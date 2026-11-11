@@ -104,6 +104,7 @@ mod tests {
             state: JobState::Submitting,
             handle: None,
             note: None,
+            diagnostic: None,
         };
         assert_eq!(
             job_line(&job),
@@ -135,6 +136,7 @@ mod tests {
             state: JobState::Submitting,
             handle: None,
             note: Some("fal took the job but returned no handle (request req-7)".into()),
+            diagnostic: None,
         };
         assert_eq!(
             job_line(&job),

@@ -155,6 +155,7 @@ struct StepView {
     path: String,
     state: &'static str,
     error: Option<String>,
+    diagnostic: Option<Value>,
     cache: Option<String>,
     /// The route a `waiting` step waits for.
     waiting_for: Option<String>,
@@ -310,6 +311,7 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
         path: entry.path,
         state: "pending",
         error: None,
+        diagnostic: None,
         cache: None,
         waiting_for: None,
         files: Vec::new(),
@@ -330,6 +332,7 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
         }
         Some((Some("node_failed"), event)) => {
             view.state = "failed";
+            view.diagnostic = event.get("diagnostic").cloned();
             view.error = error_of(event);
         }
         Some((Some("node_skipped"), event)) => {
@@ -530,6 +533,9 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
             entry.insert("state".into(), json!(step.state));
             if let Some(error) = &step.error {
                 entry.insert("error".into(), json!(error));
+            }
+            if let Some(diagnostic) = &step.diagnostic {
+                entry.insert("diagnostic".into(), diagnostic.clone());
             }
             if let Some(cache) = &step.cache {
                 entry.insert("cache".into(), json!(cache));

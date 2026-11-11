@@ -156,6 +156,7 @@ fn job(key: &str, state: JobState, handle: Option<Value>) -> JobRecord {
         state,
         handle,
         note: None,
+        diagnostic: None,
     }
 }
 

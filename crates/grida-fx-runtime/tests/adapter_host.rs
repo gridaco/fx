@@ -1622,13 +1622,26 @@ async fn the_engine_checks_the_contract_and_the_request_before_the_host_is_asked
     };
     let mut other = call("structured.generate", "acme");
     other.route.contract = json!({"adapter": NAME, "adapter_behavior": 3});
+    let (outcome, diagnostic) = checked.send(&other).await.into_report();
     assert_eq!(
-        checked.send(&other).await,
+        diagnostic.unwrap().source,
+        grida_fx_protocol::DiagnosticSource::Engine
+    );
+    assert_eq!(
+        outcome,
         Sent::Refused {
             reason: "model-a@acme is not a structured.generate route this adapter serves".into()
         }
     );
-    let Sent::Refused { reason } = checked.send(&call("structured.generate", "acme")).await else {
+    let (outcome, diagnostic) = checked
+        .send(&call("structured.generate", "acme"))
+        .await
+        .into_report();
+    assert_eq!(
+        diagnostic.unwrap().phase,
+        grida_fx_protocol::DiagnosticPhase::Validate
+    );
+    let Sent::Refused { reason } = outcome else {
         panic!("the request is refused");
     };
     assert!(!reason.contains("adapter"), "{reason}");

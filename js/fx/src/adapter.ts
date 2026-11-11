@@ -103,11 +103,28 @@ export interface Answered {
   readonly usage?: AdapterUsage | undefined;
 }
 
+/** Supplementary failure evidence, independent of retry and settlement. */
+export interface AdapterDiagnostic {
+  readonly source: "engine" | "adapter" | "transport" | "provider";
+  readonly phase: "validate" | "upload" | "send" | "submit" | "poll" | "collect" | "download";
+  readonly operation?: string | undefined;
+  readonly httpStatus?: number | undefined;
+  readonly code?: string | undefined;
+  readonly field?: string | undefined;
+  readonly message?: string | undefined;
+  readonly requestId?: string | undefined;
+  readonly taskId?: string | undefined;
+  readonly detail?: "available" | "unavailable" | "unreadable" | "withheld" | undefined;
+  readonly redacted?: boolean | undefined;
+  readonly truncated?: boolean | undefined;
+}
+
 /** `not_received`: the provider provably did not receive the request; the engine may send it
  * again, after `retryAfterS` seconds when the provider asked for a wait. */
 export interface NotReceived {
   readonly outcome: "not_received";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
   readonly retryAfterS?: number | undefined;
 }
 
@@ -115,6 +132,7 @@ export interface NotReceived {
 export interface Refused {
   readonly outcome: "refused";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
 }
 
 /** `failed`: the provider may have received the request, which failed; billed at `costUsd`, else
@@ -122,6 +140,7 @@ export interface Refused {
 export interface Failed {
   readonly outcome: "failed";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
   readonly retryable: boolean;
   readonly costUsd?: number | undefined;
 }
@@ -137,12 +156,14 @@ export interface Accepted {
 export interface Uncertain {
   readonly outcome: "uncertain";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
 }
 
 /** `ended`: the job ended without a usable result; settled at `costUsd`, else the whole hold. */
 export interface Ended {
   readonly outcome: "ended";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
   readonly costUsd?: number | undefined;
 }
 
@@ -150,6 +171,7 @@ export interface Ended {
 export interface Unreachable {
   readonly outcome: "unreachable";
   readonly reason: string;
+  readonly diagnostic?: AdapterDiagnostic | undefined;
 }
 
 /** What `send` returns. */
@@ -860,13 +882,13 @@ const TAKES: Readonly<Record<AdapterMethod, readonly string[]>> = {
 /** Each outcome's type name, and its members. */
 const OUTCOMES: Readonly<Record<string, readonly [string, readonly string[]]>> = {
   answered: ["Answered", ["files", "data", "costUsd", "usage"]],
-  not_received: ["NotReceived", ["reason", "retryAfterS"]],
-  refused: ["Refused", ["reason"]],
-  failed: ["Failed", ["reason", "retryable", "costUsd"]],
+  not_received: ["NotReceived", ["reason", "retryAfterS", "diagnostic"]],
+  refused: ["Refused", ["reason", "diagnostic"]],
+  failed: ["Failed", ["reason", "retryable", "costUsd", "diagnostic"]],
   accepted: ["Accepted", ["handle"]],
-  uncertain: ["Uncertain", ["reason"]],
-  ended: ["Ended", ["reason", "costUsd"]],
-  unreachable: ["Unreachable", ["reason"]],
+  uncertain: ["Uncertain", ["reason", "diagnostic"]],
+  ended: ["Ended", ["reason", "costUsd", "diagnostic"]],
+  unreachable: ["Unreachable", ["reason", "diagnostic"]],
 };
 const USAGE: Readonly<Record<string, string>> = {
   inputTokens: "input_tokens",
@@ -905,6 +927,7 @@ export async function encodeOutcome(
   const wire: Record<string, unknown> = { outcome };
   if (members.includes("reason")) {
     wire.reason = reasonOf(given.reason);
+    if (given.diagnostic !== undefined) wire.diagnostic = diagnosticOf(given.diagnostic);
   }
   if (outcome === "answered") {
     wire.files = await encodeFiles(given.files, ADAPTER_FILES);
@@ -928,6 +951,27 @@ export async function encodeOutcome(
   if (outcome === "accepted") {
     wire.handle = handleOf(given.handle);
   }
+  return wire;
+}
+
+function diagnosticOf(value: unknown): Record<string, unknown> {
+  if (!isPlainObject(value)) throw new TypeError("diagnostic is an object");
+  const fields: Record<string, string> = { source: "source", phase: "phase", operation: "operation", httpStatus: "http_status", code: "code", field: "field", message: "message", requestId: "request_id", taskId: "task_id", detail: "detail", redacted: "redacted", truncated: "truncated" };
+  const wire: Record<string, unknown> = {};
+  for (const [name, item] of Object.entries(value)) {
+    const key = fields[name];
+    if (!key) throw new TypeError(`unknown diagnostic member ${name}`);
+    if (item === undefined) continue;
+    if (name === "httpStatus") {
+      if (typeof item !== "number" || !Number.isInteger(item) || item < 100 || item > 599) throw new TypeError("diagnostic.httpStatus is an HTTP status");
+    } else if (name === "redacted" || name === "truncated") {
+      if (typeof item !== "boolean") throw new TypeError(`diagnostic.${name} is a boolean`);
+    } else if (typeof item !== "string") throw new TypeError(`diagnostic.${name} is text`);
+    wire[key] = item;
+  }
+  if (!["engine", "adapter", "transport", "provider"].includes(String(wire.source))) throw new TypeError("diagnostic.source is engine, adapter, transport or provider");
+  if (!["validate", "upload", "send", "submit", "poll", "collect", "download"].includes(String(wire.phase))) throw new TypeError("diagnostic.phase is validate, upload, send, submit, poll, collect or download");
+  if (wire.detail !== undefined && !["available", "unavailable", "unreadable", "withheld"].includes(String(wire.detail))) throw new TypeError("diagnostic.detail is available, unavailable, unreadable or withheld");
   return wire;
 }
 

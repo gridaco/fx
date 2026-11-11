@@ -1233,6 +1233,7 @@ async fn a_recorded_call_replays_offline_without_adapters() {
             state: JobState::Submitting,
             handle: None,
             note: None,
+            diagnostic: None,
         })
         .unwrap();
     let services = Services::planning(Arc::clone(&engine));
@@ -1717,6 +1718,7 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
         state,
         handle,
         note: None,
+        diagnostic: None,
     }
 }
 
@@ -2922,4 +2924,134 @@ async fn a_cancelled_question_sends_cancel_and_drops_the_late_answer() {
     tokio::task::yield_now().await;
     assert!(!dir.path().join(".fx/cache/stand-in/calls").exists());
     assert_eq!(services.calls_running(), 0);
+}
+
+#[tokio::test]
+async fn tripo_single_image_runs_through_managed_calls_and_preserves_provider_evidence() {
+    use grida_fx_providers::adapter::Adapter;
+    use grida_fx_providers::testing::{setup, test_keys};
+    use grida_fx_providers::transport::replay::{Expect, ExpectBody, ReplayTransport};
+    use grida_fx_providers::transport::{HttpResponse, Lane, Method, Part};
+    use grida_fx_providers::tripo::{TripoApi, mesh::TripoMesh};
+    let api = "https://openapi.tripo3d.ai/v3";
+    for status in [200, 400, 500] {
+        let root = tempfile::tempdir().unwrap();
+        let png = lantern_png();
+        let upload = Expect::new(Method::Post, format!("{api}/files"), Lane::Upload)
+            .credential("authorization", "Bearer test-tripo-key")
+            .body(ExpectBody::Multipart(vec![Part::file(
+                "file",
+                "image.png",
+                "image/png",
+                png.clone(),
+            )]))
+            .reply(HttpResponse::json(
+                200,
+                &json!({"code":0,"data":{"file_token":"temporary-upload-token"}}),
+            ));
+        let body = if status == 200 {
+            json!({"code":0,"data":{"task_id":"task-single"}})
+        } else {
+            json!({"code":1004,"field":"face_limit","request_id":"req-single", "message":"Unsupported face_limit temporary-upload-token"})
+        };
+        let post = Expect::new(Method::Post, format!("{api}/generation/image-to-model"), Lane::Provider)
+            .credential("authorization", "Bearer test-tripo-key")
+            .body(ExpectBody::Json(json!({"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"face_limit":40000,"input":"temporary-upload-token"})))
+            .reply(HttpResponse::json(status, &body));
+        let mut exchanges = vec![upload, post];
+        if status == 200 {
+            exchanges.push(Expect::new(Method::Get, format!("{api}/tasks/task-single"), Lane::Provider)
+                .credential("authorization", "Bearer test-tripo-key")
+                .reply(HttpResponse::json(200, &json!({"code":0,"data":{"task_id":"task-single","status":"success","credits_consumed":12,"output":{"model_url":"https://assets.acme.test/model.glb"}}}))));
+            exchanges.push(
+                Expect::new(
+                    Method::Get,
+                    "https://assets.acme.test/model.glb",
+                    Lane::Download,
+                )
+                .reply(HttpResponse::new(200, media::GLB.to_vec())),
+            );
+        }
+        let transport = Arc::new(ReplayTransport::new(exchanges));
+        let setup = setup(transport.clone(), test_keys());
+        let mut adapters = Adapters::new();
+        adapters.register(
+            "mesh.generate",
+            "tripo",
+            Adapter::Job(Arc::new(TripoMesh::new(TripoApi::new(&setup)))),
+        );
+        let engine = engine(root.path(), adapters, true);
+        engine.store.put_bytes(&png).unwrap();
+        let files = RunFiles::new();
+        let input = file(&png, "image/png", "source.png");
+        files.insert(&input);
+        let route = grida_fx_providers::routes::default_table()
+            .unwrap()
+            .resolve("mesh.generate", "P2-20260801@tripo")
+            .unwrap()
+            .clone();
+        let site = site(vec![route], &[("mesh.generate", 3)]);
+        let services = live(Arc::clone(&engine), Some(Usd(10_000_000)));
+        let request =
+            json!({"image":{"file":input.digest},"face_limit":40000,"texture":true,"pbr":false});
+        let result = call(
+            &services,
+            &site,
+            &CallCounter::new(),
+            &files,
+            "mesh.generate",
+            request.clone(),
+        )
+        .await;
+        if status == 200 {
+            let answer = result.unwrap();
+            assert_eq!(answer.charged, Usd(120_000));
+            let offline = Services::planning(Arc::clone(&engine));
+            let replayed = call(
+                &offline,
+                &site,
+                &CallCounter::new(),
+                &files,
+                "mesh.generate",
+                request,
+            )
+            .await
+            .unwrap();
+            assert!(replayed.cached);
+        } else {
+            let error = rpc(result);
+            assert_eq!(
+                error.code,
+                if status == 400 {
+                    ErrorCode::CallFailed.code()
+                } else {
+                    ErrorCode::JobUnsettled.code()
+                }
+            );
+            assert!(error.message.contains("Unsupported face_limit"));
+            let evidence = &error.data.as_ref().unwrap()["diagnostic"];
+            assert_eq!(evidence["source"], "provider");
+            assert_eq!(evidence["http_status"], status);
+            assert_eq!(evidence["request_id"], "req-single");
+            assert!(!error.message.contains("temporary-upload-token"));
+            assert!(!evidence.to_string().contains("temporary-upload-token"));
+            // A provider rejection with no documented cost charges the hold; a 5xx does too,
+            // but keeps the job unresolved rather than inviting another submission.
+            assert_eq!(services.ledger.as_ref().unwrap().charged(), Usd(2_500_000));
+            if status == 500 {
+                let again = rpc(call(
+                    &services,
+                    &site,
+                    &CallCounter::new(),
+                    &files,
+                    "mesh.generate",
+                    request,
+                )
+                .await);
+                assert_eq!(again.code, ErrorCode::JobUnsettled.code());
+                assert_eq!(again.data.unwrap()["diagnostic"], *evidence);
+            }
+        }
+        transport.assert_done();
+    }
 }

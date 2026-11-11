@@ -91,7 +91,10 @@ impl TripoRig {
         let allowed = call.request.get("allow_negative_check") == Some(&Value::Bool(true));
 
         // The free phase: the upload, then the riggability check and its wait.
-        let token = match api.upload("unrigged.glb", "model/gltf-binary", glb).await {
+        let token = match api
+            .upload(call, "unrigged.glb", "model/gltf-binary", glb)
+            .await
+        {
             Ok(token) => token,
             Err(outcome) => return outcome,
         };
@@ -130,7 +133,7 @@ impl TripoRig {
         body.insert("out_format".into(), json!("glb"));
         body.extend(options);
         let body = Value::Object(body);
-        match api.post_task(PATH, body).await {
+        match api.post_task(call, PATH, body).await {
             Ok(task_id) => Submitted::Accepted {
                 handle: json!({
                     "task_id": task_id,
@@ -146,12 +149,12 @@ impl TripoRig {
         }
     }
 
-    async fn collect_call(&self, handle: &Value) -> Collected {
+    async fn collect_call(&self, call: &CallRequest, handle: &Value) -> Collected {
         let api = &self.api;
         let Some(task_id) = super::handle_task_id(handle) else {
             return api.unreachable("the Tripo handle has no usable task id");
         };
-        let (task, models) = match api.finished_models(task_id, COLLECT_DEADLINE).await {
+        let (task, models) = match api.finished_models(call, task_id, COLLECT_DEADLINE).await {
             Ok(finished) => finished,
             Err(outcome) => return outcome,
         };
@@ -216,12 +219,8 @@ impl LongJob for TripoRig {
         Box::pin(self.submit_call(call))
     }
 
-    fn collect<'a>(
-        &'a self,
-        _call: &'a CallRequest,
-        handle: &'a Value,
-    ) -> BoxFuture<'a, Collected> {
-        Box::pin(self.collect_call(handle))
+    fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
+        Box::pin(self.collect_call(call, handle))
     }
 
     fn identity(&self) -> Option<Identity> {

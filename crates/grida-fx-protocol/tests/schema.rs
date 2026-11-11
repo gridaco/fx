@@ -882,6 +882,21 @@ fn every_type_validates_against_its_definition() {
         &StandInAnswerResult::Decline { decline: True },
     );
 
+    let mut diagnostic =
+        AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Submit);
+    diagnostic.http_status = Some(400);
+    diagnostic.code = Some("bad_input".into());
+    diagnostic.message = Some("Unsupported input".into());
+    diagnostic.detail = DiagnosticDetail::Available;
+    s.typed("adapter_diagnostic", &diagnostic);
+    s.typed(
+        "adapter_submit_result",
+        &AdapterSubmitResult::Uncertain {
+            reason: "Receipt is unknown".into(),
+            diagnostic: Some(diagnostic),
+        },
+    );
+
     // A project adapter (protocol.md §5.8, §6.8).
     adapter_samples(&mut s);
 
@@ -1015,6 +1030,7 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_not_received",
             AdapterSendResult::NotReceived {
+                diagnostic: None,
                 reason: "acme returned HTTP 429".into(),
                 retry_after_s: Some(1.5),
             },
@@ -1022,12 +1038,14 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_refused",
             AdapterSendResult::Refused {
+                diagnostic: None,
                 reason: "prompt is blank".into(),
             },
         ),
         (
             "outcome_failed",
             AdapterSendResult::Failed {
+                diagnostic: None,
                 reason: "acme returned HTTP 500".into(),
                 retryable: true,
                 cost_usd: None,
@@ -1036,6 +1054,7 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_failed",
             AdapterSendResult::Failed {
+                diagnostic: None,
                 reason: "acme returned HTTP 400: the size is not served".into(),
                 retryable: false,
                 cost_usd: Some(0.0),
@@ -1056,12 +1075,14 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_uncertain",
             AdapterSubmitResult::Uncertain {
+                diagnostic: None,
                 reason: "acme video submission timed out after the request left".into(),
             },
         ),
         (
             "outcome_not_received",
             AdapterSubmitResult::NotReceived {
+                diagnostic: None,
                 reason: "no connection".into(),
                 retry_after_s: None,
             },
@@ -1069,12 +1090,14 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_refused",
             AdapterSubmitResult::Refused {
+                diagnostic: None,
                 reason: "a first frame is needed".into(),
             },
         ),
         (
             "outcome_failed",
             AdapterSubmitResult::Failed {
+                diagnostic: None,
                 reason: "acme returned HTTP 422".into(),
                 retryable: false,
                 cost_usd: Some(0.25),
@@ -1104,6 +1127,7 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_ended",
             AdapterCollectResult::Ended {
+                diagnostic: None,
                 reason: "acme cancelled the job".into(),
                 cost_usd: Some(0.0),
             },
@@ -1111,6 +1135,7 @@ fn adapter_samples(s: &mut Schema) {
         (
             "outcome_unreachable",
             AdapterCollectResult::Unreachable {
+                diagnostic: None,
                 reason: "still running at the collect deadline".into(),
             },
         ),
@@ -1768,4 +1793,24 @@ fn the_first_frame_is_178_bytes() {
         .unwrap()
         .unwrap();
     assert_eq!(read, body);
+}
+
+#[test]
+fn diagnostic_evidence_has_one_shape_across_protocol_and_recorded_contracts() {
+    let diagnostic = schema()["$defs"]["adapter_diagnostic"].clone();
+    for name in [
+        "fx-job-record-v1",
+        "fx-run-events-v1",
+        "fx-viewer-run-v1",
+        "fx-run-export-v1",
+    ] {
+        let path = repository().join(format!("spec/schemas/{name}.schema.json"));
+        let record: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let actual = if name == "fx-job-record-v1" || name == "fx-run-events-v1" {
+            &record["properties"]["diagnostic"]
+        } else {
+            &record["$defs"]["adapter_diagnostic"]
+        };
+        assert_eq!(actual, &diagnostic, "{name}: diagnostic contract drift");
+    }
 }

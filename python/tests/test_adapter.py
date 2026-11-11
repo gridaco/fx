@@ -796,3 +796,31 @@ def test_closing_the_server_answers_nothing() -> None:
         return replies.answers
 
     assert asyncio.run(scenario()) == []
+
+
+def test_diagnostics_extend_failures_without_changing_legacy_outcomes() -> None:
+    evidence = fx.AdapterDiagnostic(
+        source="provider",
+        phase="submit",
+        operation="future_operation",
+        http_status=400,
+        code="bad_input",
+        field="new_field",
+        message="Unsupported new_field",
+        request_id="req-1",
+        detail="available",
+    )
+    for method, outcome in (
+        (SEND, fx.Failed("rejected", retryable=False, diagnostic=evidence)),
+        (SUBMIT, fx.Uncertain("unknown receipt", diagnostic=evidence)),
+        (COLLECT, fx.Unreachable("unavailable", diagnostic=evidence)),
+    ):
+        wire = encode(method, outcome)
+        _valid(RESULTS[method], wire)
+        assert wire["diagnostic"]["request_id"] == "req-1"
+        assert wire["diagnostic"]["http_status"] == 400
+    assert "diagnostic" not in encode(SEND, fx.Failed("legacy", retryable=False))
+    with pytest.raises(ValueError, match="diagnostic.source"):
+        encode(
+            SUBMIT, fx.Uncertain("unknown", diagnostic=fx.AdapterDiagnostic("unknown", "submit"))
+        )

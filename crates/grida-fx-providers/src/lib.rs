@@ -59,6 +59,7 @@ pub mod chat;
 pub mod checks;
 pub mod clock;
 pub mod codex;
+pub mod diagnostic;
 pub mod elevenlabs;
 #[cfg(any(test, feature = "testing"))]
 pub mod fake;

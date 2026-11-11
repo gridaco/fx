@@ -1,0 +1,21 @@
+fx: workflow/v1
+id: native
+title: Managed native operation
+inputs:
+  source: { type: file, kind: text/plain }
+  mode: { type: string, default: wait }
+  future: { type: integer, default: 70000 }
+  operation: { type: string, default: mesh_from_image }
+steps:
+  native:
+    uses: ./nodes.py#native
+    route: model-a@acme
+    with:
+      source: ${{ inputs.source }}
+      settings:
+        mode: ${{ inputs.mode }}
+        future_face_budget: ${{ inputs.future }}
+        operation: ${{ inputs.operation }}
+        vendor_extension: { new_feature: true }
+outputs:
+  result: ${{ steps.native.outputs.result }}

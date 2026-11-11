@@ -628,6 +628,7 @@ routes:
     low_usd: 1.2
     high_usd: 2.5
   features:
+  - image_input
   - multiview
   - pbr
   - quad

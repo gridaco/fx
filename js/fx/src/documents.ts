@@ -7,6 +7,22 @@
 
 import type { JsonValue, VideoPreview } from "./workflow.js";
 
+/** Safe evidence recorded with a failed managed call; older records may omit it. */
+export interface RecordedDiagnostic {
+  source: "engine" | "adapter" | "transport" | "provider";
+  phase: "validate" | "upload" | "send" | "submit" | "poll" | "collect" | "download";
+  operation?: string;
+  http_status?: number;
+  code?: string;
+  field?: string;
+  message?: string;
+  request_id?: string;
+  task_id?: string;
+  detail?: "available" | "unavailable" | "unreadable" | "withheld";
+  redacted?: boolean;
+  truncated?: boolean;
+}
+
 /** A problem that refuses a plan. */
 export interface Problem {
   where: string;
@@ -159,6 +175,8 @@ export interface ProjectedInstance {
   facts?: { [name: string]: JsonValue };
   /** Failed or skipped: why. */
   error?: string | null;
+  /** Structured evidence recorded with a failed managed call. */
+  diagnostic?: RecordedDiagnostic | undefined;
 }
 
 /** `grida-fx project <run>`: a run's record projected to its state. */
@@ -182,6 +200,7 @@ export interface InspectedStep {
   waiting_for?: string;
   /** Its files, where the run placed them: paths relative to the run folder. */
   files: { path: string; digest: string; size: number }[];
+  diagnostic?: RecordedDiagnostic;
 }
 
 /** `grida-fx inspect <run> --json`: a run's summary. */

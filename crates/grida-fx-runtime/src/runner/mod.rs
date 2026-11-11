@@ -1113,6 +1113,7 @@ impl Scheduler<'_> {
             Err(error) => {
                 let error = self.engine.scrub(&error);
                 self.emit(&Event::NodeFailed {
+                    diagnostic: None,
                     id: instance.id.clone(),
                     path: instance.path.clone(),
                     error: Some(error.clone()),
@@ -1209,6 +1210,7 @@ impl Scheduler<'_> {
         {
             // Stopped by its own assertion: the failure is the assertion's.
             self.emit(&Event::NodeFailed {
+                diagnostic: None,
                 id: done.id.clone(),
                 path,
                 error: Some(error.clone()),

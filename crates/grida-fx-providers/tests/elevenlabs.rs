@@ -108,6 +108,7 @@ fn sound_answered_with(response: HttpResponse) -> Sent {
 
 fn reason_of(sent: &Sent) -> &str {
     match sent {
+        Sent::Diagnosed(inner, _) => reason_of(inner),
         Sent::NotReceived { reason, .. }
         | Sent::Refused { reason }
         | Sent::Failed { reason, .. } => reason,

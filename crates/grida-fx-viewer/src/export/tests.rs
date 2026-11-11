@@ -668,3 +668,59 @@ fn structural_skip_causes_are_portable_without_disclosing_diagnostic_payloads() 
         "invalid_record"
     );
 }
+
+#[test]
+fn provider_evidence_is_exported_only_with_explicit_diagnostic_disclosure() {
+    use std::io::Write;
+    let fixture = source("image/png");
+    let diagnostic = json!({"source":"provider","phase":"submit","http_status":400,
+        "code":"bad_input","message":"Unsupported native format","detail":"available"});
+    let mut events = std::fs::OpenOptions::new()
+        .append(true)
+        .open(fixture.root().join("events.jsonl"))
+        .unwrap();
+    for event in [
+        json!({"event":"node_failed","id":"later#1","path":"later","error":"Provider rejected the input","diagnostic":diagnostic}),
+        json!({"event":"run_finished","ok":false,"charged_usd":0,"outputs":{}}),
+    ] {
+        let mut event = event;
+        event["kind"] = json!("fx-run-events-v1");
+        event["plan"] = json!("a".repeat(64));
+        event["invocation_id"] = json!("offline-fixture");
+        event["offset_ms"] = json!(0);
+        writeln!(events, "{event}").unwrap();
+    }
+    for include_diagnostics in [false, true] {
+        let parent = tempfile::tempdir().unwrap();
+        export(
+            &fixture,
+            &parent,
+            ExportOptions {
+                include_values: false,
+                include_diagnostics,
+            },
+        )
+        .unwrap();
+        let data = manifest(&parent);
+        let node = data["view"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["id"] == "later#1")
+            .unwrap();
+        if include_diagnostics {
+            assert_eq!(node["diagnostic"], diagnostic);
+        } else {
+            assert!(node.get("diagnostic").is_none());
+            assert!(!data.to_string().contains("Unsupported native format"));
+        }
+        let schema: Value = serde_json::from_str(include_str!(
+            "../../../../spec/schemas/fx-run-export-v1.schema.json"
+        ))
+        .unwrap();
+        jsonschema::validator_for(&schema)
+            .unwrap()
+            .validate(&data)
+            .unwrap();
+    }
+}

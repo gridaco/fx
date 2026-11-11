@@ -81,10 +81,11 @@ pub(crate) fn projection(events: &[Value]) -> Value {
                     Some(error) if truthy(error) => error.clone(),
                     _ => object.get("reason").cloned().unwrap_or(Value::Null),
                 };
-                instances.insert(
-                    id.to_string(),
-                    json!({"state": state, "path": path(), "error": error}),
-                );
+                let mut entry = json!({"state": state, "path": path(), "error": error});
+                if let Some(diagnostic) = object.get("diagnostic") {
+                    entry["diagnostic"] = diagnostic.clone();
+                }
+                instances.insert(id.to_string(), entry);
             }
             (Some("node_retry"), Some(id)) => settle(&mut instances, id, None),
             (Some(call @ ("call_waiting" | "call_admitted")), Some(id)) => {

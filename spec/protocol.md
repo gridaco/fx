@@ -2,6 +2,12 @@
 
 `fx-node-protocol-v1` · schema: [schemas/fx-node-protocol-v1.schema.json](schemas/fx-node-protocol-v1.schema.json)
 
+Adapter failure results may carry an optional `diagnostic` object
+(`adapter_diagnostic` in the schema; [adapters.md](adapters.md) §7). It is
+supplementary evidence, independent of the outcome. Hosts without this member
+remain compatible. Capability RPC errors preserve it in `data.diagnostic`;
+uncaught errors preserve it through the node host into recorded node failures.
+
 The engine runs node bodies and workflow builders written in other languages through a **node host**: a separate process that loads the user's modules and runs their code. The Python host ships with `grida.fx`, and the TypeScript host with `@grida/fx`. This document is the contract between the engine and any host.
 
 The split is fixed. **The host runs user code and nothing else.** The engine owns the store, the call cache, routes, prices, budgets, retries, prompt rendering, the agent loop, file facts and every identity. A host never computes a digest or a file fact and never writes the store. It talks to a provider only as an **adapter host** (§5.8), which runs a project's own adapter ([adapters.md](adapters.md) §9): the adapter reaches the network as it chooses, with its own client or through the engine's transport (`fetch`, §6.8), and the engine still keeps every hold, retry and record. The values a body reports about its own result with `fact` are *node facts* (§6.3), not file facts ([identity.md](identity.md) §4).

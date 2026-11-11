@@ -133,6 +133,7 @@ pub enum Event {
     /// `None`). `code` is the spec/protocol.md §7 name of the error that failed the node, `None`
     /// (written `null`) when no error code did: a timeout, an assertion.
     NodeFailed {
+        diagnostic: Option<grida_fx_protocol::AdapterDiagnostic>,
         id: String,
         path: String,
         error: Option<String>,
@@ -402,6 +403,7 @@ impl Event {
                 fields.put("duration_ms", Value::from(*duration_ms));
             }
             Event::NodeFailed {
+                diagnostic,
                 id,
                 path,
                 error,
@@ -412,6 +414,12 @@ impl Event {
             } => {
                 fields.text("id", id);
                 fields.text("path", path);
+                if let Some(diagnostic) = diagnostic {
+                    fields.put(
+                        "diagnostic",
+                        serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
+                    );
+                }
                 // Both forms require `error`; the schema allows null.
                 fields.text_or_null("error", error.as_deref());
                 fields.text_or_null("code", code.as_deref());

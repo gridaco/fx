@@ -31,6 +31,25 @@ start a viewer, return an early URL, or offer a readiness handle.
 Existing result construction reads the folder after the child exits; it is not
 an atomic invocation capture when another process immediately resumes that folder.
 
+## Provider-native calls and diagnostics
+
+A project node may declare and call a custom capability through `ctx.capability`;
+its project adapter declares it as a request or job. Standard capability schemas
+are not applied to unknown capabilities. Canonical data, file references,
+routing, holds, caching and job recovery still use the engine's common path.
+[The native harness](../fixtures/native/README.md) exercises arbitrary fields,
+files, cancellation, resume and independent call-cache replay in both SDKs.
+
+Python failure outcomes accept a keyword-only `diagnostic=AdapterDiagnostic(...)`;
+TypeScript outcomes accept `diagnostic: {source, phase, ...}` with camelCase
+`httpStatus`, `requestId` and `taskId`. Evidence is optional, independent of the
+outcome and sanitized by the engine. Uncaught capability errors retain it in
+`EngineError.data.diagnostic`. Recorded fields use lower_snake_case:
+Python `RunResult.failures[id].diagnostic`, JavaScript
+`RunResult.steps[id].diagnostic`, inspection and observation expose the same data.
+Older records may have no diagnostic. Cancellation still raises `FxError` with
+exit status 130; load the saved record to inspect and later resume it.
+
 ## Load a record
 
 Python `load_run`/`load_run_async` and JavaScript `loadRun` invoke engine inspection

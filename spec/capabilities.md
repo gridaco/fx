@@ -213,7 +213,7 @@ A clip from a prompt and frames. A long job.
 
 ## 7. `mesh.generate`
 
-A 3D model from views of one subject. A long job.
+A 3D model from one image or named views of one subject. A long job.
 
 | Member | Type | | |
 |---|---|---|---|
@@ -222,7 +222,18 @@ A 3D model from views of one subject. A long job.
 | `texture` | boolean | optional | a textured model |
 | `pbr` | boolean | optional | PBR materials |
 | `provider_options` | object | optional | as for `image.generate` |
-| `views` | file{} | required | pictures by view name; the multiview route takes `front` (required) and at least one of `back`, `left`, `right`, each PNG or JPEG |
+| `views` | file{} | optional | pictures by view name; the multiview route takes `front` (required) and at least one of `back`, `left`, `right`, each PNG or JPEG |
+| `image` | file | optional | one source image; the route must support `image_input` |
+
+Exactly one non-null source is required, after the member type checks:
+`mesh.generate needs exactly one of image or views`. An empty `views` object
+still selects multiview input and is subject to the adapter's view checks.
+The built-in's plan checks source selection and the route's `image_input` or
+`multiview` feature, including when the selected file is a pending step output.
+The Tripo adapter forwards an integer `face_limit` without a provider-specific
+range check. The provider owns model and topology limits and reports a rejection
+through its diagnostic. Local Tripo mesh encoding, provider-option and source
+format refusals carry `source: adapter`, `phase: validate`.
 
 **Answer:** the file `model`, whose kind is `model/fbx` or `model/gltf-binary`, taken from its bytes. `data` is `{"facts": {"model_kind": <kind>}}`.
 
@@ -230,6 +241,7 @@ A 3D model from views of one subject. A long job.
 
 | Feature | Meaning |
 |---|---|
+| `image_input` | the route takes one source `image` |
 | `multiview` | the route takes several named views of the subject |
 | `textured_mesh` | `texture: true` is honoured |
 | `quad` | `quad: true` is honoured |

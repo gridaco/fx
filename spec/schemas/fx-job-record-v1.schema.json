@@ -20,7 +20,7 @@
       "const": "fx-job-record-v1"
     },
     "key": {
-      "description": "The key of the call it answers (identity.md §9).",
+      "description": "The key of the call it answers (identity.md \u00a79).",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
@@ -42,14 +42,14 @@
           "pattern": "^.+@[a-z0-9._-]+$"
         },
         "fingerprint": {
-          "description": "identity.md §7.",
+          "description": "identity.md \u00a77.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         }
       }
     },
     "request": {
-      "description": "The canonical request (identity.md §9), exactly as keyed: files as `{\"file\": digest}`. It never holds a secret.",
+      "description": "The canonical request (identity.md \u00a79), exactly as keyed: files as `{\"file\": digest}`. It never holds a secret.",
       "type": "object"
     },
     "take": {
@@ -76,8 +76,74 @@
       ]
     },
     "note": {
-      "description": "Only on a `submitting` record whose submit's outcome is unknown: the redacted reason, which names the provider's job id when one was returned (store.md §5). Never a credential or a signed URL.",
+      "description": "Only on a `submitting` record whose submit's outcome is unknown: the redacted reason, which names the provider's job id when one was returned (store.md \u00a75). Never a credential or a signed URL.",
       "type": "string"
+    },
+    "diagnostic": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "enum": [
+            "engine",
+            "adapter",
+            "transport",
+            "provider"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "validate",
+            "upload",
+            "send",
+            "submit",
+            "poll",
+            "collect",
+            "download"
+          ]
+        },
+        "operation": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "detail": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unreadable",
+            "withheld"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source",
+        "phase"
+      ],
+      "additionalProperties": false
     }
   },
   "allOf": [
@@ -128,6 +194,25 @@
         "not": {
           "required": [
             "note"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "submitted",
+              "settled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "diagnostic"
           ]
         }
       }

@@ -1499,13 +1499,21 @@ fn every_route_passes_its_adapter_s_contract_and_capability_checks() {
             let value = sample(&mut builder, member.ty);
             request.insert(member.name.to_string(), value);
         }
+        if route.capability == "mesh.generate" {
+            request.insert(
+                "views".into(),
+                sample(&mut builder, MemberType::FilesByName),
+            );
+        }
         let call = builder.request(Value::Object(request)).build();
         let reason = match registry.serving(&route_ref(route)) {
-            Some(Adapter::Request(adapter)) => match block_on(adapter.send(&call)) {
-                Sent::Refused { reason } => reason,
-                other => panic!("{id} {}: {other:?}", route.capability),
-            },
-            Some(Adapter::Job(adapter)) => match block_on(adapter.submit(&call)) {
+            Some(Adapter::Request(adapter)) => {
+                match block_on(adapter.send(&call)).into_report().0 {
+                    Sent::Refused { reason } => reason,
+                    other => panic!("{id} {}: {other:?}", route.capability),
+                }
+            }
+            Some(Adapter::Job(adapter)) => match block_on(adapter.submit(&call)).into_report().0 {
                 Submitted::Refused { reason } => reason,
                 other => panic!("{id} {}: {other:?}", route.capability),
             },

@@ -620,11 +620,67 @@ def _base64(data: bytes) -> str:
 
 
 @dataclass(frozen=True)
+class AdapterDiagnostic:
+    """Supplementary failure evidence. The engine redacts and bounds every field."""
+
+    source: str
+    phase: str
+    operation: str | None = None
+    http_status: int | None = None
+    code: str | None = None
+    field: str | None = None
+    message: str | None = None
+    request_id: str | None = None
+    task_id: str | None = None
+    detail: str = "unavailable"
+    redacted: bool = False
+    truncated: bool = False
+
+    def _wire(self) -> dict[str, Any]:
+        if self.source not in ("engine", "adapter", "transport", "provider"):
+            raise ValueError("diagnostic.source is engine, adapter, transport or provider")
+        if self.phase not in (
+            "validate",
+            "upload",
+            "send",
+            "submit",
+            "poll",
+            "collect",
+            "download",
+        ):
+            raise ValueError(
+                "diagnostic.phase is validate, upload, send, submit, poll, collect or download"
+            )
+        if self.detail not in ("available", "unavailable", "unreadable", "withheld"):
+            raise ValueError("diagnostic.detail is available, unavailable, unreadable or withheld")
+        if self.http_status is not None and (
+            type(self.http_status) is not int or not 100 <= self.http_status <= 599
+        ):
+            raise ValueError("diagnostic.http_status is an HTTP status")
+        result = {name: value for name, value in vars(self).items() if value is not None}
+        for name in ("operation", "code", "field", "message", "request_id", "task_id"):
+            if name in result and not isinstance(result[name], str):
+                raise TypeError(f"diagnostic.{name} is text")
+        if type(self.redacted) is not bool or type(self.truncated) is not bool:
+            raise TypeError("diagnostic redacted and truncated are booleans")
+        return result
+
+
+def _diagnostic(wire: dict[str, Any], diagnostic: AdapterDiagnostic | None) -> dict[str, Any]:
+    if diagnostic is not None:
+        if not isinstance(diagnostic, AdapterDiagnostic):
+            raise TypeError("diagnostic is an AdapterDiagnostic")
+        wire["diagnostic"] = diagnostic._wire()
+    return wire
+
+
+@dataclass(frozen=True)
 class NotReceived:
     """``not_received``: the provider provably did not receive the request; the engine may send
     it again, after ``retry_after_s`` seconds when the provider asked for a wait."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
     retry_after_s: float | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
@@ -635,7 +691,7 @@ class NotReceived:
         wire: dict[str, Any] = {"outcome": "not_received", "reason": self.reason}
         if self.retry_after_s is not None:
             wire["retry_after_s"] = self.retry_after_s
-        return wire
+        return _diagnostic(wire, self.diagnostic)
 
 
 @dataclass(frozen=True)
@@ -643,12 +699,13 @@ class Refused:
     """``refused``: refused before anything was sent, at $0."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         _reason(self.reason)
 
     def _wire(self) -> dict[str, Any]:
-        return {"outcome": "refused", "reason": self.reason}
+        return _diagnostic({"outcome": "refused", "reason": self.reason}, self.diagnostic)
 
 
 @dataclass(frozen=True)
@@ -657,6 +714,7 @@ class Failed:
     ``cost_usd``, else the whole hold, and made again only when ``retryable``."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
     retryable: bool = field(kw_only=True)
     cost_usd: float | None = field(default=None, kw_only=True)
 
@@ -674,7 +732,7 @@ class Failed:
         }
         if self.cost_usd is not None:
             wire["cost_usd"] = self.cost_usd
-        return wire
+        return _diagnostic(wire, self.diagnostic)
 
 
 @dataclass(frozen=True)
@@ -702,12 +760,13 @@ class Uncertain:
     """``uncertain``: nobody can say whether the provider took the job."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         _reason(self.reason)
 
     def _wire(self) -> dict[str, Any]:
-        return {"outcome": "uncertain", "reason": self.reason}
+        return _diagnostic({"outcome": "uncertain", "reason": self.reason}, self.diagnostic)
 
 
 @dataclass(frozen=True)
@@ -716,6 +775,7 @@ class Ended:
     hold."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
     cost_usd: float | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
@@ -726,7 +786,7 @@ class Ended:
         wire: dict[str, Any] = {"outcome": "ended", "reason": self.reason}
         if self.cost_usd is not None:
             wire["cost_usd"] = self.cost_usd
-        return wire
+        return _diagnostic(wire, self.diagnostic)
 
 
 @dataclass(frozen=True)
@@ -734,12 +794,13 @@ class Unreachable:
     """``unreachable``: it is not clear that the job is over; a later run collects it again."""
 
     reason: str
+    diagnostic: AdapterDiagnostic | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         _reason(self.reason)
 
     def _wire(self) -> dict[str, Any]:
-        return {"outcome": "unreachable", "reason": self.reason}
+        return _diagnostic({"outcome": "unreachable", "reason": self.reason}, self.diagnostic)
 
 
 #: The outcomes each method takes, in the order a refusal names them.

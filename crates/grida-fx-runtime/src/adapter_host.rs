@@ -587,7 +587,8 @@ impl AdapterHost {
             Err(error) => return lost(self.unreadable(&read_reason(&error))),
         };
         let reason = |text: String| said(&text, redactor);
-        match result {
+        let diagnostic = result.diagnostic().cloned();
+        let outcome = match result {
             AdapterSendResult::Answered(answer) => match self.answer(call, answer) {
                 Ok(answer) => Sent::Answered(answer),
                 Err(Refusal::Unreadable(place)) => lost(self.unreadable(&place)),
@@ -600,6 +601,7 @@ impl AdapterHost {
             AdapterSendResult::NotReceived {
                 reason: text,
                 retry_after_s,
+                ..
             } => match (reason(text), wait(retry_after_s)) {
                 (Ok(reason), Ok(retry_after)) => Sent::NotReceived {
                     reason,
@@ -607,7 +609,7 @@ impl AdapterHost {
                 },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
-            AdapterSendResult::Refused { reason: text } => match reason(text) {
+            AdapterSendResult::Refused { reason: text, .. } => match reason(text) {
                 Ok(reason) => Sent::Refused { reason },
                 Err(place) => lost(self.unreadable(&place)),
             },
@@ -615,6 +617,7 @@ impl AdapterHost {
                 reason: text,
                 retryable,
                 cost_usd,
+                ..
             } => match (reason(text), cost(cost_usd)) {
                 (Ok(reason), Ok(cost)) => Sent::Failed {
                     reason,
@@ -623,6 +626,10 @@ impl AdapterHost {
                 },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
+        };
+        match diagnostic {
+            Some(diagnostic) => outcome.with_diagnostic(diagnostic),
+            None => outcome,
         }
     }
 
@@ -636,7 +643,8 @@ impl AdapterHost {
             Err(error) => return lost(self.unreadable(&read_reason(&error))),
         };
         let reason = |text: String| said(&text, redactor);
-        match result {
+        let diagnostic = result.diagnostic().cloned();
+        let outcome = match result {
             AdapterSubmitResult::Accepted { handle } => {
                 let handle = Value::Object(handle.into_iter().collect());
                 let text = grida_fx_core::value::canon(&handle);
@@ -649,13 +657,14 @@ impl AdapterHost {
                 }
                 Submitted::Accepted { handle }
             }
-            AdapterSubmitResult::Uncertain { reason: text } => match reason(text) {
+            AdapterSubmitResult::Uncertain { reason: text, .. } => match reason(text) {
                 Ok(reason) => Submitted::Uncertain { reason },
                 Err(place) => lost(self.unreadable(&place)),
             },
             AdapterSubmitResult::NotReceived {
                 reason: text,
                 retry_after_s,
+                ..
             } => match (reason(text), wait(retry_after_s)) {
                 (Ok(reason), Ok(retry_after)) => Submitted::NotReceived {
                     reason,
@@ -663,7 +672,7 @@ impl AdapterHost {
                 },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
-            AdapterSubmitResult::Refused { reason: text } => match reason(text) {
+            AdapterSubmitResult::Refused { reason: text, .. } => match reason(text) {
                 Ok(reason) => Submitted::Refused { reason },
                 Err(place) => lost(self.unreadable(&place)),
             },
@@ -671,6 +680,7 @@ impl AdapterHost {
                 reason: text,
                 retryable,
                 cost_usd,
+                ..
             } => match (reason(text), cost(cost_usd)) {
                 (Ok(reason), Ok(cost)) => Submitted::Failed {
                     reason,
@@ -679,6 +689,10 @@ impl AdapterHost {
                 },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
+        };
+        match diagnostic {
+            Some(diagnostic) => outcome.with_diagnostic(diagnostic),
+            None => outcome,
         }
     }
 
@@ -692,7 +706,8 @@ impl AdapterHost {
             Err(error) => return lost(self.unreadable(&read_reason(&error))),
         };
         let reason = |text: String| said(&text, redactor);
-        match result {
+        let diagnostic = result.diagnostic().cloned();
+        let outcome = match result {
             AdapterCollectResult::Answered(answer) => match self.answer(call, answer) {
                 Ok(answer) => Collected::Answered(answer),
                 Err(Refusal::Unreadable(place)) => lost(self.unreadable(&place)),
@@ -704,14 +719,19 @@ impl AdapterHost {
             AdapterCollectResult::Ended {
                 reason: text,
                 cost_usd,
+                ..
             } => match (reason(text), cost(cost_usd)) {
                 (Ok(reason), Ok(cost)) => Collected::Ended { reason, cost },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
-            AdapterCollectResult::Unreachable { reason: text } => match reason(text) {
+            AdapterCollectResult::Unreachable { reason: text, .. } => match reason(text) {
                 Ok(reason) => Collected::Unreachable { reason },
                 Err(place) => lost(self.unreadable(&place)),
             },
+        };
+        match diagnostic {
+            Some(diagnostic) => outcome.with_diagnostic(diagnostic),
+            None => outcome,
         }
     }
 }

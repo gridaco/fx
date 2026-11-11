@@ -246,6 +246,8 @@ impl Answer {
 /// The outcome of one send of a plain request.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Sent {
+    /// Supplementary evidence, independent of receipt, retry and billing semantics.
+    Diagnosed(Box<Sent>, Box<grida_fx_protocol::AdapterDiagnostic>),
     /// Provably not received: the connection or the send failed, or the provider said it took
     /// nothing. The engine may send the same request again under the same attempt, at $0.
     /// `retry_after` is the wait the provider asked for before that ([`retry_after`]; `None` when
@@ -272,6 +274,8 @@ pub enum Sent {
 /// The outcome of submitting a long job once.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Submitted {
+    /// Supplementary evidence, independent of receipt, retry and billing semantics.
+    Diagnosed(Box<Submitted>, Box<grida_fx_protocol::AdapterDiagnostic>),
     /// Provably not received; may be submitted again under the same attempt, at $0. `retry_after`
     /// as for [`Sent::NotReceived`].
     NotReceived {
@@ -304,6 +308,33 @@ impl Sent {
         }
     }
 }
+
+macro_rules! diagnostic_report {
+    ($name:ident) => {
+        impl $name {
+            /// Attach diagnostic evidence without changing the execution outcome.
+            pub fn with_diagnostic(self, diagnostic: grida_fx_protocol::AdapterDiagnostic) -> Self {
+                let (outcome, _) = self.into_report();
+                Self::Diagnosed(Box::new(outcome), Box::new(diagnostic))
+            }
+
+            /// Separate supplementary evidence from the outcome the retry owner interprets.
+            pub fn into_report(self) -> (Self, Option<grida_fx_protocol::AdapterDiagnostic>) {
+                let mut outcome = self;
+                let mut diagnostic = None;
+                while let Self::Diagnosed(inner, detail) = outcome {
+                    diagnostic.get_or_insert(*detail);
+                    outcome = *inner;
+                }
+                (outcome, diagnostic)
+            }
+        }
+    };
+}
+
+diagnostic_report!(Sent);
+diagnostic_report!(Submitted);
+diagnostic_report!(Collected);
 
 impl Submitted {
     /// [`Submitted::NotReceived`] with no wait asked for.
@@ -414,6 +445,8 @@ fn http_date(text: &str) -> Option<u64> {
 /// The outcome of collecting a long job by its handle. Collecting bills nothing new.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Collected {
+    /// Supplementary evidence, independent of receipt, retry and billing semantics.
+    Diagnosed(Box<Collected>, Box<grida_fx_protocol::AdapterDiagnostic>),
     /// The job's answer.
     Answered(Answer),
     /// The job ended without a result: the record becomes `settled`, the call fails

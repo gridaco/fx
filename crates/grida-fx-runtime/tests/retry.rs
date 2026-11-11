@@ -374,6 +374,7 @@ fn job_fields() -> JobRecord {
         state: JobState::Settled,
         handle: None,
         note: None,
+        diagnostic: None,
     }
 }
 

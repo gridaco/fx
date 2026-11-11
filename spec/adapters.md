@@ -144,6 +144,35 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
 
 ## 7. Downloads and reasons
 
+**Structured diagnostics.** A non-success outcome may additionally carry a
+`diagnostic`, as defined by `adapter_diagnostic` in the node protocol schema.
+It supplements the outcome and reason; it never changes receipt, retry,
+settlement or job-state semantics. Legacy hosts may omit it. Unknown native
+capabilities remain free of the standard capability request schemas: a project
+node declares the custom capability and calls its adapter through the same
+managed execution path, with arbitrary canonical JSON and file references.
+
+The diagnostic identifies its `source` (`engine`, `adapter`, `transport` or
+`provider`) and `phase` (`validate`, `upload`, `send`, `submit`, `poll`, `collect`
+or `download`). Optional members are `operation`, `http_status`, `code`, `field`,
+`message`, `request_id` and `task_id`. `detail` is `available`, `unavailable`,
+`unreadable` or `withheld`; `redacted` and `truncated` report changes to detail.
+Provider and route attribution comes from the managed call, not a host-supplied
+credential or URL. String detail is bounded and redacted before it reaches any
+record, event or RPC error. Only selected error fields may be extracted from a
+provider body; never attach a response body or headers. Extraction registers
+transient secrets and withholds sensitive input echoes. An unreadable body
+does not become evidence that a paid submission was not received.
+Input-echo checks apply to all diagnostic strings, including identifiers and
+operation names; an identifier-shaped echo is not safe merely because it has no
+spaces. Such optional metadata is withheld rather than partly rewritten.
+
+The engine forwards the sanitized diagnostic in the capability error's
+`data.diagnostic` and the failed node event's `diagnostic`. An uncertain job
+also retains it beside its note, so a later `job_unsettled` preserves the
+original evidence. SDK run failures expose it independently of node facts.
+An absent diagnostic in an older record means no diagnostic was recorded.
+
 **Downloads.**
 - A result file at a URL MUST be fetched **once** per send or collect, at the URL exactly as the provider gave it, on the download lane: no credential, no redirects and the response cap the adapter's reference gives. A built-in adapter accepts the provider's choice of result host under its reference's URL checks; FX keeps no provider CDN catalog. A project adapter's downloads through `fetch` remain confined to its declaration's `download_hosts`, with an empty list denying every download ([providers.md](providers.md) §1; §9 below). A failed fetch is not repeated within that send or collect. An adapter does not re-serialize the URL; it parses it only to check it. The default transport sends the URL as the WHATWG URL parser (Rust `url` crate, via reqwest, which has no raw-URI path) serializes it: in an http(s) query, controls, space, `"`, `<`, `>`, `'` and non-ASCII are percent-encoded; existing `%XX` escapes are kept; a default port is dropped, the host is lowercased, and `.`/`..` path segments are resolved.
 - A download URL may be signed. It MUST NOT be kept in an answer's `data`, a handle, a record, an event or a reason. Adapters add it to the redactor before using it.

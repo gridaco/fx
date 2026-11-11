@@ -279,7 +279,11 @@ fn sent_to<'a>(route: &Route, facts: &Facts<'a>) -> Vec<&'a Value> {
         ),
         "gg-video" => by("interface", "videos"),
         "gg-mesh" | "gg-rig" => by("id", route.contract["endpoint"].as_str().unwrap_or("")),
-        tripo::mesh::ADAPTER => by("id", tripo::mesh::PATH),
+        tripo::mesh::ADAPTER => {
+            let mut endpoints = by("id", tripo::mesh::PATH);
+            endpoints.extend(by("id", tripo::mesh::IMAGE_PATH));
+            endpoints
+        }
         tripo::rig::ADAPTER => by("id", tripo::rig::PATH),
         _ => by("id", &route.model),
     }
@@ -612,7 +616,8 @@ fn honoured(adapter: &str, capability: &str) -> BTreeSet<&'static str> {
         "gg-tool-loop" | "openrouter-tool-loop" => &["tool_use", "image_input"],
         "gg-video" => &["text_to_video"],
         "fal-queue" => &["text_to_video", "first_last_frame"],
-        "tripo-multiview" | "gg-mesh" => &["multiview", "pbr", "quad", "textured_mesh"],
+        "tripo-multiview" => &["image_input", "multiview", "pbr", "quad", "textured_mesh"],
+        "gg-mesh" => &["multiview", "pbr", "quad", "textured_mesh"],
         "tripo-rig" | "gg-rig" => &["biped", "glb_input", "rig_check"],
         "elevenlabs-sound-effect" => &["exact_duration"],
         "elevenlabs-speech" => &["audio_tags", "stability"],
@@ -844,16 +849,14 @@ fn limits_are_within_the_provider_s() {
         }
         if adapter == tripo::mesh::ADAPTER {
             let faces = parameter(&sent, "face_limit").expect("Tripo records face_limit");
-            let (min, max) = (faces["minimum"].as_i64(), faces["maximum"].as_i64());
-            let range = tripo::mesh::FACE_LIMIT;
-            if !(min.is_some_and(|min| *range.start() >= min)
-                && max.is_some_and(|max| *range.end() <= max))
-            {
+            if faces["type"] != "integer" {
                 gate.fail(
                     &route,
-                    format!("face_limit {range:?} is not within {min:?}..{max:?}"),
+                    "face_limit no longer has the integer wire shape".into(),
                 );
             }
+            // Provider ranges are informative, not an FX acceptance schema. The adapter
+            // forwards canonical integers and lets Tripo enforce model/topology limits.
         }
         // A structured call's default; an agent turn sends none (src/chat/mod.rs).
         if route.capability == "structured.generate" {

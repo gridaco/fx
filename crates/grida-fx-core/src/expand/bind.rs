@@ -79,6 +79,16 @@ fn implied_features(
     spec: &NodeSpec,
     with: &IndexMap<String, Val>,
 ) -> Vec<(&'static str, &'static str)> {
+    if spec.capability.as_deref() == Some("mesh.generate") {
+        return [("image", "image_input"), ("views", "multiview")]
+            .into_iter()
+            .filter(|(member, _)| {
+                with.get(*member)
+                    .is_some_and(|v| !matches!(v, Val::Null | Val::Missing))
+            })
+            .map(|(member, feature)| (feature, member))
+            .collect();
+    }
     if !matches!(
         spec.capability.as_deref(),
         Some("image.generate" | "image.edit")
@@ -178,6 +188,18 @@ impl Expander<'_> {
                 );
             }
             return (routes, prices);
+        }
+        if spec.capability.as_deref() == Some("mesh.generate") {
+            let present = |name| {
+                with.get(name)
+                    .is_some_and(|v| !matches!(v, Val::Null | Val::Missing))
+            };
+            if present("image") == present("views") {
+                self.problem(
+                    &format!("{where_}.with"),
+                    "mesh.generate needs exactly one of image or views",
+                );
+            }
         }
         let requires: BTreeSet<&str> = declared.requires.iter().map(String::as_str).collect();
         let capabilities: Vec<&str> = calls.keys().map(String::as_str).collect();
@@ -453,6 +475,60 @@ mod tests {
         // The route is still bound and priced.
         assert_eq!(bound["image.generate"].id(), "img-a@acme");
         assert_eq!(prices.len(), 1);
+    }
+
+    #[test]
+    fn mesh_sources_are_checked_while_the_source_file_is_still_pending() {
+        let mut declared = step("fx/mesh.generate@1");
+        declared.route = Some("mesh-a@acme".into());
+        let mut fixture = Fixture::new(&[("mesh", declared.clone())]);
+        fixture.routes = routes(serde_json::json!([{
+            "capability": "mesh.generate", "route": "mesh-a@acme", "price": {"usd": 0.01},
+            "features": ["multiview"]
+        }]));
+        let pending = || {
+            Val::Pending(Box::new(crate::val::Pending::of(
+                "steps.concept.outputs.image",
+                None,
+            )))
+        };
+        let mut problems = |values| {
+            let mut expander = fixture.expander();
+            expander.bind_routes(
+                &declared,
+                "mesh",
+                &paid("mesh.generate", "mesh.generate"),
+                &values,
+            );
+            expander
+                .problems
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            problems(IndexMap::from([("image".into(), pending())])),
+            ["mesh.with.image: mesh-a@acme does not support image_input"]
+        );
+        assert_eq!(
+            problems(IndexMap::new()),
+            ["mesh.with: mesh.generate needs exactly one of image or views"]
+        );
+        assert!(
+            problems(IndexMap::from([(
+                "views".into(),
+                Val::Object(IndexMap::from([
+                    ("front".into(), pending()),
+                    ("back".into(), pending())
+                ]))
+            )]))
+            .is_empty()
+        );
+        let both = problems(IndexMap::from([
+            ("image".into(), pending()),
+            ("views".into(), Val::Object(IndexMap::new())),
+        ]));
+        assert!(both.iter().any(|p| p.contains("exactly one")));
     }
 
     #[test]

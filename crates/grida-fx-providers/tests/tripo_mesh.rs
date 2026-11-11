@@ -69,13 +69,13 @@ impl Harness {
     fn submit(&self, call: &TestCall) -> Submitted {
         let outcome = block_on(self.mesh.submit(call));
         assert_clean(&format!("{outcome:?}"));
-        outcome
+        outcome.into_report().0
     }
 
     fn collect(&self, call: &TestCall, handle: Value) -> Collected {
         let outcome = block_on(self.mesh.collect(call, &handle));
         assert_clean(&format!("{:?}", without_bytes(&outcome)));
-        outcome
+        outcome.into_report().0
     }
 
     /// Every scripted exchange was used; API requests carry the key, downloads carry none.
@@ -329,8 +329,8 @@ fn defaults_jpeg_names_and_four_views_in_order() {
 }
 
 #[test]
-fn the_face_limit_bounds_are_inclusive() {
-    for limit in [48, 25_000] {
+fn face_counts_are_forwarded_without_a_provider_range_snapshot() {
+    for limit in [-1, 0, 47, 48, 25_000, 40_000, 50_000, 70_000] {
         let mut b = builder();
         let front = b.file("image/png", &front_png());
         let back = b.file("image/png", &back_png());
@@ -388,7 +388,9 @@ fn provider_options_set_no_member_of_the_paid_body() {
                             "provider_options": {"tripo": {*name: 1}}}))
             .build();
         assert_eq!(
-            block_on(offline_mesh(test_keys()).submit(&call)),
+            block_on(offline_mesh(test_keys()).submit(&call))
+                .into_report()
+                .0,
             Submitted::Refused {
                 reason: format!("provider_options.tripo.{name} is a member FX owns")
             }
@@ -400,7 +402,7 @@ fn provider_options_set_no_member_of_the_paid_body() {
 fn bad_requests_are_refused_before_anything_is_sent() {
     // spec/adapters.md §4; src/tripo/README.md, with a view Tripo does not take.
     let refused = |call: TestCall, keys: Keys| -> String {
-        match block_on(offline_mesh(keys).submit(&call)) {
+        match block_on(offline_mesh(keys).submit(&call)).into_report().0 {
             Submitted::Refused { reason } => {
                 assert_clean(&reason);
                 reason
@@ -457,15 +459,6 @@ fn bad_requests_are_refused_before_anything_is_sent() {
         ),
         alone
     );
-    for limit in [json!(47), json!(25_001), json!(-1)] {
-        assert_eq!(
-            refused(
-                with_views(&["front", "back"], json!({"face_limit": limit})),
-                test_keys()
-            ),
-            "face_limit is 48 to 25000"
-        );
-    }
     // The shape of the request (spec/capabilities.md §1, §7).
     assert_eq!(
         refused(
@@ -486,7 +479,7 @@ fn bad_requests_are_refused_before_anything_is_sent() {
             builder().request(json!({"quad": true})).build(),
             test_keys()
         ),
-        "mesh.generate needs views"
+        "mesh.generate needs exactly one of image or views"
     );
     assert_eq!(
         refused(
@@ -1584,5 +1577,280 @@ fn a_refusal_names_only_tripos_integer_error_code() {
             retryable: false,
         }
     );
+    h.done();
+}
+
+fn single_image_call() -> TestCall {
+    let mut builder = builder();
+    let image = builder.file("image/png", &front_png());
+    builder
+        .request(json!({"image": image, "face_limit": 1200, "texture": true, "pbr": false}))
+        .build()
+}
+
+fn image_post() -> Expect {
+    Expect::new(Method::Post, format!("{API}{}", mesh::IMAGE_PATH), Lane::Provider)
+        .credential("authorization", BEARER)
+        .body(ExpectBody::JsonText(r#"{"model":"P2-20260801","quad":false,"texture":true,"pbr":false,"face_limit":1200,"input":"image-token"}"#.into()))
+}
+
+#[test]
+fn a_single_image_uploads_once_submits_to_image_to_model_and_collects() {
+    let h = harness(vec![
+        upload("image.png", "image/png", &front_png(), "image-token"),
+        image_post().reply(ok(json!({"task_id": "single-1"}))),
+        success("single-1", json!({"model": STORAGE}), json!(12)),
+        download(STORAGE, &glb(1)),
+    ]);
+    let call = single_image_call();
+    assert_eq!(
+        h.submit(&call),
+        Submitted::Accepted {
+            handle: handle("single-1")
+        }
+    );
+    let answer = answered(h.collect(&call, handle("single-1")));
+    assert_eq!(answer.files["model"].kind, "model/gltf-binary");
+    assert_eq!(answer.cost, Some(Usd(120_000)));
+    assert_eq!(
+        h.methods_and_urls()
+            .iter()
+            .filter(|(method, _)| *method == Method::Post)
+            .count(),
+        2
+    );
+    h.done();
+
+    // A new adapter needs only the persisted handle; there is no upload or submission.
+    let h = harness(vec![
+        success("single-1", json!({"model": STORAGE}), json!(12)),
+        download(STORAGE, &glb(1)),
+    ]);
+    answered(h.collect(&call, handle("single-1")));
+    assert!(
+        h.methods_and_urls()
+            .iter()
+            .all(|(method, _)| *method == Method::Get)
+    );
+    h.done();
+}
+
+#[test]
+fn mesh_sources_are_exclusive_and_input_is_owned_before_any_upload() {
+    for request in [json!({}), json!({"image": null}), json!({"views": null})] {
+        let call = builder().request(request).build();
+        assert_eq!(
+            block_on(offline_mesh(test_keys()).submit(&call))
+                .into_report()
+                .0,
+            Submitted::Refused {
+                reason: "mesh.generate needs exactly one of image or views".into(),
+            }
+        );
+    }
+    let mut b = builder();
+    let image = b.file("image/png", &front_png());
+    let call = b
+        .request(json!({"image": image, "views": {"front": image}}))
+        .build();
+    assert_eq!(
+        block_on(offline_mesh(test_keys()).submit(&call))
+            .into_report()
+            .0,
+        Submitted::Refused {
+            reason: "mesh.generate needs exactly one of image or views".into(),
+        }
+    );
+    let mut b = builder();
+    let image = b.file("image/png", &front_png());
+    let call = b
+        .request(json!({"image": image, "provider_options": {"tripo": {"input": "override"}}}))
+        .build();
+    assert_eq!(
+        block_on(offline_mesh(test_keys()).submit(&call))
+            .into_report()
+            .0,
+        Submitted::Refused {
+            reason: "provider_options.tripo.input is a member FX owns".into(),
+        }
+    );
+}
+
+#[test]
+fn single_image_provider_errors_keep_evidence_without_changing_submission_outcomes() {
+    use grida_fx_protocol::{DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
+    for (status, body, uncertain) in [
+        (
+            400,
+            json!({"code": 1004, "field": "face_limit", "request_id": "req-single-1",
+            "message": format!("Invalid face_limit; {KEY} image-token https://assets.acme.test/x?signature=secret /private/native/image.png"),
+            "suggestion": "this field is never copied"}),
+            false,
+        ),
+        (
+            500,
+            json!({"code": 1000, "message": "Task receipt unknown"}),
+            true,
+        ),
+    ] {
+        let h = harness(vec![
+            upload("image.png", "image/png", &front_png(), "image-token"),
+            image_post().reply(HttpResponse::json(status, &body)),
+        ]);
+        let (outcome, diagnostic) = block_on(h.mesh.submit(&single_image_call())).into_report();
+        let diagnostic = diagnostic.expect("provider error evidence");
+        assert_eq!(diagnostic.source, DiagnosticSource::Provider);
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Submit);
+        assert_eq!(diagnostic.http_status, Some(status));
+        assert_eq!(
+            diagnostic.operation.as_deref(),
+            Some("generation.image-to-model")
+        );
+        assert_eq!(diagnostic.detail, DiagnosticDetail::Available);
+        if uncertain {
+            assert!(matches!(outcome, Submitted::Uncertain { .. }));
+        } else {
+            assert!(matches!(
+                outcome,
+                Submitted::Failed {
+                    cost: None,
+                    retryable: false,
+                    ..
+                }
+            ));
+            assert_eq!(diagnostic.field.as_deref(), Some("face_limit"));
+            assert_eq!(diagnostic.request_id.as_deref(), Some("req-single-1"));
+            assert!(diagnostic.redacted);
+            let text = serde_json::to_string(&diagnostic).unwrap();
+            for secret in [
+                KEY,
+                "image-token",
+                "signature=secret",
+                "/private/native",
+                "never copied",
+            ] {
+                assert!(!text.contains(secret), "{text}");
+            }
+        }
+        h.done();
+    }
+    let h = harness(vec![
+        upload("image.png", "image/png", &front_png(), "image-token"),
+        image_post().reply(HttpResponse::new(200, b"not JSON".to_vec())),
+    ]);
+    let (outcome, diagnostic) = block_on(h.mesh.submit(&single_image_call())).into_report();
+    assert!(matches!(outcome, Submitted::Uncertain { .. }));
+    assert_eq!(diagnostic.unwrap().detail, DiagnosticDetail::Unreadable);
+    h.done();
+}
+
+#[test]
+fn terminal_task_failures_keep_the_tasks_error_code_and_explanation() {
+    let h = harness(vec![read_expect("task-single").reply(ok(json!({
+        "task_id":"task-single","status":"failed","error_code": 42,
+        "error_message":"Source geometry could not be reconstructed from file_private_token",
+        "credits_consumed":0
+    })))]);
+    let (outcome, diagnostic) =
+        block_on(h.mesh.collect(&single_image_call(), &handle("task-single"))).into_report();
+    assert!(matches!(
+        outcome,
+        Collected::Ended {
+            cost: Some(Usd::ZERO),
+            ..
+        }
+    ));
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(
+        diagnostic.phase,
+        grida_fx_protocol::DiagnosticPhase::Collect
+    );
+    assert_eq!(diagnostic.code.as_deref(), Some("42"));
+    assert_eq!(diagnostic.task_id.as_deref(), Some("task-single"));
+    assert_eq!(
+        diagnostic.message.as_deref(),
+        Some("Source geometry could not be reconstructed from [redacted upload token]")
+    );
+    h.done();
+}
+
+#[test]
+fn single_image_face_counts_reach_tripo_for_both_topologies() {
+    for quad in [false, true] {
+        for limit in [40_000, 50_000, 70_000] {
+            let mut call = single_image_call();
+            call.call.request["face_limit"] = json!(limit);
+            call.call.request["quad"] = json!(quad);
+            let h = harness(vec![
+                upload("image.png", "image/png", &front_png(), "image-token"),
+                Expect::new(
+                    Method::Post,
+                    format!("{API}{}", mesh::IMAGE_PATH),
+                    Lane::Provider,
+                )
+                .credential("authorization", BEARER)
+                .body(ExpectBody::Json(json!({"model":"P2-20260801", "quad":quad,
+                        "texture":true,"pbr":false,"face_limit":limit,"input":"image-token"})))
+                .reply(HttpResponse::json(
+                    400,
+                    &json!({"code":1004,"field":"face_limit",
+                        "message":"Polycount rejected by this model and topology"}),
+                )),
+            ]);
+            let (outcome, diagnostic) = block_on(h.mesh.submit(&call)).into_report();
+            assert!(matches!(
+                outcome,
+                Submitted::Failed {
+                    retryable: false,
+                    ..
+                }
+            ));
+            assert_eq!(
+                diagnostic.unwrap().source,
+                grida_fx_protocol::DiagnosticSource::Provider
+            );
+            h.done();
+        }
+    }
+}
+
+#[test]
+fn local_mesh_limitations_are_adapter_validation_diagnostics() {
+    for case in ["options", "views", "format"] {
+        let mut b = builder();
+        let image = b.file(
+            "image/svg+xml",
+            b"<svg xmlns='http://www.w3.org/2000/svg'/>",
+        );
+        let request = match case {
+            "options" => json!({"image":image,"provider_options":{"tripo":{"model":"override"}}}),
+            "views" => json!({"views":{"front":image}}),
+            _ => json!({"image":image}),
+        };
+        let call = b.request(request).build();
+        let (outcome, diagnostic) = block_on(offline_mesh(test_keys()).submit(&call)).into_report();
+        assert!(matches!(outcome, Submitted::Refused { .. }));
+        let diagnostic = diagnostic.expect("local limitation identifies its owner");
+        assert_eq!(
+            diagnostic.source,
+            grida_fx_protocol::DiagnosticSource::Adapter
+        );
+        assert_eq!(
+            diagnostic.phase,
+            grida_fx_protocol::DiagnosticPhase::Validate
+        );
+        assert_eq!(diagnostic.http_status, None);
+    }
+}
+
+#[test]
+fn an_integral_float_keeps_the_historical_integer_wire_spelling() {
+    let mut call = single_image_call();
+    call.call.request["face_limit"] = json!(1200.0);
+    let h = harness(vec![
+        upload("image.png", "image/png", &front_png(), "image-token"),
+        image_post().reply(ok(json!({"task_id":"single-1"}))),
+    ]);
+    assert!(matches!(h.submit(&call), Submitted::Accepted { .. }));
     h.done();
 }

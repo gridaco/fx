@@ -83,6 +83,8 @@ pub struct Node {
     pub outputs: Value,
     pub cache: Option<String>,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<Value>,
     /// A recorded engine cause, kept separate from diagnostics and never inferred from status.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_reason: Option<Value>,
@@ -371,6 +373,7 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         outputs: json!({}),
         cache: None,
         error: text(value, "reason").map(str::to_string),
+        diagnostic: None,
         skip_reason: None,
         duration_ms: None,
         started_at: None,
@@ -777,6 +780,7 @@ fn project_inventory(
                     "node_started" => {
                         current.state = "running".into();
                         current.error = None;
+                        current.diagnostic = None;
                         current.cache = None;
                         current.outputs = json!({});
                         current.duration_ms = None;
@@ -797,6 +801,7 @@ fn project_inventory(
                         current.outputs = object(event.get("outputs"));
                         current.cache = text(event, "cache").map(str::to_string);
                         current.error = None;
+                        current.diagnostic = None;
                         let placed_step = step_folder(&current.path, &takes_of_id(&current.id));
                         collect_object(
                             &current.outputs,
@@ -813,6 +818,7 @@ fn project_inventory(
                         .into();
                         current.outputs = json!({});
                         current.cache = None;
+                        current.diagnostic = event.get("diagnostic").cloned();
                         current.error = text(event, "error")
                             .filter(|s| !s.is_empty())
                             .or_else(|| text(event, "reason"))

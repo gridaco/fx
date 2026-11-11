@@ -15,6 +15,7 @@ testing = ["dep:png"]
 
 [dependencies]
 grida-fx-core.workspace = true
+grida-fx-protocol.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
 tokio = { workspace = true, features = ["time", "sync"] }

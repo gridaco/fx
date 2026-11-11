@@ -66,7 +66,7 @@ impl Harness {
     fn submit(&self, call: &TestCall) -> Submitted {
         let outcome = block_on(self.rig.submit(call));
         assert_clean(&format!("{outcome:?}"));
-        outcome
+        outcome.into_report().0
     }
 
     fn collect(&self, call: &TestCall, handle: Value) -> Collected {
@@ -76,7 +76,7 @@ impl Harness {
         } else {
             assert_clean(&format!("{outcome:?}"));
         }
-        outcome
+        outcome.into_report().0.into_report().0
     }
 
     /// Every scripted exchange was used; API requests carry the key, downloads carry none.
