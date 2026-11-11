@@ -685,13 +685,28 @@ export class CanvasController {
   }
   /**
    * A card chosen outside the canvas, from a list: the camera glides to it, in the area the
-   * caller's panels leave free. A member of the open deck is already in view in its grid.
+   * caller's panels leave free. Use its displayed position, including open grids and stack shifts.
    */
   reveal(id: string, inset: CanvasInset = { left: 0, right: 0, top: 0, bottom: 0 }) {
     const node = this.layout.nodes.find((item) => item.id === id);
-    if (!node || (this.open && this.holding(this.open.deck, id) >= 0)) return;
+    if (!node) return;
+    if (this.open && this.holding(this.open.deck, id) < 0) this.collapse(true);
+    const box = { x: node.x, y: node.y, width: node.width, height: node.height };
+    for (const deck of this.decks) {
+      const at = this.holding(deck, id);
+      if (at < 0) continue;
+      if (this.open?.deck === deck) {
+        const position = cell(this.open.grid, at);
+        box.x += position.x - deck.boxes[at].x;
+        box.y += position.y - deck.boxes[at].y;
+      } else {
+        const shift = this.shifts.get(deck.cards[at]) ?? 0;
+        box.x += shift;
+        box.y += shift;
+      }
+    }
     const bounds = this.container.getBoundingClientRect();
-    this.animateCamera(() => this.viewport.reveal(node, bounds, inset, LEGIBLE_ZOOM));
+    this.animateCamera(() => this.viewport.reveal(box, bounds, inset, LEGIBLE_ZOOM));
   }
   private highlightConnections(nodeId: string | null, edgeId: string | null = null) {
     const next = this.drag?.moved ? new Set<string>() : nodeId !== null

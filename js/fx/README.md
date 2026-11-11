@@ -46,7 +46,61 @@ pointing at a Python that has it. A project whose steps are all paid built-ins, 
 TypeScript nodes needs only this package (and Node 24 or later for those nodes). See
 [Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#when-fx-needs-python).
 
-## The SDK
+## Browser viewer client
+
+The [viewer integration guide](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md)
+covers browser automation, host integration, context capture, and authorization.
+
+Use the separate browser-safe entry to communicate with an **already loaded** FX
+viewer window. It does not start an engine or open a tab:
+
+```ts
+import { ViewerClient } from "@grida/fx/viewer/client";
+
+// viewerWindow is a Window reference your application already owns.
+const client = new ViewerClient({
+  targetWindow: viewerWindow,
+  origin: "http://127.0.0.1:8787", // exact viewer origin, including port
+});
+const unsubscribe = await client.subscribe((context) => console.log(context.selection));
+const context = await client.getContext(); // capture afresh when the user sends a message
+await client.present({ action: "reveal_instance", instance_id: "prepare#1" });
+unsubscribe();
+client.dispose();
+```
+
+Use one client per source/target window pair and share it between local listeners.
+`getContext()` and `present()` return promises; `subscribe()` returns a promise
+for a local unsubscribe function. Options also accept `sourceWindow` (defaults to
+the current window) and `timeoutMs` (10 seconds by default). Public types and
+`ViewerClientError` are exported from this same entry. Errors have a `code`:
+for example `not_ready`, `not_found`, `unsupported_version`, or `timeout`. A timeout
+does not prove an action was unapplied; presentation is never automatically retried.
+
+Actions are `reveal_instance` with a recorded `instance_id`, `open_scope` with a
+recorded `scope_id` or `null`, `clear_selection`, and `fit`. Context identifies the
+current subject, scope and selection, without graph/value payloads or private file
+paths. Inspection of a take never changes the workflow's execution pick.
+
+The viewer accepts same-origin peers. A cross-origin host must first be explicitly
+authorized by trusted code in the viewer realm using
+`window.fx_viewer.allowHost(hostWindow, hostOrigin)`. Parent/opener identity alone
+does not authorize it. Existing HTTP/framing policies remain in force; the default
+local server does not become cross-origin frameable. Browser automation can use
+`window.fx_viewer.getContext()`, `.present(action)` and `.subscribe(listener)`
+directly in the viewer realm.
+
+After viewer navigation/reload, dispose the old client and create/subscribe a new
+one. Disposal clears messaging resources; it does not close the viewer. The
+[page API contract](https://github.com/gridaco/fx/blob/main/spec/viewer.md)
+defines wire messages, trust, context and compatibility.
+
+This subpath imports no Node SDK, engine launcher, UI or Node type declarations.
+Normal npm installation can still install the matching optional engine package;
+those files are not included in a browser bundle. The viewer application itself
+ships with the engine; this entry is a client, not a rendering/component SDK.
+
+## The Node SDK
 
 Every function drives the engine and reads the JSON it prints. Planning never spends; a run
 spends only with `live: true`, within a ceiling.

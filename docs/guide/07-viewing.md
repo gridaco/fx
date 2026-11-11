@@ -380,3 +380,6 @@ returns to the terminal state when that invocation ends. A resume resets the int
 This label does not prove the runner is still alive or that cleanup finished. Use
 [`inspect --control` or `cancel --wait`](08-run-control.md) for verified local control.
 The viewer has no cancellation button or write endpoint in this version.
+
+To connect a chat, editor, or browser automation to the current selection and
+presentation, see [Connect to the FX viewer](16-viewer-api.md).

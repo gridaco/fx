@@ -439,6 +439,8 @@ async function main(argv) {
  * (`dist/host-entry.js` is what the engine starts). */
 const SDK_MODULES = [
   "index",
+  "viewer-protocol",
+  "viewer/client",
   "cli",
   "binary",
   "platforms",

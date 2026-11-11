@@ -3,7 +3,7 @@
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { platforms } from "../src/platforms.js";
 import { packageRoot, repoRoot, SLOW, temporaryFolder } from "./support.js";
@@ -67,7 +67,7 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
 
   test(
     "@grida/fx and an engine package, packed",
-    () => {
+    async () => {
       const engine = join(folder.path, "engine");
       writeFileSync(engine, elf(platform.cpu, "\0GLIBC_2.17\0GLIBC_2.28\0GLIBC_PRIVATE\0"));
       const out = join(folder.path, "out");
@@ -105,10 +105,30 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
         "engine-errors",
         "stand-in",
         "socket",
+        "viewer-protocol",
+        "viewer/client",
       ]) {
         expect(statSync(join(out, "packages", "fx", "dist", `${module}.js`)).isFile()).toBe(true);
         expect(statSync(join(out, "packages", "fx", "dist", `${module}.d.ts`)).isFile()).toBe(true);
       }
+
+      // Resolve the assembled package's real export, with no Node ambient types or engine.
+      expect(sdk.exports["./viewer/client"]).toEqual({ types: "./dist/viewer/client.d.ts", default: "./dist/viewer/client.js" });
+      const consumer = join(folder.path, "browser-consumer");
+      mkdirSync(join(consumer, "node_modules", "@grida"), { recursive: true });
+      symlinkSync(join(out, "packages", "fx"), join(consumer, "node_modules", "@grida", "fx"), "dir");
+      const entry = join(consumer, "index.ts");
+      writeFileSync(entry, 'import { ViewerClient } from "@grida/fx/viewer/client";\nconst client = new ViewerClient({ targetWindow: window, sourceWindow: window, origin: window.location.origin });\nvoid client.getContext();\n');
+      writeFileSync(join(consumer, "tsconfig.json"), JSON.stringify({ compilerOptions: {
+        target: "ES2022", lib: ["ES2022", "DOM"], types: [], strict: true, skipLibCheck: false,
+        module: "ESNext", moduleResolution: "Bundler", noEmit: true,
+      }, files: ["index.ts"] }));
+      const declarations = spawnSync("node", [join(packageRoot, "node_modules", "typescript", "bin", "tsc"), "-p", join(consumer, "tsconfig.json")], { encoding: "utf8" });
+      expect(declarations.stdout + declarations.stderr).toBe("");
+      expect(declarations.status).toBe(0);
+      const browser = await Bun.build({ entrypoints: [entry], target: "browser" });
+      expect(browser.success).toBeTrue();
+      expect(browser.logs).toHaveLength(0);
 
       const engineFolder = join(out, "packages", name);
       const package_ = JSON.parse(readFileSync(join(engineFolder, "package.json"), "utf8"));

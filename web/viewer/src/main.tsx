@@ -1,13 +1,48 @@
 import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { OutputArchiveController, ServiceIndexProjection, ViewerController, elapsedLabel, outputFiles, ownsKeys, priceLabel, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
 import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
 const apiBase = entryController.route?.api_base ?? "/api";
 const controller = new ViewerController(undefined, { apiBase });
+const presentation = new ViewerPresentation({
+  getSnapshot: controller.getSnapshot,
+  restore: (scope, selected) => controller.restore(scope, selected),
+  reference: () => {
+    const route = entryController.route;
+    if (!route?.project_id || !route.entry_id || route.kind === "root") return undefined;
+    return { kind: "service_entry", project_id: route.project_id, entry_kind: route.kind, entry_id: route.entry_id };
+  },
+});
+const page = new ViewerPage(window, {
+  getContext: () => {
+    const entry = entryController.getSnapshot();
+    if (entry.kind === "catalog") return {
+      subject: { kind: "catalog" }, scope_id: null, selection: null, sampled_at: Date.now(),
+      ...(entry.error ? { retained: true as const } : {}),
+    };
+    if (entry.kind !== "viewer") throw new ViewerPresentationError("not_ready", "No viewer evidence is loaded.");
+    return presentation.getContext();
+  },
+  present: (action) => {
+    if (entryController.getSnapshot().kind === "catalog") throw new ViewerPresentationError("unavailable", "The project catalog has no workflow canvas.");
+    return presentation.present(action);
+  },
+  subscribe: (changed) => {
+    const entry = entryController.subscribe(changed);
+    const workflow = controller.subscribe(changed);
+    return () => { entry(); workflow(); };
+  },
+});
+// Same-realm browser automation and trusted host preload code use this page facade.
+Object.defineProperty(window, "fx_viewer", { configurable: true, value: Object.freeze({
+  getContext: page.getContext, present: page.present, subscribe: page.subscribe, allowHost: page.allowHost,
+}) });
+if (import.meta.hot) import.meta.hot.dispose(() => page.dispose());
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
 /** A titled set of named values, after `children`; nothing when the set is empty. */
@@ -143,6 +178,18 @@ function ScopeDetails({ node }: { node: CanvasStep }) {
   </>;
 }
 
+/** Floating chrome belongs to this page; the canvas receives only its measured insets. */
+function canvasInset(pane: HTMLElement) {
+  const box = pane.getBoundingClientRect();
+  const edge = (selector: string) => pane.querySelector(selector)?.getBoundingClientRect();
+  return {
+    left: Math.max(0, (edge(".fx-steps")?.right ?? box.left) - box.left),
+    right: Math.max(0, box.right - (edge(".fx-details")?.left ?? box.right)),
+    top: Math.max(0, (edge(".fx-bar")?.bottom ?? box.top) - box.top),
+    bottom: 0,
+  };
+}
+
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
@@ -177,6 +224,16 @@ function WorkflowView() {
   // A step chosen from the list brings its card into the canvas the open panels leave free.
   const pane = useRef<HTMLElement>(null);
   const canvas = useRef<WorkflowCanvasHandle>(null);
+  const canvasLoaded = view !== null;
+  useEffect(() => {
+    if (!canvasLoaded) return;
+    return presentation.attachCanvas((next, focus) => {
+      // Commit the controller's selection/scope and its details before measuring the free area.
+      flushSync(() => { setAbout(false); if (focus !== null) setSteps(false); });
+      if (!canvas.current || !pane.current) throw new ViewerPresentationError("not_ready", "The workflow canvas is not mounted.");
+      canvas.current.present(next.graph, next.layout, next.selected, next.scope, focus, canvasInset(pane.current));
+    });
+  }, [canvasLoaded]);
   const [reveal, setReveal] = useState<{ id: string } | null>(null);
   const inspectSource = (id: string) => {
     if (!run?.nodes.some((node) => node.id === id)) return;
@@ -188,14 +245,7 @@ function WorkflowView() {
   };
   useEffect(() => {
     if (!reveal || !pane.current) return;
-    const box = pane.current.getBoundingClientRect();
-    const edge = (selector: string) => pane.current!.querySelector(selector)?.getBoundingClientRect();
-    canvas.current?.reveal(reveal.id, {
-      left: Math.max(0, (edge(".fx-steps")?.right ?? box.left) - box.left),
-      right: Math.max(0, box.right - (edge(".fx-details")?.left ?? box.right)),
-      top: Math.max(0, (edge(".fx-bar")?.bottom ?? box.top) - box.top),
-      bottom: 0,
-    });
+    canvas.current?.reveal(reveal.id, canvasInset(pane.current));
   }, [reveal]);
   // Esc closes the details, then the step list; an open deck takes it before them, and the canvas's own Esc after.
   useEffect(() => {

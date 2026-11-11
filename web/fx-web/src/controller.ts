@@ -101,6 +101,16 @@ export class ViewerController {
     const breadcrumbs = this.navigation.getSnapshot().breadcrumbs;
     if (breadcrumbs.length > 1) this.goToScope(breadcrumbs[breadcrumbs.length - 2].id);
   };
+  /** Restore presentation using recorded scope membership, rejecting before mutation. */
+  restore(scope: string | null, selected: string | null): boolean {
+    const view = this.state.view;
+    if (!view || (scope !== null && !navigationScopes(view.scopes).some((item) => item.id === scope))) return false;
+    const graph = canvasGraph(view, scope, this.apiBase);
+    if (selected !== null && !graph.nodes.some((node) => node.id === selected)) return false;
+    if (!this.navigation.restore(scope, selected)) return false;
+    this.update(this.project(view));
+    return true;
+  }
   private apply(view: ViewerView, layout: LayoutReport | null, cancelling = false) {
     this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
     this.update({ view, layout, ...this.project(view), cancelling, error: null });
@@ -211,12 +221,12 @@ export class CanvasViewport {
   }
   /**
    * Centres a box in the part of the canvas the inset leaves free. A zoom at which titles read
-   * stays; below it the camera zooms in to 100 %, and never past what fits. An inset that leaves
-   * too little room is ignored rather than squeezing the box.
+   * stays; below it the camera zooms in to 100 %, and never past what fits. Honor narrow usable
+   * space; only fall back to the canvas when the inset leaves no room beyond the padding.
    */
   reveal(box: { x: number; y: number; width: number; height: number }, size: { width: number; height: number }, inset: CanvasInset, legible: number) {
     let area = { x: inset.left, y: inset.top, width: size.width - inset.left - inset.right, height: size.height - inset.top - inset.bottom };
-    if (area.width < 240 || area.height < 160) area = { x: 0, y: 0, width: size.width, height: size.height };
+    if (area.width <= 32 || area.height <= 32) area = { x: 0, y: 0, width: size.width, height: size.height };
     if (area.width <= 0 || area.height <= 0) return;
     const fits = Math.min((area.width - 32) / box.width, (area.height - 32) / box.height);
     const zoom = Math.max(this.minimumZoom, Math.min(this.state.zoom >= legible ? this.state.zoom : 1, fits));
