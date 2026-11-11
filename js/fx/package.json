@@ -1,7 +1,7 @@
 {
   "name": "@grida/fx",
   "version": "0.8.0",
-  "description": "Grida FX for JavaScript and TypeScript: the grida-fx command; an SDK to write workflows, builders, node types and stand-ins and to drive the engine; and the TypeScript node host.",
+  "description": "Grida FX for JavaScript and TypeScript: the grida-fx command; an SDK to write workflows, builders, node types and stand-ins and to drive the engine; the TypeScript node host; and a browser-safe viewer client.",
   "keywords": ["grida", "fx", "workflow", "generative", "assets", "pipeline"],
   "homepage": "https://grida.co/fx",
   "license": "Apache-2.0",
@@ -15,6 +15,7 @@
   "exports": {
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./cli": { "types": "./dist/cli.d.ts", "default": "./dist/cli.js" },
+    "./viewer/client": { "types": "./dist/viewer/client.d.ts", "default": "./dist/viewer/client.js" },
     "./package.json": "./package.json"
   },
   "files": ["bin/grida-fx.js", "dist", "README.md", "LICENSE"],

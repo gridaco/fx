@@ -109,6 +109,10 @@ are still Python (decision 8).
   [local workflow-plan and run viewer](../guide/07-viewing.md), the read-only node canvas with
   its automatic grid and decks, live observation, the persistent project service,
   [portable recorded-run exports](../../spec/exports.md) and the shared static browser reader.
+- [Viewer interoperability](viewer-interoperability.md): accepted v1 scope for a
+  page-level `postMessage` API and the `@grida/fx/viewer/client` SDK entry for
+  context, subscriptions and presentation actions. Implemented in source for #126
+  (2026-11-11); pending release.
 - Standard-library node bodies in Rust, with a planned rekey (decision 8). This lets a TypeScript project that uses them run without Python, the other half of decision 2, and also makes their outputs the same bytes on every platform. Today Pillow's Linux x86-64 build writes other PNG bytes than its macOS arm64 build for some pictures, so a cache filled on one platform misses on the other for every paid call downstream of a std picture output.
 
 ## Identity

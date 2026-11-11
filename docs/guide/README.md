@@ -46,6 +46,7 @@ steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
 13. [AI providers](13-providers.md): no provider, your own Codex or Grok Build, Grida Gateway or your own keys, and what each serves
 14. [Images from your own Grok Build](14-grok.md): no API key, with your Grok subscription, and its caveats
 15. [Community providers](15-community-providers.md): a provider of your own, from a declaration, the OpenAI-compatible family or an adapter in Python or TypeScript
+16. [Connect to the FX viewer](16-viewer-api.md): current selection, context subscriptions, presentation, and browser/host integration
 
 ## Example projects
 

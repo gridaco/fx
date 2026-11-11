@@ -76,17 +76,16 @@ export class ExportViewerController {
     if (breadcrumbs.length > 1) this.goToScope(breadcrumbs[breadcrumbs.length - 2].id);
   };
 
-  /** Restore a deep link by walking recorded parent scopes, never by guessing path segments. */
+  /** Restore a deep link using recorded membership, rejecting before mutation. */
   restore(scope: string | null, selected: string | null) {
     if (!this.state.recording) return false;
     const scopes = new Map(navigationScopes(this.state.recording.manifest.view.scopes).map((item) => [item.id, item]));
     if (scope !== null && !scopes.has(scope)) return false;
-    this.navigation.goTo(null);
-    const ancestors: string[] = [];
-    for (let at = scope; at !== null; at = scopes.get(at)?.parent ?? null) ancestors.unshift(at);
-    for (const id of ancestors) if (!this.navigation.open(id)) return false;
+    const graph = exportCanvasGraph(this.state.recording, scope);
+    if (selected !== null && !graph.nodes.some((node) => node.id === selected)) return false;
+    if (!this.navigation.restore(scope, selected)) return false;
     this.update(this.project(this.state.recording));
-    return this.select(selected);
+    return true;
   }
 
   dispose() { this.request?.abort(); this.request = null; this.listeners.clear(); }

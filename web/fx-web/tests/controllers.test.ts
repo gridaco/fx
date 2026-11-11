@@ -94,7 +94,13 @@ describe("vanilla canvas viewport", () => {
     const tall = { x: 0, y: 0, width: 250, height: 2000 };
     viewport.reveal(tall, size, inset, 11 / 13);
     expect(centre(viewport, tall).zoom).toBeCloseTo((1155 - 32) / 2000);
-    // Panels that leave too little room are ignored.
+    // A narrow desktop pane still honors the space left beside its details panel.
+    viewport.restore({ x: 0, y: 0, zoom: 1 });
+    viewport.reveal(card, { width: 600, height: 650 }, { left: 0, right: 372, top: 50, bottom: 0 }, 11 / 13);
+    const narrow = viewport.getSnapshot();
+    expect(narrow.x + card.x * narrow.zoom).toBeGreaterThanOrEqual(16);
+    expect(narrow.x + (card.x + card.width) * narrow.zoom).toBeLessThanOrEqual(212);
+    // Insets leaving no space beyond the padding are ignored.
     viewport.restore({ x: 0, y: 0, zoom: 1 });
     viewport.reveal(card, { width: 375, height: 812 }, { left: 359, right: 0, top: 0, bottom: 0 }, 11 / 13);
     expect(centre(viewport).x).toBeCloseTo(187.5);

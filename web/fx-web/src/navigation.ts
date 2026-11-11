@@ -54,4 +54,12 @@ export class WorkflowNavigation {
   }
 
   select(id: string | null) { this.selections.set(this.current, id); }
+
+  /** Enter an already validated recorded scope without intermediate navigation. */
+  restore(scope: string | null, selected: string | null): boolean {
+    if (scope !== null && !this.scopes.has(scope)) return false;
+    this.current = scope;
+    this.selections.set(scope, selected);
+    return true;
+  }
 }

@@ -642,6 +642,26 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
+- **Viewer context and presentation.** The engine-shipped page exposes
+  `window.fx_viewer.getContext()`, `.subscribe(listener)` (returns unsubscribe), and
+  `.present(action)` to browser automation in that page. Context identifies the
+  displayed plan/run/catalog, recorded workflow scope and selection, with
+  `sampled_at` and `retained: true` when showing data after a failed read; it omits
+  values, diagnostics, media and private paths. Read it afresh when a user sends a
+  message. Actions are `reveal_instance` with a recorded `instance_id`, `open_scope`
+  with a recorded `scope_id` or `null`, `clear_selection`, and `fit`. They change
+  presentation only, never execution picks or records. No loaded evidence returns
+  `not_ready`; missing targets return `not_found`; catalog presentation is
+  `unavailable`. A successful result confirms applied state, not paint or tab activation.
+  Reveal uses the displayed stack/grid position after panning and the space left by floating panels.
+  Hosts with an existing window use the browser-safe `ViewerClient` from
+  `@grida/fx/viewer/client`: async `getContext`, `present`, `subscribe`, and `dispose`.
+  Use one client per window pair and recreate it after viewer navigation/reload.
+  Same-origin peers are accepted; a cross-origin peer requires trusted viewer-realm
+  code to call `window.fx_viewer.allowHost(hostWindow, exactOrigin)` (returns revoke).
+  An opener/parent is not automatically trusted. HTTP/framing policies remain unchanged.
+  The client does not launch FX, manage tabs or retry presentation on timeout.
+  See https://github.com/gridaco/fx/blob/main/spec/viewer.md for wire protocol v1.
 - **Canvas previews.** A run card shows its first available image output, otherwise offers its
   first available `video/*` output to the browser's native player. Container and codec support
   depend on the browser. A skipped card with reserved preview space but no preview candidate
@@ -1507,6 +1527,7 @@ changed-file/field/operation identities and redacted provider errors, tested thr
 - [Running](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md): CLI, SDKs, keys, stand-ins
 - [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md)
 - [Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md): a provider of your own, by declaration, the OpenAI-compatible family or an adapter
+- [Connect to the FX viewer](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md): browser automation, client SDK, selection/context, presentation and host authorization
 - [Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md)
 - [Examples](https://github.com/gridaco/fx/tree/main/examples): complete projects
 

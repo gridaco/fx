@@ -9,11 +9,15 @@
     "build:viewer": "bun --no-env-file run --cwd web/viewer build",
     "check:viewer": "bun --no-env-file run --cwd web/viewer check",
     "test:viewer": "bun --no-env-file test web/fx-web/tests",
+    "test:viewer:browser": "bun --no-env-file tools/check_viewer_browser.mjs",
     "dev:viewer": "bun --no-env-file run --cwd web/viewer dev",
     "dev:www": "bun --no-env-file run --cwd www dev",
     "check:www": "bun --no-env-file run --cwd www check",
     "test:www": "bun --no-env-file run --cwd www test",
     "build:www": "bun --no-env-file run --cwd www build",
     "preview:www": "bun --no-env-file run --cwd www preview"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2"
   }
 }
