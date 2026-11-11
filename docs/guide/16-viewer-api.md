@@ -4,9 +4,9 @@ Use the viewer API to connect a chat, editor, or browser automation to an FX
 viewer the user is already working in. You can read the current selection,
 observe changes, and ask the viewer to show a recorded instance or workflow scope.
 
-This guide describes the current source implementation, pending release. An older
-installed viewer may not expose `window.fx_viewer`, and an older `@grida/fx`
-package may not contain the client entry shown below.
+The viewer API requires FX 0.8.1 or later. An older installed viewer may not
+expose `window.fx_viewer`, and an older `@grida/fx` package may not contain the
+client entry shown below.
 
 First open a plan or recorded run using [Viewing workflows and runs](07-viewing.md).
 The viewer must have loaded its evidence before context is available. Your
