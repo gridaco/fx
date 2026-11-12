@@ -1,4 +1,4 @@
-import { createElement, X } from "lucide";
+import { ArrowLeft, createElement, Maximize, Minimize } from "lucide";
 import type { CanvasModelPreview } from "./graph";
 import type { Artifact } from "./index";
 import { ModelSourceController } from "./model";
@@ -105,6 +105,7 @@ interface Active { binding: Binding; controller: ModelPreviewController }
 export class CardModels {
   readonly player = document.createElement("div");
   private readonly mount = document.createElement("div");
+  private readonly fullscreenButton = document.createElement("button");
   private readonly abort = new AbortController();
   private readonly bindings = new Map<Element, Binding>();
   private readonly stills = new Map<string, string>();
@@ -114,6 +115,7 @@ export class CardModels {
   private readonly observer: IntersectionObserver;
   private job?: { key: string; abort: AbortController };
   private active?: Active;
+  private fullscreenRequest?: { active: Active; focus?: Binding };
   private following = 0;
   private box = "";
 
@@ -123,16 +125,29 @@ export class CardModels {
     this.player.className = "fx-canvas-model-player"; this.player.hidden = true; this.player.tabIndex = -1;
     this.player.setAttribute("role", "group");
     this.mount.className = "fx-canvas-model-mount";
-    const close = document.createElement("button"); close.type = "button"; close.className = "fx-canvas-model-close";
-    close.setAttribute("aria-label", "Close 3D preview"); close.title = "Close 3D preview";
-    close.append(createElement(X, { width: 14, height: 14, "aria-hidden": "true" }));
-    close.addEventListener("click", () => this.stop(), { signal: this.abort.signal });
-    this.player.append(this.mount, close);
+    const back = document.createElement("button"); back.type = "button"; back.className = "fx-canvas-model-control fx-canvas-model-back";
+    back.setAttribute("aria-label", "Back to poster"); back.title = "Back to poster";
+    back.append(createElement(ArrowLeft, { width: 14, height: 14, "aria-hidden": "true" }));
+    back.addEventListener("click", () => this.stop(true), { signal: this.abort.signal });
+    this.fullscreenButton.type = "button"; this.fullscreenButton.className = "fx-canvas-model-control fx-canvas-model-fullscreen";
+    this.fullscreenButton.addEventListener("click", () => this.fullscreen(), { signal: this.abort.signal });
+    this.player.append(this.mount, back, this.fullscreenButton);
+    this.renderFullscreen();
     for (const type of ["pointerdown", "pointerup", "click", "dblclick", "wheel"]) this.player.addEventListener(type, event => event.stopPropagation(), { signal: this.abort.signal });
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !this.active || !this.host.contains(event.target as Node)) return;
-      event.preventDefault(); event.stopPropagation(); this.stop(true);
+      event.preventDefault(); event.stopPropagation();
+      if (this.fullscreened) void this.exitFullscreen();
+      else this.stop(true);
     }, { capture: true, signal: this.abort.signal });
+    this.player.addEventListener("keydown", event => {
+      if (event.key.toLowerCase() !== "f" || event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey
+        || (event.target as Element).closest("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault(); event.stopPropagation(); this.fullscreen();
+    }, { signal: this.abort.signal });
+    document.addEventListener("fullscreenchange", () => {
+      this.box = ""; this.renderFullscreen(); this.recheck();
+    }, { signal: this.abort.signal });
     document.addEventListener("pointerdown", event => {
       const target = event.target as Element;
       if (!this.active || this.player.contains(target) || target.closest(".fx-canvas-model-open")) return;
@@ -185,7 +200,7 @@ export class CardModels {
 
   recheck(): void {
     for (const binding of this.bindings.values()) this.syncControl(binding);
-    if (this.active && (document.hidden || !this.eligible(this.active.binding, false))) this.stop();
+    if (this.active && !this.activeEligible()) this.stop();
     if (this.job && ![...this.bindings.values()].some(binding => keyOf(binding.preview) === this.job!.key && this.eligible(binding, false))) this.job.abort.abort();
     for (const key of this.queue.keys()) if (![...this.bindings.values()].some(binding => keyOf(binding.preview) === key && this.eligible(binding, false))) this.queue.delete(key);
     for (const binding of this.bindings.values()) if (this.eligible(binding)) this.enqueue(binding);
@@ -196,13 +211,13 @@ export class CardModels {
     const active = this.active;
     if (!active) return;
     const focused = this.player.contains(document.activeElement);
+    const focus = focused || restoreFocus ? active.binding : undefined;
+    if (this.fullscreenRequest?.active === active) this.fullscreenRequest.focus = focus;
     this.active = undefined; cancelAnimationFrame(this.following); this.following = 0; this.box = "";
+    void this.exitFullscreen(focus);
     active.binding.group.classList.remove("is-shown"); active.controller.dispose();
     this.player.hidden = true; this.player.classList.remove("is-shown");
-    if (focused || restoreFocus) {
-      const target = active.binding.open.isConnected && this.canInspect(active.binding) ? active.binding.open : this.host;
-      target.focus({ preventScroll: true });
-    }
+    if (focus) this.restoreFocus(focus);
   }
 
   dispose(): void {
@@ -213,9 +228,57 @@ export class CardModels {
   }
 
   private eligible(binding: Binding, visible = true): boolean {
-    if (document.hidden || !binding.preview.url || !binding.frame.isConnected || this.covered(binding.group) || (visible && !binding.visible)) return false;
+    if (!this.current(binding) || (visible && !binding.visible)) return false;
     const frame = binding.frame.getBoundingClientRect(), host = this.host.getBoundingClientRect();
     return frame.width > 0 && frame.height > 0 && frame.right > host.left && frame.left < host.right && frame.bottom > host.top && frame.top < host.bottom;
+  }
+
+  /** Fullscreen owns its viewport, while the recording still owns source availability. */
+  private activeEligible(): boolean {
+    if (!this.active || !this.current(this.active.binding)) return false;
+    return this.fullscreened || this.fullscreenRequest?.active === this.active || this.eligible(this.active.binding, false);
+  }
+
+  private current(binding: Binding): boolean {
+    return !document.hidden && Boolean(binding.preview.url) && binding.frame.isConnected && !this.covered(binding.group);
+  }
+
+  private get fullscreened(): boolean { return document.fullscreenElement === this.player; }
+
+  /** The same mounted model retains its camera, clip and playback through size changes. */
+  private fullscreen(): void {
+    const active = this.active;
+    if (!active || !document.fullscreenEnabled || typeof this.player.requestFullscreen !== "function") return;
+    if (this.fullscreened) { void this.exitFullscreen(); return; }
+    if (this.fullscreenRequest?.active === active) return;
+    const request: { active: Active; focus?: Binding } = { active };
+    this.fullscreenRequest = request;
+    void this.player.requestFullscreen().then(async () => {
+      // A replacement preview may have its own newer request. Do not tear that one down.
+      if (this.fullscreenRequest === request && (this.active !== active || this.abort.signal.aborted)) await this.exitFullscreen(request.focus);
+    }).catch(() => {}).finally(() => {
+      if (this.fullscreenRequest === request) this.fullscreenRequest = undefined;
+      if (!this.abort.signal.aborted) { this.renderFullscreen(); this.recheck(); }
+    });
+  }
+
+  private async exitFullscreen(focus?: Binding): Promise<void> {
+    if (!this.fullscreened) return;
+    await document.exitFullscreen().catch(() => {});
+    if (focus && !this.active && !this.abort.signal.aborted) this.restoreFocus(focus);
+  }
+
+  private restoreFocus(binding: Binding): void {
+    const target = binding.open.isConnected && this.canInspect(binding) ? binding.open : this.host;
+    target.focus({ preventScroll: true });
+  }
+
+  private renderFullscreen(): void {
+    this.fullscreenButton.hidden = !document.fullscreenEnabled || typeof this.player.requestFullscreen !== "function";
+    const label = this.fullscreened ? "Exit full screen" : "Full screen";
+    if (this.fullscreenButton.getAttribute("aria-label") === label) return;
+    this.fullscreenButton.setAttribute("aria-label", label); this.fullscreenButton.title = label;
+    this.fullscreenButton.replaceChildren(createElement(this.fullscreened ? Minimize : Maximize, { width: 14, height: 14, "aria-hidden": "true" }));
   }
 
   private paint(binding: Binding): void {
@@ -318,12 +381,14 @@ export class CardModels {
 
   private follow = (): void => {
     if (!this.active) return;
-    if (!this.eligible(this.active.binding, false)) { this.stop(); return; }
-    const frame = this.active.binding.frame.getBoundingClientRect(), host = this.host.getBoundingClientRect();
-    const values = [frame.left - host.left, frame.top - host.top, frame.width, frame.height], box = values.join();
-    if (box !== this.box) {
-      this.box = box;
-      (["left", "top", "width", "height"] as const).forEach((side, index) => { this.player.style[side] = `${values[index]}px`; });
+    if (!this.activeEligible()) { this.stop(); return; }
+    if (!this.fullscreened) {
+      const frame = this.active.binding.frame.getBoundingClientRect(), host = this.host.getBoundingClientRect();
+      const values = [frame.left - host.left, frame.top - host.top, frame.width, frame.height], box = values.join();
+      if (box !== this.box) {
+        this.box = box;
+        (["left", "top", "width", "height"] as const).forEach((side, index) => { this.player.style[side] = `${values[index]}px`; });
+      }
     }
     this.following = requestAnimationFrame(this.follow);
   };

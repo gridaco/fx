@@ -194,10 +194,16 @@
 .fx-canvas-model-player[hidden] { display: none; }
 .fx-canvas-model-player:not(.is-shown) { opacity: 0; pointer-events: none; }
 .fx-canvas-model-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
+.fx-canvas-model-player:fullscreen, .fx-canvas-model-player:fullscreen .fx-model-viewport { border-radius: 0; }
+.fx-canvas-model-player::backdrop { background: #f7f7f8; }
 .fx-canvas-model-mount, .fx-canvas-model-player .fx-model-preview { height: 100%; }
 .fx-canvas-model-player .fx-model-viewport { height: 100%; aspect-ratio: auto; }
 .fx-canvas-model-player .fx-model-footer { position: absolute; bottom: 4px; left: 4px; right: 32px; margin: 0; }
 .fx-canvas-model-player .fx-model-footer[hidden] { display: none; }
 .fx-canvas-model-player .fx-model-controls { max-width: 100%; border-radius: 4px; background: #fffffff0; }
-.fx-canvas-model-close { position: absolute; top: 4px; right: 4px; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: #fffffff0; color: #52525b; cursor: pointer; }
-.fx-canvas-model-close:hover { background: white; color: #27272a; }
+.fx-canvas-model-control { position: absolute; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: #fffffff0; color: #52525b; cursor: pointer; }
+.fx-canvas-model-control[hidden] { display: none; }
+.fx-canvas-model-control:hover { background: white; color: #27272a; }
+.fx-canvas-model-control:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.fx-canvas-model-back { top: 4px; left: 4px; }
+.fx-canvas-model-fullscreen { bottom: 4px; right: 4px; }

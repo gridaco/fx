@@ -82,11 +82,21 @@ one interactive model over its card's frame without opening details, expanding a
 deck or changing selection or execution picks. The cube button keeps its existing
 appearance and remains the keyboard action. Orbit, pan,
 zoom and embedded animation use the same minimal controls as details. The overlay
-follows the card as the workflow camera moves. Close or Escape restores the still
-and keyboard focus to the activating control while it remains available and
+follows the card as the workflow camera moves. A top-left **Back to poster** arrow
+restores the still and keyboard focus to the activating control while it remains available and
 uncovered, otherwise to the canvas. Covered or offscreen controls leave the tab order. Covered
 or removed cards cannot keep an active preview. Video and model interaction are
 mutually exclusive within one canvas. Ordinary polling retains an unchanged active model.
+
+A bottom-right **Full screen** toggle uses the browser's native fullscreen API,
+like video, when available. **F** also toggles fullscreen while the player is focused;
+editable controls retain their own keys. Entering and leaving fullscreen preserves
+the active model, camera and animation state. The canvas leaves fullscreen sizing
+to the browser. **Escape** leaves fullscreen first, retaining inline inspection;
+Escape inline returns to the poster. Back returns directly to the poster from
+either size. Closing, replacement, navigation and disposal release owned fullscreen,
+including a request that completes after its preview has stopped. A refused request
+leaves the inline player usable; unsupported browsers hide the fullscreen control.
 
 Unavailable or omitted model bytes never start capture or interaction, including
 when a thumbnail of the same digest was previously cached. Browser preview failures

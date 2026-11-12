@@ -709,8 +709,12 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   a thumbnail of its own recorded `model/gltf-binary` output, lazily when visible. No poster or
   workflow setting is needed. Click anywhere on the 3D poster, or activate `Inspect 3D`, to
   open the model in place without opening the sidebar, expanding a deck or changing selection
-  or picks. Only one media preview is interactive per canvas;
-  Close or Escape restores the still and focus. Thumbnails use a bounded browser-local cache,
+  or picks. Only one media preview is interactive per canvas. The top-left `Back to poster`
+  arrow restores the still and focus. A bottom-right `Full screen` toggle, or F while the
+  player is focused, enters or leaves native fullscreen when the browser supports it.
+  Fullscreen preserves camera and animation state; Escape exits fullscreen first, then
+  returns to the poster from inline inspection. Back always returns to the poster.
+  Thumbnails use a bounded browser-local cache,
   never a generated reference image in place of the actual mesh, and require no provider calls.
   If all 64 cached thumbnails are needed by visible cards, additional cards offer
   `Activate to preview this model`; panning frees space for automatic capture.

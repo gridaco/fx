@@ -216,7 +216,8 @@ failures. Static models present just a frame and original-filename link;
 animated models add only the applicable compact controls. GLB cards automatically
 render their own thumbnails and expose one in-place interactive overlay without
 a sidebar or authored poster. The browser checker verifies thumbnail pixels,
-card gestures, exact takes, overlay placement, polling, close/focus and offline loading.
+card gestures, exact takes, overlay placement, polling, Back/focus, native fullscreen
+state retention and offline loading.
 Renderer and decoder
 resources come from the built viewer, and outbound requests are refused. The
 [3D inspection contract](../../spec/model-previews.md) defines supported models,

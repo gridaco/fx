@@ -352,7 +352,7 @@ including those that leave the deck.
 | Click a labelled control on the front card (`Open workflow`, a video's play control, `Inspect 3D`) or anywhere on its 3D poster | does what it says | does what it says |
 | Double-click | counts as one expand click | on a workflow card: open it |
 | Click the veil | — | collapse one level; the selection is unchanged; a second deck needs a second click |
-| Esc | close an active media preview first; otherwise with focus in the canvas, go back a scope | collapse one level, wherever focus is except in a text field or an active media preview; consumed only then |
+| Esc | leave native fullscreen first, then close an active media preview; otherwise with focus in the canvas, go back a scope | collapse one level, wherever focus is except in a text field or an active media preview; consumed only then |
 | × | — | collapse one level |
 | Tab | one stop per deck (the front card); back cards have `tabindex=-1` | each card, in grid order |
 | Enter or Space | expand | select |

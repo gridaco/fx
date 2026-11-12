@@ -44,9 +44,15 @@ const run = { kind: "fx-viewer-run-v1", workflow: { id: "models", title: "Origin
   nodes: cases.map((item, index) => ({ ...instances[index], title: item.id, state: "succeeded", reads: [], with: {},
     outputs: { model: { file: { digest: item.digest, kind: item.kind, size: item.bytes.length, name: artifacts[index].name } } },
     cache: "hit", error: null, duration_ms: 0 })) };
+let omitCardModel = false;
 const runAt = (pathname, longName = false, cardOnly = false) => {
   const prefix = pathname.slice(0, pathname.lastIndexOf("/api/"));
-  return { ...run, nodes: cardOnly ? run.nodes.filter(node => ["animated", "static", "single"].includes(node.id)) : run.nodes, artifacts: artifacts.map(artifact => ({ ...artifact, name: longName && artifact.digest === cases[0].digest ? "original-checkered-character-with-a-deliberately-long-recorded-filename-for-loading-layout.glb" : artifact.name, url: artifact.url === null ? null : prefix + artifact.url })) };
+  return { ...run, nodes: cardOnly ? run.nodes.filter(node => ["animated", "static", "single"].includes(node.id)) : run.nodes, artifacts: artifacts.map(artifact => {
+    const omitted = cardOnly && omitCardModel && artifact.digest === cases[0].digest;
+    return { ...artifact, available: artifact.available && !omitted,
+      name: longName && artifact.digest === cases[0].digest ? "original-checkered-character-with-a-deliberately-long-recorded-filename-for-loading-layout.glb" : artifact.name,
+      url: omitted || artifact.url === null ? null : prefix + artifact.url };
+  }) };
 };
 const requests = [], outbound = [];
 let revision = 0, snapshots = 0;
@@ -113,6 +119,72 @@ async function frameAt(page, seconds) {
   await page.waitForFunction((seconds) => Math.abs(document.querySelector(".fx-details model-viewer").currentTime - seconds) < .05, seconds);
 }
 
+/** Fullscreen changes presentation only: the same model keeps its camera and recorded clip. */
+async function modelFullscreen(page, player, model, aligned, base) {
+  const back = player.getByRole("button", { name: "Back to poster", exact: true });
+  const full = () => player.getByRole("button", { name: "Full screen", exact: true });
+  const exit = () => player.getByRole("button", { name: "Exit full screen", exact: true });
+  const box = await player.boundingBox(), backBox = await back.boundingBox(), fullBox = await full().boundingBox();
+  assert(Math.abs(backBox.x - box.x - 4) < 1.5 && Math.abs(backBox.y - box.y - 4) < 1.5, "Back belongs at the preview's top left");
+  assert(Math.abs(box.x + box.width - fullBox.x - fullBox.width - 4) < 1.5 && Math.abs(box.y + box.height - fullBox.y - fullBox.height - 4) < 1.5, "Fullscreen belongs at the preview's bottom right");
+  assert.equal(await player.getByRole("button", { name: "Close 3D preview", exact: true }).count(), 0);
+  await player.getByLabel("Animation", { exact: true }).selectOption("Nod");
+  await player.getByRole("button", { name: "Play", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".fx-canvas-model-player model-viewer").currentTime > .1);
+  await player.getByRole("button", { name: "Pause", exact: true }).click();
+  const handle = await model.elementHandle();
+  const state = () => model.evaluate(model => ({ orbit: { theta: model.getCameraOrbit().theta, phi: model.getCameraOrbit().phi }, target: model.getCameraTarget().toString(), clip: model.animationName, time: model.currentTime, paused: model.paused }));
+  const before = await state();
+  const retained = async () => {
+    assert(await handle.evaluate(node => node.isConnected && node === document.querySelector(".fx-canvas-model-player model-viewer")), "Fullscreen must retain the same model renderer");
+    const after = await state();
+    assert.equal(after.clip, before.clip); assert.equal(after.paused, before.paused);
+    assert.equal(after.target, before.target); assert(Math.abs(after.time - before.time) < .03);
+    for (const angle of ["theta", "phi"]) assert(Math.abs(after.orbit[angle] - before.orbit[angle]) < .02, "Fullscreen must preserve the inspected angle");
+  };
+  // A browser/policy refusal leaves a usable inline preview and no unhandled rejection.
+  await player.evaluate(node => { node.requestFullscreen = () => Promise.reject(new DOMException("Fixture refusal", "NotAllowedError")); });
+  await full().click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
+  assert.equal(await page.evaluate(() => document.fullscreenElement === null), true);
+  assert.equal(await player.isVisible(), true); await retained();
+  await player.evaluate(node => { delete node.requestFullscreen; });
+  await full().click();
+  await page.waitForFunction(() => document.fullscreenElement === document.querySelector(".fx-canvas-model-player"));
+  await exit().waitFor();
+  await page.waitForFunction(() => {
+    const box = document.fullscreenElement.getBoundingClientRect();
+    return Math.abs(box.x) < 1.5 && Math.abs(box.y) < 1.5 && Math.abs(box.width - innerWidth) < 1.5 && Math.abs(box.height - innerHeight) < 1.5;
+  });
+  await retained();
+  if (base === "/") await page.screenshot({ path: resolve(root, "output/playwright/model-card-fullscreen.png") });
+  await exit().click();
+  await page.waitForFunction(() => document.fullscreenElement === null);
+  await aligned(); await retained();
+  await page.keyboard.press("f");
+  await page.waitForFunction(() => document.fullscreenElement === document.querySelector(".fx-canvas-model-player"));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => document.fullscreenElement === null);
+  assert.equal(await player.isVisible(), true, "First Escape exits fullscreen and retains inline inspection");
+  await aligned(); await retained();
+  await full().click();
+  await page.waitForFunction(() => document.fullscreenElement === document.querySelector(".fx-canvas-model-player"));
+  await player.getByRole("button", { name: "Play", exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector(".fx-canvas-model-player model-viewer").paused);
+  const playingTime = await model.evaluate(model => model.currentTime);
+  await exit().click();
+  await page.waitForFunction(() => document.fullscreenElement === null);
+  await page.waitForFunction(previous => {
+    const model = document.querySelector(".fx-canvas-model-player model-viewer");
+    return !model.paused && Math.abs(model.currentTime - previous) > .02;
+  }, playingTime);
+  assert.equal(await model.evaluate(model => model.animationName), "Nod");
+  assert(await handle.evaluate(node => node.isConnected));
+  await player.getByRole("button", { name: "Pause", exact: true }).click();
+  await aligned();
+  console.log(`ok   ${base === "/" ? "standalone" : "nested service"} Back/fullscreen controls keep the model, camera and selected clip, handle refusal, and return inline on Escape`);
+}
+
 /** Canvas thumbnails show the actual recorded GLB; inspection remains on its exact card. */
 async function cardInspection(context, base = "/") {
   const page = await context.newPage();
@@ -159,7 +231,7 @@ async function cardInspection(context, base = "/") {
       assert.equal((await page.evaluate(() => window.fx_viewer.getContext())).selection, null);
       assert.equal(await page.locator(".fx-details").count(), 0);
       assert.equal(await page.locator(".fx-canvas > svg > g").evaluate(node => node.style.transform), closedCamera, "Poster activation must not pan the workflow");
-      await page.keyboard.press("Escape");
+      await player.getByRole("button", { name: "Back to poster", exact: true }).click();
       assert.equal(await player.isVisible(), false);
       await page.locator(".fx-deck-badge").click();
       assert.equal(await open("animated").getAttribute("tabindex"), "0");
@@ -206,6 +278,7 @@ async function cardInspection(context, base = "/") {
     await player.getByRole("button", { name: "Play", exact: true }).click();
     await page.waitForFunction(() => document.querySelector(".fx-canvas-model-player model-viewer").currentTime > .1);
     await player.getByRole("button", { name: "Pause", exact: true }).click();
+    await modelFullscreen(page, player, model, aligned, base);
     const modelHandle = await model.elementHandle(), thumbnailUrl = await still("animated").getAttribute("href");
     const snapshotCount = snapshots;
     revision++;
@@ -236,16 +309,40 @@ async function cardInspection(context, base = "/") {
     assert.equal(await page.locator(".fx-canvas-model-player:visible").count(), 1);
     assert.equal(await player.getByRole("button", { name: "Play", exact: true }).count(), 0);
     assert.equal((await page.evaluate(() => window.fx_viewer.getContext())).selection, null);
-    await page.keyboard.press("Escape");
+    await player.getByRole("button", { name: "Back to poster", exact: true }).click();
+    assert.equal(await player.isVisible(), false);
+    assert(await open("static").evaluate(node => node === document.activeElement), "Back returns focus to the activating poster");
+    await open("animated").click();
+    await page.locator(".fx-canvas-model-player.is-shown").waitFor();
+    await player.getByRole("button", { name: "Full screen", exact: true }).click();
+    await page.waitForFunction(() => document.fullscreenElement === document.querySelector(".fx-canvas-model-player"));
+    await player.getByRole("button", { name: "Back to poster", exact: true }).click();
+    await page.waitForFunction(() => document.fullscreenElement === null);
+    assert.equal(await player.isVisible(), false, "Back from fullscreen returns to the poster");
+    assert(await open("animated").evaluate(node => node === document.activeElement));
     await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
     await page.mouse.move(20, 20);
     mkdirSync(resolve(root, "output/playwright"), { recursive: true });
     await page.screenshot({ path: resolve(root, base === "/" ? "output/playwright/model-cards.png" : "output/playwright/model-cards-service.png") });
+    await open("animated").click();
+    await page.locator(".fx-canvas-model-player.is-shown").waitFor();
+    const removed = await player.locator("model-viewer").elementHandle();
+    await player.getByRole("button", { name: "Full screen", exact: true }).click();
+    await page.waitForFunction(() => document.fullscreenElement === document.querySelector(".fx-canvas-model-player"));
+    omitCardModel = true; revision++;
+    await page.waitForFunction(() => document.fullscreenElement === null && document.querySelector(".fx-canvas-model-player").hidden);
+    assert.equal(await removed.evaluate(node => node.isConnected), false, "Omitted source bytes dispose a fullscreen inspector");
+    assert.equal(await open("animated").getAttribute("tabindex"), "-1");
     console.log(`ok   ${base === "/" ? "standalone" : "nested service"} cards automatically render exact recorded GLBs, inspect interactively in place without sidebar/picks, follow pan/zoom and retain cached redraw state`);
   } catch (error) {
+    console.error(error);
     console.error("Card inspection failed", base, await page.locator("body").innerText(), await page.locator(".fx-canvas-model-player").evaluateAll(nodes => nodes.map(node => ({ hidden: node.hidden, phase: node.dataset.phase, html: node.innerHTML.slice(0, 300) }))));
     throw error;
-  } finally { await page.close(); }
+  } finally {
+    omitCardModel = false; revision++;
+    await page.evaluate(() => document.fullscreenElement ? document.exitFullscreen() : undefined).catch(() => {});
+    await page.close();
+  }
 }
 
 /** Hold both downloads and decoded-model loading, measuring every painted frame along the way. */

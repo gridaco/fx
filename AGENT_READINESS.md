@@ -456,7 +456,8 @@ portable-export delivery and stale-selection URL cleanup. The
 original PBR factors, visible weighted-skin deformation, discovered clips and
 play/pause, model camera gestures without canvas movement, minimal inline
 controls, actual card-thumbnail pixels, full-poster activation without selection or deck expansion,
-overlay camera isolation and placement, Escape/focus restoration, bounded lazy capture,
+overlay camera isolation and placement, Back/Escape focus restoration, native fullscreen
+entry/exit and state retention, bounded lazy capture,
 stable loading geometry at wide and narrow widths, exact takes,
 polling without resetting or refetching the model,
 fallback downloads and nested service URLs. It runs with outbound requests refused and checks that inspection

@@ -363,7 +363,10 @@ after image and video previews in the existing priority order. No poster file
 or extra workflow step is needed: the viewer renders the actual recorded model
 when its card is visible. Click anywhere on the 3D thumbnail, or choose **Inspect 3D**,
 to rotate and zoom in place without opening the sidebar or expanding a deck;
-Close or Escape returns to the still.
+the top-left Back arrow returns to the still. Use the bottom-right fullscreen toggle
+or press F while the preview is focused to inspect it at full screen, where supported.
+Your model camera and animation state stay intact when changing size. Escape leaves
+fullscreen first; from inline inspection, it returns to the still.
 Only one video or model is interactive per canvas, and model gestures preserve
 the workflow camera. Thumbnail generation and reuse never contact a provider.
 
