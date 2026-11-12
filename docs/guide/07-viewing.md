@@ -289,8 +289,13 @@ stand-in run is visibly marked.
 
 Select a step to see its recorded values and artifacts. The viewer follows the record
 automatically, polling about once a second. Reloading the page also reattaches to the
-latest consistent snapshot. Images, text/JSON,
-audio, and video use generic previews; other file types can be opened in a new tab.
+latest consistent snapshot. Images, text/JSON, audio, video and supported 3D models
+use generic previews; other file types can be opened in a new tab.
+
+Images and 3D objects in the details sidebar have a bottom-right fullscreen toggle.
+Use it, or press F while the preview is focused, to inspect the same media at full
+screen; Escape returns to the sidebar without closing it. Video keeps its native
+player's fullscreen control. The model camera and animation continue across size changes.
 
 Run canvas cards also show the first available recorded image output. A step without
 one offers its first available video output to the browser's native player. Whether it

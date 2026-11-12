@@ -474,6 +474,11 @@ also places images, native and unsupported videos, authored video posters and
 static/animated GLBs in one real code-only run. Its focused launcher and browser
 check exercise the actual saved-run host; generated media stays outside Git.
 
+Focused image and model previews in details use one internal visual-preview shell
+with fullscreen enabled by default; native video explicitly keeps its own controls.
+The same mounted media survives fullscreen changes, and Escape returns to details
+before closing the panel.
+
 The canonical [text-to-3D example](examples/text-to-3d/) connects generation to
 this inspection job: its Python `generate_3d_asset(text: str)` builder returns
 two steps, a reference image and a direct Tripo P2 single-image mesh.

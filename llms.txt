@@ -720,6 +720,9 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `Activate to preview this model`; panning frees space for automatic capture.
   In step or run details, a recorded `model/gltf-binary` file
   appears in an inline frame with orbit, pan and zoom gestures; gesture help is in its tooltip.
+  Images and models in the details sidebar share a bottom-right fullscreen toggle and F
+  shortcut, where supported. Escape returns to the sidebar first; the mounted media, model
+  camera and playback remain intact. Video retains its native player's fullscreen control.
   Embedded textures and original materials are shown under neutral lighting. An animated model
   starts paused and offers an icon play/pause button, plus a compact native clip selector only
   when it has multiple clips. A static model has just the frame and quiet original-filename

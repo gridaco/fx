@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { ArtifactController, artifactDownloadName, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview } from "@grida/fx-web";
 import { ModelPreview } from "./model-preview";
+import { VisualPreview } from "./visual-preview";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
 
 export function money(value: number | null): string {
@@ -47,7 +48,7 @@ export function Status({ state }: { state: string }) {
 const imageKinds = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
 const jsonKinds = ["json", "application/json", "annotations"];
 
-/** The file itself: a picture, a player or its text. Clicking a picture opens the file. */
+/** Visual media uses VisualPreview; native players explicitly own their fullscreen control. */
 export function ArtifactPreview({ artifact, poster }: { artifact: Artifact; poster?: Artifact }) {
   const controller = useMemo(() => new ArtifactController(), []);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
@@ -60,22 +61,22 @@ export function ArtifactPreview({ artifact, poster }: { artifact: Artifact; post
   </div>;
   const url = artifact.url;
   const open = <a className="fx-value-note hover:text-zinc-800" href={url} target="_blank" rel="noopener noreferrer">{name} ↗</a>;
-  if (artifact.kind === "model/gltf-binary") return <ModelPreview artifact={artifact} />;
+  if (artifact.kind === "model/gltf-binary") return <VisualPreview key={artifact.digest}><ModelPreview artifact={artifact} /></VisualPreview>;
   if (artifact.kind.startsWith("model/")) return <div className="fx-value-stack">
     <p className="fx-value-note">3D preview unavailable. This viewer supports self-contained GLB 2 models; {artifact.kind} is not supported.</p>
     <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original model</a>
   </div>;
-  if (artifact.kind.startsWith("video/")) return <div className="fx-value-stack">
+  if (artifact.kind.startsWith("video/")) return <VisualPreview key={artifact.digest} fullscreen="native"><div className="fx-value-stack">
     {state.error
       ? <>{posterImage && <ArtifactPreview artifact={posterImage} />}<p className="fx-value-note">{posterImage ? "Browser playback unavailable." : "Browser preview unavailable."} Download the original to try it in another video player.</p></>
       : <video className="max-h-64 w-full rounded" controls preload="metadata" src={url} poster={posterImage?.url ?? undefined} onError={controller.fail} />}
     <p className="fx-value-note">{name} · {artifact.kind}</p>
     <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original video</a>
-  </div>;
+  </div></VisualPreview>;
   if (state.error) return open;
-  if (imageKinds.includes(artifact.kind)) return <a href={url} target="_blank" rel="noopener noreferrer" title={`${name} · open in a new tab`} className="preview-grid block rounded border border-zinc-200 p-2">
+  if (imageKinds.includes(artifact.kind)) return <VisualPreview key={artifact.digest}><a href={url} target="_blank" rel="noopener noreferrer" title={`${name} · open in a new tab`} className="preview-grid block rounded border border-zinc-200 p-2">
     <img className="mx-auto max-h-64 max-w-full object-contain" src={url} alt={name} loading="lazy" onError={controller.fail} />
-  </a>;
+  </a></VisualPreview>;
   if (artifact.kind.startsWith("audio/")) return <audio className="w-full" controls preload="metadata" src={url} onError={controller.fail} />;
   if (canPreviewText(artifact)) {
     // A JSON file reads as its value does: rows, one line, or folded.

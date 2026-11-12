@@ -113,13 +113,20 @@ instructions available as a tooltip. Its existing surrounding details retain
 the recorded run, producing instance, output port and take; the preview's
 accessible name can include that context without repeating it as a caption.
 
-A static model presents the frame and a quiet original-filename download link.
+A static model presents the frame, shared fullscreen action and a quiet original-filename download link.
 An animated model adds only the play/pause icon and, for multiple clips, the
 native selector. Loading and failure feedback appear when needed; a ready
 preview has no persistent instruction or no-clips message. Inspection stays
 inline without a dialog or modal. Camera movement within a model must not pan
 the workflow canvas. Ordinary run polling must not reset an unchanged model's
 camera or playback state.
+
+Details use the shared visual-preview shell, which supplies the same bottom-right
+native fullscreen toggle to images and models by default. A visual renderer with
+its own fullscreen controls, such as native video, explicitly opts out of the extra
+button. New visual renderers follow this internal shell contract. Fullscreen keeps
+the same mounted media; Escape leaves fullscreen before the surrounding details
+panel can close. Closing or replacing the preview also releases owned fullscreen.
 
 The square preview frame and one-row footer reserve their final dimensions
 before artifact fetching, renderer loading and custom-element initialization.

@@ -18,7 +18,10 @@ const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-mod
  * Esc closes it. A page's own Esc (closing a panel, a deck) leaves such a target alone.
  */
 export function ownsKeys(target: EventTarget | null) {
-  return Boolean((target as Element | null)?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player"));
+  const element = target as Element | null;
+  // Native fullscreen gets Escape before surrounding details, decks or scope navigation.
+  return Boolean(element?.ownerDocument?.fullscreenElement?.contains(element)
+    || element?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player"));
 }
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
 const LEGIBLE_ZOOM = 11 / 13;

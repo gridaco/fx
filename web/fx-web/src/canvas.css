@@ -201,9 +201,22 @@
 .fx-canvas-model-player .fx-model-footer { position: absolute; bottom: 4px; left: 4px; right: 32px; margin: 0; }
 .fx-canvas-model-player .fx-model-footer[hidden] { display: none; }
 .fx-canvas-model-player .fx-model-controls { max-width: 100%; border-radius: 4px; background: #fffffff0; }
-.fx-canvas-model-control { position: absolute; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: #fffffff0; color: #52525b; cursor: pointer; }
-.fx-canvas-model-control[hidden] { display: none; }
-.fx-canvas-model-control:hover { background: white; color: #27272a; }
-.fx-canvas-model-control:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.fx-canvas-model-control, .fx-media-fullscreen { position: absolute; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: #fffffff0; color: #52525b; cursor: pointer; }
+.fx-canvas-model-control[hidden], .fx-media-fullscreen[hidden] { display: none; }
+.fx-canvas-model-control:hover, .fx-media-fullscreen:hover { background: white; color: #27272a; }
+.fx-canvas-model-control:focus-visible, .fx-media-fullscreen:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 .fx-canvas-model-back { top: 4px; left: 4px; }
 .fx-canvas-model-fullscreen { bottom: 4px; right: 4px; }
+/* Every non-native visual renderer uses this shell; fullscreen keeps its existing DOM. */
+.fx-media-preview { position: relative; min-width: 0; }
+.fx-media-fullscreen { bottom: 4px; right: 4px; }
+.fx-media-content > .fx-model-preview .fx-model-footer { padding-right: 32px; }
+.fx-media-preview:fullscreen { display: flex; flex-direction: column; background: #f7f7f8; }
+.fx-media-preview::backdrop { background: #f7f7f8; }
+.fx-media-preview:fullscreen .fx-media-content { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; }
+.fx-media-preview:fullscreen .fx-media-content > * { width: 100%; }
+.fx-media-preview:fullscreen .fx-media-content > a { display: flex; height: 100%; align-items: center; justify-content: center; border: 0; border-radius: 0; padding: 0; }
+.fx-media-preview:fullscreen img { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
+.fx-media-preview:fullscreen .fx-model-preview { display: flex; height: 100%; flex-direction: column; }
+.fx-media-preview:fullscreen .fx-model-viewport { flex: 1; min-height: 0; aspect-ratio: auto; border-radius: 0; }
+.fx-media-preview:fullscreen .fx-model-footer { flex: none; margin: 0; padding: 4px 36px 4px 4px; }
