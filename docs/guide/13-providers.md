@@ -14,9 +14,60 @@ one serves.
 | [Your own keys](#your-own-provider-keys) | each provider's key | that provider's routes | each provider's account |
 | [A provider FX does not ship](#a-provider-fx-does-not-ship) | a declaration in `fx.yaml`, and an adapter of your own unless it speaks OpenAI's chat API: a [community provider](15-community-providers.md) | its routes | the provider's account |
 
-You can mix them: a project picks a route per capability in `fx.yaml`, and a step can name its own
-`route:`. `grida fx doctor` says which keys FX found, where, and which routes a live run could
+You can mix them: `fx.yaml` supplies defaults, and each step can choose its own model.
+`grida fx doctor` says which keys FX found, where, and which routes a live run could
 serve ([Running](05-running.md#keys-and-live-runs)).
+
+## Choose a model and a provider
+
+Keep the model for a capability under `routes`, and the provider you want to use under
+`provider_preferences`:
+
+```yaml
+# fx.yaml
+fx: project/v1
+routes:
+  image.generate: openai/gpt-image-2.5-sunburst
+  structured.generate: openai/gpt-5.6-sol
+provider_preferences:
+  image.generate: openrouter
+  structured.generate: gg
+```
+
+Changing the image preference to `openai` keeps the model and workflow unchanged. The catalog
+maps its canonical model ID to that provider's native route. It must contain an unambiguous
+binding for the model, provider and capability; FX does not guess from similar names or choose
+a provider because a key happens to be available. A missing preference is a planning error.
+
+Defaults do not force every node to use one model. A step can name another model, using that
+capability's provider preference, or an exact `native-model@provider` route that overrides it:
+
+```yaml
+steps:
+  reference:
+    uses: fx/image.generate@1
+    with: { prompt: A moss-green ceramic lantern. }
+  alternative:
+    uses: fx/image.generate@1
+    route: imagegen@codex
+    with: { prompt: A blue ceramic birdhouse. }
+```
+
+The reference uses the configured image model; the alternative uses Codex. Codex and Grok Build
+remain distinct runtimes with their own supported settings, not aliases for a specific API
+model. Existing qualified defaults and step routes work without `provider_preferences`.
+
+A custom node calling one distinct capability uses the same step override, even if it calls
+that capability several times. A node calling several capabilities uses each capability's
+project default. Individual body calls do not choose a different route: use separate workflow
+steps when two image calls need different models.
+
+The workflow source project's defaults are overlaid by the project you plan from, independently
+for model choices and provider preferences. This is project configuration, not an operating-system
+home setting. Planning and `doctor` share selection; doctor reports configured readiness,
+not remote model availability. Plan with the actual inputs to check required features and prices.
+Resolving to the same concrete route preserves its call cache. A different model or provider
+changes the plan and cannot silently replace the routing of an existing resumed run.
 
 ## No provider
 
@@ -116,8 +167,26 @@ named another `adapter_behavior`.
 
 ## A model FX does not list
 
-New models arrive faster than FX's built-in table. On a provider FX speaks, a route of your own is
-enough: name the model, and give a cap when you do not know its price.
+New models arrive faster than FX's built-in table. GG image models can be imported explicitly
+from Grida Models, without an engine release:
+
+```sh
+grida fx models import openai/gpt-image-2.6-sunburst --provider gg --cap-usd 3
+```
+
+Import resolves the latest published Models release, validates its model and operation schemas,
+and writes an ordinary project route table under `routes/models/`, registered in `fx.yaml`.
+Use `--release TAG` to choose a release and `--from DIRECTORY` to read a local verified bundle.
+They can be combined to check that the local bundle is the selected release.
+The initial profile admits compatible GG image generation and editing only; listing a model
+does not prove its interface is supported. The per-call cap is your planning allowance, not a
+provider price or permission to spend. Import does not change the selected model or preference;
+after importing, change `routes.image.generate` to the model ID and re-plan. Planning and running
+never discover models over the network.
+
+For other providers, or a model outside that import profile, a route of your own is enough when
+an existing adapter supports its interface. Name the provider's native model, and give a cap
+when you do not know its price:
 
 ```yaml
 # routes/models.yaml, listed under route_tables: in fx.yaml
@@ -134,6 +203,11 @@ routes:
     contract:
       provider_options: { fal: { seed: 7 } }
 ```
+
+An optional `model_id` on either entry gives its canonical ID for unqualified selection with a
+provider preference. Without it, unqualified selection matches the native model exactly.
+The concrete qualified route and adapter contract still determine identity; adding this
+selection metadata does not invalidate existing cached calls.
 
 - **OpenRouter and fal images.** A route whose `contract` names no `adapter` gets FX's generic
   image adapter for the provider. It sends what the provider's image models share, the prompt and the input

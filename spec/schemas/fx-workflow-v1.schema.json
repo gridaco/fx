@@ -650,11 +650,11 @@
           "maximum": 1024
         },
         "route": {
-          "description": "The `model@provider` serving the type's one paid capability.",
+          "description": "The canonical model ID or exact model@provider serving the type's one paid capability. A bare model uses the configured provider preference (model-selection.md).",
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^.+@[a-z0-9._-]+$"
+              "pattern": "^(?:[^@\\s]+|.+@[a-z0-9._-]+)$"
             },
             {
               "type": "null"

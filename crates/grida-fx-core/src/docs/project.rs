@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 /// The project file's name.
 const PROJECT_FILE: &str = "fx.yaml";
 
-/// A capability's default route in fx.yaml `routes:`.
+/// A capability's default model selector in fx.yaml `routes:`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteDefault {
     pub route: String,
@@ -39,6 +39,8 @@ pub struct ProjectDoc {
     pub cache: String,
     pub budget: Option<Budget>,
     pub routes: IndexMap<String, RouteDefault>,
+    /// One explicitly preferred provider per capability (spec/model-selection.md).
+    pub provider_preferences: IndexMap<String, String>,
     pub route_tables: Vec<String>,
     /// The providers it declares, in its order (spec/providers.md §1).
     pub providers: Vec<Declaration>,
@@ -57,6 +59,7 @@ impl Default for ProjectDoc {
             cache: ".fx/cache".into(),
             budget: None,
             routes: IndexMap::new(),
+            provider_preferences: IndexMap::new(),
             route_tables: Vec::new(),
             providers: Vec::new(),
             view_origins: Vec::new(),
@@ -243,6 +246,24 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
         cache: text("cache", ".fx/cache")?,
         budget,
         routes,
+        provider_preferences: value
+            .get("provider_preferences")
+            .and_then(Value::as_object)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .map(|(capability, provider)| {
+                        (
+                            capability.clone(),
+                            provider
+                                .as_str()
+                                .expect("validated provider name")
+                                .to_string(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         route_tables: texts("route_tables")?,
         providers: crate::providers::parse(value.get("providers"), label)?,
         view_origins: texts("view_origins")?,
@@ -317,7 +338,7 @@ mod tests {
             "fx.yaml: nodes: nodes is a folder inside the project"
         );
         assert!(
-            message(json!({"fx": "project/v1", "routes": {"image.generate": "nope"}}))
+            message(json!({"fx": "project/v1", "routes": {"image.generate": "nope@"}}))
                 .starts_with("fx.yaml: routes.image.generate: ")
         );
         assert!(
@@ -336,6 +357,37 @@ mod tests {
         ] {
             let found = message(json!({"fx": "project/v1", "workflows": workflows}));
             assert!(found.starts_with("fx.yaml: workflows"), "{found}");
+        }
+    }
+
+    #[test]
+    fn model_defaults_and_provider_preferences_are_separate() {
+        let project = parse_project(
+            &json!({
+                "fx": "project/v1",
+                "routes": {
+                    "image.generate": "acme/img-a",
+                    "mesh.generate": {"route": "mesh-a@acme", "concurrency": 2}
+                },
+                "provider_preferences": {"image.generate": "other"}
+            }),
+            "fx.yaml",
+        )
+        .unwrap();
+        assert_eq!(project.routes["image.generate"].route, "acme/img-a");
+        assert_eq!(project.routes["mesh.generate"].concurrency, Some(2));
+        assert_eq!(project.provider_preferences["image.generate"], "other");
+        for preference in [json!(""), json!("Upper"), json!(["acme", "other"])] {
+            assert!(
+                parse_project(
+                    &json!({
+                        "fx": "project/v1",
+                        "provider_preferences": {"image.generate": preference}
+                    }),
+                    "fx.yaml"
+                )
+                .is_err()
+            );
         }
     }
 

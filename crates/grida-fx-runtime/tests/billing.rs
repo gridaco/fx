@@ -36,6 +36,8 @@ fn route(capability: &str, model: &str, high: i64) -> Route {
         capability: capability.into(),
         model: model.into(),
         provider: "acme".into(),
+        model_id: None,
+        selection: None,
         price: RoutePrice {
             low: Usd(high / 4),
             high: Usd(high),

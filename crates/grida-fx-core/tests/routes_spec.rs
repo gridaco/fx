@@ -27,6 +27,8 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
         capability: capability.into(),
         model: model.into(),
         provider: provider.into(),
+        model_id: None,
+        selection: None,
         price: RoutePrice {
             low: Usd::ZERO,
             high: Usd::ZERO,

@@ -283,8 +283,34 @@ def text_to_3d(home: Path) -> str:
     expect(all(step.cache == "hit" for step in second.steps.values()), "the second run missed")
     expect(len(calls) == 2, "a cached run asked the stand-in again")
     expect(second.outputs["model"].digest == first.outputs["model"].digest, "the cache changed GLB")
+    configuration = home / "fx.yaml"
+    original = configuration.read_text("utf-8")
+    alternative = original.replace("image.generate: openrouter", "image.generate: openai")
+    expect(alternative != original, "the example has no independent image provider preference")
+    configuration.write_text(alternative, "utf-8")
+    try:
+        switched = planned(TEXT_TO_3D, home, arguments=arguments)
+        reference = next(
+            instance
+            for instance in switched.document["instances"]
+            if instance["step"] == "reference"
+        )
+        expect(
+            reference["routes"]["image.generate"]["route"] == "gpt-image-2.5-sunburst@openai",
+            "changing only the preference did not select the same model on OpenAI",
+        )
+        third = finished(
+            fx.run(TEXT_TO_3D, arguments=arguments, stand_in=answer, cwd=home),
+            "switched text-to-3d",
+        )
+        expect(calls == ["image.generate", "mesh.generate", "image.generate"], "unexpected resend")
+        expect(third.steps["model"].cache == "hit", "the identical reference regenerated its mesh")
+        expect(third.outputs["model"].digest == first.outputs["model"].digest, "the mesh changed")
+    finally:
+        configuration.write_text(original, "utf-8")
     return (
-        "two direct-provider steps at $0 with a stand-in, exact image handoff, delivery and cache"
+        "two direct-provider steps, handoff, delivery and cache; "
+        "image provider changed independently"
     )
 
 

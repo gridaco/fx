@@ -43,6 +43,7 @@ fx: routes/v1
 routes:
 - capability: agent.turn
   route: openai/gpt-5.6-sol@gg
+  model_id: openai/gpt-5.6-sol
   price:
     low_usd: 0.003
     high_usd: 0.1
@@ -54,6 +55,7 @@ routes:
     adapter_behavior: 1
 - capability: agent.turn
   route: openai/gpt-5.6-sol@openrouter
+  model_id: openai/gpt-5.6-sol
   price:
     low_usd: 0.003
     high_usd: 0.1
@@ -65,6 +67,7 @@ routes:
     adapter_behavior: 1
 - capability: agent.turn
   route: openai/gpt-6-astra@gg
+  model_id: openai/gpt-6-astra
   price:
     low_usd: 0.01
     high_usd: 1.5
@@ -79,6 +82,7 @@ routes:
     reasoning_effort: high
 - capability: agent.turn
   route: openai/gpt-6-astra@openrouter
+  model_id: openai/gpt-6-astra
   price:
     low_usd: 0.01
     high_usd: 1.5
@@ -100,6 +104,7 @@ routes:
       image_detail: high
 - capability: image.edit
   route: gpt-image-2.5-sunburst@openai
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.85
@@ -196,6 +201,7 @@ routes:
     adapter_behavior: '1'
 - capability: image.edit
   route: openai/gpt-image-2.5-sunburst@gg
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.85
@@ -259,6 +265,7 @@ routes:
     quality: max
 - capability: image.edit
   route: openai/gpt-image-2.5-sunburst@openrouter
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.13
     high_usd: 0.85
@@ -302,6 +309,7 @@ routes:
     adapter_behavior: '3'
 - capability: image.edit
   route: openai/gpt-image-2.5/sunburst@fal
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.85
@@ -364,6 +372,7 @@ routes:
     adapter_behavior: '1'
 - capability: image.generate
   route: gpt-image-2.5-sunburst@openai
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.7
@@ -460,6 +469,7 @@ routes:
     adapter_behavior: '1'
 - capability: image.generate
   route: openai/gpt-image-2.5-sunburst@gg
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.7
@@ -522,6 +532,7 @@ routes:
     quality: max
 - capability: image.generate
   route: openai/gpt-image-2.5-sunburst@openrouter
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.13
     high_usd: 0.7
@@ -564,6 +575,7 @@ routes:
     adapter_behavior: '3'
 - capability: image.generate
   route: openai/gpt-image-2.5/sunburst@fal
+  model_id: openai/gpt-image-2.5-sunburst
   price:
     low_usd: 0.09
     high_usd: 0.7
@@ -624,6 +636,7 @@ routes:
     adapter_behavior: '1'
 - capability: mesh.generate
   route: P2-20260801@tripo
+  model_id: tripo/p2
   price:
     low_usd: 1.2
     high_usd: 2.5
@@ -639,6 +652,7 @@ routes:
     adapter_behavior: 1
 - capability: mesh.generate
   route: tripo/p2@gg
+  model_id: tripo/p2
   price:
     low_usd: 1.2
     high_usd: 2.5
@@ -653,6 +667,7 @@ routes:
     endpoint: three-d.tripo.p2.multiview
 - capability: mesh.rig
   route: tripo/rig-v1.0@gg
+  model_id: tripo/rig-v1.0
   price:
     low_usd: 0.25
     high_usd: 0.5
@@ -668,6 +683,7 @@ routes:
     endpoint: three-d.tripo.rig-v1.0.mesh
 - capability: mesh.rig
   route: v1.0-20240301@tripo
+  model_id: tripo/rig-v1.0
   price:
     low_usd: 0.25
     high_usd: 0.5
@@ -681,6 +697,7 @@ routes:
     adapter_behavior: 1
 - capability: music.generate
   route: google/lyria-3-pro-preview@openrouter
+  model_id: google/lyria-3-pro
   price:
     low_usd: 0.05
     high_usd: 0.5
@@ -689,6 +706,7 @@ routes:
     adapter_behavior: 1
 - capability: sound.generate
   route: eleven_text_to_sound_v2@elevenlabs
+  model_id: eleven_text_to_sound_v2
   price:
     low_usd: 0.001
     high_usd: 0.1
@@ -699,6 +717,7 @@ routes:
     adapter_behavior: 1
 - capability: speech.generate
   route: eleven_v3@elevenlabs
+  model_id: eleven_v3
   price:
     low_usd: 0.001
     high_usd: 0.05
@@ -710,6 +729,7 @@ routes:
     adapter_behavior: 1
 - capability: structured.generate
   route: openai/gpt-5.6-sol@gg
+  model_id: openai/gpt-5.6-sol
   price:
     low_usd: 0.02
     high_usd: 0.6
@@ -722,6 +742,7 @@ routes:
     adapter_behavior: 1
 - capability: structured.generate
   route: openai/gpt-5.6-sol@openrouter
+  model_id: openai/gpt-5.6-sol
   price:
     low_usd: 0.02
     high_usd: 0.6
@@ -734,6 +755,7 @@ routes:
     adapter_behavior: 1
 - capability: structured.generate
   route: openai/gpt-6-astra@gg
+  model_id: openai/gpt-6-astra
   price:
     low_usd: 0.05
     high_usd: 1.5
@@ -749,6 +771,7 @@ routes:
     reasoning_effort: high
 - capability: structured.generate
   route: openai/gpt-6-astra@openrouter
+  model_id: openai/gpt-6-astra
   price:
     low_usd: 0.05
     high_usd: 1.5
@@ -771,6 +794,7 @@ routes:
     pictures: unchanged
 - capability: video.generate
   route: alibaba/wan-3.0@gg
+  model_id: alibaba/wan-3.0
   price:
     low_usd: 0.05
     high_usd: 0.2
@@ -795,6 +819,7 @@ routes:
     adapter_behavior: 1
 - capability: video.generate
   route: google/gemini-omni-flash/v1.1/image-to-video@fal
+  model_id: google/gemini-omni-1.1-flash
   price:
     low_usd: 0.03
     high_usd: 0.375

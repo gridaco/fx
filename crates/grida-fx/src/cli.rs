@@ -83,6 +83,8 @@ pub enum Verb {
     Nodes(NodesArgs),
     /// the keys, routes and tools a workflow needs
     Doctor(DoctorArgs),
+    /// import supported model routes explicitly; planning remains offline
+    Models(ModelsArgs),
     /// pin versioned node types and adapters to their source
     Lock(LockArgs),
     /// run a workflow; --live admits paid calls, within a ceiling
@@ -225,6 +227,36 @@ pub struct NodesArgs {
 #[derive(Debug, Args, Clone)]
 pub struct DoctorArgs {
     pub target: Option<String>,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct ModelsArgs {
+    #[command(subcommand)]
+    pub verb: ModelsVerb,
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum ModelsVerb {
+    /// add a model from a verified public catalogue with a per-call allowance
+    Import(ModelImportArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct ModelImportArgs {
+    /// canonical model identifier, without a provider suffix
+    pub model: String,
+    /// provider whose supported interface to import (currently gg)
+    #[arg(long)]
+    pub provider: String,
+    /// positive per-call planning allowance; never spending approval
+    #[arg(long, value_name = "USD", allow_negative_numbers = true)]
+    pub cap_usd: String,
+    /// pinned Models release; otherwise resolve the latest during this command
+    #[arg(long, value_name = "TAG")]
+    pub release: Option<String>,
+    /// read release assets and gg.operations.json locally, without network access
+    #[arg(long, value_name = "DIRECTORY")]
+    pub from: Option<String>,
 }
 
 #[derive(Debug, Args, Clone)]
@@ -666,6 +698,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Schema(args) => verbs::schema::run(&args),
         Verb::Nodes(args) => verbs::nodes::run(&args),
         Verb::Doctor(args) => verbs::doctor::run(&args),
+        Verb::Models(args) => verbs::models::run(&args),
         Verb::Lock(args) => verbs::lock::run(&args),
         Verb::Run(mut args) => {
             args.rest = rest;

@@ -12,6 +12,10 @@ The project that owns the store and the run folders is the **planning project**:
 
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
+Optional `provider_preferences` merge independently in the same workflow-home then planning-
+project order as route defaults ([model-selection.md](model-selection.md)). They do not add
+a user-wide configuration scope or change ownership of the catalog, providers or store.
+
 ## 1. Layout
 
 ```

@@ -1,0 +1,167 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0.03,
+  "low_usd": 0.03
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "ordinary#1",
+   "identity": "dd3de685c2e03246f49288a001a4467f826868935fd74aacdc3db5064aa480af",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "ordinary",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "ordinary",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "alternative#1",
+   "identity": "dd3de685c2e03246f49288a001a4467f826868935fd74aacdc3db5064aa480af",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "alternative",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "alternative",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "exact#1",
+   "identity": "d8b5a87cec7151a2cb88f7a22cd79ee6f0472355ba1a7e33fd0ec48c0d7fa607",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "exact",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.03,
+    "low_usd": 0.03
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "253873662518c4ed787e84ec0dd667756d47719cbfb755e4fb54a877158e83a6",
+     "route": "vendor-a@other"
+    }
+   },
+   "state": "planned",
+   "step": "exact",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a kite",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [
+  {
+   "message": "no provider preference for image.generate model acme/img-a: set provider_preferences.image.generate in fx.yaml or use a qualified model@provider",
+   "where": "ordinary.route"
+  },
+  {
+   "message": "no provider preference for image.generate model acme/img-b: set provider_preferences.image.generate in fx.yaml or use a qualified model@provider",
+   "where": "alternative.route"
+  }
+ ],
+ "scopes": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Independent model and provider selection"
+ }
+}

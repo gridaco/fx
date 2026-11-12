@@ -1,0 +1,44 @@
+# Canonical models resolve to provider-native routes before pricing and identity.
+# A step can change its model or name an exact provider; preferences change only bare
+# selections. Qualified defaults retain their original identities without a preference.
+steps:
+  - argv: [expand, case, --routes, routes.yaml]
+    save: acme.json
+    json: true
+    never_mentions: ["{project}"]
+  - argv: [identity, case, --routes, routes.yaml]
+    save: acme-identities.json
+    json: true
+  - files:
+      fx.yaml: |
+        fx: project/v1
+        routes:
+          image.generate: img-a-v1@acme
+        provider_preferences:
+          image.generate: acme
+    argv: [identity, case, --routes, routes.yaml]
+    save: acme-identities.json
+    json: true
+  - files:
+      fx.yaml: |
+        fx: project/v1
+        routes:
+          image.generate: acme/img-a
+        provider_preferences:
+          image.generate: other
+    argv: [expand, case, --routes, routes.yaml]
+    save: other.json
+    json: true
+  - argv: [identity, case, --routes, routes.yaml]
+    save: other-identities.json
+    json: true
+  - files:
+      fx.yaml: |
+        fx: project/v1
+        routes:
+          image.generate: acme/img-a
+    argv: [expand, case, --routes, routes.yaml]
+    mentions: [provider_preferences.image.generate]
+    status: 1
+    save: missing-preference.json
+    json: true

@@ -35,7 +35,7 @@
       ]
     },
     "routes": {
-      "description": "The default route for each capability, used where a step names none. The object form also limits how many calls of the route run at once.",
+      "description": "Default model selector per capability, used where a step names none: a canonical model ID resolved through provider_preferences, or an exact model@provider route (model-selection.md). The object form also limits concurrency.",
       "type": "object",
       "propertyNames": {
         "type": "string",
@@ -45,7 +45,7 @@
         "anyOf": [
           {
             "type": "string",
-            "pattern": "^.+@[a-z0-9._-]+$"
+            "pattern": "^(?:[^@\\s]+|.+@[a-z0-9._-]+)$"
           },
           {
             "$ref": "#/$defs/route_default"
@@ -54,7 +54,7 @@
       }
     },
     "route_tables": {
-      "description": "Route table files (`fx: routes/v1`) to load, relative to the project root. The catalog is built from these tables, in this order (identity.md §7): the built-in default table, left out when any `--routes` file is given; then these tables, in their listed order; then each `--routes <file>`, in the order given. A later table's entry for the same capability and route replaces an earlier one, contract included. Two entries for the same capability and route within one table are refused.",
+      "description": "Route table files (`fx: routes/v1`) to load, relative to the project root. The catalog is built from these tables, in this order (identity.md \u00a77): the built-in default table, left out when any `--routes` file is given; then these tables, in their listed order; then each `--routes <file>`, in the order given. A later table's entry for the same capability and route replaces an earlier one, contract included. Two entries for the same capability and route within one table are refused.",
       "type": "array",
       "items": {
         "type": "string",
@@ -64,7 +64,7 @@
       "default": []
     },
     "providers": {
-      "description": "Providers the project declares beside FX's own (providers.md §1), by name: the provider part of their routes (`<model>@<name>`). A declaration names the variable its key comes from and the header it is sent in, its base URL and the variable that may move it, the hosts its results may be downloaded from, and the wire it speaks. It is configuration and is not hashed: only its family or its adapter reaches a fingerprint, by completing the contract of each of the provider's routes that leaves out `adapter` or `adapter_behavior` (identity.md §7). Refused while the file is read, beyond this schema: a declaration that names both a family and an adapter; a name FX ships (`gg`, `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`); a variable a built-in declaration, an earlier declaration or the same one already reads; a `GRIDA_FX_` variable, a proxy or certificate variable, `PATH` or `HOME`, in any letter case; a default base URL that is not `https`, unless it names a loopback host, or that has userinfo, a query or a fragment.",
+      "description": "Providers the project declares beside FX's own (providers.md \u00a71), by name: the provider part of their routes (`<model>@<name>`). A declaration names the variable its key comes from and the header it is sent in, its base URL and the variable that may move it, the hosts its results may be downloaded from, and the wire it speaks. It is configuration and is not hashed: only its family or its adapter reaches a fingerprint, by completing the contract of each of the provider's routes that leaves out `adapter` or `adapter_behavior` (identity.md \u00a77). Refused while the file is read, beyond this schema: a declaration that names both a family and an adapter; a name FX ships (`gg`, `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`); a variable a built-in declaration, an earlier declaration or the same one already reads; a `GRIDA_FX_` variable, a proxy or certificate variable, `PATH` or `HOME`, in any letter case; a default base URL that is not `https`, unless it names a loopback host, or that has userinfo, a query or a fragment.",
       "type": "object",
       "propertyNames": {
         "type": "string",
@@ -112,6 +112,19 @@
       "default": [
         "workflows"
       ]
+    },
+    "provider_preferences": {
+      "description": "Optional provider choice per capability for unqualified model selectors. Workflow-home preferences are overlaid by the planning project independently of model defaults. Qualified routes override preferences; keys do not select providers (model-selection.md).",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-z0-9._-]+$"
+      },
+      "default": {}
     }
   },
   "$defs": {
@@ -137,7 +150,7 @@
       "properties": {
         "route": {
           "type": "string",
-          "pattern": "^.+@[a-z0-9._-]+$"
+          "pattern": "^(?:[^@\\s]+|.+@[a-z0-9._-]+)$"
         },
         "concurrency": {
           "description": "Overrides the route table's concurrency for this route.",

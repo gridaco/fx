@@ -327,6 +327,49 @@
           },
           "preview": {
             "$ref": "#/$defs/preview"
+          },
+          "routing": {
+            "description": "Optional explanation of unqualified model resolution, keyed by capability (model-selection.md). Presentation metadata; no absolute paths and no identity effect.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "model",
+                "model_source",
+                "provider_preference",
+                "provider_source"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^@\\s]+$"
+                },
+                "model_source": {
+                  "enum": [
+                    "step",
+                    "planning_project",
+                    "workflow_home"
+                  ]
+                },
+                "provider_preference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9._-]+$"
+                },
+                "provider_source": {
+                  "enum": [
+                    "planning_project",
+                    "workflow_home"
+                  ]
+                }
+              }
+            },
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            }
           }
         }
       }

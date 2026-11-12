@@ -48,7 +48,10 @@
 //! visited is not entered again); `at: plan` steps, which never pay, are skipped. A step's route
 //! is chosen as planning chooses it (spec/identity.md §7): its `route:` when its type calls one
 //! capability, else the capability's `routes:` default in fx.yaml (the home's, then the planning
-//! project's). Neither: `uses      <capability> no route (<n> steps)`; a route the catalog does
+//! project's). Bare models use independently merged `provider_preferences` and the core's
+//! exact metadata lookup, with safe configuration sources shown beside the resolved route.
+//! A `routing` line clarifies that input-dependent settings and remote model availability are
+//! not verified. Neither selector: `uses      <capability> no route (<n> steps)`; a route the catalog does
 //! not hold for the capability: `… <id> not in the catalog (<n> steps)`. A node type that does
 //! not resolve adds no line. Any state but `servable` makes doctor exit 1, as a live run could
 //! not make that step's calls. Routes need no inputs: they are written in the workflow and
@@ -106,7 +109,7 @@ use grida_fx_core::host::{HostFailure, Language, NodeHost};
 use grida_fx_core::project::load_target;
 use grida_fx_core::providers::{Declarations, shown_host};
 use grida_fx_core::registry::{Registry, RegistryError, Resolved};
-use grida_fx_core::routes::{Route, RouteTable, load_catalog};
+use grida_fx_core::routes::{Route, RouteSelection, RouteTable, load_catalog};
 use grida_fx_protocol::{CallKind, DescribeParams};
 use grida_fx_providers::installed::Version;
 use grida_fx_providers::keys::{Environment, KeySource};
@@ -169,14 +172,13 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     ));
     let adapters = adapter_lines(&mut project, &mut host);
     let providers = Providers::of(&project, &env, adapters)?;
-    let mut route_defaults = home.route_defaults();
-    route_defaults.extend(project.route_defaults());
     let mut registry = Registry::new(
         home.root.clone(),
         home.document.sources.clone(),
         read_lock(&home.root)?,
-        route_defaults,
+        IndexMap::new(),
     );
+    registry.configure_routing(&home, &project);
     host.open_project(&home.root, &home.document.sources)?;
     // The target's routes and the keys first: they need no node host, so they print even when
     // the project's own node types cannot be resolved (no Python with grida, no @grida/fx yet).
@@ -196,6 +198,16 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     );
     for line in &uses {
         print_line(line);
+    }
+    if used.keys().any(|(_, selection)| {
+        selection
+            .as_ref()
+            .is_some_and(|selection| !selection.is_qualified())
+    }) {
+        print_line(&labelled(
+            "routing",
+            "configuration only; plan checks input-dependent settings; remote model availability is not verified",
+        ));
     }
     providers.print();
     let mut missing = usize::from(providers.refused);
@@ -234,7 +246,7 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
 
 /// The capability a paid step calls and the route id chosen for it (`None`: no route), with the
 /// number of steps (module doc, "The target's routes").
-type UsedRoutes = BTreeMap<(String, Option<String>), usize>;
+type UsedRoutes = BTreeMap<(String, Option<RouteSelection>), usize>;
 
 /// Counts into `used` the routes the paid steps of `steps` use, entering used workflows
 /// (`within` holds the ones being visited). A node type that does not resolve, for whatever
@@ -280,12 +292,18 @@ fn count_route(
     capability: &str,
     calls: usize,
 ) {
-    let declared = if calls == 1 {
-        step.route.clone().filter(|route| !route.is_empty())
-    } else {
-        None
-    };
-    let chosen = declared.or_else(|| registry.route_default(capability).map(str::to_string));
+    let chosen = registry
+        .route_selection(capability, step.route.as_deref(), calls)
+        .map(|mut selection| {
+            // Qualified choices show only their exact route, so configuration origins must
+            // not split identical lines or their step counts. Bare choices display origins.
+            if selection.is_qualified() {
+                selection.source = grida_fx_core::routes::RoutingSource::Step;
+                selection.provider = None;
+                selection.provider_source = None;
+            }
+            selection
+        });
     *used.entry((capability.to_string(), chosen)).or_default() += 1;
 }
 
@@ -304,14 +322,34 @@ fn uses_lines(
         .map(|((capability, chosen), &count)| {
             let (what, servable) = match chosen {
                 None => ("no route".to_string(), false),
-                Some(id) => match catalog.resolve(capability, id) {
+                Some(selection) => match catalog.resolve_selector(
+                    capability,
+                    &selection.selector,
+                    selection.provider.as_deref(),
+                ) {
                     Ok(route) => {
                         let servable =
                             live::servable(&adapters, keys, installed, &RouteRef::of(route));
                         let served = servable == Servable::Yes;
-                        (format!("{id} {}", servable_text(servable)), served)
+                        let mut text = format!("{} {}", route.id(), servable_text(servable));
+                        if !selection.is_qualified() {
+                            text.push_str(&format!(
+                                " [model {} from {}; provider {} from {}]",
+                                selection.selector,
+                                selection.source.as_str(),
+                                selection.provider.as_deref().unwrap_or("none"),
+                                selection
+                                    .provider_source
+                                    .map(|source| source.as_str())
+                                    .unwrap_or("none"),
+                            ));
+                        }
+                        (text, served)
                     }
-                    Err(_) => (format!("{id} not in the catalog"), false),
+                    Err(_) if selection.is_qualified() => {
+                        (format!("{} not in the catalog", selection.selector), false)
+                    }
+                    Err(message) => (message, false),
                 },
             };
             unservable |= !servable;
@@ -1163,7 +1201,18 @@ mod tests {
             routes
                 .iter()
                 .map(|(capability, route, count)| {
-                    ((capability.to_string(), route.map(str::to_string)), *count)
+                    (
+                        (
+                            capability.to_string(),
+                            route.map(|route| RouteSelection {
+                                selector: route.to_string(),
+                                provider: None,
+                                source: grida_fx_core::routes::RoutingSource::Step,
+                                provider_source: None,
+                            }),
+                        ),
+                        *count,
+                    )
                 })
                 .collect()
         };
@@ -1204,6 +1253,87 @@ mod tests {
             uses_lines(&used(&[]), &catalog, &keys, &[]),
             (Vec::new(), false)
         );
+    }
+
+    #[test]
+    fn model_choices_report_the_bound_route_and_configuration_sources() {
+        use grida_fx_core::routes::RoutingSource;
+        let mut catalog = table(&[("image.generate", "native-a@openai")]);
+        catalog.entries[0].model_id = Some("org/img-a".into());
+        let selection = RouteSelection {
+            selector: "org/img-a".into(),
+            provider: Some("openai".into()),
+            source: RoutingSource::Step,
+            provider_source: Some(RoutingSource::PlanningProject),
+        };
+        let used = BTreeMap::from([(("image.generate".into(), Some(selection.clone())), 2)]);
+        let (lines, unavailable) = uses_lines(&used, &catalog, &Keys::from_pairs(&[]), &[]);
+        assert!(unavailable);
+        assert_eq!(
+            lines,
+            [
+                "uses      image.generate native-a@openai no key (OPENAI_API_KEY) [model org/img-a from step; provider openai from planning_project] (2 steps)"
+            ]
+        );
+        let missing = RouteSelection {
+            provider: None,
+            provider_source: None,
+            ..selection.clone()
+        };
+        let (lines, unavailable) = uses_lines(
+            &BTreeMap::from([(("image.generate".into(), Some(missing)), 1)]),
+            &catalog,
+            &Keys::from_pairs(&[]),
+            &[],
+        );
+        assert!(unavailable);
+        assert!(lines[0].contains("provider_preferences.image.generate"));
+        // An unrelated configured key cannot select a different route.
+        let keys = Keys::from_pairs(&[(KeyName::OpenRouter, "fx-made-up-openrouter-value")]);
+        assert_eq!(
+            uses_lines(&used, &catalog, &keys, &[]).0,
+            uses_lines(&used, &catalog, &Keys::from_pairs(&[]), &[]).0
+        );
+    }
+
+    #[test]
+    fn qualified_routes_count_together_across_configuration_sources() {
+        let mut registry = Registry::new(
+            ".".into(),
+            Vec::new(),
+            Default::default(),
+            IndexMap::from([("background.remove".into(), "bg@fal".into())]),
+        );
+        let default = step(Some("fx/background.remove@1"), None);
+        let mut explicit = (*default).clone();
+        explicit.route = Some("bg@fal".into());
+        let mut used = UsedRoutes::new();
+        count_route(&mut used, &default, &registry, "background.remove", 1);
+        count_route(&mut used, &explicit, &registry, "background.remove", 1);
+        let (lines, unavailable) = uses_lines(
+            &used,
+            &table(&[("background.remove", "bg@fal")]),
+            &Keys::from_pairs(&[(KeyName::Fal, "fx-made-up-fal-value")]),
+            &[],
+        );
+        assert!(!unavailable);
+        assert_eq!(
+            lines,
+            ["uses      background.remove bg@fal servable (2 steps)"]
+        );
+
+        // Bare choices retain origins because doctor actually displays that distinction.
+        registry
+            .route_defaults
+            .insert("background.remove".into(), "bg".into());
+        registry
+            .provider_preferences
+            .insert("background.remove".into(), "fal".into());
+        explicit.route = Some("bg".into());
+        let mut used = UsedRoutes::new();
+        count_route(&mut used, &default, &registry, "background.remove", 1);
+        count_route(&mut used, &explicit, &registry, "background.remove", 1);
+        assert_eq!(used.len(), 2);
     }
 
     #[test]

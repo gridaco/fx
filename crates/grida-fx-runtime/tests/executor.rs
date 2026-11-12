@@ -824,6 +824,8 @@ fn calling_job(identity: &str) -> InstanceJob {
         capability: "image.generate".into(),
         model: "img-a".into(),
         provider: "acme".into(),
+        model_id: None,
+        selection: None,
         price: RoutePrice {
             low: Usd(10_000),
             high: Usd(40_000),

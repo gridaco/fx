@@ -160,6 +160,7 @@ struct Project {
     root: PathBuf,
     routes: String,
     defaults: IndexMap<String, String>,
+    preferences: IndexMap<String, String>,
     takes: Takes,
     results: IndexMap<String, NodeResult>,
     inputs: IndexMap<String, Val>,
@@ -181,6 +182,7 @@ impl Project {
             .into_iter()
             .map(|(c, r)| (c.to_string(), r.to_string()))
             .collect(),
+            preferences: IndexMap::new(),
             takes: Takes::new(),
             results: IndexMap::new(),
             inputs: IndexMap::new(),
@@ -228,6 +230,7 @@ impl Project {
             LockFile::default(),
             self.defaults.clone(),
         );
+        registry.provider_preferences = self.preferences.clone();
         let mut host = FakeHost::new().with_module(cases_module(&self.root));
         expand(ExpandEnv {
             workflow: &loaded,
@@ -1283,7 +1286,8 @@ steps:
     for want in [
         "edit.route: no route for image.edit: set route: on the step or routes.image.edit in \
          fx.yaml",
-        "odd.route: a route is model@provider, not 'nonsense'",
+        "odd.route: no provider preference for structured.generate model nonsense: set \
+         provider_preferences.structured.generate in fx.yaml or use a qualified model@provider",
         "free.route: shout makes no paid call",
         "free.requires: shout makes no paid call to check",
         "early.at: an at: plan step makes no paid call",
@@ -1336,6 +1340,50 @@ steps:
         vec![2, 7]
     );
     usd(27_000, 94_000, b);
+}
+
+#[test]
+fn a_bare_model_binds_the_concrete_route_before_identity_and_feature_checks() {
+    let mut project = Project::new();
+    project.routes = "fx: routes/v1\nroutes:\n  - {capability: image.generate, route: native-a@acme, model_id: org/img-a, price: {usd: 0.02}, features: [alpha]}\n".into();
+    project
+        .defaults
+        .insert("image.generate".into(), "org/img-a".into());
+    project
+        .preferences
+        .insert("image.generate".into(), "acme".into());
+    let workflow = "fx: workflow/v1\nid: case\ntitle: Model selection\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    requires: [alpha]\n    with: {prompt: a kite}\n";
+    let bare = project.expand(workflow);
+    assert!(bare.problems.is_empty());
+    let instance = get(&bare, "draw#1");
+    assert_eq!(instance.routes["image.generate"].id(), "native-a@acme");
+    assert_eq!(instance.low(), Usd(20_000));
+    let document = grida_fx_core::plan::output::instance_document(instance);
+    assert_eq!(
+        document["routing"]["image.generate"],
+        json!({
+            "model": "org/img-a", "model_source": "planning_project",
+            "provider_preference": "acme", "provider_source": "planning_project"
+        })
+    );
+    project
+        .defaults
+        .insert("image.generate".into(), "native-a@acme".into());
+    let qualified = project.expand(workflow);
+    assert_eq!(instance.identity, get(&qualified, "draw#1").identity);
+    assert!(
+        grida_fx_core::plan::output::instance_document(get(&qualified, "draw#1"))
+            .get("routing")
+            .is_none()
+    );
+    project
+        .defaults
+        .insert("image.generate".into(), "org/img-a".into());
+    let unsupported = project.expand(&workflow.replace("[alpha]", "[exact_size]"));
+    assert_eq!(
+        problems(&unsupported),
+        ["draw.requires: native-a@acme does not support exact_size"]
+    );
 }
 
 #[test]

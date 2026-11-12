@@ -1,0 +1,18 @@
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: img-a-v1@acme
+    model_id: acme/img-a
+    price: { usd: 0.02 }
+  - capability: image.generate
+    route: img-b-v1@acme
+    model_id: acme/img-b
+    price: { cap_usd: 0.5 }
+  - capability: image.generate
+    route: vendor-a@other
+    model_id: acme/img-a
+    price: { usd: 0.03 }
+  - capability: image.generate
+    route: vendor-b@other
+    model_id: acme/img-b
+    price: { cap_usd: 0.6 }

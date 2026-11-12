@@ -20,7 +20,8 @@ export interface PlanOptions extends CallOptions {
   readonly inputs?: Readonly<Record<string, unknown>>;
   /** Inputs YAML files (`--inputs`), relative to `cwd`; later files win. */
   readonly inputFiles?: readonly string[];
-  /** Route tables (`--routes`, `fx: routes/v1`); giving any leaves the built-in table out. */
+  /** Route-table files (`--routes`, `fx: routes/v1`), not capability model selections.
+   * Giving any leaves the built-in table out; model/provider defaults come from `fx.yaml`. */
   readonly routes?: readonly string[];
   /** Arguments of a builder target, `file.ts:function` or `file.py:function` (`--arg NAME=VALUE`). */
   readonly args?: Readonly<Record<string, string | number | boolean>>;

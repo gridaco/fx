@@ -91,6 +91,22 @@ pub fn instance_document(instance: &Instance) -> Value {
             )
         })
         .collect();
+    let routing: Map<String, Value> = instance
+        .routes
+        .iter()
+        .filter_map(|(capability, route)| {
+            let selection = route.selection.as_ref()?;
+            Some((
+                capability.clone(),
+                json!({
+                    "model": selection.selector,
+                    "model_source": selection.source.as_str(),
+                    "provider_preference": selection.provider,
+                    "provider_source": selection.provider_source.map(|source| source.as_str()),
+                }),
+            ))
+        })
+        .collect();
     let mut price = json!({"low_usd": usd(instance.low()), "high_usd": usd(instance.high())});
     if instance.capped() {
         price["capped"] = Value::Bool(true);
@@ -130,6 +146,9 @@ pub fn instance_document(instance: &Instance) -> Value {
     }
     if let Some(preview) = &instance.preview {
         document["preview"] = preview.to_value();
+    }
+    if !routing.is_empty() {
+        document["routing"] = Value::Object(routing);
     }
     document
 }

@@ -207,19 +207,11 @@ impl Expander<'_> {
         let implied = implied_features(spec, with);
         let pictures = input_pictures(spec, with);
         for (capability, &count) in &calls {
-            // `route:` names the route of a type that calls one capability; a type that calls
-            // several takes each from fx.yaml, and `route:` is ignored there.
-            let chosen = if calls.len() == 1 {
-                declared.route.clone().filter(|route| !route.is_empty())
-            } else {
-                None
-            };
-            let chosen = chosen.or_else(|| {
-                self.env
-                    .registry
-                    .route_default(capability)
-                    .map(str::to_string)
-            });
+            let chosen = self.env.registry.route_selection(
+                capability,
+                declared.route.as_deref(),
+                calls.len(),
+            );
             let Some(chosen) = chosen else {
                 self.problem(
                     &format!("{where_}.route"),
@@ -230,13 +222,20 @@ impl Expander<'_> {
                 );
                 continue;
             };
-            let route = match self.env.routes.resolve(capability, &chosen) {
+            let mut route = match self.env.routes.resolve_selector(
+                capability,
+                &chosen.selector,
+                chosen.provider.as_deref(),
+            ) {
                 Ok(route) => route.clone(),
                 Err(message) => {
                     self.problem(&format!("{where_}.route"), message);
                     continue;
                 }
             };
+            if !chosen.is_qualified() {
+                route.selection = Some(chosen);
+            }
             // The lock drift of the project adapter that serves it (spec/adapters.md §9).
             if let Some(drift) = &route.drift {
                 self.problem(&format!("{where_}.route"), drift.clone());

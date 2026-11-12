@@ -395,7 +395,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   const named = lines
     .filter((line) => line.startsWith(RUN_LINE))
     .map((line) => line.slice(RUN_LINE.length));
-  const folder = options.runDir ?? named.at(-1);
+  const folder = named.at(-1);
   if (folder === undefined) {
     const refused = lines.filter((line) => line.startsWith(REFUSED));
     if (refused.length > 0) {

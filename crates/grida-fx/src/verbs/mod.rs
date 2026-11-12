@@ -12,6 +12,7 @@ pub mod init;
 pub mod inspect;
 pub mod jobs;
 pub mod lock;
+pub mod models;
 pub mod nodes;
 pub mod observe;
 pub mod planning;

@@ -92,6 +92,8 @@ pub(crate) fn route(capability: &str, model: &str, provider: &str) -> Route {
         capability: capability.to_string(),
         model: model.to_string(),
         provider: provider.to_string(),
+        model_id: None,
+        selection: None,
         price: RoutePrice {
             low: Usd(10_000),
             high: Usd(40_000),

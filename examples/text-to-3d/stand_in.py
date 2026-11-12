@@ -137,7 +137,6 @@ def model_glb() -> bytes:
 
 def answer(call: StandInCall) -> Answer:
     if call.capability == "image.generate":
-        assert call.route.id == "openai/gpt-image-2.5-sunburst@openrouter"
         return Answer(files={"image": reference_png()})
     if call.capability == "mesh.generate":
         assert call.route.id == "P2-20260801@tripo"
