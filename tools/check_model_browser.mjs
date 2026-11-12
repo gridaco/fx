@@ -42,6 +42,7 @@ const plan = { kind: "fx-graph-v1", workflow: { id: "models", title: "Original m
 const run = { kind: "fx-viewer-run-v1", workflow: { id: "models", title: "Original model fixtures" }, run_name: "recorded", state: "succeeded", stand_in: false,
   charged_usd: 0, estimate: null, inputs: {}, outputs: {}, artifacts, warnings: [],
   nodes: cases.map((item, index) => ({ ...instances[index], title: item.id, state: "succeeded", reads: [], with: {},
+    ...(item.id === "fbx" ? { ports: { inputs: {}, outputs: { model: "model/fbx" }, params: {} } } : {}),
     outputs: { model: { file: { digest: item.digest, kind: item.kind, size: item.bytes.length, name: artifacts[index].name } } },
     cache: "hit", error: null, duration_ms: 0 })) };
 let omitCardModel = false;
@@ -558,6 +559,9 @@ try {
     assert.equal(await page.locator(".fx-details .fx-model-preview a[download]").count(), 1, `${id}: original must remain accessible`);
   }
   await page.evaluate(() => window.fx_viewer.present({ action: "reveal_instance", instance_id: "fbx" }));
+  const fbxCard = page.locator('.fx-canvas-node[data-node-id="instance:fbx"]');
+  assert(await fbxCard.getByText("Preview unavailable", { exact: true }).isVisible(), "A succeeded unsupported model card explains its reserved preview frame");
+  assert((await fbxCard.getAttribute("aria-label")).includes("Preview unavailable"));
   await page.getByText(/3D preview unavailable.*not supported/i).waitFor();
   assert(await page.locator(".fx-details a[download]").count() > 0);
   await page.evaluate(() => window.fx_viewer.present({ action: "reveal_instance", instance_id: "missing" }));

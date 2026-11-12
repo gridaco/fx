@@ -72,13 +72,14 @@ export function short(text: string, limit: number) { return [...text].length > l
 export function nodeCard(node: PositionedNode, canvasId: string, index: number, signal: AbortSignal, onOpen: (scope: string) => void) {
   const preview = node.preview;
   const skippedPreview = !preview && canvasPreviewReserved(node) && node.state === "skipped";
+  const unavailablePreview = !preview && canvasPreviewReserved(node) && node.state === "succeeded";
   const skipMessage = node.state === "skipped" ? node.skip_explanation?.message ?? "Reason not recorded." : null;
   const { settings_y, preview_y, preview_height } = canvasNodeGeometry(node);
   const portsLabel = node.ports ? `, inputs: ${node.ports.inputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}, outputs: ${node.ports.outputs.map((port) => `${displayPortName(port.name)} (${port.type}, ${port.kind})`).join(", ") || "none"}` : node.pending ? "" : ", port metadata not recorded";
   const scopeLabel = node.kind === "workflow" ? `, imported workflow, ${node.child_count ?? 0} steps, ${node.failure_count ?? 0} failed` : "";
   const state = node.state === "waiting" && node.waiting_for ? `waiting for ${node.waiting_for}` : node.state;
   const count = preview ? `${preview.count} ${preview.kind} ${preview.count === 1 ? "output" : "outputs"}` : "";
-  const label = `${node.title}, ${state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${count}` : skippedPreview ? ", No preview to display." : ""}${skipMessage ? ` ${skipMessage}` : ""}`;
+  const label = `${node.title}, ${state}${scopeLabel}${portsLabel}${preview ? `, ${preview.label}, ${count}` : skippedPreview ? ", No preview to display." : unavailablePreview ? ", Preview unavailable." : ""}${skipMessage ? ` ${skipMessage}` : ""}`;
   const group = element("g", { transform: `translate(${node.x},${node.y})`, class: `fx-canvas-node${node.kind === "workflow" ? " fx-canvas-workflow" : node.kind === "boundary" ? " fx-canvas-boundary" : ""}`, role: node.kind === "workflow" ? "group" : "button", tabindex: 0, "data-node-id": node.id, "data-state": node.state, "aria-label": label, ...(node.kind === "workflow" ? { "aria-current": "false" } : { "aria-pressed": "false" }) });
   group.append(element("rect", { width: node.width, height: node.height, rx: 11, class: node.pending ? "fx-canvas-node-box fx-canvas-pending" : "fx-canvas-node-box" }));
   group.append(element("text", { x: 16, y: 27, class: "fx-canvas-node-title" }, short(node.title, node.ports ? 42 : 28)));
@@ -190,6 +191,9 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       );
       group.append(empty);
     }
+    if (unavailablePreview) group.append(element("text", {
+      x: node.width / 2, y: frame.y + frame.height / 2, "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error",
+    }, "Preview unavailable"));
     group.append(element("rect", { ...frame, rx: 6, class: "fx-canvas-image-border" }));
   }
   group.append(stateIconElement(node.state, 15, node.height - 32, 12));

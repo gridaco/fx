@@ -36,9 +36,10 @@ The viewer reads only the selected artifact URL already supplied by its trusted
 run or export reader. It checks the file's recorded size and SHA-256 digest
 before handing bytes to the renderer. Files larger than 128 MiB are refused
 before reading; reads are bounded independently of a server's reported length.
-GLB headers and chunk boundaries are validated before model parsing. A preview
-that has not loaded within 30 seconds stops with an explicit timeout; this
-includes artifact loading and renderer startup.
+GLB headers and chunk boundaries are validated before model parsing. Unknown
+chunk types are ignored; JSON remains first and unique, and BIN, when present,
+remains second and unique. A preview that has not loaded within 30 seconds stops
+with an explicit timeout; this includes artifact loading and renderer startup.
 
 GLB is a container, not a guarantee that resources are embedded. External
 buffer and image references, including relative paths and HTTP(S) URLs, are
@@ -104,6 +105,8 @@ stay distinct from node failure and source availability; original files remain
 accessible from details when available. Missing or unsupported previews do not
 change card geometry. Model output declarations reserve the preview area before
 outputs arrive, just as image and video declarations do.
+A succeeded card without a supported preview shows **Preview unavailable** in
+its reserved area.
 
 ### Details
 

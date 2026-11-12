@@ -7,6 +7,13 @@ import { exportArtifactUrl, parseRunExport } from "../src/export";
 
 const buffer = (bytes: Uint8Array): ArrayBuffer => Uint8Array.from(bytes).buffer;
 const fixture = (options = {}): ArrayBuffer => buffer(modelFixture(options));
+function appendChunk(bytes: ArrayBuffer, type: number, data = new Uint8Array([1, 2, 3, 4])): ArrayBuffer {
+  const result = new Uint8Array(bytes.byteLength + 8 + data.byteLength), header = new DataView(result.buffer);
+  result.set(new Uint8Array(bytes)); header.setUint32(8, result.byteLength, true);
+  header.setUint32(bytes.byteLength, data.byteLength, true); header.setUint32(bytes.byteLength + 4, type, true);
+  result.set(data, bytes.byteLength + 8);
+  return result.buffer;
+}
 function rewrite(bytes: ArrayBuffer, edit: (document: any) => void): ArrayBuffer {
   const view = new DataView(bytes), end = 20 + view.getUint32(12, true);
   const document = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, end - 20)));
@@ -29,6 +36,29 @@ describe("recorded GLB boundary", () => {
       validateModel(bytes);
       expect(new Uint8Array(bytes)).toEqual(new Uint8Array(before));
     }
+  });
+  test("ignores bounded custom chunks with or without a binary chunk, without mutating the bytes", () => {
+    for (const bytes of [fixture(), fixture({ dataUris: true })]) {
+      const extended = appendChunk(appendChunk(bytes, 0x454d4341), 0x454d4341, new Uint8Array());
+      const before = extended.slice(0);
+      validateModel(extended);
+      expect(new Uint8Array(extended)).toEqual(new Uint8Array(before));
+    }
+  });
+  test("refuses additional JSON chunks, duplicate binary chunks and a binary chunk after a custom chunk", () => {
+    expect(() => validateModel(appendChunk(fixture(), 0x4e4f534a))).toThrow("valid GLB 2");
+    expect(() => validateModel(appendChunk(fixture(), 0x004e4942))).toThrow("valid GLB 2");
+    expect(() => validateModel(appendChunk(appendChunk(fixture({ dataUris: true }), 0x454d4341), 0x004e4942))).toThrow("valid GLB 2");
+  });
+  test("checks custom chunk alignment, payload bounds and truncated headers", () => {
+    const bytes = fixture();
+    expect(() => validateModel(appendChunk(bytes, 0x454d4341, new Uint8Array(3)))).toThrow("valid GLB 2");
+    const oversized = appendChunk(bytes, 0x454d4341);
+    new DataView(oversized).setUint32(bytes.byteLength, 8, true);
+    expect(() => validateModel(oversized)).toThrow("valid GLB 2");
+    const truncated = appendChunk(bytes, 0x454d4341).slice(0, bytes.byteLength + 4);
+    new DataView(truncated).setUint32(8, truncated.byteLength, true);
+    expect(() => validateModel(truncated)).toThrow("valid GLB 2");
   });
   test("refuses external resources, required extensions, and a scene containing motion without a mesh", () => {
     expect(() => validateModel(fixture({ external: true }))).toThrow("embedded resources");

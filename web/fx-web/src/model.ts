@@ -21,12 +21,15 @@ export function validateModel(bytes: ArrayBuffer): void {
   if (header.getUint32(0, true) !== 0x46546c67 || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength) throw invalid();
   const jsonLength = header.getUint32(12, true);
   if (header.getUint32(16, true) !== 0x4e4f534a || !jsonLength || jsonLength % 4 || 20 + jsonLength > bytes.byteLength) throw invalid();
-  let chunks = 0;
+  let chunkIndex = 1;
   for (let offset = 20 + jsonLength; offset < bytes.byteLength;) {
     if (offset + 8 > bytes.byteLength) throw invalid();
-    const length = header.getUint32(offset, true);
-    if (length % 4 || offset + 8 + length > bytes.byteLength || header.getUint32(offset + 4, true) !== 0x004e4942 || ++chunks > 1) throw invalid();
+    const length = header.getUint32(offset, true), type = header.getUint32(offset + 4, true);
+    // Unknown chunks are ignored by the renderer. JSON is first and unique; BIN, if
+    // present, is second and unique, even when custom chunks follow it.
+    if (length % 4 || offset + 8 + length > bytes.byteLength || type === 0x4e4f534a || (type === 0x004e4942 && chunkIndex !== 1)) throw invalid();
     offset += 8 + length;
+    chunkIndex++;
   }
   let document: unknown;
   try { document = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(bytes, 20, jsonLength))); } catch { throw invalid(); }

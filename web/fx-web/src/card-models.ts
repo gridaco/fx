@@ -201,8 +201,9 @@ export class CardModels {
   recheck(): void {
     for (const binding of this.bindings.values()) this.syncControl(binding);
     if (this.active && !this.activeEligible()) this.stop();
-    if (this.job && ![...this.bindings.values()].some(binding => keyOf(binding.preview) === this.job!.key && this.eligible(binding, false))) this.job.abort.abort();
-    for (const key of this.queue.keys()) if (![...this.bindings.values()].some(binding => keyOf(binding.preview) === key && this.eligible(binding, false))) this.queue.delete(key);
+    const eligible = new Set([...this.bindings.values()].filter(binding => this.eligible(binding, false)).map(binding => keyOf(binding.preview)));
+    if (this.job && !eligible.has(this.job.key)) this.job.abort.abort();
+    for (const key of this.queue.keys()) if (!eligible.has(key)) this.queue.delete(key);
     for (const binding of this.bindings.values()) if (this.eligible(binding)) this.enqueue(binding);
     this.next();
   }

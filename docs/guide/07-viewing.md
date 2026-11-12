@@ -395,6 +395,8 @@ and browser graphics failures receive an explanation. The original file link
 remains available whenever the recorded file bytes are available, even when the
 browser cannot preview them. A preview failure does not mean the producing step
 failed. Missing or changed bytes remain explicitly unavailable.
+A succeeded card without a supported preview shows **Preview unavailable** in
+its reserved preview area.
 
 The renderer and its Meshopt decoder load on the first visible model preview;
 Draco and KTX2 decoders load when a model needs them. All are bundled with the

@@ -732,6 +732,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   so loading feedback and animation controls do not move surrounding details.
   FBX, JSON glTF, standalone motion, skeleton-only files, external resource dependencies and
   unsupported required extensions keep an explanation and the original download when available.
+  A succeeded card without a supported preview shows `Preview unavailable` in its reserved area.
   Models are limited to 128 MiB and checked against their recorded size and digest before
   rendering. A preview that has not loaded within 30 seconds stops with a timeout.
   The renderer, including Meshopt, loads on the first visible model preview; Draco/KTX2

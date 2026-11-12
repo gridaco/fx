@@ -43,12 +43,16 @@ To retain the focused fixture at a chosen new/empty location, without opening a 
 
 ```sh
 uv run --project python python tools/check_viewer_fixtures.py --case media-previews --output .fx/viewer-fixtures/media-previews
+bun --no-env-file x playwright-core install chromium
 bun --no-env-file run test:viewer:media-browser --run .fx/viewer-fixtures/media-previews/runs/media-previews
 ```
 
 `bun --no-env-file run demo:viewer:media --open` is the equivalent launcher shortcut.
 The browser check uses that actual saved run and engine host, rather than fabricated
 viewer records, and saves an overview under ignored `output/playwright/`.
+Playwright's Chromium is installed separately from the JavaScript dependencies.
+On Linux, use `install --with-deps chromium` to install its system dependencies too.
+Both browser checks also accept `FX_CHROMIUM_EXECUTABLE` for an existing compatible browser.
 
 ## Generate, verify, and inspect
 
@@ -243,6 +247,7 @@ After building the viewer, run the focused browser acceptance:
 
 ```sh
 bun --no-env-file run build:viewer
+bun --no-env-file x playwright-core install chromium
 bun --no-env-file run test:viewer:model-browser
 ```
 
