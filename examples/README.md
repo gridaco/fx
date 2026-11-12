@@ -14,6 +14,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | [world](world/) | synopsis, poster and direction into reviewed illustrated entities | free preparation offline; structured proposals and illustrations paid |
 | [movie-sprite](movie-sprite/) | an image into a video take, then transparent loop finishing | generation paid; downloaded or supplied footage finishes locally at $0 with FFmpeg |
 | [portrait-motion](portrait-motion/) | independent face states, registration, native patches and combinations | state generation paid; synthesized stand-ins exercise both branches at $0 |
+| [layered-character](layered-character/) | full-face repaints, native patches, clipped gaze, source-owned head/torso layers and LivLiv v4 export | Codex at $0; exact fixed-patch neutral, canonical gaze/puppet checks, synthetic direction/ownership/coverage tests; procedural poses require player review; authored keyforms/hair physics deferred |
 | [character-3d](character-3d/) | reviewed reference views, mesh generation, Blender assembly, rigging and admission | current runnable graph; local steps need Blender, generation and review paid |
 | [terrain](terrain/) | Python builder, fixed 47-mask atlas, validation and deterministic map preview | preparation and preview local; atlas generation and review paid |
 | [ui-kit](ui-kit/) | Python builder, nine-slice panels, button states, icons and measured geometry | preparation and validation local; artwork and review paid |
@@ -26,7 +27,7 @@ Every example plans offline. A run without `--live` executes free steps and refu
 calls at $0. Live execution uses your keys, within the ceiling supplied with
 `--max-usd` ([Running](../docs/guide/05-running.md#keys-and-live-runs)): the routes on Grida
 Gateway (`@gg`) all take one key, `GG_API_KEY`, and the others their provider's. A
-ceiling limits spending; it does not guarantee completion or artistic quality. The pet draws on
+ceiling limits spending; it does not guarantee completion or artistic quality. The pet and layered character draw on
 [your own Codex](../docs/guide/12-codex.md) instead: no key, and no `--max-usd`.
 
 ## Use an example
@@ -98,8 +99,8 @@ Paid calls are refused at $0; hello also proves cache reuse. The complete parall
 plans and refuses its paid calls using synthesized input.
 
 [`tools/check_showcase_examples.py`](../tools/check_showcase_examples.py) checks the other
-seven website projects with synthesized inputs, without CDN access, provider keys or dotenv
-loading. It plans the actual graphs, checks paid-call refusal, finishes a synthetic movie,
+seven website projects and the registered portrait example with synthesized inputs,
+without CDN access, provider keys or dotenv loading. It plans the actual graphs, checks paid-call refusal, finishes a synthetic movie,
 exercises both portrait branches with stand-ins, and renders a stand-in pet's reel. The 3D graph always plans; actual local
 normalization requires Blender and is separately documented in that example.
 

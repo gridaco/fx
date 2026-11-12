@@ -1,0 +1,6 @@
+fx: project/v1
+budget:
+  max_usd: 0
+routes:
+  image.generate: { route: imagegen@codex, concurrency: 2 }
+  image.edit: { route: imagegen@codex, concurrency: 2 }

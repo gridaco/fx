@@ -1,0 +1,46 @@
+fx: workflow/v1
+id: gaze-repaints
+title: Complete eye surfaces in full-face context
+description: Native full-face donors for skin, blank whites and hidden iris completion.
+inputs:
+  portrait: { type: file, kind: image }
+  geometry: { type: file, kind: json }
+tables:
+  states:
+    - id: eye_skin
+      instruction: >-
+        Remove BOTH entire drawn eyes: the irises, pupils, white eye openings, upper and lower eyelashes and eye-outline ink. Replace only these eye regions with continuous matching cheek/eyelid skin, a smooth closed skin surface without any lashes or eyeballs. This is intentionally an eyeless clean backing plate for a rig. Preserve the original eyebrows, hair, nose, mouth, blush, anatomy, pose and lighting. Especially remove the old thick upper lash strokes; leave no dark iris or lash ghost in either eye region.
+    - id: eye_whites
+      instruction: >-
+        Remove ONLY both golden irises, black pupils and iris highlights. Repaint the insides of BOTH existing eye openings as continuous clean natural pale sclera, with the original subtle upper-lid shadow. Preserve the original eye-opening shape and original upper/lower eyelashes and outline exactly. Both eyes must have blank whites with no iris, pupil, colored disk, highlight dots or extra ink inside. Keep the entire rest of the face and hair identical to the reference.
+    - id: eye_complete
+      instruction: >-
+        Reveal the COMPLETE original golden iris disk in BOTH eyes: lift only the upper eyelids and lower the lower eyelids just enough to expose the full circular iris, including its hidden top and bottom. Keep both iris centers, size, pupil positions, golden coloring, shading, fine details and highlights at their original positions. The source irises must not move, grow, shrink or be redesigned. The full disk of each iris must be visible without eyelashes or lid outlines crossing it. Keep the original gaze straight ahead. Keep the entire rest of the face, nose, hair, mouth, expression, pose and lighting unchanged. This is a hidden-surface completion reference, not a new character.
+steps:
+  prepare:
+    at: plan
+    uses: ./nodes/prepare.py#prepare
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+    view: true
+  repaint:
+    for_each: ${{ tables.states }}
+    key: ${{ item.id }}
+    concurrency: 2
+    steps:
+      draw:
+        title: Repaint complete face for native eye layers
+        uses: fx/image.edit@1
+        route: imagegen@codex
+        with:
+          image: ${{ steps.prepare.outputs.face }}
+          prompt: ./prompts/gaze.md
+          background: opaque
+          vars:
+            state_id: ${{ item.id }}
+            instruction: ${{ item.instruction }}
+        view: true
+outputs:
+  donors: ${{ steps.repaint.*.draw.outputs.image }}
+  mask_overlay: ${{ steps.prepare.outputs.mask_overlay }}

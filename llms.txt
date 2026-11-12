@@ -1530,6 +1530,24 @@ changed-file/field/operation identities and redacted provider errors, tested thr
 - [Connect to the FX viewer](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md): browser automation, client SDK, selection/context, presentation and host authorization
 - [Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md)
 - [Examples](https://github.com/gridaco/fx/tree/main/examples): complete projects
+- [Layered character](https://github.com/gridaco/fx/tree/main/examples/layered-character): a
+  Codex-only $0 foundation repaints the complete master face, registers each donor, and extracts
+  agent-masked native blink/mouth patches for LivLiv v4. Neutral reconstruction and pixels
+  outside the masks are checked exactly. Its optional gaze workflow adds complete-face eye
+  backing/whites/completion donors and source-aligned clipped irises for looking left, right,
+  up and down, with an explicit canonical eye stack and reported differences from the master.
+  Synthetic tests track both pupils and exercise the full eight-call workflow offline.
+  A further puppet workflow adds one full-portrait body/neck completion donor and source-owned
+  head/torso layers for procedural head turns, nods, tilts and breathing. Its report separates
+  canonical neutral differences and candidate pose ranges; actual poses require player review,
+  and the package cannot enforce caller parameters. Synthetic checks exercise the nine-call
+  workflow. Optional `neck_texture_polygon_xy` extends clean registered skin within the neck
+  fill to exclude donor outlines without changing geometry. Checks cover scoped
+  neck-import registration coverage. Hair physics, brows, expressions and authored
+  keyforms remain proposed in the
+  [moving-layer design study](https://github.com/gridaco/fx/blob/main/examples/layered-character/LAYERS.md).
+  Browser playback and artistic acceptance are separate.
+  Generated art stays out of Git.
 
 ## Spec
 

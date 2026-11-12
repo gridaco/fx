@@ -61,6 +61,7 @@ offline; without `--live` a run does every free step and refuses each paid call 
 | [hello](../../examples/hello/) | your own nodes, built-in local steps, a judge, a keyed repeat, the cache | everything, offline, at $0 |
 | [hello-ts](../../examples/hello-ts/) | hello with every node in TypeScript: types from the declaration, a judge and the source closure | everything, offline, at $0 |
 | [looping-parallax](../../examples/looping-parallax/) | plan-time facts, fallbacks, a paid call inside your own node | offline when every layer mirrors; a repaint is live |
+| [layered-character](../../examples/layered-character/) | full-face repaints, clipped gaze, native head/torso ownership and LivLiv v4 export | Codex at $0; neutral/direction/coverage checks; procedural poses reviewed in the player; keyforms and separate hair physics deferred |
 | [item-icons](../../examples/item-icons/) | a TypeScript builder reading a web game's own item table, a TypeScript stand-in, and delivery into the game | the stand-in offline; the icons live |
 | [concept-gallery](../../examples/concept-gallery/) | propose a world, review it, one reviewed image per entity: YAML plus judges you write | live |
 | [game-build](../../examples/game-build/) | a game repo that builds its art with FX from its own level files: Python builder | the sky offline; the rest live |

@@ -18,9 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from PIL import Image
-
 import grida.fx as fx
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
@@ -106,6 +105,14 @@ def check(home: Path, name: str) -> str:
         plan_and_refuse(home, "workflow.yaml", ".fixtures/face.yaml")
         run_script(home, "check.py")
         return "source and face calls refused; face and whole-portrait stand-ins finished at $0"
+    if name == "layered-character":
+        run_script(home, "check.py")
+        run_script(home, "check_gaze.py")
+        run_script(home, "check_puppet.py")
+        return (
+            "native repaints, clipped gaze and head/body ownership: "
+            "neutral, coverage guards and refusal/cache at $0"
+        )
     if name == "character-3d":
         run_script(home, "make_fixture.py")
         plan = fx.plan("workflow.yaml", cwd=home, input_files=["inputs/fixture/inputs.yaml"])
@@ -162,6 +169,7 @@ def main() -> int:
         "ui-kit",
         "movie-sprite",
         "portrait-motion",
+        "layered-character",
         "character-3d",
         "pet",
     ]
@@ -173,6 +181,7 @@ def main() -> int:
             "ui-kit",
             "movie-sprite",
             "portrait-motion",
+            "layered-character",
             "character-3d",
             "pet",
         ):

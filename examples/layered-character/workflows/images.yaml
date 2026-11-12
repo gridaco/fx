@@ -1,0 +1,42 @@
+fx: workflow/v1
+id: registered-portrait-images
+title: Repaint complete faces on Codex
+description: Five full-face repaints from one native crop; the source geometry remains authoritative.
+inputs:
+  portrait: { type: file, kind: image }
+  geometry: { type: file, kind: json }
+tables:
+  states:
+    - { id: blink, instruction: "Close BOTH eyes in a gentle natural blink. Preserve the mouth exactly. The closed eyelids replace the original iris and eye whites with matching skin and delicate closed lashes." }
+    - { id: mouth_half, instruction: "Open the mouth just a little to speak. A small natural opening with muted rose interior. Preserve BOTH original open eyes, nose and expression exactly." }
+    - { id: mouth_open, instruction: "Open the mouth naturally for the vowel A. A modest vertical opening with subtle tongue and dark rose interior, no exaggerated smile. Preserve BOTH original open eyes and nose exactly." }
+    - { id: mouth_round, instruction: "Shape the mouth into a small natural rounded O for speech. Preserve BOTH original open eyes, nose and expression exactly." }
+    - { id: mouth_wide, instruction: "Shape the mouth for the vowel E, a modest wider opening and slight upper teeth. Do not make a broad grin. Preserve BOTH original open eyes and nose exactly." }
+steps:
+  prepare:
+    at: plan
+    uses: ./nodes/prepare.py#prepare
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+    view: true
+  repaint:
+    for_each: ${{ tables.states }}
+    key: ${{ item.id }}
+    concurrency: 2
+    steps:
+      draw:
+        title: Repaint the whole face in place
+        uses: fx/image.edit@1
+        route: imagegen@codex
+        with:
+          image: ${{ steps.prepare.outputs.face }}
+          prompt: ./prompts/repaint.md
+          background: opaque
+          vars:
+            state_id: ${{ item.id }}
+            instruction: ${{ item.instruction }}
+        view: true
+outputs:
+  donors: ${{ steps.repaint.*.draw.outputs.image }}
+  mask_overlay: ${{ steps.prepare.outputs.mask_overlay }}

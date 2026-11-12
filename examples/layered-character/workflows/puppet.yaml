@@ -1,0 +1,35 @@
+fx: workflow/v1
+id: layered-character-puppet
+title: Faux head volume, gaze and independent breathing
+description: Native head/body ownership and a completed neck let the player deform the head without rotating the jacket.
+inputs:
+  portrait: { type: file, kind: image }
+  geometry: { type: file, kind: json }
+  gaze_geometry: { type: file, kind: json }
+  puppet_geometry: { type: file, kind: json }
+steps:
+  face:
+    uses: ./workflows/gaze.yaml
+    with:
+      portrait: ${{ inputs.portrait }}
+      geometry: ${{ inputs.geometry }}
+      gaze_geometry: ${{ inputs.gaze_geometry }}
+  backing:
+    uses: ./workflows/puppet-images.yaml
+    with:
+      portrait: ${{ inputs.portrait }}
+  assemble:
+    uses: ./nodes/puppet.py#assemble_puppet
+    with:
+      portrait: ${{ inputs.portrait }}
+      package: ${{ steps.face.outputs.archive }}
+      donors:
+        body_neck: ${{ steps.backing.outputs.body_neck }}
+      geometry: ${{ inputs.puppet_geometry }}
+outputs:
+  model: ${{ steps.assemble.outputs.model }}
+  archive: ${{ steps.assemble.outputs.archive }}
+  preview: ${{ steps.assemble.outputs.preview }}
+  report: ${{ steps.assemble.outputs.report }}
+  patches: ${{ steps.assemble.outputs.patches }}
+  states: ${{ steps.assemble.outputs.states }}
