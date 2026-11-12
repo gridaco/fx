@@ -182,7 +182,9 @@ speech and music have no GG route yet. `GG_BASE_URL`, `OPENAI_BASE_URL`,
 `OPENROUTER_BASE_URL`, `FAL_BASE_URL` and `ELEVENLABS_BASE_URL` point a provider at another
 address, such as a proxy. A key that is missing refuses only the calls that need it, before
 anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
-Without `--live` no key is used. A provider FX does not ship is declared in `fx.yaml`, with the
+Without `--live` no paid capability call is sent. Preparing a selected missing GG/OpenRouter
+image binding may use that provider's key for a read-only metadata lookup before planning;
+it never generates or spends. `GRIDA_FX_NETWORK=off` disables this lookup. A provider FX does not ship is declared in `fx.yaml`, with the
 variables of its own key and address
 ([Community providers](15-community-providers.md#declare-the-provider)).
 
@@ -528,10 +530,14 @@ const images = result.outputs["images"]; // a keyed collection is a Map, in its 
 ## Stand-ins (testing without a provider)
 
 A **stand-in run** answers each paid call with a function you write instead of a provider:
-offline, for nothing, with the answers your test chooses, as a mock model does in an AI SDK. The
+model execution is offline, for nothing, with the answers your test chooses, as a mock model does in an AI SDK. The
 rest is a real run: every step runs, your nodes and judges see the answers, and the run is
 recorded. A call answered before is replayed from the stand-in's own cache (below); the function
 is asked only the rest.
+
+Preparing a missing GG/OpenRouter image binding may still read provider metadata before the
+stand-in starts. For a fully offline test, set `GRIDA_FX_NETWORK=off` and use authored routes
+or available cached metadata. The stand-in never sends a generation request or reserves money.
 
 **Ways to give one:**
 - **From Python,** `grida.fx.run(..., stand_in=answer)` (or `run_async`) calls `answer` in your

@@ -598,6 +598,19 @@ pub fn generic_image<'a>(
     label: &str,
     generate_references: bool,
 ) -> Result<GenericImage<'a>, String> {
+    generic_image_controls(call, who, label, generate_references, false, false)
+}
+
+/// The generic image checks with standard controls explicitly enabled by a versioned adapter.
+/// The caller validates those controls against its route's recorded metadata before sending.
+pub(crate) fn generic_image_controls<'a>(
+    call: &'a CallRequest,
+    who: &str,
+    label: &str,
+    generate_references: bool,
+    exact_size: bool,
+    transparent: bool,
+) -> Result<GenericImage<'a>, String> {
     let request = &call.request;
     let not_sent = |what: &str| {
         format!(
@@ -615,12 +628,13 @@ pub fn generic_image<'a>(
     match request.get("background") {
         None | Some(Value::Null) => {}
         Some(Value::String(b)) if b == "auto" || b == "opaque" => {}
-        Some(Value::String(b)) if b == "transparent" => {
+        Some(Value::String(b)) if b == "transparent" && !transparent => {
             return Err(not_sent("transparent background"));
         }
+        Some(Value::String(b)) if b == "transparent" => {}
         Some(_) => return Err("background must be auto, opaque or transparent".into()),
     }
-    if parse_size(request.get("size"))?.is_some() {
+    if parse_size(request.get("size"))?.is_some() && !exact_size {
         return Err(not_sent("exact size"));
     }
     let edit = call.route.capability == "image.edit";

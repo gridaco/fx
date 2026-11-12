@@ -1,8 +1,10 @@
 # Model selection and provider preferences
 
 Model selection is authoring configuration. The engine resolves it to an ordinary concrete
-route before pricing, approval, identity and execution. No planning or running operation
-discovers models over the network. The words MUST and MUST NOT are used as in RFC 2119.
+route before pricing, approval, identity and execution. For supported providers, preparing a
+missing image-model binding may read provider metadata over the network (§3). The planning
+core itself remains offline. Discovery never generates an asset or authorizes spending.
+The words MUST and MUST NOT are used as in RFC 2119.
 
 ## 1. Selectors and defaults
 
@@ -29,17 +31,22 @@ Selection proceeds as follows:
 3. An unqualified selector uses that capability's merged provider preference. Missing
    preference is a refusal naming the setting or a qualified selector as corrections.
 4. Resolve the selected model, provider and capability in the admitted route catalog (§2).
-   Missing or ambiguous bindings are refusals. Credentials do not choose a provider, and a
-   missing key does not cause another provider to be selected.
+   When no binding exists, the engine may prepare one through the selected provider's
+   supported metadata lookup (§3). Ambiguous bindings are refused without discovery.
+   Credentials do not choose a provider, and a missing key does not cause another provider
+   to be selected.
 5. Apply the existing route's feature, input-count, contract and price checks.
 
 The provider of a qualified capability default is not extracted when a step overrides that
 default with an unqualified model: provider preferences are a separate explicit setting.
 Existing qualified configurations require no preference and retain their behavior.
 
-The core owns this resolution. Planning and `doctor` use the same selection policy; doctor
-reports adapter, key and local-program readiness afterward. It does not claim remote model
-availability or validate settings that require actual workflow inputs.
+The core owns selection and concrete-route resolution; the engine prepares provider metadata
+before invoking it. Planning and `doctor` use the same selection policy; doctor reports
+adapter, key and local-program readiness afterward. Finding model metadata is not a provider
+health check and does not prove that a generation will succeed. `doctor <target>` prepares
+missing used bindings through the same discovery path; `doctor` without a target stays local.
+Doctor does not validate settings that require actual workflow inputs.
 
 ## 2. Canonical model metadata and concrete routes
 
@@ -67,3 +74,97 @@ absolute paths and is not identity. Existing model-independence checks are uncha
 Runtime calls consume the already bound concrete route. Resume continues to replan current
 configuration and compare plan digests; changing the resolved model or provider refuses an
 existing incompatible run rather than silently switching or restoring previous preferences.
+
+## 3. Selected-provider image discovery
+
+The engine prepares a missing `image.generate` or `image.edit` binding on `gg` or
+`openrouter` by reading that provider's model metadata. This happens automatically during
+normal planning and run preparation: no model import or manual synchronization is required.
+It asks only the provider already selected by the qualified selector or provider preference.
+It does not search for another provider, change the authored model ID, upgrade to a newer
+model or make a paid fallback call.
+
+Authored route tables remain authoritative. Discovery MUST NOT replace an admitted binding,
+repair an ambiguous binding, or weaken a route's authored feature, input, contract or price
+checks. An explicit `--routes` invocation disables automatic discovery, retaining that
+invocation's isolated catalog. Other providers and capabilities continue to use admitted
+route tables, including project tables for models FX does not ship. A project provider or
+adapter does not need a model-discovery service or a Grida Models catalog.
+
+Provider metadata is normalized into ordinary concrete routes before the offline planner
+runs. A provider's published model facts are admitted only for the request and response
+wire the installed adapter implements. An unsupported wire, missing image capability or
+unknown required feature is a refusal; metadata cannot install an adapter or execute code.
+Model matching remains exact under §2. The serving adapter's identity completes the route
+contract under [identity.md](identity.md) §7.
+
+Lookups are read-only provider GET requests over the engine's transport, each limited to
+4 MiB and a 15-second deadline. They generate
+no assets, create no provider jobs and incur no generation charge. They may use only the
+selected provider's declared credential, with the same base-URL origin confinement and
+redaction as other provider requests ([providers.md](providers.md) §1,
+[adapters.md](adapters.md) §2). They do not follow redirects or retry. With
+`GRIDA_FX_NETWORK=off`, no lookup request is sent. A lookup failure does not change the
+provider or silently admit unsupported facts; without sufficient locally available metadata
+or an authored route, resolution is refused with the missing requirement.
+
+This path reads the provider APIs. It does not download Grida Models releases at runtime.
+The existing build-time Models projection continues to check shipped routes. A public
+custom-resolver API is deferred; existing project route tables and adapters remain the
+extension paths.
+
+## 4. Reusable model allowances
+
+The planning project's `fx.yaml` may set `model_allowances`, a provider-to-capability map of
+positive USD amounts:
+
+```yaml
+model_allowances:
+  gg:
+    image.generate: 0.10
+    image.edit: 0.15
+```
+
+An allowance supplies the per-attempt cap for a discovered model whose provider metadata
+does not supply a sufficient planning price. It applies to every discovered model of that
+provider and capability that needs this fallback, including a step's model override. It is
+optional when a sufficient price is known, and is not a provider quote or permission to
+spend. Without a price or applicable allowance, the route is not admitted. Authored routes'
+prices and caps are unchanged.
+
+The planning project owns this setting; the workflow home's value is not inherited, and
+provider preferences do not imply an allowance. Values use the existing positive USD
+grammar and precision. A capped call plans at $0 to its cap, reserves that cap per attempt
+and settles at the provider's reported cost, else the cap, under
+[identity.md](identity.md) §12 and [protocol.md](protocol.md) §6.1. Run and phase ceilings
+remain separate admission controls. Repricing or changing an allowance does not change the
+route fingerprint.
+
+## 5. Metadata cache and prepared plans
+
+The planning project's `.fx/models/` is an optional metadata cache, separate from the paid
+call and result store. It holds sanitized normalized routes, a connection-scope hash and a
+fetch timestamp, never raw responses, credentials, credential-bearing URLs or headers.
+Different provider connections do not silently share an entry. Cache failures do not prevent
+an otherwise valid online lookup.
+
+An entry is fresh for one hour. With the network on, an expired entry is refreshed before
+use; it may be used on a transient lookup failure. With `GRIDA_FX_NETWORK=off`, a usable
+cached entry may be used regardless of age, without sending anything. An explicit provider
+response that the selected model does not exist MUST NOT silently fall back to stale data.
+Without usable metadata or an authored route, offline resolution is refused. The cache is
+an optimization, not an offline-availability guarantee or a source of paid answers.
+
+A prepared SDK plan carries its engine-resolved model routes independently of this cache.
+Running that plan reuses its bound discovered routes, not a fresh model lookup; deleting or
+expiring the metadata cache does not substitute a different model or contract. If a fallback
+allowance used by that plan has changed, execution refuses and asks for a new plan. The engine
+still checks current authored configuration and the usual run admission rules. SDKs transport
+the normalized route data; only the engine validates and resolves it.
+
+A CLI resume may reuse the run's recorded discovered model facts without consulting the
+metadata cache or provider. It reapplies the planning project's current allowance policy,
+as for an authored route's current price; removing a required allowance refuses the binding.
+Allowance changes do not alter route identity or authorize spending. Fresh plans obtain
+current metadata under the policy above; all resumes retain the current-configuration and
+plan-digest checks in §2.

@@ -5,6 +5,7 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
 | Capability | Contract `adapter` | `adapter_behavior` |
 |---|---|---|
 | `image.generate`, `image.edit` | `openrouter-image` | `"1"` |
+| `image.generate`, `image.edit` | `openrouter-image-discovered-v1` | `"1"` |
 | `image.generate`, `image.edit` | `fx-openrouter-image-v1` | `"3"` |
 | `structured.generate` | `openrouter-structured` | `1` |
 | `agent.turn` | `openrouter-tool-loop` | `1` |
@@ -12,6 +13,7 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
 
 - **Capabilities:**
   - `image.generate` and `image.edit` on any model (`POST {base}/images`). Contract `adapter`: `openrouter-image`, behaviour `"1"`, the string: the default of both capabilities, which serves a route whose contract names no adapter ([providers.md](../../../../spec/providers.md) §2).
+  - The same generic image interface with discovered standard controls. Contract `adapter`: `openrouter-image-discovered-v1`, behaviour `"1"`: an explicit named contract; it leaves the original generic default unchanged.
   - `image.generate` and `image.edit` on GPT Image (`POST {base}/images`). Contract `adapter`: `fx-openrouter-image-v1`, behaviour `"3"`: only a route that names it, as the built-in routes do.
   - `structured.generate` (`POST {base}/chat/completions`, a strict `json_schema` response format). Contract `adapter`: `openrouter-structured`, behaviour `1`.
   - `agent.turn` (`POST {base}/chat/completions`, strict function tools). Contract `adapter`: `openrouter-tool-loop`, behaviour `1`.
@@ -29,6 +31,7 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
 
 - **Provider options** ([adapters.md](../../../../spec/adapters.md) §8): the parameters of `provider_options.openrouter` are added at the end of each body, after FX's members, and are refused, as the first of the values below, when they set a member FX owns:
   - images on any model: `model`, `prompt`, `input_references`, `n`, `response_format` and `stream`;
+  - images with discovered controls: the same members, plus `size` and `background`;
   - images on GPT Image: `model`, `prompt`, `n`, `provider`, `size`, `quality`, `background`, `input_references`, `response_format` and `stream`;
   - structured output: `model`, `messages`, `response_format`, `provider`, `reasoning`, `max_tokens`, `stream`, `n`, `tools` and `tool_choice`;
   - agent turns: `model`, `messages`, `tools`, `tool_choice`, `provider`, `reasoning`, `max_tokens`, `stream`, `n` and `response_format`; the engine's agent loop sends a turn none, so an agent run's turns take only the route's;
@@ -56,6 +59,7 @@ The reference for FX's adapters on `openrouter`, under the adapter contract, [sp
   - The answer is `data[0].b64_json`, strict base64, never a URL. `data` holding anything but one object is `OpenRouter image generation returned no single image`, `Failed { cost, retryable: false }`: FX asked for no count, so another attempt would draw as many. The bytes decide the kind (`media_type` is not read): a PNG is kept as it is, and a JPEG, WebP or GIF (its first frame) is decoded and encoded as PNG, the same pixels. Bytes that do not decode are `OpenRouter's image is not decodable`, and a picture that cannot be encoded is `OpenRouter's image could not be encoded as PNG`, each `Failed { cost, retryable: true }`. The answer is file `image` (`image/png`), with `data: null`.
   - The check is every image route's ([capabilities.md](../../../../spec/capabilities.md) §2): a PNG that decodes, opaque when asked for.
   - Facts: [Grida Models](https://github.com/gridaco/models) `v1.20261014.1` records no request parameters on OpenRouter's image models but GPT Image's, and, on 13 of its 17 OpenRouter image bindings, the number of input pictures each takes (`references.max`, 1 to 16); the endpoint and its answer are the ones the GPT Image adapter reads.
+- **Images with discovered controls** (`openrouter-image-discovered-v1`). The generic image wire above, with `n: 1` always sent and a required contract `image_controls` object. It maps only `size` and `background` to nonempty lists of allowed strings; each requested non-`auto` standard control must occur in its recorded list, else `OpenRouter model metadata does not support the requested <size|background>`. Missing, `null` and `auto` controls are omitted. `size` remains `auto` or exact `<W>x<H>` and `background` remains `auto`, `opaque` or `transparent`; masks remain unsupported. No quality, moderation or provider routing settings are added. The answer is converted to PNG as above, and its check also holds exact dimensions and transparency when requested. The contract takes only `adapter`, `adapter_behavior`, `provider_options` and `image_controls`; another shape is refused as a route this adapter does not serve.
 - **Images on GPT Image** (`fx-openrouter-image-v1`). Refused before sending, in this order:
   - provider options (above);
   - a blank `prompt`: `an image call needs its prompt as text`;

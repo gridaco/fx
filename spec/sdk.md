@@ -4,6 +4,23 @@ Python and JavaScript expose useful user jobs through language-native APIs. CLI
 verb coverage is not a goal. This additive SDK contract changes no execution,
 identity, cache, spending, run-record or observation wire semantics.
 
+## Prepare a plan
+
+Python and JavaScript plan through the same engine path as the CLI. For a selected missing
+image-model binding on a supported provider, the engine may make a bounded, read-only
+metadata lookup before offline core planning ([model-selection.md](model-selection.md) §3).
+This needs neither `live` nor spending approval and never generates an asset. Network-off,
+authored-route precedence, reusable allowances and lookup failures are identical through
+every invoker. Importing an SDK does not make a lookup.
+
+A `Plan` retains the engine's normalized discovered routes as a preparation snapshot,
+independently of the optional metadata cache. `run(plan)` sends that snapshot back to the engine
+instead of discovering those model bindings again. The engine validates the snapshot and
+current authored configuration. A changed fallback allowance used by the plan requires a new
+plan, rather than silently changing its prepared reservation. SDKs compute no route identity. This adds no public resolver
+or synchronization API. Preparing a new plan still resolves current configuration and
+provider metadata under the normal freshness policy.
+
 ## Execute and resume
 
 Python `run`/`run_async` and JavaScript `run` accept `name` and `resume` as run

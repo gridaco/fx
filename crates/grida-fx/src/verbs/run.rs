@@ -129,6 +129,34 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     };
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
+    let recorded_folder = if let Some(name) = &args.resume {
+        Some(super::run_catalog::resume_named(
+            &planner.project.runs_dir(),
+            &planner.workflow.workflow.id,
+            &planner.workflow.source,
+            name,
+        )?)
+    } else {
+        args.run.as_ref().map(|folder| cwd.join(folder))
+    };
+    let snapshot = if let Some(file) = &args.resolved_models {
+        Some(crate::models::read(&cwd.join(file))?)
+    } else if let Some(file) = recorded_folder
+        .map(|folder| folder.join("resolved-models.json"))
+        .filter(|file| file.exists())
+    {
+        let mut models = crate::models::read(&file)?;
+        crate::models::refresh_allowances(&mut models, &planner.project);
+        Some(models)
+    } else {
+        None
+    };
+    let resolved_models = crate::models::prepare(
+        &mut planner,
+        &mut host,
+        snapshot.as_ref(),
+        !args.routes.is_empty(),
+    )?;
     let declared: Vec<&str> = planner
         .workflow
         .workflow
@@ -170,12 +198,12 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     };
     let ran = plan_and_run(
         args,
-        &cwd,
         &engine,
         &mut planner,
         &mut host,
         yes_up_to,
         &deliveries,
+        resolved_models,
     );
     crate::engine::shutdown(&runtime, &engine);
     ran
@@ -184,13 +212,15 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
 /// Steps 3–8 of the module doc.
 fn plan_and_run(
     args: &RunArgs,
-    cwd: &Path,
     engine: &Arc<Engine>,
     planner: &mut Planner,
     host: &mut dyn NodeHost,
     yes_up_to: Option<grida_fx_core::money::Usd>,
     deliveries: &[Delivery],
+    resolved_models: serde_json::Value,
 ) -> Result<u8, Error> {
+    let working_directory = planner.cwd.clone();
+    let cwd = working_directory.as_path();
     let plan = crate::engine::plan(engine, planner, host)?;
     let text = if engine.stand_in_run() {
         grida_fx_core::plan::render::render_stand_in(&plan, planner)
@@ -253,6 +283,10 @@ fn plan_and_run(
             project_root: planner.project.root.clone(),
         }),
         repeat: super::repeat::recorded(args, planner, cwd),
+        resolved_models: resolved_models["routes"]
+            .as_array()
+            .filter(|entries| !entries.is_empty())
+            .map(|_| resolved_models.clone()),
     };
     let mut viewer = None;
     let project = planner.project.clone();

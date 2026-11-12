@@ -470,6 +470,8 @@ BUILT_IN_ADAPTERS: dict[tuple[str, str, str], tuple[Any, bool]] = {
     ("image.edit", "grok", "fx-grok-image-v1"): ("1", True),
     ("image.generate", "openrouter", "fx-openrouter-image-v1"): ("3", False),
     ("image.edit", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.generate", "openrouter", "openrouter-image-discovered-v1"): ("1", False),
+    ("image.edit", "openrouter", "openrouter-image-discovered-v1"): ("1", False),
     ("image.generate", "fal", "fx-fal-image-v1"): ("1", False),
     ("image.edit", "fal", "fx-fal-image-v1"): ("1", False),
 }

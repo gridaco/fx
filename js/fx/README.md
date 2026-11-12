@@ -117,7 +117,9 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 ```
 
 - `plan(target, options)`: the expanded graph (`plan.graph`, fx-graph-v1) and its price
-  (`plan.price`), with `ok`, `problems`, `estimate` and `phases`.
+  (`plan.price`), with `ok`, `problems`, `estimate` and `phases`, from one engine invocation.
+  A subsequent `run(plan)` reuses its resolved model facts; authored project configuration
+  is still checked again.
 - `expand`, `identity`, `price`: the documents of `grida-fx expand`, `identity` and `price`.
 - `run(target | plan, options)`: plans first (a plan with problems rejects with `PlanRefused`),
   runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`.

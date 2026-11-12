@@ -25,9 +25,16 @@ use std::ffi::OsString;
 /// The verbs whose extra arguments are workflow input flags.
 const PLANNING_VERBS: [&str; 6] = ["plan", "expand", "identity", "price", "run", "view"];
 /// Options of every planning verb that take a value.
-const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
+const VALUE_OPTIONS: [&str; 5] = [
+    "--inputs",
+    "--routes",
+    "--arg",
+    "--max-usd",
+    "--resolved-models",
+];
 /// Flags of `plan` alone.
-const PLAN_FLAGS: [&str; 5] = [
+const PLAN_FLAGS: [&str; 6] = [
+    "--prepared",
     "--check",
     "--json",
     "--expect-cached",

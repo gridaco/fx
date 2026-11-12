@@ -16,6 +16,11 @@ Optional `provider_preferences` merge independently in the same workflow-home th
 project order as route defaults ([model-selection.md](model-selection.md)). They do not add
 a user-wide configuration scope or change ownership of the catalog, providers or store.
 
+The planning project alone owns `model_allowances` and the optional `.fx/models/` metadata
+cache ([model-selection.md](model-selection.md) §4–§5). A workflow home's allowances are not
+inherited. This metadata cache is separate from the result/call store below and contains no
+paid answers or credentials.
+
 ## 1. Layout
 
 ```
@@ -209,12 +214,18 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
 ```
 <run folder>/
   plan.json                       fx-graph-v1        the plan the run started from
+  resolved-models.json             fx: routes/v1     discovered routes, when present
   events.jsonl                    fx-run-events-v1   everything that happened, in order
   run.lock                                           locked by the invocation running the folder
   files/<step>/<port><suffix>                        each step's output files
   outputs/<name><suffix>                             the workflow's declared outputs
 ```
 
+- **`resolved-models.json`**, when present, is an `fx: routes/v1` document of sanitized
+  discovered route entries used to prepare the run. It is separate from the graph, carries
+  no credential or private connection configuration, and adds no new identity rule. Legacy
+  runs need not have it. Recorded model, provider and contract remain authoritative; current
+  configuration and the usual plan-digest comparison still govern resume.
 - **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps` (each declared step by its declaration path, with its declaration `order`), `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to (found as *Repeating a run* says). A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
 - **Waiting for a route.** A paid call takes its route's slot before each send: the route's `concurrency` and `requests_per_minute` ([providers.md](providers.md) §3). A call that cannot take one at once writes `call_waiting` (`id`, `capability`, `route`, and `call`, its key) before it waits, and `call_admitted` with the same members once it has the slot; a call admitted at once writes neither, so a run on unpaced routes records nothing more. A wait that the run's cancellation ends writes no `call_admitted`. A wait is open from its `call_waiting` until the `call_admitted` of the same call, or until the step starts again, makes a new attempt (`node_retry`) or its run a new invocation (`run_started`): a wait those leave behind is no longer the step's. Readers show a started step that has not ended and has an open wait as `waiting` rather than `running` (`inspect`, `project`, the viewer), and time the work a step did from its start less the time it waited. A step whose body makes several calls at once is shown `waiting` while any of them waits, though another may be drawing: the record names only calls that waited.

@@ -85,8 +85,10 @@ that costs more is charged in full, and can take the run past its ceiling by the
 `price` must state an amount, so `price: {}` is refused; write `usd: 0` for a free route.
 
 In general:
-- **The plan never calls a provider.** It is also how you check a workflow in CI: `grida fx plan
-  --check` fails on any error, with no spend.
+- **The plan never makes a paid model call.** A missing GG/OpenRouter image binding may need a
+  read-only model-metadata lookup before the offline planner runs. For offline CI, use
+  authored routes or available metadata and `GRIDA_FX_NETWORK=off`; `grida fx plan --check`
+  fails on any error without spending.
 - **Calls priced by length** (speech by characters, music by seconds) use the step's `max_chars` or
   `duration`, or the route's worst case, and show as a range.
 - **The ceiling is enforced, not advised.** Before every paid call, and before every new attempt

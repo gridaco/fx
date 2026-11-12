@@ -65,7 +65,7 @@ use crate::val::Val;
 use crate::value::as_f64;
 use indexmap::IndexMap;
 use serde_json::{Map, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// What a price's amounts are per.
@@ -226,7 +226,7 @@ const fn named(
 
 /// The adapters FX ships, as spec/providers.md §2 lists them: each capability and provider's
 /// default, in its first table's order, then the adapters a route names, in its second's.
-pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 30] = [
+pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 32] = [
     served("image.generate", "openai", "fx-openai-image-v1", r#""1""#),
     served("image.edit", "openai", "fx-openai-image-v1", r#""1""#),
     served("image.generate", "openrouter", "openrouter-image", r#""1""#),
@@ -274,6 +274,18 @@ pub const BUILT_IN_ADAPTERS: [BuiltInAdapter; 30] = [
         "openrouter",
         "fx-openrouter-image-v1",
         r#""3""#,
+    ),
+    named(
+        "image.generate",
+        "openrouter",
+        "openrouter-image-discovered-v1",
+        r#""1""#,
+    ),
+    named(
+        "image.edit",
+        "openrouter",
+        "openrouter-image-discovered-v1",
+        r#""1""#,
     ),
     named("image.generate", "fal", "fx-fal-image-v1", r#""1""#),
     named("image.edit", "fal", "fx-fal-image-v1", r#""1""#),
@@ -502,6 +514,8 @@ pub fn parse_route_id(value: &str) -> std::result::Result<(String, String), Stri
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RouteTable {
     pub entries: IndexMap<(String, String), Route>,
+    /// Preparation failures, used only when no admitted entry matches. Never identity.
+    resolution_errors: BTreeMap<(String, String), String>,
 }
 
 impl RouteTable {
@@ -540,12 +554,21 @@ impl RouteTable {
         }
     }
 
+    /// Supplies a safe explanation for an unresolved selection. Admitted entries still win.
+    pub fn resolution_error(&mut self, capability: &str, id: &str, message: String) {
+        self.resolution_errors
+            .insert((capability.into(), id.into()), message);
+    }
+
     /// The route `id` serving `capability`: `a route is model@provider, not {repr}` for a bad id;
     /// `no route {id} serves {capability} (known routes: {sorted ids joined ", " or "none"})`.
     pub fn resolve(&self, capability: &str, id: &str) -> std::result::Result<&Route, String> {
         parse_route_id(id)?;
         if let Some(route) = self.entries.get(&(capability.to_string(), id.to_string())) {
             return Ok(route);
+        }
+        if let Some(message) = self.resolution_errors.get(&(capability.into(), id.into())) {
+            return Err(message.clone());
         }
         let known: Vec<String> = self.routes_for(capability).iter().map(|r| r.id()).collect();
         let known = if known.is_empty() {
@@ -588,6 +611,12 @@ impl RouteTable {
         match candidates.as_slice() {
             [route] => Ok(route),
             [] => {
+                if let Some(message) = self
+                    .resolution_errors
+                    .get(&(capability.into(), format!("{selector}@{provider}")))
+                {
+                    return Err(message.clone());
+                }
                 let known: BTreeSet<&str> = self
                     .entries
                     .values()

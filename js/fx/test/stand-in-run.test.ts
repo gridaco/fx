@@ -389,7 +389,10 @@ describe.skipIf(!NODE)("run with a stand-in", () => {
         const planned = new Plan({ problems: [] } as never, {} as never, makeRequest("wf.yaml", engine.options));
         const result = await run(planned, { standIn: answer });
         expect(result.standIn).toBe(true);
-        expect(engine.log()[0]?.args).toEqual(["run", "wf.yaml", "--stand-in=-", "--no-view"]);
+        expect(engine.log()[0]?.args).toEqual([
+          "run", "wf.yaml", "--stand-in=-", "--no-view",
+          expect.stringMatching(/^--resolved-models=\.grida-fx-models-[a-f0-9]+\.json$/),
+        ]);
       } finally {
         engine.cleanup();
       }

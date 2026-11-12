@@ -37,12 +37,20 @@ pub enum PlanVerb {
 
 /// Runs a planning verb.
 pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
-    let (plan, planner) = planned(args)?;
+    let (plan, planner, resolved_models) = planned(args)?;
     let refused = u8::from(!plan.ok());
     let status = match verb {
         PlanVerb::Plan => {
             if args.json {
-                print_json(&output::graph_document(&plan, &planner));
+                let graph = output::graph_document(&plan, &planner);
+                if args.prepared {
+                    print_json(
+                        &serde_json::json!({"kind":"fx-prepared-plan-v1", "graph":graph,
+                        "price":output::price_document(&plan), "resolved_models":resolved_models}),
+                    );
+                } else {
+                    print_json(&graph);
+                }
             } else {
                 print_line(&render::render(&plan, &planner));
             }
@@ -88,7 +96,7 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
 /// the planning project with it. A refused plan remains inspectable, with its planning problems
 /// in the document.
 pub(crate) fn graph(args: &PlanArgs) -> Result<(Value, Project), Error> {
-    let (plan, planner) = planned(args)?;
+    let (plan, planner, _) = planned(args)?;
     Ok((materialized(&plan, &planner), planner.project))
 }
 
@@ -108,10 +116,21 @@ fn materialized(plan: &Plan, planner: &Planner) -> Value {
     graph
 }
 
-fn planned(args: &PlanArgs) -> Result<(Plan, Planner), Error> {
+fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
     let request = request(args)?;
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
+    let snapshot = args
+        .resolved_models
+        .as_ref()
+        .map(|file| crate::models::read(&request.cwd.join(file)))
+        .transpose()?;
+    let resolved_models = crate::models::prepare(
+        &mut planner,
+        &mut host,
+        snapshot.as_ref(),
+        !args.routes.is_empty(),
+    )?;
     let runtime = crate::engine::runtime()?;
     let engine = crate::engine::engine_for(
         &runtime,
@@ -123,7 +142,7 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner), Error> {
     let plan = crate::engine::plan(&engine, &mut planner, &mut host);
     crate::engine::shutdown(&runtime, &engine);
     let plan = plan?;
-    Ok((plan, planner))
+    Ok((plan, planner, resolved_models))
 }
 
 /// The request of a planning verb's arguments.

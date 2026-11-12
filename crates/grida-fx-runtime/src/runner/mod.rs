@@ -139,6 +139,8 @@ pub struct RunOptions {
     /// `run_started`'s `repeat` (spec/store.md §8, "Repeating a run"): the arguments that repeat
     /// this invocation's run, when it has them.
     pub repeat: Option<serde_json::Value>,
+    /// Sanitized discovered route facts, independently retained for offline recovery.
+    pub resolved_models: Option<serde_json::Value>,
 }
 
 /// How an invocation ended.
@@ -711,6 +713,23 @@ fn prepare(
     folder.write_plan_once(&document).map_err(|error| {
         RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
     })?;
+    if let Some(models) = &options.resolved_models {
+        let path = folder.path.join("resolved-models.json");
+        // Keep the original facts. Current configuration is still replanned and checked above.
+        if !path.exists() {
+            crate::store::atomic_write(
+                &path,
+                &serde_json::to_vec(models).expect("model facts are JSON"),
+                true,
+            )
+            .map_err(|error| {
+                RunError::Fatal(Error::io(
+                    &in_folder(&options.label, "resolved-models.json"),
+                    &error,
+                ))
+            })?;
+        }
+    }
     Ok((folder, prior))
 }
 

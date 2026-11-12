@@ -172,7 +172,14 @@ the built-in table. Do not invent prices to make a refused plan pass.
 FX 0.7 and later run models and providers its built-in table lacks; check
 `grida fx --version` first.
 
-- **A model FX does not list, on GG, OpenRouter or fal**, needs only a route of
+- **A new image model on GG or OpenRouter**: change the model ID and plan. The engine
+  discovers a missing binding from the already selected provider's metadata, without
+  generating or spending. If its rates are insufficient, agree a reusable positive
+  provider/capability `model_allowances` amount in `fx.yaml`; it is a per-attempt cap,
+  separate from the run ceiling. Existing route tables win; explicit `--routes`
+  disables discovery. Network-off uses available cached metadata or authored routes,
+  and refuses a missing binding rather than searching another provider.
+- **Other models FX does not list, on GG, OpenRouter or fal**, need only a route of
   the project's own table (`route_tables:`): the model id as the provider names
   it, and `price: { cap_usd: N }` when its price is unknown. Each call holds the
   cap against the ceiling and is charged what the provider reports, else the cap:

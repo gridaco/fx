@@ -158,6 +158,14 @@ Price, features, input-picture limits, concurrency and pacing are not part of it
 
 A later table's entry for the same capability and route replaces an earlier one, contract included; this is how a project overrides a built-in price. Two entries for the same capability and route within one table are refused.
 
+When a selected image model on a supported provider has no admitted binding, preparation may
+supply a normalized discovered route under [model-selection.md](model-selection.md) §3.
+It does not replace a table entry and is disabled by any explicit `--routes` file. The
+discovered route has the same fingerprint rule and contract completion as an authored route.
+Metadata-source revisions, HTTP-cache timestamps and `model_allowances` are not hashed;
+changes to the resolved native model, provider or completed contract are. An SDK prepared
+plan carries its discovered routes so execution need not rediscover them.
+
 **The contract.** A route's contract is the object its entry declares, `{}` when none, completed when the table is read, in this order:
 
 1. **`extends`.** An entry may name, in `extends`, another route of the same capability and provider, its base. The entry starts from the base's price, features, `max_input_pictures`, `concurrency`, `requests_per_minute` and contract. A member the entry states replaces the base's whole, except `contract`, whose members merge one level deep: a member the entry's contract states replaces the base's member of that name, and the base's other members stay. With a base, `price` may be left out.

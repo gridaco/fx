@@ -1,8 +1,8 @@
 # Grida FX
 
 > Grida FX is a workflow engine for generated assets (images, video, audio, 3D models, structured
-> text) and ordinary local code. You describe steps in a YAML workflow; FX plans the run offline
-> with its price, runs only what changed, caches every result by content, reserves every paid call
+> text) and ordinary local code. You describe steps in a YAML workflow; FX resolves its models,
+> plans its price, runs only what changed, caches every result by content, reserves every paid call
 > against a ceiling, and records how each result was made. The command is `grida fx`.
 
 Version: 0.8.1
@@ -17,8 +17,9 @@ says which you have, and `grida fx --help` and `grida fx <verb> --help` are alwa
 
 ## Rules for agents
 
-- **Plan first; it is free.** `grida fx plan <workflow>` never calls a provider. Show the user its
-  steps and estimate before any run that may spend.
+- **Plan first; it is free.** `grida fx plan <workflow>` never makes a paid model call.
+  A selected missing GG/OpenRouter image model may require a read-only provider metadata
+  lookup before the offline planner runs. Show the user the steps and estimate before spending.
 - **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
   agreed ceiling (`--max-usd`). A run on the user's own Codex or Grok Build needs no ceiling but
   spends their subscription: ask for that too.
@@ -81,6 +82,7 @@ my-assets/
   prompts/         # prompt templates (optional)
   runs/            # one folder per run          (FX writes it; keep out of git)
   .fx/cache/       # content-addressed results   (FX writes it; keep out of git)
+  .fx/models/      # optional model metadata     (FX writes it; keep out of git)
   .fx/service/     # local service state         (FX writes it; keep out of git)
 ```
 
@@ -96,6 +98,7 @@ provider_preferences:               # independent of model choice; keys alone ne
   image.generate: gg
   structured.generate: gg
 # route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
+# model_allowances: { gg: { image.generate: 0.10 } } # fallback cap per attempt for unpriced discovered models
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
 # sources: [acme_lib]                  # packages whose source counts toward your nodes' identity
@@ -300,7 +303,8 @@ A concrete route is `model@provider`. In `fx.yaml`, `routes:` sets a model defau
 capability, and `provider_preferences:` independently sets one provider per capability.
 An unqualified model ID resolves through the catalog's canonical `model_id` metadata, or the
 native model exactly when metadata is absent. It needs an explicit provider preference;
-missing or ambiguous bindings are planning errors. Names are not matched fuzzily and available
+ambiguous bindings are planning errors. Missing GG/OpenRouter image bindings may be discovered
+automatically from the selected provider; other missing bindings are refused. Names are not matched fuzzily and available
 keys never choose the provider. A qualified route overrides the preference and works as before.
 
 These are defaults, not one model forced on every node. A step's `route:` can choose a different
@@ -314,8 +318,30 @@ The workflow source project's defaults are overlaid by the planning project's, i
 for models and preferences; this is not user-wide configuration. Selection completes before
 pricing, approval, identity or execution. The same concrete route keeps its cache; a different
 model or provider changes the plan, so an incompatible resume is refused. No provider is tried
-as a paid fallback. `grida fx nodes <type>` lists concrete routes; `grida fx doctor` shares the
-selection policy and reports local configuration readiness, not remote model availability.
+as a paid fallback. `grida fx nodes <type>` lists shipped concrete routes, not every discoverable
+model. `grida fx doctor <target>` prepares missing used bindings through the same path and
+reports configuration readiness; finding metadata is not a provider health check. Without a
+target, doctor stays local.
+
+For `image.generate` and `image.edit` on GG or OpenRouter, change the model ID and plan. If
+the local catalog has no binding, FX reads the selected provider's model metadata and admits
+only what its installed adapter supports. It does not import a model, select another provider
+or download code. Existing bindings and your own route tables remain authoritative; explicit
+`--routes` disables discovery. Other capabilities and providers retain the authored-route path.
+
+When metadata has no sufficient planning price, optionally set one reusable positive allowance
+per provider and capability in the planning project's `fx.yaml`, for example
+`model_allowances: { gg: { image.generate: 0.10, image.edit: 0.15 } }`. This is a per-attempt
+reservation, not a provider quote or approval to spend. It applies to newly discovered models
+that need a fallback; authored prices and caps are unchanged. Without rates or an allowance,
+FX refuses the binding. Live generation still needs the user's go and a run ceiling.
+
+The optional `.fx/models/` cache holds sanitized normalized routes, never provider keys or raw
+responses. Metadata is fresh for one hour; stale metadata may be used with the network off or
+on a transient lookup failure, but an explicit missing-model response does not silently use a
+stale entry. `GRIDA_FX_NETWORK=off` forbids every metadata request. Without cached metadata or
+an authored route, a new model cannot resolve offline. An SDK `Plan` carries its resolved
+models independently of this cache; `run(plan)` does not discover them again.
 
 | Capability | Built-in routes | Key |
 |---|---|---|
@@ -334,7 +360,8 @@ selection policy and reports local configuration readiness, not remote model ava
   whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
 - **Keys** come from the environment, else the project's `.env` (only the key and base URL names
   of FX's providers and of those `fx.yaml` declares are read). Keys never go in `fx.yaml` or a
-  workflow. Without `--live` no key is used.
+  workflow. Without `--live` no paid capability call is sent; a read-only missing-model
+  lookup may use the selected provider's key before planning.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
@@ -459,7 +486,8 @@ providers:
         openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
 ```
 
-- **A model FX does not list** runs on a route of your own table, with a cap when you do not know
+- **An authored model route** remains independent of automatic image discovery. A model FX
+  does not list runs on a route of your own table, with a cap when you do not know
   its price (recipe below). On OpenRouter a new chat model needs only its id, for structured output
   and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
   FX's generic image adapter: it sends the prompt, the input pictures and the

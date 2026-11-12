@@ -14,8 +14,9 @@
  *   {@link PlanRefused}. A failed step does not reject: read `result.ok` and `result.failed`.
  */
 
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import { open, readFile, unlink } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type {
   Encoded,
   FileRef,
@@ -48,6 +49,8 @@ import type { JsonValue } from "./workflow.js";
 const RUN_LINE = "run       ";
 /** How the engine says it would not start a run (on stdout, exit status 1). */
 const REFUSED = "refused: ";
+/** Serialized privately so changing the public graph cannot change prepared model facts. */
+const resolvedModels = new WeakMap<Plan, string>();
 
 // ------------------------------------------------------------------------------------------------
 // Plans
@@ -129,16 +132,60 @@ export async function price(target: string, options: PlanOptions = {}): Promise<
   return planningDocument<Price>("price", makeRequest(target, options), options.signal);
 }
 
-/** Expands, checks and prices `target` (`grida-fx plan --json` and `price`). Never spends;
+/** Expands, checks and prices `target` in one engine invocation. Never spends;
  * `plan.problems` says what is wrong. */
 export async function plan(target: string, options: PlanOptions = {}): Promise<Plan> {
   return planRequest(makeRequest(target, options), options.signal);
 }
 
-async function planRequest(request: PlanRequest, signal: AbortSignal | undefined): Promise<Plan> {
-  const graph = await planningDocument<Graph>("plan", request, signal, ["--json"]);
-  const priced = await planningDocument<Price>("price", request, signal);
-  return new Plan(graph, priced, request);
+async function planRequest(
+  request: PlanRequest,
+  signal: AbortSignal | undefined,
+  models: string | undefined = undefined,
+): Promise<Plan> {
+  const prepared = await withResolvedModels(request, models, (modelsFile) =>
+    planningDocument<Record<string, unknown>>("plan", request, signal, [
+      "--json",
+      "--prepared",
+      ...(modelsFile === null ? [] : [`--resolved-models=${modelsFile}`]),
+    ]),
+  );
+  const object = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  if (
+    prepared.kind !== "fx-prepared-plan-v1" ||
+    !object(prepared.graph) || prepared.graph.kind !== "fx-graph-v1" ||
+    !object(prepared.price) || !object(prepared.resolved_models) ||
+    prepared.resolved_models.fx !== "routes/v1" || !Array.isArray(prepared.resolved_models.routes)
+  ) {
+    throw new FxError("grida-fx plan returned an invalid prepared plan");
+  }
+  const planned = new Plan(
+    prepared.graph as unknown as Graph,
+    prepared.price as unknown as Price,
+    request,
+  );
+  resolvedModels.set(planned, JSON.stringify(prepared.resolved_models));
+  return planned;
+}
+
+async function withResolvedModels<T>(
+  request: PlanRequest,
+  models: string | undefined,
+  work: (modelsFile: string | null) => Promise<T>,
+): Promise<T> {
+  if (models === undefined) return work(null);
+  const name = `.grida-fx-models-${randomBytes(8).toString("hex")}.json`;
+  const path = join(request.cwd, name);
+  const file = await open(path, "wx", 0o600);
+  try {
+    await file.writeFile(models, "utf8");
+    await file.close();
+    return await work(name);
+  } finally {
+    await file.close().catch(() => undefined);
+    await unlink(path).catch(() => undefined);
+  }
 }
 
 async function planningDocument<T>(
@@ -371,11 +418,18 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   if (planned !== null && !planned.ok) {
     throw new PlanRefused(planned);
   }
-  const done = await withInputsFile(request, (inputsFile) => {
-    const args = ["run", ...planningArgs(request, inputsFile), ...own, "--no-view"];
-    const given = callOptions(request, signal);
-    return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
-  });
+  const models = planned === null ? undefined
+    : resolvedModels.get(planned) ?? '{"fx":"routes/v1","routes":[]}';
+  const done = await withResolvedModels(request, models, (modelsFile) =>
+    withInputsFile(request, (inputsFile) => {
+      const args = [
+        "run", ...planningArgs(request, inputsFile), ...own, "--no-view",
+        ...(modelsFile === null ? [] : [`--resolved-models=${modelsFile}`]),
+      ];
+      const given = callOptions(request, signal);
+      return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
+    }),
+  );
   const fault = answerer?.fault;
   if (fault !== null && fault !== undefined) {
     throw fault.error;
@@ -406,7 +460,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
         args: done.args,
       });
     }
-    const replanned = await planRequest(request, signal);
+    const replanned = await planRequest(request, signal, models);
     if (!replanned.ok) {
       throw new PlanRefused(replanned);
     }

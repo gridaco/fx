@@ -73,9 +73,10 @@ missing = result.deliver({"images": "out/{key}.png"})
   `name` (create-only), `resume` (require-existing) or `run_dir` (explicit-folder create/resume). `cwd` is
   the engine's working directory (default: the current one); every relative path is relative to
   it. A `Plan` takes no planning options when it runs: plan again to change them.
-- **`plan`** asks the engine for the plan (`grida-fx plan --json`) and its price (`grida-fx
-  price`). `Plan.document` is the fx-graph-v1 document; `ok`, `problems` (`where`, `message`),
-  `estimate()` and `phases()` read it. Planning never spends.
+- **`plan`** gets the graph and price from one engine invocation. `Plan.document` is the
+  fx-graph-v1 document; `ok`, `problems` (`where`, `message`), `estimate()` and `phases()` read it.
+  A subsequent `run(plan)` reuses the resolved model facts from that plan; authored project
+  configuration is still checked again. Planning never spends.
 - **`run`** plans first, and raises `PlanRefused` (`the plan is refused:` and one line per
   problem) before any run folder exists. A failed step does not raise: check `result.ok` and
   `result.failed`. The result is read from the run folder's `events.jsonl`: `ok`, `incomplete`,

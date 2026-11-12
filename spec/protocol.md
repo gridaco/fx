@@ -332,7 +332,13 @@ A notification, `{id}`, naming a pending request the engine sent. The host SHOUL
 
 ### 5.7 Stand-in answers
 
-A **stand-in run** answers the paid calls that the call cache cannot answer with a function the caller supplies, the **stand-in**, instead of a provider. It is a test feature, like a mock model: the run is offline, every answer passes the checks a provider's answer passes (§6.1, *Stand-in answers*), nothing is billed or reserved, and what the run stores is kept apart from the project's store ([store.md](store.md) §8, *Stand-in runs*).
+A **stand-in run** answers the paid calls that the call cache cannot answer with a function the caller supplies, the **stand-in**, instead of a provider. It is a test feature, like a mock model: capability execution sends no provider requests, every answer passes the checks a provider's answer passes (§6.1, *Stand-in answers*), nothing is billed or reserved, and what the run stores is kept apart from the project's store ([store.md](store.md) §8, *Stand-in runs*).
+
+Model preparation follows [model-selection.md](model-selection.md) §3 even for a stand-in:
+a selected missing supported image binding may require a read-only metadata lookup before
+capability execution. `GRIDA_FX_NETWORK=off` forbids that lookup; a fully offline test supplies
+authored routes or locally available model metadata. This does not construct live generation
+adapters or change the stand-in's answer and billing contract.
 
 `grida-fx run --stand-in <source>` makes one. With `--live` or `--yes-up-to` it is a usage error (exit 2), `--stand-in cannot be used with --live` (or `--yes-up-to`): a stand-in run never spends, and it runs every phase. The engine reaches the stand-in through an **answerer**: a peer that speaks this protocol's transport (§1: framing, I-JSON messages, interleaving), to which only the engine sends requests. `<source>` is one of:
 - `<file>#<function>`, where `<file>` has one of §1's suffixes (`.py`, `.ts`, `.mts`, `.js`, `.mjs`): the engine starts a **stand-in host** of the file's language (§1), outside the pools of node hosts, and loads the function with `stand_in.load`. `<file>` is relative to the working directory and may lie outside the project. The engine sends its absolute path to the host and records it nowhere.

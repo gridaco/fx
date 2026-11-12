@@ -188,9 +188,17 @@ pub fn register(adapters: &mut Adapters, setup: &Setup) {
     let client = client(setup);
     let generic = Arc::new(generic_image::OpenRouterGenericImages::new(client.clone()));
     let images = Arc::new(image::OpenRouterImages::new(client.clone()));
+    let discovered = Arc::new(generic_image::OpenRouterGenericImages::discovered(
+        client.clone(),
+    ));
     for capability in ["image.generate", "image.edit"] {
         adapters.register(capability, "openrouter", Adapter::Request(generic.clone()));
         adapters.register_named(capability, "openrouter", Adapter::Request(images.clone()));
+        adapters.register_named(
+            capability,
+            "openrouter",
+            Adapter::Request(discovered.clone()),
+        );
     }
     adapters.register(
         "structured.generate",

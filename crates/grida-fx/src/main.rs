@@ -5,6 +5,7 @@ mod cli;
 mod engine;
 mod interrupt;
 mod invoker;
+mod models;
 mod print;
 mod verbs;
 

@@ -694,6 +694,7 @@ dependencies = [
 name = "grida-fx"
 version = "0.8.1"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "clap",
  "flate2",

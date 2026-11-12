@@ -19,7 +19,8 @@
 - Inputs: ``inputs`` (a mapping) is written to a temporary inputs YAML file (strict subset: JSON is
   YAML) placed in ``cwd`` so its relative paths keep their meaning, passed with ``--inputs``
   after ``input_files``; ``routes`` paths go as ``--routes``; ``max_usd`` as ``--max-usd``.
-- :func:`plan` / :func:`plan_async`: ``grida-fx plan --json`` and ``grida-fx price``; a
+- :func:`plan` / :func:`plan_async`: one engine invocation returns the graph, price and
+  resolved model facts used by a subsequent run; a
   :class:`Plan` with ``document`` (fx-graph-v1), ``ok``, ``problems``, ``estimate()`` and
   ``phases()``. Exit 2 raises :class:`FxError` with the engine's stderr line.
 - :func:`run` / :func:`run_async`: plans first and raises :class:`PlanRefused` (``the plan is
@@ -71,7 +72,7 @@ import sys
 import tempfile
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -150,6 +151,7 @@ class _Request:
     cwd: Path
     routes: tuple[str, ...]
     arguments: tuple[tuple[str, str], ...]
+    _resolved_models: str | None = None
 
     def args(self, inputs_file: str | None) -> list[str]:
         """The target and the planning options; ``inputs_file`` holds ``inputs``."""
@@ -713,6 +715,22 @@ def _inputs_file(request: _Request) -> Iterator[str | None]:
             os.unlink(path)
 
 
+@contextlib.contextmanager
+def _resolved_models_file(request: _Request) -> Iterator[str | None]:
+    """Keep prepared model facts available only for the engine invocation that uses them."""
+    if request._resolved_models is None:
+        yield None
+        return
+    handle, path = tempfile.mkstemp(prefix=".grida-fx-models-", suffix=".json", dir=request.cwd)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as written:
+            written.write(request._resolved_models)
+        yield Path(path).name
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
+
+
 # ------------------------------------------------------------------------------------------------
 # Driving the binary
 
@@ -1001,12 +1019,26 @@ async def _document(verb: str, args: Sequence[str], cwd: Path) -> dict[str, Any]
 
 
 async def _plan(request: _Request) -> Plan:
-    with _inputs_file(request) as inputs_file:
+    with _inputs_file(request) as inputs_file, _resolved_models_file(request) as models_file:
         args = request.args(inputs_file)
-        graph = await _document("plan", [*args, "--json"], request.cwd)
-        price = await _document("price", args, request.cwd)
+        if models_file is not None:
+            args.append(f"--resolved-models={models_file}")
+        prepared = await _document("plan", [*args, "--json", "--prepared"], request.cwd)
+    graph = prepared.get("graph")
+    price = prepared.get("price")
+    models = prepared.get("resolved_models")
+    if (
+        prepared.get("kind") != "fx-prepared-plan-v1"
+        or not isinstance(graph, dict)
+        or graph.get("kind") != "fx-graph-v1"
+        or not isinstance(price, dict)
+        or not isinstance(models, dict)
+        or models.get("fx") != "routes/v1"
+        or not isinstance(models.get("routes"), list)
+    ):
+        raise FxError("grida-fx plan returned an invalid prepared plan")
     planned = Plan(graph, price)
-    planned._request = request
+    planned._request = replace(request, _resolved_models=json.dumps(models, allow_nan=False))
     return planned
 
 
@@ -1158,8 +1190,12 @@ async def run_async(
         planned = None  # a stand-in run plans nothing first: the run plans, and refuses problems
     if planned is not None and not planned.ok:
         raise PlanRefused(planned)
-    with _inputs_file(request) as inputs_file:
+    if planned is not None and planned._request is not None:
+        request = planned._request
+    with _inputs_file(request) as inputs_file, _resolved_models_file(request) as models_file:
         args = ["run", *request.args(inputs_file), *options, "--no-view"]
+        if models_file is not None:
+            args.append(f"--resolved-models={models_file}")
         if answerer is None:
             done = await _call(args, request.cwd)
         else:

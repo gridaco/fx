@@ -99,6 +99,8 @@ Each row above is its capability and provider's **default**: the adapter that se
 |---|---|---|---|---|
 | `openrouter` | `image.generate` | `fx-openrouter-image-v1` | `"3"` | [OpenRouter](../crates/grida-fx-providers/src/openrouter/README.md) |
 | `openrouter` | `image.edit` | `fx-openrouter-image-v1` | `"3"` | [OpenRouter](../crates/grida-fx-providers/src/openrouter/README.md) |
+| `openrouter` | `image.generate` | `openrouter-image-discovered-v1` | `"1"` | [OpenRouter](../crates/grida-fx-providers/src/openrouter/README.md) |
+| `openrouter` | `image.edit` | `openrouter-image-discovered-v1` | `"1"` | [OpenRouter](../crates/grida-fx-providers/src/openrouter/README.md) |
 | `fal` | `image.generate` | `fx-fal-image-v1` | `"1"` | [fal](../crates/grida-fx-providers/src/fal/README.md) |
 | `fal` | `image.edit` | `fx-fal-image-v1` | `"1"` | [fal](../crates/grida-fx-providers/src/fal/README.md) |
 
@@ -113,15 +115,19 @@ A provider the planning project declares with a `family` (§1) is served by its 
 - A route whose contract names its adapter with another `adapter_behavior` than its row's is refused before the adapter sees the call ([adapters.md](adapters.md) §4 step 1). `background.remove` on fal has no route (§3); its behaviour is the integer `1`, as for every route outside images.
 - A route table's contract on a capability and provider of a row is filled in before its fingerprint is taken ([identity.md](identity.md) §7): a left-out `adapter` gets the default's, and a left-out `adapter_behavior` the behaviour of the row, in either of the first two tables, whose adapter the contract names. So a project route declared without a contract names its default, as every built-in route names its adapter, and one whose contract names only `fx-openrouter-image-v1` gets `"3"`. A declared provider's routes are filled the same way from its family's rows, or from its declared adapter's name and behaviour, the declaration read from the planning project, never from the provider's name: a route on a provider the planning project declares with neither, or of a capability its family or adapter does not serve, keeps its contract.
 - **The OpenRouter and fal image defaults are generic.** They serve any image model of their provider with what its image models share: the prompt, the input pictures and the provider options, and nothing FX chose for one model; an answer that is not a PNG becomes one, the same pixels ([OpenRouter](../crates/grida-fx-providers/src/openrouter/README.md), [fal](../crates/grida-fx-providers/src/fal/README.md)). The GPT Image adapters of the second table send what FX chose for GPT Image (its quality, its sizes, and on OpenRouter its moderation and routing), and the built-in OpenRouter and fal image routes name them. Up to 0.6.1 those were the only adapters of these pairs, so a project route there that named no adapter got GPT Image's request; it now gets the generic one's, under another fingerprint ([identity.md](identity.md) §7). One on OpenRouter whose contract states `adapter_behavior: "3"` without an `adapter` now names the generic adapter with a behaviour it does not serve, and a call on it is refused when it is sent ([adapters.md](adapters.md) §4 step 1); naming `adapter: fx-openrouter-image-v1` keeps GPT Image's.
+- **Discovered OpenRouter images** name `openrouter-image-discovered-v1`, behavior `"1"`. This separate adapter honors the standard size and background fields admitted by the model's metadata and sends one image (`n: 1`). Existing generic and GPT Image routes keep their existing request behavior and fingerprints.
 - **The OpenAI-compatible family** serves any model of a provider that speaks the OpenAI Chat Completions API, with what FX's structured output and agent turns need of that API and nothing chosen for one provider ([OpenAI-compatible](../crates/grida-fx-providers/src/openai_compatible/README.md)). It sends the key as the declaration says, and none for a provider declared without a credential. Its route contract may select picture detail, original structured-context pictures and the token-limit field; reasoning parameters use `provider_options`. By default it reads no cost, so each call is booked at its whole hold or cap ([adapters.md](adapters.md) §5). Its contract may opt into a documented final USD `usage.cost` and specific unbilled refusal statuses; valid reported costs win, invalid costs remain unknown, and each policy enters the route fingerprint. Its statuses follow [adapters.md](adapters.md) §3.3, except that a 408 is a possibly billed timeout (`Failed { cost, retryable: true }`), and a 429 carrying a cost or an unknown cost under the opt-in policy is a possibly billed failure too: wire compatibility does not prove non-receipt, so these repeats need new reserved attempts. The reference defines the settings and their conservative defaults.
 - Each reference lists the members its adapter owns, which `provider_options` may not set, and where the others go ([adapters.md](adapters.md) §8). The `codex` and `grok` adapters take none.
 - The `codex` and `grok` adapters work through a runtime and bill the user's own plan ([adapters.md](adapters.md) §1, §5). Every other adapter bills dollars, to the account of its provider's key (§1), a family's adapters and a project's own included.
 
 ## 3. The built-in route table
 
-[Model selection](model-selection.md) specifies optional independent provider preferences
-and canonical model metadata. Model catalogue updates and discovery remain separate work;
-this selection contract resolves the routes already admitted to the local catalogue.
+[Model selection](model-selection.md) specifies independent provider preferences, canonical
+model metadata and automatic discovery of a selected missing image binding on GG or
+OpenRouter. Discovery reads that provider's APIs before offline core planning; authored
+tables remain authoritative and explicit `--routes` disables discovery. Reusable
+`model_allowances` supply a positive per-attempt cap when a discovered route has insufficient
+rate information. Other providers and capabilities retain the project-route path.
 
 FX ships a default route table, embedded in `grida-fx`. It is the first table of the catalog ([identity.md](identity.md) §7): a project's `route_tables` override its entries, and any `--routes` file leaves it out.
 

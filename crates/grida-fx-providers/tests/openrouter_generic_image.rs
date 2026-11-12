@@ -147,6 +147,64 @@ fn a_png_answer_is_kept_as_it_is() {
 }
 
 #[test]
+fn discovered_controls_have_a_distinct_identity_and_send_only_recorded_standard_values() {
+    let call = CallBuilder::new("image.generate", ROUTE)
+        .contract(
+            json!({"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1",
+            "image_controls":{"size":["1024x1024"],"background":["transparent"]}}),
+        )
+        .request(json!({"prompt":"p","size":"1024x1024","background":"transparent"}))
+        .build();
+    let transport = Arc::new(ReplayTransport::new(vec![
+        expect(&json!({"model":MODEL,"prompt":"p","n":1,
+        "size":"1024x1024","background":"transparent"}))
+        .reply(one_image(&media::png(1024, 1024, Some(0)))),
+    ]));
+    let adapter = OpenRouterGenericImages::discovered(openrouter::client(&setup(
+        transport.clone(),
+        test_keys(),
+    )));
+    let answer = answered(block_on(adapter.send(&call)));
+    transport.assert_done();
+    assert_eq!(adapter.check(&call, &answer), Ok(()));
+    assert_ne!(
+        adapter.identity(),
+        adapter_over(Arc::new(NoNetwork), test_keys()).identity()
+    );
+}
+
+#[test]
+fn discovered_controls_refuse_unadvertised_values_and_provider_override_before_sending() {
+    let adapter = OpenRouterGenericImages::discovered(openrouter::client(&setup(
+        Arc::new(NoNetwork),
+        test_keys(),
+    )));
+    for (request, reason) in [
+        (
+            json!({"prompt":"p","background":"transparent"}),
+            "OpenRouter model metadata does not support the requested background",
+        ),
+        (
+            json!({"prompt":"p","size":"1024x1024"}),
+            "OpenRouter model metadata does not support the requested size",
+        ),
+    ] {
+        let call = CallBuilder::new("image.generate",ROUTE)
+            .contract(json!({"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1","image_controls":{}}))
+            .request(request).build();
+        assert!(
+            matches!(block_on(adapter.send(&call)),Sent::Refused { reason: actual } if actual == reason)
+        );
+    }
+    let call = CallBuilder::new("image.generate",ROUTE)
+        .contract(json!({"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1","image_controls":{"background":["opaque"]}}))
+        .request(json!({"prompt":"p","provider_options":{"openrouter":{"background":"transparent"}}})).build();
+    assert!(
+        matches!(block_on(adapter.send(&call)),Sent::Refused { reason } if reason.contains("background"))
+    );
+}
+
+#[test]
 fn an_edit_sends_its_pictures_in_order_then_the_provider_options() {
     let first = media::png(4, 4, None);
     let second = media::jpeg(2, 2);
@@ -461,7 +519,7 @@ fn it_is_the_default_and_gpt_image_s_adapter_serves_a_route_that_names_it() {
     let mut adapters = Adapters::new();
     openrouter::register(&mut adapters, &setup(Arc::new(NoNetwork), test_keys()));
     assert_eq!(adapters.served().len(), 5);
-    assert_eq!(adapters.registered().len(), 7);
+    assert_eq!(adapters.registered().len(), 9);
     for capability in ["image.generate", "image.edit"] {
         let route = |contract: Value| RouteRef {
             capability: capability.into(),
@@ -479,6 +537,10 @@ fn it_is_the_default_and_gpt_image_s_adapter_serves_a_route_that_names_it() {
         assert_eq!(
             identity(json!({"adapter": "fx-openrouter-image-v1"})),
             Some(image::IDENTITY)
+        );
+        assert_eq!(
+            identity(json!({"adapter":"openrouter-image-discovered-v1"})),
+            Some(generic_image::DISCOVERED_IDENTITY)
         );
         assert_eq!(identity(json!({"adapter": "acme-image"})), None);
     }

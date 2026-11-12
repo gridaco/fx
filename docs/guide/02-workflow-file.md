@@ -107,9 +107,11 @@ workflow file it is written in, the way local actions are in GitHub Actions. Tha
 `uses:`, `prompt: ./prompts/...`, `schema: ./schemas/...` and a file given in `with:` alike. An
 absolute path is refused.
 
-Nothing is fetched from elsewhere while planning. A registry of workflows and nodes comes later,
-and it copies: `grida fx add <item>` will put a copy in your project, used through a `./` path like
-your own files.
+Planning never downloads workflow, node or adapter code. A selected missing GG/OpenRouter image
+binding may require a read-only provider metadata lookup before the offline core plans it
+([AI providers](13-providers.md#a-model-fx-does-not-list)). A registry of workflows and nodes
+comes later, and it copies: `grida fx add <item>` will put a copy in your project, used through
+a `./` path like your own files.
 
 Every step field:
 
@@ -129,7 +131,7 @@ Every step field:
 | `budget:` | a ceiling for this step, group or each instance, inside the run's ceiling; a step inside several is held to the innermost one only |
 | `concurrency:` | at most this many instances of a repeated node step at once; on a repeated group or workflow step it does nothing yet |
 | `route:` | which model serves this step |
-| `requires:` | what the route must support (`image_input`, `mask`, `alpha` ...). The plan refuses others, offline. An image step's own settings already ask for what they need: `references` need `image_input`, a `WxH` size `exact_size`, a transparent background `alpha`, and no more pictures than the route takes. |
+| `requires:` | what the route must support (`image_input`, `mask`, `alpha` ...). The plan refuses unsupported requirements before execution. An image step's own settings already ask for what they need: `references` need `image_input`, a `WxH` size `exact_size`, a transparent background `alpha`, and no more pictures than the route takes. |
 | `independent_of:` | refuse a plan where this step and those share an underlying model, whatever the provider |
 | `timeout:` | wall-clock limit for this step, in seconds: past it the step fails (`ran past <n> seconds`) and is not run again |
 

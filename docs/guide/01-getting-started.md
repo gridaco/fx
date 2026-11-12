@@ -2,7 +2,7 @@
 
 FX builds generated assets the way a build system builds code:
 - You describe the steps in a **workflow file**.
-- FX **plans** the run offline, with a cost estimate.
+- FX **resolves models and plans** the run, with a cost estimate and no paid model calls.
 - It **runs** only what changed.
 - Every result is kept with a record of how it was made.
 
