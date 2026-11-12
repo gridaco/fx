@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { ArtifactController, artifactDownloadName, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview } from "@grida/fx-web";
+import { ModelPreview } from "./model-preview";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
 
 export function money(value: number | null): string {
@@ -59,6 +60,11 @@ export function ArtifactPreview({ artifact, poster }: { artifact: Artifact; post
   </div>;
   const url = artifact.url;
   const open = <a className="fx-value-note hover:text-zinc-800" href={url} target="_blank" rel="noopener noreferrer">{name} ↗</a>;
+  if (artifact.kind === "model/gltf-binary") return <ModelPreview artifact={artifact} />;
+  if (artifact.kind.startsWith("model/")) return <div className="fx-value-stack">
+    <p className="fx-value-note">3D preview unavailable. This viewer supports self-contained GLB 2 models; {artifact.kind} is not supported.</p>
+    <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original model</a>
+  </div>;
   if (artifact.kind.startsWith("video/")) return <div className="fx-value-stack">
     {state.error
       ? <>{posterImage && <ArtifactPreview artifact={posterImage} />}<p className="fx-value-note">{posterImage ? "Browser playback unavailable." : "Browser preview unavailable."} Download the original to try it in another video player.</p></>

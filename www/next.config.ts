@@ -10,6 +10,15 @@ const config: NextConfig = {
   images: { unoptimized: true, remotePatterns: [], domains: [] },
   reactStrictMode: true,
   transpilePackages: ["@grida/fx-web", "@grida/fx-react"],
+  webpack(config) {
+    config.module.rules.push({
+      dependency: "url",
+      test: /(?:draco_decoder|draco_wasm_wrapper|basis_transcoder)\.(?:js|wasm)$/,
+      type: "asset/resource",
+      generator: { filename: "static/media/model-decoders/[name][ext]" },
+    });
+    return config;
+  },
   // Repository rules already live at the FX root.
   agentRules: false,
 };

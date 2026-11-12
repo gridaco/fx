@@ -46,6 +46,7 @@ jobs:
         run: printf '%s\n' https://archive.ubuntu.com/ubuntu/ | sudo tee /etc/apt/apt-mirrors.txt
       - run: bun --no-env-file x playwright-core install --with-deps chromium
       - run: bun --no-env-file run test:viewer:browser
+      - run: bun --no-env-file run test:viewer:model-browser
       - run: bun --no-env-file install --frozen-lockfile
         working-directory: js/fx
       - run: bun --no-env-file run build

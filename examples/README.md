@@ -14,6 +14,7 @@ source stays in Git, while generated artwork and saved runs stay outside it.
 | [world](world/) | synopsis, poster and direction into reviewed illustrated entities | free preparation offline; structured proposals and illustrations paid |
 | [movie-sprite](movie-sprite/) | an image into a video take, then transparent loop finishing | generation paid; downloaded or supplied footage finishes locally at $0 with FFmpeg |
 | [portrait-motion](portrait-motion/) | independent face states, registration, native patches and combinations | state generation paid; synthesized stand-ins exercise both branches at $0 |
+| [text-to-3d](text-to-3d/) | `generate_3d_asset(text: str)`: a description into an OpenRouter reference image, then a Tripo P2 model | two paid steps with `OPENROUTER_API_KEY` and `TRIPO_API_KEY`; a synthesized stand-in runs the graph offline at $0 |
 | [character-3d](character-3d/) | reviewed reference views, mesh generation, Blender assembly, rigging and admission | current runnable graph; local steps need Blender, generation and review paid |
 | [terrain](terrain/) | Python builder, fixed 47-mask atlas, validation and deterministic map preview | preparation and preview local; atlas generation and review paid |
 | [ui-kit](ui-kit/) | Python builder, nine-slice panels, button states, icons and measured geometry | preparation and validation local; artwork and review paid |
@@ -96,6 +97,8 @@ is deliberately separate from the settings for generating a new take.
 their free paths on fresh copies using the current checkout's SDK and embedded engine.
 Paid calls are refused at $0; hello also proves cache reuse. The complete parallax graph
 plans and refuses its paid calls using synthesized input.
+The text-to-3D check also exercises the two-step builder with a synthesized PNG/GLB
+stand-in, verifies the direct OpenRouter and Tripo routes and proves cache reuse.
 
 [`tools/check_showcase_examples.py`](../tools/check_showcase_examples.py) checks the other
 seven website projects with synthesized inputs, without CDN access, provider keys or dotenv

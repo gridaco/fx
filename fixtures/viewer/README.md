@@ -187,6 +187,42 @@ The recorded-prefix fixture keeps exact original event bytes through the delay's
 The missing-artifact case changes only a copied run. These two derived cases are
 explicitly different from a fresh completed invocation.
 
+## 3D artifact browser harness
+
+The focused [model generator](../../tools/make_model_fixture.mjs) synthesizes a
+self-contained GLB 2 model from original geometry, a four-color PNG checker,
+material settings, skin weights and two animation clips. It needs no modeling
+application or downloaded artwork. Its static, rig-without-clips, motion-only,
+external-resource and unsupported-extension variants exercise the inspector's
+supported scope and fallback boundaries. The
+[Draco helper](../../tools/make_draco_fixture.mjs) compresses this original
+geometry with the installed, pinned encoder so browser acceptance exercises the
+bundled decoder and its WASM worker. Generated GLBs stay outside Git.
+
+After building the viewer, run the focused browser acceptance:
+
+```sh
+bun --no-env-file run build:viewer
+bun --no-env-file run test:viewer:model-browser
+```
+
+[The checker](../../tools/check_model_browser.mjs) serves synthetic recorded run
+and plan documents with the generated model bytes. It is separate from the
+real workflow/host fixture checker above: it exercises browser rendering without
+a provider, credentials or generation. It checks actual texture pixels, original
+PBR factors and visible skin deformation as well as inline play/pause and clip
+selection, camera gestures, polling retention, exact takes, downloads and
+failures. Static models present just a frame and original-filename link;
+animated models add only the applicable compact controls. GLB cards automatically
+render their own thumbnails and expose one in-place interactive overlay without
+a sidebar or authored poster. The browser checker verifies thumbnail pixels,
+card gestures, exact takes, overlay placement, polling, close/focus and offline loading.
+Renderer and decoder
+resources come from the built viewer, and outbound requests are refused. The
+[3D inspection contract](../../spec/model-previews.md) defines supported models,
+resource handling and the distinction between a failed preview and available
+original bytes.
+
 ## Storage and current limits
 
 Generated projects, caches, plans, runs, viewer responses and reports live under the
@@ -196,7 +232,8 @@ is no generated HTML, portable publication format or CDN dependency here.
 
 This first suite covers common topology and viewer states, not every engine feature.
 Cancellation/incomplete runs, nested repeats, explicit manual takes, very large
-graphs, 3D and paid-call retries can be added as focused cases. Existing
+graphs and paid-call retries can be added as focused cases. The focused 3D browser
+harness above is independent of these workflow cases. Existing
 reader tests own malformed records, traversal, corrupted bytes and torn tails.
 
 Known viewer limits exposed by the suite:

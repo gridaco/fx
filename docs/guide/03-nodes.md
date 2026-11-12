@@ -21,9 +21,17 @@ Every built-in type is declared, so a workflow using it plans and prices. A type
 | `speech.generate@1` | `text` (delivery as audio tags, `[whispering] ...`), `voice`, `stability`, `language_code`, `max_chars` → `audio` |
 | `sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` |
 | `music.generate@1` | `prompt`, `duration` → `audio` |
-| `mesh.generate@1` | `views` (pictures by side: `front` and at least one of `back`, `left`, `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` |
+| `mesh.generate@1` | exactly one of `image` or `views` (pictures by side: `front` and at least one of `back`, `left`, `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` |
 | `mesh.rig@1` | `model`, `rig_type`, `skeleton`, `allow_negative_check` → rigged `model` (binary glTF) |
 | `background.remove@1` | `image` → `image` with alpha (**planned**: FX can call fal for it, but ships no route yet; a route in your own table makes it run) |
+
+For a minimal description-to-model pipeline, use
+[text-to-3D](../../examples/text-to-3d/). Its Python builder,
+`generate_3d_asset(text: str)`, generates one reference image on OpenRouter and
+passes it to `P2-20260801@tripo` as `image`. The project explicitly uses
+`OPENROUTER_API_KEY` and `TRIPO_API_KEY`. Its two outputs retain the reference
+image and model for inspection. Single-image generation needs a route with
+`image_input`; the built-in GG mesh route supports named views only.
 
 - **A prompt may be a template file** (`prompt: ./prompts/draw.md`), rendered with the step's
   `vars:` and the workflow's `inputs`.

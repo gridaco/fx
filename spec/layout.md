@@ -112,10 +112,12 @@ authored cells, rule 10 removes empty tracks and rule 11 sizes them.
     left.
 
 Rules 1–10 read no size, so a preview arriving never changes a cell. Footprints come from
-declarations: ports, settings and kind. A step whose declared output ports include an image or a
-video reserves its preview area in both views, before any artifact exists: a 16:9 frame as wide as
+declarations: ports, settings and kind. A step whose declared output ports include an image,
+video or model reserves its preview area in both views, before any artifact exists: a 16:9 frame as wide as
 the card less its padding, in which the file is fitted whole. A recorded card
-previews its first image output, or without one its first available `video/*` output. A video
+previews its first image output, or without one its first available `video/*` output, then its
+first available `model/gltf-binary` output. GLB cards receive automatic browser-rendered
+thumbnails and an explicit in-place inspection action ([model-previews.md](model-previews.md)). A video
 is offered to the browser's native media decoder; its container or MIME type alone does not
 guarantee playback. Local artifact responses serve concrete video kinds matching the type
 grammar (`video/` followed by `[a-z0-9.+-]+`) inline with their recorded media type. Other
@@ -347,10 +349,10 @@ including those that leave the deck.
 | Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
 | Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
-| Click a labelled control on the front card (`Open workflow`, a video's play control) | does what it says | does what it says |
+| Click a labelled control on the front card (`Open workflow`, a video's play control, `Inspect 3D`) | does what it says | does what it says |
 | Double-click | counts as one expand click | on a workflow card: open it |
 | Click the veil | — | collapse one level; the selection is unchanged; a second deck needs a second click |
-| Esc | with focus in the canvas: go back a scope (unchanged) | collapse one level, wherever focus is except in a text field or a playing video; consumed only then |
+| Esc | close an active media preview first; otherwise with focus in the canvas, go back a scope | collapse one level, wherever focus is except in a text field or an active media preview; consumed only then |
 | × | — | collapse one level |
 | Tab | one stop per deck (the front card); back cards have `tabindex=-1` | each card, in grid order |
 | Enter or Space | expand | select |

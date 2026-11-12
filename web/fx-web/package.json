@@ -5,9 +5,14 @@
   "homepage": "https://grida.co/fx",
   "license": "Apache-2.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./canvas.css": "./src/canvas.css" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./canvas.css": "./src/canvas.css"
+  },
   "dependencies": {
+    "@google/model-viewer": "4.4.0",
     "fflate": "0.8.3",
-    "lucide": "1.52.0"
+    "lucide": "1.52.0",
+    "three": "0.183.2"
   }
 }

@@ -1,0 +1,4 @@
+fx: project/v1
+routes:
+  image.generate: openai/gpt-image-2.5-sunburst@openrouter
+  mesh.generate: P2-20260801@tripo

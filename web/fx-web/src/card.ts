@@ -3,7 +3,7 @@ import { canvasNodeGeometry, canvasPreviewReserved, PORT_ROW, PORT_TOP, type Pos
 import { stateIcon, stateIconParts } from "./state-icon";
 import type { CanvasStep } from "./graph";
 import { skipPreviewLines } from "./skip";
-import { CircleSlash, createElement, RotateCw, VideoOff } from "lucide";
+import { Box, CircleSlash, createElement, RotateCw, VideoOff } from "lucide";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -117,9 +117,9 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     clip.append(element("rect", { ...frame, rx: 6 }));
     group.append(clip);
     const backdrop = element("rect", { ...frame, rx: 6, fill: `url(#${canvasId}-checker)` });
-    const unavailable = preview.kind === "video" ? "Browser preview unavailable" : "Image unavailable";
-    const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: `fx-canvas-node-image${preview.kind === "video" ? " fx-canvas-video-still" : ""}` });
-    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2 + (preview.kind === "video" ? 38 : 0), "text-anchor": "middle", "dominant-baseline": "middle", class: "fx-canvas-image-error", visibility: "hidden" }, unavailable);
+    const unavailable = preview.kind === "model" ? "3D preview unavailable" : preview.kind === "video" ? "Browser preview unavailable" : "Image unavailable";
+    const image = element("image", { ...frame, preserveAspectRatio: "xMidYMid meet", "clip-path": `url(#${clipId})`, role: "img", "aria-label": preview.label, class: `fx-canvas-node-image${preview.kind === "video" ? " fx-canvas-video-still" : preview.kind === "model" ? " fx-canvas-model-still" : ""}` });
+    const fallback = element("text", { x: node.width / 2, y: frame.y + frame.height / 2 + (preview.kind === "image" ? 0 : 38), "text-anchor": "middle", "dominant-baseline": "middle", class: `fx-canvas-image-error${preview.kind === "model" ? " fx-canvas-model-error" : ""}`, visibility: "hidden" }, unavailable);
     if (preview.kind === "image") image.addEventListener("error", () => {
       image.setAttribute("visibility", "hidden");
       fallback.setAttribute("visibility", "visible");
@@ -129,6 +129,17 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
     if (preview.kind === "image") {
       image.setAttribute("href", preview.url);
       group.append(backdrop, image, border, fallback);
+    } else if (preview.kind === "model") {
+      // A browser-rendered still keeps cards light; one explicitly activated HTML model
+      // inspector is placed over this frame by the canvas, like the native-video player.
+      backdrop.setAttribute("fill", "#f7f7f8");
+      const model = element("g", { class: "fx-canvas-model", "data-digest": preview.digest });
+      const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
+      const open = element("g", { class: "fx-canvas-model-open", role: "button", tabindex: 0, "aria-label": `Inspect 3D ${preview.label}`, "data-label": preview.label });
+      open.append(element("title", {}, `Inspect 3D ${preview.label}`), element("circle", { cx: center.x, cy: center.y, r: 18 }),
+        createElement(Box, { x: center.x - 8, y: center.y - 8, width: 16, height: 16, "stroke-width": 1.5, "aria-hidden": "true" }));
+      model.append(backdrop, image, border, fallback, open);
+      group.append(model);
     } else {
       // A video shows its first frame, which the canvas sets once the card is in view, and a play
       // control; the canvas plays it over the frame (video.ts). The backdrop takes the pointer, so

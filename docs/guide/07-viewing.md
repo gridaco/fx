@@ -356,6 +356,47 @@ does not imply that detailed provider usage was retained. Absent cost evidence i
 shown as unknown. The viewer does not change the source run or recover missing files
 by rerunning anything.
 
+## Inspect 3D results
+
+Completed GLB outputs receive an automatic thumbnail on their producing card,
+after image and video previews in the existing priority order. No poster file
+or extra workflow step is needed: the viewer renders the actual recorded model
+when its card is visible. Choose **Inspect 3D** on the card to rotate and zoom
+in place without opening the sidebar; Close or Escape returns to the still.
+Only one video or model is interactive per canvas, and model gestures preserve
+the workflow camera. Thumbnail generation and reuse never contact a provider.
+
+You can also select the producing step to inspect its recorded model output in
+details. Drag to orbit, scroll to zoom and Shift-drag to pan; the frame's tooltip
+reminds you of the gestures. Textures and material settings come from the
+original model, shown under neutral lighting. The surrounding step and take
+identify the result you are examining. Moving the model camera preserves the
+workflow canvas and execution take.
+
+Animation starts paused. Use the play/pause icon to inspect motion; a compact
+clip selector appears when the model includes more than one clip. A model
+without animation shows its frame and original-filename download link. Rigging
+does not necessarily supply clips, and the viewer does not attach a separate
+motion file to a character or retarget it. Inspection stays inline on the card or in details.
+
+The first supported format is `model/gltf-binary` (GLB 2) with embedded resources,
+up to 128 MiB. FBX, JSON glTF, skeleton-only or standalone motion files, models
+that reference external buffers or textures, unsupported required extensions,
+and browser graphics failures receive an explanation. The original file link
+remains available whenever the recorded file bytes are available, even when the
+browser cannot preview them. A preview failure does not mean the producing step
+failed. Missing or changed bytes remain explicitly unavailable.
+
+The renderer and its Meshopt decoder load on the first visible model preview;
+Draco and KTX2 decoders load when a model needs them. All are bundled with the
+installed viewer. Pages without visible model previews do not load the 3D renderer, and 3D
+inspection needs no CDN or new generation. A preview that has not loaded within
+30 seconds stops with a timeout and retains the original download. Cached
+results and included GLBs in portable exports use the same inspector. The
+preview does not change the recording, file bytes, workflow pick or cache
+identity. The
+[3D inspection contract](../../spec/model-previews.md) defines these boundaries.
+
 ## Distribution and later work
 
 The viewer's production JavaScript and CSS are embedded in the native engine.

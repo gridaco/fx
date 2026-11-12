@@ -184,8 +184,15 @@ export interface CanvasVideoPreview extends CanvasPreviewBase {
   poster?: CanvasPoster;
   unavailable_reason?: "not_included" | "unavailable";
 }
+export interface CanvasModelPreview extends CanvasPreviewBase {
+  kind: "model";
+  url: string | null;
+  name: string;
+  size: number;
+  unavailable_reason?: "not_included" | "unavailable";
+}
 /** Authored posters remain distinct from native decoded frames and do not establish playability. */
-export type CanvasPreview = CanvasImagePreview | CanvasVideoPreview;
+export type CanvasPreview = CanvasImagePreview | CanvasVideoPreview | CanvasModelPreview;
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
   /** Recorded evidence that the node executed; status alone does not prove this for skipped nodes. */
@@ -226,8 +233,8 @@ export interface CanvasConnection {
 export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string; executed?: true }
 export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
 
-/** The files a card previews: inert pictures and native-video candidates, never active documents. */
-const previewKinds: Record<string, CanvasPreview["kind"]> = {
+/** The inert image kinds a card can draw directly; models are rendered from verified GLB bytes. */
+const previewKinds: Record<string, "image"> = {
   "image/png": "image", "image/jpeg": "image", "image/webp": "image", "image/gif": "image", "image/avif": "image",
 };
 // Concrete recorded video kinds follow the FX type grammar. The browser decides whether
@@ -249,9 +256,10 @@ export function recordedFileDigests(value: unknown): string[] {
 
 /**
  * A card's preview from a step's output files, in output order: the first image, or without one
- * the first video. `resolve` gives a file's type, name and verified URL, or null to leave it out.
+ * the first video, then a GLB. `resolve` gives the recorded inventory entry, or null to omit it.
+ * A GLB needs its recorded size for byte verification; a missing GLB retains an explicit fallback.
  */
-export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; url: string | null; unavailable_reason?: CanvasVideoPreview["unavailable_reason"] } | null, selection?: PreviewDescriptor): CanvasPreview | undefined {
+export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: string) => { media_type: string; name: string; size?: number; url: string | null; unavailable_reason?: CanvasVideoPreview["unavailable_reason"] } | null, selection?: PreviewDescriptor): CanvasPreview | undefined {
   if (selection) {
     const scalar = (name: string) => {
       const value = outputs[name];
@@ -267,21 +275,30 @@ export function cardPreview(outputs: Record<string, unknown>, resolve: (digest: 
     };
   }
   const found = { image: new Map<string, { url: string; label: string }>(), video: new Map<string, { url: string; label: string }>() };
+  const models = new Map<string, Omit<CanvasModelPreview, "kind" | "digest" | "count">>();
   for (const [port, value] of Object.entries(outputs)) for (const digest of recordedFileDigests(value)) {
     const file = resolve(digest);
     const kind = file && (videoKind.test(file.media_type) ? "video" : previewKinds[file.media_type]);
     if (file?.url && kind && !found[kind].has(digest)) found[kind].set(digest, { url: file.url, label: `${port}: ${file.name}` });
+    if (file?.media_type === "model/gltf-binary" && typeof file.size === "number" && Number.isSafeInteger(file.size) && file.size >= 0 && !models.has(digest)) {
+      models.set(digest, { url: file.url, name: file.name, size: file.size, label: `${port}: ${file.name}`,
+        ...(!file.url ? { unavailable_reason: file.unavailable_reason ?? "unavailable" } : {}) });
+    }
   }
   const kind = found.image.size ? "image" : found.video.size ? "video" : undefined;
   const first = kind && found[kind].entries().next().value;
-  return kind && first ? { kind, digest: first[0], ...first[1], count: found[kind].size } : undefined;
+  if (kind && first) return { kind, digest: first[0], ...first[1], count: found[kind].size };
+  const availableModels = [...models].filter(([, model]) => model.url !== null);
+  const candidates = availableModels.length ? availableModels : [...models];
+  const model = candidates[0];
+  return model ? { kind: "model", digest: model[0], ...model[1], count: candidates.length } : undefined;
 }
 
-/** Select a recorded output picture or video from the host's verified artifact inventory. */
+/** Select recorded output media from the host's verified artifact inventory. */
 function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string, ViewerRun["artifacts"][number]>, apiBase: string): CanvasPreview | undefined {
   return cardPreview(node.outputs, (digest) => {
     const artifact = artifacts.get(digest);
-    return artifact ? { media_type: artifact.kind, name: artifact.name, url: artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null } : null;
+    return artifact ? { media_type: artifact.kind, name: artifact.name, size: artifact.size, url: artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null } : null;
   }, node.preview);
 }
 
