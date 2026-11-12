@@ -61,7 +61,7 @@ KEYS = (
     "ELEVENLABS_BASE_URL",
 )
 #: Verbs whose first argument is a subcommand with its own help.
-NESTED = {"runs", "cache", "takes", "models"}
+NESTED = {"runs", "cache", "takes"}
 #: A path comment on a block's first line: ``# fx.yaml``, ``// nodes/caption.ts``.
 PATH_LINE = re.compile(r"^(?:#|//)\s*([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]+)\s*$")
 FENCE = re.compile(r"^```(\S*)\s*$")

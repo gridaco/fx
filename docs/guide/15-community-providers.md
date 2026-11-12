@@ -15,8 +15,7 @@ you would write is shown in full, and every output is the engine's.
 
 | You want | You write | Where |
 |---|---|---|
-| A new compatible GG image model in Grida Models | an explicit model import | [AI providers](13-providers.md#a-model-fx-does-not-list) |
-| Another model FX does not list, on GG, OpenRouter or fal | a route | [below](#a-new-model-needs-only-a-route) |
+| A model FX does not list, on GG, OpenRouter or fal | a route | [below](#a-new-model-needs-only-a-route) |
 | A provider that speaks the OpenAI Chat Completions API, such as a model server on this machine | a declaration with `family: openai-compatible`, and routes | [An OpenAI-compatible server](#an-openai-compatible-server) |
 | Any other provider | a declaration, routes, and an adapter in Python or TypeScript | [Your own adapter](#your-own-adapter) |
 | A provider operation whose inputs do not fit a standard capability | a custom capability, project node and adapter | [Native operations](#native-operations) |
@@ -216,7 +215,7 @@ The table entry above declares `model_id: acme/text-a` while keeping its qualifi
 route to override the preference. Declaring credentials under `providers` does not select that
 provider. Missing or ambiguous model bindings are refused while planning; no provider is tried
 as a paid fallback. Both SDKs consume this configuration through the engine's normal plan/run
-operations; model import is a CLI setup operation, not a separate SDK resolver.
+operations, with no separate resolver.
 
 ## An OpenAI-compatible server
 

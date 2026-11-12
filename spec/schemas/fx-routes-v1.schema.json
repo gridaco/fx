@@ -227,39 +227,6 @@
           }
         }
       }
-    },
-    "model_source": {
-      "description": "Public provenance of an explicit model import; not part of route identity (model-selection.md).",
-      "type": "object",
-      "required": [
-        "repository",
-        "release",
-        "asset_sha256",
-        "schema_sha256",
-        "operations_sha256"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "repository": {
-          "const": "https://github.com/gridaco/models"
-        },
-        "release": {
-          "type": "string",
-          "pattern": "^v[0-9]+\\.[0-9]{8}\\.[0-9]+$"
-        },
-        "asset_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
-        "schema_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        },
-        "operations_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        }
-      }
     }
   }
 }

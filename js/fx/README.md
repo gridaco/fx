@@ -155,9 +155,9 @@ carries its `exitCode` and `stderr`.
 The engine reads model selections and `provider_preferences` from `fx.yaml`. They are defaults:
 a structured-generation step's `route: "openai/gpt-6-astra"` selects another model with its
 capability's provider preference; `route: "openai/gpt-6-astra@openrouter"` overrides the provider too.
-The SDK's `routes` option names route-table files (`--routes`), not model selections. Explicit
-model import is CLI setup; normal SDK `plan` and `run` consume the registered files, with no
-separate resolver. See [model and provider selection](../../docs/guide/13-providers.md#choose-a-model-and-a-provider).
+The SDK's `routes` option names route-table files (`--routes`), not model selections. Normal
+SDK `plan` and `run` consume this project configuration without a separate resolver. See
+[model and provider selection](../../docs/guide/13-providers.md#choose-a-model-and-a-provider).
 
 The SDK and `grida-fx` start the engine with your environment plus `GRIDA_FX_SDK_NODE`, the Node
 running them (not set under Bun or Deno), and `GRIDA_FX_SDK_NODE_HOST`, this package's own node

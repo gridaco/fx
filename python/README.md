@@ -107,8 +107,8 @@ Model selections and `provider_preferences` in `fx.yaml` are read by the engine 
 `run`. They are defaults: a structured-generation step's `route="openai/gpt-6-astra"` can
 choose another model using its capability's preference, and `route="openai/gpt-6-astra@openrouter"` overrides
 the provider too. The `routes=` API option names route-table files (`--routes`), not model
-selections. Explicit model import is CLI setup; the SDK consumes the registered files without
-a separate resolver. See [model and provider selection](../docs/guide/13-providers.md#choose-a-model-and-a-provider).
+selections. The SDK consumes this project configuration without a separate resolver. See
+[model and provider selection](../docs/guide/13-providers.md#choose-a-model-and-a-provider).
 
 `Workflow` writes the same document as a workflow file. Its step fields use the same names,
 with `with_`, `if_`, `assert_` and `as_` for Python's reserved words:

@@ -136,8 +136,8 @@ A route is `<model>@<provider>`, split at the last `@`.
 
 Authored model selectors may omit the provider and use independent preferences
 ([model-selection.md](model-selection.md)). They resolve to this concrete native-model route
-before identity. Optional route-table `model_id` and `model_source` are selection metadata
-and provenance only; neither enters the fingerprint below.
+before identity. Optional route-table `model_id` is selection metadata only; it does not enter the
+fingerprint below.
 
 ```
 route_fingerprint = digest({

@@ -601,7 +601,7 @@ impl RouteTable {
                 };
                 Err(format!(
                     "no route for model {selector} on provider {provider} serves {capability} \
-                     (known models on {provider}: {known}); import or declare a compatible route"
+                     (known models on {provider}: {known}); declare a compatible route in route_tables or choose a listed model"
                 ))
             }
             _ => Err(format!(

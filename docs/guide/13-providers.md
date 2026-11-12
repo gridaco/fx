@@ -167,26 +167,9 @@ named another `adapter_behavior`.
 
 ## A model FX does not list
 
-New models arrive faster than FX's built-in table. GG image models can be imported explicitly
-from Grida Models, without an engine release:
-
-```sh
-grida fx models import openai/gpt-image-2.6-sunburst --provider gg --cap-usd 3
-```
-
-Import resolves the latest published Models release, validates its model and operation schemas,
-and writes an ordinary project route table under `routes/models/`, registered in `fx.yaml`.
-Use `--release TAG` to choose a release and `--from DIRECTORY` to read a local verified bundle.
-They can be combined to check that the local bundle is the selected release.
-The initial profile admits compatible GG image generation and editing only; listing a model
-does not prove its interface is supported. The per-call cap is your planning allowance, not a
-provider price or permission to spend. Import does not change the selected model or preference;
-after importing, change `routes.image.generate` to the model ID and re-plan. Planning and running
-never discover models over the network.
-
-For other providers, or a model outside that import profile, a route of your own is enough when
-an existing adapter supports its interface. Name the provider's native model, and give a cap
-when you do not know its price:
+New models arrive faster than FX's built-in table. On a provider FX speaks, a route of your own
+is enough when an existing adapter supports its interface. Name the provider's native model,
+and give a cap when you do not know its price:
 
 ```yaml
 # routes/models.yaml, listed under route_tables: in fx.yaml

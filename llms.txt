@@ -458,18 +458,8 @@ providers:
       provider_options:
         openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
 ```
-- **Import a new GG image model** with `grida fx models import openai/gpt-image-2.6-sunburst --provider gg --cap-usd 3`.
-  This explicit setup operation validates Grida Models' published model and operation schemas,
-  writes a portable route table under `routes/models/`, and registers it in `route_tables`.
-  It uses the latest release unless `--release TAG` pins one; `--from DIRECTORY` reads a local
-  bundle of `SHA256SUMS`, `manifest.json`, `models.v1.json`, `models.v1.schema.json` and
-  `gg.operations.json` without network access. The initial profile admits compatible GG image
-  generation/editing only, with an explicit positive per-call allowance, not a provider quote
-  or permission to spend. Unknown facts do not enable features. It changes neither selected
-  defaults nor provider preferences; change the model ID afterward and re-plan. Planning and
-  running never discover models over the network. Both SDKs consume the registered files
-  through their normal plan/run APIs; import is CLI-only setup.
-- **A model FX does not list** otherwise runs on a route of your own table, with a cap when you do not know
+
+- **A model FX does not list** runs on a route of your own table, with a cap when you do not know
   its price (recipe below). On OpenRouter a new chat model needs only its id, for structured output
   and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
   FX's generic image adapter: it sends the prompt, the input pictures and the
