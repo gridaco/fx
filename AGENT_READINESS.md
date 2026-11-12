@@ -455,7 +455,7 @@ portable-export delivery and stale-selection URL cleanup. The
 [browser checker](tools/check_model_browser.mjs) verifies rendered checker colors,
 original PBR factors, visible weighted-skin deformation, discovered clips and
 play/pause, model camera gestures without canvas movement, minimal inline
-controls, actual card-thumbnail pixels, in-place activation without selection,
+controls, actual card-thumbnail pixels, full-poster activation without selection or deck expansion,
 overlay camera isolation and placement, Escape/focus restoration, bounded lazy capture,
 stable loading geometry at wide and narrow widths, exact takes,
 polling without resetting or refetching the model,

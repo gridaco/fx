@@ -77,8 +77,10 @@ cards, further cards offer **Activate to preview this model** and retain their
 inspection action; capture resumes automatically when panning frees a cache slot.
 Failures remain marked for the current graph instead of automatically retrying in a loop.
 
-An explicit **Inspect 3D** action activates one interactive model over its card's
-frame without opening details or changing selection or execution picks. Orbit, pan,
+Clicking anywhere on the 3D poster, or activating its **Inspect 3D** button, opens
+one interactive model over its card's frame without opening details, expanding a
+deck or changing selection or execution picks. The cube button keeps its existing
+appearance and remains the keyboard action. Orbit, pan,
 zoom and embedded animation use the same minimal controls as details. The overlay
 follows the card as the workflow camera moves. Close or Escape restores the still
 and keyboard focus to the activating control while it remains available and

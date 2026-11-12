@@ -349,7 +349,7 @@ including those that leave the deck.
 | Hover a bookmark row | raise that member, as hovering its card does | the camera glides to that member's card, which is outlined; leaving keeps the camera there |
 | Click a bookmark row | select that member (a frame member: its first step), which then rests in front | select it, and the camera glides to its card |
 | Still click on a card, a back card's visible rim or the badge | expand | select that member |
-| Click a labelled control on the front card (`Open workflow`, a video's play control, `Inspect 3D`) | does what it says | does what it says |
+| Click a labelled control on the front card (`Open workflow`, a video's play control, `Inspect 3D`) or anywhere on its 3D poster | does what it says | does what it says |
 | Double-click | counts as one expand click | on a workflow card: open it |
 | Click the veil | — | collapse one level; the selection is unchanged; a second deck needs a second click |
 | Esc | close an active media preview first; otherwise with focus in the canvas, go back a scope | collapse one level, wherever focus is except in a text field or an active media preview; consumed only then |

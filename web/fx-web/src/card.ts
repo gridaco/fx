@@ -136,7 +136,9 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       const model = element("g", { class: "fx-canvas-model", "data-digest": preview.digest });
       const center = { x: node.width / 2, y: frame.y + frame.height / 2 };
       const open = element("g", { class: "fx-canvas-model-open", role: "button", tabindex: 0, "aria-label": `Inspect 3D ${preview.label}`, "data-label": preview.label });
-      open.append(element("title", {}, `Inspect 3D ${preview.label}`), element("circle", { cx: center.x, cy: center.y, r: 18 }),
+      // The poster is one action, with the cube as its visual affordance.
+      open.append(element("title", {}, `Inspect 3D ${preview.label}`), element("rect", { ...frame, rx: 6, fill: "transparent" }),
+        element("circle", { cx: center.x, cy: center.y, r: 18 }),
         createElement(Box, { x: center.x - 8, y: center.y - 8, width: 16, height: 16, "stroke-width": 1.5, "aria-hidden": "true" }));
       model.append(backdrop, image, border, fallback, open);
       group.append(model);

@@ -150,6 +150,17 @@ async function cardInspection(context, base = "/") {
     if (await page.locator(".fx-deck-badge").count()) {
       assert.deepEqual(await page.locator('.fx-deck-card[tabindex="0"] .fx-canvas-model-open').evaluateAll(nodes => nodes.map(node => node.getAttribute("tabindex"))), ["0"], "Only the front take's Inspect control belongs in the closed deck's tab order");
       assert.deepEqual(await page.locator('.fx-deck-card[tabindex="-1"] .fx-canvas-model-open').evaluateAll(nodes => nodes.map(node => node.getAttribute("tabindex"))), ["-1"], "Covered takes must not expose a dead Inspect tab stop");
+      await page.locator('.fx-deck-card[tabindex="0"] .fx-canvas-model.has-still').waitFor();
+      const frontPoster = await page.locator('.fx-deck-card[tabindex="0"] .fx-canvas-model-still').boundingBox();
+      const closedCamera = await page.locator(".fx-canvas > svg > g").evaluate(node => node.style.transform);
+      await page.mouse.click(frontPoster.x + 12, frontPoster.y + 12);
+      await page.locator(".fx-canvas-model-player.is-shown").waitFor();
+      assert.equal(await page.locator('.fx-deck-bar:not([hidden])').count(), 0, "Clicking the 3D poster away from the cube must inspect without expanding its deck");
+      assert.equal((await page.evaluate(() => window.fx_viewer.getContext())).selection, null);
+      assert.equal(await page.locator(".fx-details").count(), 0);
+      assert.equal(await page.locator(".fx-canvas > svg > g").evaluate(node => node.style.transform), closedCamera, "Poster activation must not pan the workflow");
+      await page.keyboard.press("Escape");
+      assert.equal(await player.isVisible(), false);
       await page.locator(".fx-deck-badge").click();
       assert.equal(await open("animated").getAttribute("tabindex"), "0");
       assert.equal(await open("static").getAttribute("tabindex"), "0");
@@ -168,12 +179,13 @@ async function cardInspection(context, base = "/") {
     assert.equal(await open("animated").getAttribute("tabindex"), "-1", "Offscreen model controls must leave the tab order rather than offer an action that cannot activate");
     await page.getByRole("button", { name: "Fit workflow", exact: true }).click();
     await page.waitForFunction(() => document.querySelector('[data-node-id="instance:animated"] .fx-canvas-model-open').getAttribute("tabindex") === "0");
-    await open("animated").click();
+    const poster = await still("animated").boundingBox();
+    await page.mouse.click(poster.x + poster.width - 12, poster.y + poster.height - 12);
     await player.waitFor({ state: "visible" });
     await page.waitForFunction(() => document.querySelector(".fx-canvas-model-player model-viewer")?.loaded === true);
     await page.locator(".fx-canvas-model-player.is-shown").waitFor();
     assert.equal(await ready(), true);
-    assert.equal(await page.locator(".fx-details").count(), 0, "Explicit in-card inspection must not open details");
+    assert.equal(await page.locator(".fx-details").count(), 0, "Clicking the poster away from the cube must inspect without opening details");
     assert.equal((await page.evaluate(() => window.fx_viewer.getContext())).selection, null);
     assert.deepEqual(await player.locator("model-viewer").evaluate(model => model.availableAnimations), ["Bend", "Nod"]);
     await aligned();

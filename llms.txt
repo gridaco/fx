@@ -707,8 +707,9 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   Portable exports retain their media allowlist; omitted files cannot be previewed.
 - **3D artifact inspection.** A card with no available image or video automatically renders
   a thumbnail of its own recorded `model/gltf-binary` output, lazily when visible. No poster or
-  workflow setting is needed. `Inspect 3D` activates the model in place without opening the
-  sidebar or changing selection or picks. Only one media preview is interactive per canvas;
+  workflow setting is needed. Click anywhere on the 3D poster, or activate `Inspect 3D`, to
+  open the model in place without opening the sidebar, expanding a deck or changing selection
+  or picks. Only one media preview is interactive per canvas;
   Close or Escape restores the still and focus. Thumbnails use a bounded browser-local cache,
   never a generated reference image in place of the actual mesh, and require no provider calls.
   If all 64 cached thumbnails are needed by visible cards, additional cards offer
