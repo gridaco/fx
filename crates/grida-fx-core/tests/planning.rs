@@ -1731,6 +1731,56 @@ fn integrated_a_nested_home() {
     );
 }
 
+#[test]
+fn integrated_model_and_provider_defaults_merge_independently() {
+    use grida_fx_core::routes::RoutingSource;
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\nroutes:\n  image.generate: native-a@acme\nprovider_preferences:\n  image.generate: other\n");
+    fixture.write("workflows/pkg/fx.yaml", "fx: project/v1\nroutes:\n  image.generate: org/home-image\n  speech.generate: org/voice\nprovider_preferences:\n  image.generate: acme\n  speech.generate: acme\n");
+    fixture.write("workflows/pkg/case.yaml", CASE);
+    let planner = make_planner(&request(&fixture, "case"), &mut FakeHost::new()).unwrap();
+    let registry = &planner.registry;
+    let selected = registry
+        .route_selection("image.generate", Some("org/step-image"), 1)
+        .unwrap();
+    assert_eq!(selected.selector, "org/step-image");
+    assert_eq!(selected.source, RoutingSource::Step);
+    assert_eq!(selected.provider.as_deref(), Some("other"));
+    assert_eq!(
+        selected.provider_source,
+        Some(RoutingSource::PlanningProject)
+    );
+    let default = registry.route_selection("image.generate", None, 1).unwrap();
+    assert_eq!(default.selector, "native-a@acme");
+    assert_eq!(default.source, RoutingSource::PlanningProject);
+    assert_eq!(
+        default.provider, None,
+        "a qualified choice ignores preferences"
+    );
+    let home = registry
+        .route_selection("speech.generate", None, 1)
+        .unwrap();
+    assert_eq!(home.selector, "org/voice");
+    assert_eq!(home.source, RoutingSource::WorkflowHome);
+    assert_eq!(home.provider.as_deref(), Some("acme"));
+    assert_eq!(home.provider_source, Some(RoutingSource::WorkflowHome));
+    assert_eq!(
+        registry.route_selection("image.generate", Some("org/step-image"), 2),
+        Some(default)
+    );
+    let qualified = registry
+        .route_selection("image.generate", Some("native-z@elsewhere"), 1)
+        .unwrap();
+    assert_eq!(qualified.provider, None);
+    assert_eq!(qualified.selector, "native-z@elsewhere");
+    let absent = registry
+        .route_selection("music.generate", Some("org/tune"), 1)
+        .unwrap();
+    assert_eq!(absent.provider, None);
+    assert_eq!(absent.provider_source, None);
+    assert_eq!(registry.route_selection("music.generate", None, 1), None);
+}
+
 /// A workflow found through the `workflows` setting, outside the planning project, under its
 /// own fx.yaml: that fx.yaml is its home (node modules, sources, the plan-digest source, route
 /// defaults under the planning project's), while the planning project keeps the runs, the

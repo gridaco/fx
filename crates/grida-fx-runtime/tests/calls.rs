@@ -50,6 +50,8 @@ fn route(capability: &str, model: &str, provider: &str, high_micros: i64) -> Rou
         capability: capability.into(),
         model: model.into(),
         provider: provider.into(),
+        model_id: None,
+        selection: None,
         price: RoutePrice {
             low: Usd(high_micros / 4),
             high: Usd(high_micros),

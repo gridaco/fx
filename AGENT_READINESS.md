@@ -57,7 +57,7 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Cache reuse | Reuse under FX's identity and validation rules. The engine decides which work matches; the agent does not manufacture cache keys. |
 | Retry | Another engine-owned attempt within execution. It is not a new run, resume, or request for an artistic alternative. |
 | Provider call / attempt / job | A call is the requested capability work; an attempt is one engine-accounted try; a job is a provider operation that may remain pending beyond a local request. An unknown job outcome is not permission to submit it again. |
-| Route / route table | A route is `model@provider` for one capability, with a price or a cap and a contract; a project's own route table adds or restates routes. A new route is a new cache key; repricing one is not. |
+| Model selection / route / route table | A step or capability default selects a canonical model with a separate `provider_preferences` entry, or an exact `model@provider`. Resolution produces a concrete route for one capability, with a price or cap and a contract. A project's route table adds or restates routes, optionally identifying the canonical model with `model_id`. Another concrete route is another cache key; selection metadata and repricing are not. |
 | Cap | `price: {cap_usd: N}` on a route with no known price: each call holds N against the ceiling and is charged what the provider reports, else N. A reservation, not a limit the provider honours. |
 | Provider options | `provider_options`, keyed by provider: a provider's own parameters, passed on a step or in a route's contract, for the adapter of the route's provider. Part of the call's identity; never a key. |
 | Community provider | A provider a project declares in `fx.yaml`, not one FX ships. Distinct from a model FX does not list on a provider it ships, which needs only a route. |
@@ -99,6 +99,7 @@ narrower target rules.
 | Start service: `start --background [--project directory] [--port N] [--open] --json` | Ready service identity and actual URL | Native background process, port 8787 by default. Matching startup is idempotent; readiness checks project, instance and protocol. A failed start exits 2 with this attempt's cause in one line (an occupied port names `--port N`); `--json` also prints the `stopped` status with that `cause`. Does not execute workflows or install crash/login recovery. |
 | Manage service: `status --json`, `logs --lines N`, `stop --json` | Service identity/status, bounded logs, shutdown outcome | Select the project explicitly when needed. Stop affects inspection only; runs and records remain. Plain `start` stays foreground. |
 | Discover built-ins: `nodes [TYPE]` | Text descriptions, settings, ports and applicable routes | Lists built-in types, not a complete custom-node registry. Unknown types currently print nothing with exit 0. Listing a type does not prove every advertised capability can execute. |
+| Choose model/provider: `fx.yaml` `routes` and `provider_preferences`; a step's `route` | A plan bound to concrete native model/provider routes, with selection provenance for unqualified models | Capability choices are defaults, so different steps can use different models. Qualified routes override preferences. Canonical IDs match catalog metadata exactly; missing preferences, missing bindings and ambiguity refuse before execution. Credentials never choose a provider. Workflow-home defaults are overlaid independently by the planning project's; there is no user-wide scope or per-call dynamic routing. CLI and both SDKs use the engine's resolver. |
 | Discover workflow inputs: `schema <target>` | JSON Schema for authored inputs | May load author code to resolve a target. |
 | Validate: `plan <target> ... --check --json` | Expanded graph including problems; nonzero validation status | No FX paid calls; may import code, invoke builders, execute local `at: plan` nodes and write cache results. `--json` alone does not make plan problems a failing exit status. An image step's own request is checked against its route while planning (references need `image_input`, a `WxH` size `exact_size`, a transparent background `alpha`, and pictures within the route's `max_input_pictures`), so an agent learns at $0 that a route cannot take it. |
 | Inspect planned work: `expand`, `identity`, `price <target> ...` | JSON graph, instance identities, or phased estimates | Planning conditions apply. Unresolved work and estimates are not proof of final work or actual billing. |
@@ -536,6 +537,15 @@ reach these same engine boundaries without new client APIs.
 |---|---|
 | [Recover a retained provider task](https://github.com/gridaco/fx/issues/116) | An older FX may already have failed and settled a successful task. Upgrading does not reopen it; running again may submit new paid work. |
 | [Retry a synchronous fal result download](https://github.com/gridaco/fx/issues/117) | A failed image or background-removal download may trigger another billed generation. Delivery retries without new generation are not implemented. |
+
+For AR-20, [model selection](spec/model-selection.md) separates canonical model choice from
+provider preference while retaining exact qualified overrides and the existing concrete route
+identity. The CLI and both SDKs consume one resolver; `model_id` metadata adds no cache rekey.
+The Python `test_stand_in_engine.py` and JavaScript `api.test.ts` model-selection cases use
+three image steps to prove capability defaults, another step's model, an exact provider override,
+per-provider call-cache isolation, unchanged-selection reuse, missing-preference refusal and
+changed-plan resume refusal. No provider keys or paid calls are used. SDK callers consume the
+same project configuration and route tables without a second resolver.
 
 For AR-20, the Python and JavaScript SDK README job examples continue polling through HTTP and
 transport errors and return `Unreachable` on a failed result download, preserving the submitted

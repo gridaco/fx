@@ -159,7 +159,8 @@ export interface NodeStep extends StepCommon {
   pick?: "manual" | "first_accepted" | { best: KeepBest } | null;
   /** `plan`: a free, local, deterministic step that runs while planning. */
   at?: "plan" | null;
-  /** The `model@provider` serving the type's one paid capability. */
+  /** Model for the type's one paid capability, overriding its project default. A canonical
+   * model uses the configured provider preference; `native-model@provider` is exact. */
   route?: string | null;
   /** Features the route must support. */
   requires?: string[];

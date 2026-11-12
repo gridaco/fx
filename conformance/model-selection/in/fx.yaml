@@ -1,0 +1,5 @@
+fx: project/v1
+routes:
+  image.generate: acme/img-a
+provider_preferences:
+  image.generate: acme

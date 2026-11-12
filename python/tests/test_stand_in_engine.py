@@ -346,3 +346,99 @@ def test_a_stand_in_that_raises_stops_the_run_and_run_raises_it(project: Path) -
     assert not stopped.ok and stopped.stand_in
     assert stopped.stopped == "the stand-in failed: RuntimeError: the harness broke"
     assert stopped.failures["gull#1"].code == "internal"
+
+
+def test_model_defaults_and_step_choices_resolve_before_cache_and_resume(project: Path) -> None:
+    def configure(provider: str | None) -> None:
+        document = {"fx": "project/v1", "routes": {"image.generate": "acme/image-a"}}
+        if provider is not None:
+            document["provider_preferences"] = {"image.generate": provider}
+        (project / "fx.yaml").write_text(json.dumps(document), "utf-8")
+
+    configure("acme")
+    (project / "routes.yaml").write_text(
+        json.dumps(
+            {
+                "fx": "routes/v1",
+                "routes": [
+                    {
+                        "capability": "image.generate",
+                        "route": f"native-{model}@{provider}",
+                        "model_id": f"acme/image-{model}",
+                        "price": {"usd": cost},
+                        "features": ["exact_size", "opaque_background"],
+                    }
+                    for provider, cost in [("acme", 0.01), ("other", 0.02)]
+                    for model in ["a", "b"]
+                ],
+            }
+        ),
+        "utf-8",
+    )
+    workflow = fx.Workflow("harbour", title="Different models with a provider preference")
+    for name, route, prompt in [
+        ("ordinary", None, "a lantern on a quay"),
+        ("special", "acme/image-b", "a gull on a mast"),
+        ("fixed", "native-a@other", "make it blue"),
+    ]:
+        workflow.step(
+            name,
+            uses="fx/image.generate@1",
+            route=route,
+            with_={"prompt": prompt, "size": "16x16", "background": "opaque"},
+        )
+    (project / "workflows" / "harbour.yaml").write_text(json.dumps(workflow.document()), "utf-8")
+    planned = fx.plan("harbour", cwd=project, routes=["routes.yaml"])
+    assert planned.ok, planned.problems
+    assert planned.estimate() == (0.04, 0.04)
+    expected = [
+        ("fixed", "native-a@other"),
+        ("ordinary", "native-a@acme"),
+        ("special", "native-b@acme"),
+    ]
+    assert (
+        sorted(
+            (instance["step"], instance["routes"]["image.generate"]["route"])
+            for instance in planned.document["instances"]
+        )
+        == expected
+    )
+    asked: list[tuple[str, str]] = []
+
+    def answer(call: StandInCall) -> Answer:
+        asked.append((call.instance.step, call.route.id))
+        return picture(call)
+
+    assert fx.run(
+        "harbour", cwd=project, routes=["routes.yaml"], name="selected", stand_in=answer
+    ).ok
+    assert sorted(asked) == expected
+    assert run(project, "runs/replayed", answer).ok
+    assert len(asked) == 3
+
+    # Provider preference changes do not replace explicit routes or share another provider's
+    # call cache. The existing run keeps its plan rather than silently switching providers.
+    configure("other")
+    with pytest.raises(fx.FxError, match="another workflow or other inputs"):
+        fx.run("harbour", cwd=project, routes=["routes.yaml"], resume="selected", stand_in=answer)
+    with pytest.raises(fx.FxError, match="another workflow or other inputs"):
+        run(project, "runs/replayed", answer)
+    assert len(asked) == 3
+    assert run(project, "runs/other", answer).ok
+    assert sorted(asked[3:]) == [
+        ("ordinary", "native-a@other"),
+        ("special", "native-b@other"),
+    ]
+    configure("acme")
+    assert fx.run(
+        "harbour", cwd=project, routes=["routes.yaml"], resume="selected", stand_in=answer
+    ).ok
+    assert len(asked) == 5
+
+    configure(None)
+    missing = fx.plan("harbour", cwd=project, routes=["routes.yaml"])
+    assert not missing.ok
+    assert len(missing.problems) == 2
+    assert all(
+        "provider_preferences.image.generate" in item["message"] for item in missing.problems
+    )

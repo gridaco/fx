@@ -44,7 +44,7 @@ Ratified 2026-10-14.
 | R11 | **GG's planning prices are FX's allowances, and say so.** GG's image and video routes keep allowances taken from the same model elsewhere until GG's own rates can be planned from. A GG call is booked at GG's settled charge. |
 | R12 | **Request fields become provider-neutral later,** in the one identity break before 1.0, with the naming review, so users migrate once. `provider_options` lands now, since it only adds a member. |
 | R13 | **One definition per capability is deferred.** A capability is consolidated when it next changes. |
-| R14 | **No model aliases.** The capability default in `fx.yaml` is already a one-line bump. |
+| R14 | **No arbitrary model aliases.** The capability default in `fx.yaml` is already a one-line bump. Clarified 2026-11-13 for #130: a canonical published model ID may select its explicit provider binding independently of provider preference; it is not a user-defined alias or an automatic model upgrade. |
 | R15 | **Nothing is spent.** Everything is proven over replay fixtures, stand-ins and synthetic adapters. |
 
 **Amendments to the [overview](overview.md)'s decisions:**

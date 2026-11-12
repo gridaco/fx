@@ -41,9 +41,11 @@
 
 use crate::builtins::BuiltinType;
 use crate::docs::lock::LockFile;
+use crate::docs::project::Project;
 use crate::docs::workflow::LoadedWorkflow;
 use crate::error::{Error, Result, io_reason};
 use crate::host::{HostFailure, Language, NodeHost};
+use crate::routes::{RouteSelection, RoutingSource};
 use crate::spec::{BodyKind, NodeSpec};
 use crate::val::FileValue;
 use grida_fx_protocol::{
@@ -202,8 +204,12 @@ pub struct Registry {
     /// Declared source packages (fx.yaml `sources`).
     pub sources: Vec<String>,
     pub locks: LockFile,
-    /// `{capability: route id}`: the planning project's fx.yaml routes over the home's.
+    /// `{capability: model selector}`: the planning project's fx.yaml routes over the home's.
     pub route_defaults: IndexMap<String, String>,
+    /// Explicit provider preferences, merged independently of model defaults.
+    pub provider_preferences: IndexMap<String, String>,
+    route_sources: IndexMap<String, RoutingSource>,
+    provider_sources: IndexMap<String, RoutingSource>,
     /// Module descriptions by project-relative path, failed ones included.
     pub(crate) modules: HashMap<String, ModuleDescription>,
     /// Resolved node types by `uses` as written (built-ins also by their canonical `uses`).
@@ -227,11 +233,73 @@ impl Registry {
             sources,
             locks,
             route_defaults,
+            provider_preferences: IndexMap::new(),
+            route_sources: IndexMap::new(),
+            provider_sources: IndexMap::new(),
             modules: HashMap::new(),
             types: HashMap::new(),
             workflows: HashMap::new(),
             files: HashMap::new(),
         }
+    }
+
+    /// Installs the same independent configuration overlays for planning and doctor.
+    pub fn configure_routing(&mut self, home: &Project, planning: &Project) {
+        self.route_defaults.clear();
+        self.provider_preferences.clear();
+        self.route_sources.clear();
+        self.provider_sources.clear();
+        for (project, source) in [
+            (home, RoutingSource::WorkflowHome),
+            (planning, RoutingSource::PlanningProject),
+        ] {
+            for (capability, route) in &project.document.routes {
+                self.route_defaults
+                    .insert(capability.clone(), route.route.clone());
+                self.route_sources.insert(capability.clone(), source);
+            }
+            for (capability, provider) in &project.document.provider_preferences {
+                self.provider_preferences
+                    .insert(capability.clone(), provider.clone());
+                self.provider_sources.insert(capability.clone(), source);
+            }
+        }
+    }
+
+    /// Chooses a step selector, else the capability default. A scalar override applies only
+    /// to a type calling one distinct capability. Provider preference is a separate overlay.
+    pub fn route_selection(
+        &self,
+        capability: &str,
+        declared: Option<&str>,
+        calls: usize,
+    ) -> Option<RouteSelection> {
+        let declared = declared.filter(|value| calls == 1 && !value.is_empty());
+        let (selector, source) = match declared {
+            Some(selector) => (selector, RoutingSource::Step),
+            None => (
+                self.route_default(capability)?,
+                self.route_sources
+                    .get(capability)
+                    .copied()
+                    .unwrap_or(RoutingSource::PlanningProject),
+            ),
+        };
+        let provider = (!selector.contains('@'))
+            .then(|| self.provider_preferences.get(capability).cloned())
+            .flatten();
+        let provider_source = provider.as_ref().map(|_| {
+            self.provider_sources
+                .get(capability)
+                .copied()
+                .unwrap_or(RoutingSource::PlanningProject)
+        });
+        Some(RouteSelection {
+            selector: selector.to_string(),
+            provider,
+            source,
+            provider_source,
+        })
     }
 
     /// Resolves a step's `uses` (module doc).

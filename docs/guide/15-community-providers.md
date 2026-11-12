@@ -165,6 +165,7 @@ fx: routes/v1
 routes:
   - capability: structured.generate
     route: text-a@acme                           # <model>@<provider>, the model as acme names it
+    model_id: acme/text-a                        # optional canonical ID for separate selection
     price: { low_usd: 0.001, high_usd: 0.02 }   # what a call may cost
   - capability: video.generate
     route: clip-a@acme
@@ -196,6 +197,25 @@ routes:
 A step names the route (`route: text-a@acme`), or `fx.yaml` makes it the project's default for its
 capability (`routes: { structured.generate: text-a@acme }`). `grida fx nodes <type>` lists your
 routes beside FX's.
+
+Model choice and provider preference can be separate. Add a canonical `model_id` to a route
+entry when the provider's native spelling differs, then select that ID with an explicit
+capability preference:
+
+```yaml
+# fx.yaml
+routes:
+  structured.generate: acme/text-a
+provider_preferences:
+  structured.generate: acme
+```
+
+The table entry above declares `model_id: acme/text-a` while keeping its qualified
+`route: text-a@acme`. These are defaults: a step can select another model, or use a qualified
+route to override the preference. Declaring credentials under `providers` does not select that
+provider. Missing or ambiguous model bindings are refused while planning; no provider is tried
+as a paid fallback. Both SDKs consume this configuration through the engine's normal plan/run
+operations, with no separate resolver.
 
 ## An OpenAI-compatible server
 

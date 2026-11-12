@@ -32,22 +32,25 @@ Use the Python environment for FX's builder host. From this folder:
 export GRIDA_FX_PYTHON="$PWD/.venv/bin/python"
 ```
 
-The supplied [`fx.yaml`](fx.yaml) selects `openai/gpt-image-2.5-sunburst@openrouter` for the
-reference and `P2-20260801@tripo` for the mesh. OpenRouter was used for live verification
-because that credential was available; it is not a requirement of the image-to-3D pipeline.
-For example, with an OpenAI key, change only the image route:
+The supplied [`fx.yaml`](fx.yaml) chooses `openai/gpt-image-2.5-sunburst` for the reference
+image, with its provider preference set separately to `openrouter`. Tripo P2 is explicit because
+it is the model generator this example demonstrates:
 
 ```yaml
 routes:
-  image.generate: gpt-image-2.5-sunburst@openai
+  image.generate: openai/gpt-image-2.5-sunburst
   mesh.generate: P2-20260801@tripo
+provider_preferences:
+  image.generate: openrouter
 ```
 
-FX currently requires a fully qualified `model@provider` route; it does not infer the provider
-from available keys. Choose a route that supports the requested image settings and re-plan
-after changing it: provider prices and cache identities differ. The estimate below is for
-the supplied OpenRouter configuration. Separating model choice from provider selection is
-tracked in [#130](https://github.com/gridaco/fx/issues/130).
+OpenRouter was used for live verification because that credential was available; it is not
+a requirement of the image-to-3D pipeline. With an OpenAI key, change only
+`provider_preferences.image.generate` to `openai`; the model and workflow stay unchanged.
+FX resolves the canonical model to that provider's native route before pricing and execution.
+It does not choose from available keys or try another provider after a failure. Existing
+qualified `model@provider` selections remain exact overrides. Re-plan after changing the model
+or provider: prices and cache identities differ. The estimate below uses OpenRouter.
 
 With the supplied configuration, set `OPENROUTER_API_KEY` and `TRIPO_API_KEY` in your shell or
 in a local `.env`; the OpenAI alternative uses `OPENAI_API_KEY` and `TRIPO_API_KEY`. Keep `.env`,
@@ -132,8 +135,9 @@ object. The CLI and SDK share the same engine contracts. See
 
 ## Live verification
 
-Live verification on 2026-11-12 used the default lantern description and the two direct routes
-above, with an approved $3 ceiling. OpenRouter produced a 1024×1024 PNG and Tripo P2 produced a
+Live verification on 2026-11-12 used the default lantern description and the concrete routes
+`openai/gpt-image-2.5-sunburst@openrouter` and `P2-20260801@tripo`, with an approved $3 ceiling.
+OpenRouter produced a 1024×1024 PNG and Tripo P2 produced a
 3,061,812-byte GLB with one mesh, one material and three embedded texture images. FX recorded
 $0.42244 for the reference and $1.10 for the mesh, $1.52244 total. Both saved files passed
 `inspect --verify`; repeating the same builder with the network disabled reused both steps at

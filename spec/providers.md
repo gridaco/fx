@@ -119,6 +119,10 @@ A provider the planning project declares with a `family` (§1) is served by its 
 
 ## 3. The built-in route table
 
+[Model selection](model-selection.md) specifies optional independent provider preferences
+and canonical model metadata. Model catalogue updates and discovery remain separate work;
+this selection contract resolves the routes already admitted to the local catalogue.
+
 FX ships a default route table, embedded in `grida-fx`. It is the first table of the catalog ([identity.md](identity.md) §7): a project's `route_tables` override its entries, and any `--routes` file leaves it out.
 
 - It holds 29 routes over 10 capabilities. Every route MUST be served by an adapter of §2, and every capability is defined in [capabilities.md](capabilities.md).

@@ -10,10 +10,18 @@ export interface Price { low_usd: number; high_usd: number }
 export interface InstancePrice extends Price { capped?: true }
 /** A step's own scalar output names; expressions and cross-instance references are never evaluated. */
 export interface PreviewDescriptor { video: string; poster?: string }
+/** Safe configuration provenance for a model resolved to a concrete route. */
+export interface ModelSelection {
+  model: string;
+  model_source: "step" | "planning_project" | "workflow_home";
+  provider_preference: string;
+  provider_source: "planning_project" | "workflow_home";
+}
 export interface GraphInstance {
   id: string; path: string; step: string; take: number[]; uses: string; type: string | null;
   with: Record<string, unknown>;
   routes: Record<string, { route: string; fingerprint: string }>;
+  routing?: Record<string, ModelSelection>;
   state: PlanState; identity: string | null; phase: number; key: string | null;
   judges: string | null; judged_by: string[]; waiting_on: string[]; needs: string[]; reads: string[];
   price: InstancePrice; view?: boolean | string; reason?: string;
@@ -87,13 +95,19 @@ function withValue(value: unknown, depth = 0): boolean {
   return Object.values(value).every((item) => withValue(item, depth + 1));
 }
 function instance(value: unknown): value is GraphInstance {
-  if (!isRecord(value) || !fields(value, ["id", "path", "step", "take", "uses", "type", "with", "routes", "state", "identity", "phase", "key", "judges", "judged_by", "waiting_on", "needs", "reads", "price"], ["view", "reason", "bindings", "interface_bindings", "preview"])) return false;
+  if (!isRecord(value) || !fields(value, ["id", "path", "step", "take", "uses", "type", "with", "routes", "state", "identity", "phase", "key", "judges", "judged_by", "waiting_on", "needs", "reads", "price"], ["view", "reason", "bindings", "interface_bindings", "preview", "routing"])) return false;
   return [value.id, value.path, value.step, value.uses].every(isString)
     && Array.isArray(value.take) && value.take.length > 0 && value.take.every(isPositiveInteger)
     && isNullableString(value.type) && isRecord(value.with) && Object.values(value.with).every((item) => withValue(item))
     && isRecord(value.routes) && Object.entries(value.routes).every(([name, route]) => /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(name)
       && isRecord(route) && fields(route, ["route", "fingerprint"]) && isString(route.route)
       && /^.+@[a-z0-9._-]+$/.test(route.route) && isDigest(route.fingerprint))
+    && optional(value, "routing", (items) => isRecord(items) && Object.entries(items).every(([name, item]) => /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(name)
+      && isRecord(item) && fields(item, ["model", "model_source", "provider_preference", "provider_source"])
+      && isString(item.model) && /^[^@\s]+$/.test(item.model)
+      && isString(item.model_source) && ["step", "planning_project", "workflow_home"].includes(item.model_source)
+      && isString(item.provider_preference) && /^[a-z0-9._-]+$/.test(item.provider_preference)
+      && isString(item.provider_source) && ["planning_project", "workflow_home"].includes(item.provider_source)))
     && states.has(value.state as PlanState) && (value.identity === null || isDigest(value.identity))
     && isPositiveInteger(value.phase) && isNullableString(value.key) && isNullableString(value.judges)
     && [value.judged_by, value.waiting_on, value.needs, value.reads].every(isStrings)

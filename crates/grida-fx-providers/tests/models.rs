@@ -409,9 +409,20 @@ fn every_route_has_its_model_s_card() {
             "Grida Models has no card for its model".into()
         });
         if let Some(facts) = facts {
+            assert_eq!(
+                route.model_id.as_deref(),
+                facts.card["id"].as_str(),
+                "{} selects its canonical Models card independently of its native ID",
+                route.id()
+            );
             gate.hold(&route, "card", facts.coverage == Some("listed"), || {
                 format!("its provider's coverage is {:?}", facts.coverage)
             });
+        } else {
+            assert!(
+                route.model_id.is_none(),
+                "no invented canonical model alias"
+            );
         }
     }
     gate.finish();

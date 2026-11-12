@@ -346,4 +346,102 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
     },
     SLOW,
   );
+
+  test.skipIf(process.platform === "win32")(
+    "model defaults and step choices resolve before cache and resume",
+    async () => {
+      const selected = temporaryFolder("model-selection");
+      try {
+        const configure = (provider: string | null) => {
+          writeFileSync(join(selected.path, "fx.yaml"), toYaml({
+            fx: "project/v1",
+            routes: { "image.generate": "acme/image-a" },
+            ...(provider === null ? {} : { provider_preferences: { "image.generate": provider } }),
+          }));
+        };
+        configure("acme");
+        writeFileSync(join(selected.path, "routes.yaml"), toYaml({
+          fx: "routes/v1",
+          routes: ["acme", "other"].flatMap((provider) => ["a", "b"].map((model) => ({
+            capability: "image.generate",
+            route: `native-${model}@${provider}`,
+            model_id: `acme/image-${model}`,
+            price: { usd: provider === "acme" ? 0.01 : 0.02 },
+            features: ["exact_size", "opaque_background"],
+          }))),
+        }));
+        writeFileSync(join(selected.path, "selection.yaml"), toYaml(workflow({
+          id: "selection",
+          title: "Different models with a provider preference",
+          steps: {
+            ordinary: {
+              uses: "fx/image.generate@1",
+              with: { prompt: "a lantern on a quay", size: "16x16", background: "opaque" },
+            },
+            special: {
+              uses: "fx/image.generate@1",
+              route: "acme/image-b",
+              with: { prompt: "a gull on a mast", size: "16x16", background: "opaque" },
+            },
+            fixed: {
+              uses: "fx/image.generate@1",
+              route: "native-a@other",
+              with: { prompt: "make it blue", size: "16x16", background: "opaque" },
+            },
+          },
+        })));
+        const own = {
+          cwd: selected.path,
+          env: { ...env, GRIDA_FX_NETWORK: "off", GRIDA_FX_DISABLE_DOTENV: "1" },
+          routes: ["routes.yaml"],
+        };
+        const planned = await plan("selection.yaml", own);
+        expect(planned.ok).toBe(true);
+        expect(planned.estimate).toMatchObject({ lowUsd: 0.04, highUsd: 0.04 });
+        const expected = [
+          ["fixed", "native-a@other"],
+          ["ordinary", "native-a@acme"],
+          ["special", "native-b@acme"],
+        ];
+        expect(planned.graph.instances.map((instance) => [
+          instance.step, instance.routes["image.generate"]?.route,
+        ]).sort()).toEqual(expected);
+        const asked: string[][] = [];
+        const standIn: StandIn = (call) => {
+          asked.push([call.instance.step, call.route.id]);
+          return { files: { image: png(16, 16) } };
+        };
+        const runOptions = { ...own, standIn };
+        expect((await run("selection.yaml", { ...runOptions, name: "selected" })).ok).toBe(true);
+        expect([...asked].sort()).toEqual(expected);
+        expect((await run("selection.yaml", { ...runOptions, runDir: "runs/replayed" })).ok).toBe(true);
+        expect(asked).toHaveLength(3);
+
+        configure("other");
+        await expect(run("selection.yaml", { ...runOptions, resume: "selected" }))
+          .rejects.toThrow("another workflow or other inputs");
+        await expect(run("selection.yaml", { ...runOptions, runDir: "runs/replayed" }))
+          .rejects.toThrow("another workflow or other inputs");
+        expect(asked).toHaveLength(3);
+        expect((await run("selection.yaml", { ...runOptions, runDir: "runs/other" })).ok).toBe(true);
+        expect(asked.slice(3).sort()).toEqual([
+          ["ordinary", "native-a@other"],
+          ["special", "native-b@other"],
+        ]);
+        configure("acme");
+        expect((await run("selection.yaml", { ...runOptions, resume: "selected" })).ok).toBe(true);
+        expect(asked).toHaveLength(5);
+
+        configure(null);
+        const missing = await plan("selection.yaml", own);
+        expect(missing.ok).toBe(false);
+        expect(missing.problems).toHaveLength(2);
+        expect(missing.problems.every((problem) =>
+          problem.message.includes("provider_preferences.image.generate"))).toBe(true);
+      } finally {
+        selected.cleanup();
+      }
+    },
+    SLOW,
+  );
 });

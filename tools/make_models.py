@@ -429,6 +429,14 @@ def check() -> list[str]:
     ids = route_ids()
     if sorted(CARDS) != ids:
         problems.append(f"CARDS names {sorted(CARDS)}, the built-in table {ids}")
+    for route in digest.read_yaml_file(DEFAULT_ROUTES)["routes"]:
+        place = CARDS.get(route["route"])
+        model_id = place[1] if place is not None else None
+        if route.get("model_id") != model_id:
+            problems.append(
+                f"{DEFAULT_ROUTES.relative_to(REPO).as_posix()}: {route['route']}: "
+                f"model_id is {route.get('model_id')!r}, not {model_id!r}"
+            )
     named = sorted(set(RELEASE_TAG.findall(SPEC.read_text(encoding="utf-8"))))
     if named != [RELEASE]:
         spec = SPEC.relative_to(REPO).as_posix()

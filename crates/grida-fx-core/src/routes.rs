@@ -2,7 +2,9 @@
 //!
 //! A route is `<model>@<provider>`, split at the last `@`. Its fingerprint hashes capability,
 //! model, provider and contract (`{}` when none) under `kind: fx-route-v1`; price, features,
-//! input-picture limit and concurrency are not part of it.
+//! input-picture limit, concurrency and canonical `model_id` metadata are not part of it.
+//! A bare authored model selector resolves through an explicit provider preference and exact
+//! `model_id` metadata (or native model when absent); qualified selectors remain exact overrides.
 //!
 //! The catalog is built from tables in this order (identity.md §7): the built-in default table
 //! (left out when any `--routes` file is given), then `fx.yaml` `route_tables` in order, then each
@@ -122,6 +124,10 @@ pub struct Route {
     pub capability: String,
     pub model: String,
     pub provider: String,
+    /// Canonical selection metadata; neither this nor its provenance enters a fingerprint.
+    pub model_id: Option<String>,
+    /// Authoring provenance on a bound unqualified selection, absent from catalog entries.
+    pub selection: Option<RouteSelection>,
     pub price: RoutePrice,
     pub features: BTreeSet<String>,
     /// The most input pictures one call takes (spec/capabilities.md §1); `None`: no limit is
@@ -133,6 +139,39 @@ pub struct Route {
     pub contract: Value,
     /// The serving project adapter's lock drift (module doc): not part of the fingerprint.
     pub drift: Option<String>,
+}
+
+/// The configuration scope that supplied a selector or a provider preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RoutingSource {
+    Step,
+    PlanningProject,
+    WorkflowHome,
+}
+
+impl RoutingSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Step => "step",
+            Self::PlanningProject => "planning_project",
+            Self::WorkflowHome => "workflow_home",
+        }
+    }
+}
+
+/// A model selector and its independently configured provider preference, before binding.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RouteSelection {
+    pub selector: String,
+    pub provider: Option<String>,
+    pub source: RoutingSource,
+    pub provider_source: Option<RoutingSource>,
+}
+
+impl RouteSelection {
+    pub fn is_qualified(&self) -> bool {
+        self.selector.contains('@')
+    }
 }
 
 /// The contract one of FX's adapters serves (spec/providers.md §2).
@@ -388,6 +427,11 @@ fn adapter_drift(
 }
 
 impl Route {
+    /// The exact unqualified model identifier accepted for this entry.
+    pub fn canonical_model(&self) -> &str {
+        self.model_id.as_deref().unwrap_or(&self.model)
+    }
+
     /// `model@provider`.
     pub fn id(&self) -> String {
         format!("{}@{}", self.model, self.provider)
@@ -512,6 +556,64 @@ impl RouteTable {
         Err(format!(
             "no route {id} serves {capability} (known routes: {known})"
         ))
+    }
+
+    /// Resolves authoring configuration without consulting credentials or the network.
+    /// Qualified selectors remain exact overrides; bare models need an explicit preference.
+    pub fn resolve_selector(
+        &self,
+        capability: &str,
+        selector: &str,
+        provider: Option<&str>,
+    ) -> std::result::Result<&Route, String> {
+        if selector.contains('@') {
+            return self.resolve(capability, selector);
+        }
+        if selector.is_empty() || selector.chars().any(char::is_whitespace) {
+            return Err(
+                "a model identifier is nonempty and contains neither whitespace nor @".into(),
+            );
+        }
+        let Some(provider) = provider else {
+            return Err(format!(
+                "no provider preference for {capability} model {selector}: set \
+                 provider_preferences.{capability} in fx.yaml or use a qualified model@provider"
+            ));
+        };
+        let candidates: Vec<&Route> = self
+            .routes_for(capability)
+            .into_iter()
+            .filter(|route| route.provider == provider && route.canonical_model() == selector)
+            .collect();
+        match candidates.as_slice() {
+            [route] => Ok(route),
+            [] => {
+                let known: BTreeSet<&str> = self
+                    .entries
+                    .values()
+                    .filter(|route| route.capability == capability && route.provider == provider)
+                    .map(Route::canonical_model)
+                    .collect();
+                let known = if known.is_empty() {
+                    "none".to_string()
+                } else {
+                    known.into_iter().collect::<Vec<_>>().join(", ")
+                };
+                Err(format!(
+                    "no route for model {selector} on provider {provider} serves {capability} \
+                     (known models on {provider}: {known}); declare a compatible route in route_tables or choose a listed model"
+                ))
+            }
+            _ => Err(format!(
+                "model {selector} on provider {provider} is ambiguous for {capability} \
+                 (routes: {}); use a qualified model@provider",
+                candidates
+                    .iter()
+                    .map(|route| route.id())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }
     }
 
     /// Every route serving a capability, sorted by id.
@@ -644,6 +746,14 @@ fn parse_route(
             Some(base)
         }
     };
+    let model_id = match entry.get("model_id") {
+        Some(Value::String(model_id)) => Some(model_id.clone()),
+        None => base
+            .as_ref()
+            .filter(|base| base.model == model)
+            .and_then(|base| base.model_id.clone()),
+        Some(_) => return Err(format!("{at}.model_id: not text")),
+    };
     let price = match (entry.get("price"), &base) {
         (Some(price), _) => parse_price(price, &format!("{at}.price"))?,
         (None, Some(base)) => base.price.clone(),
@@ -703,6 +813,8 @@ fn parse_route(
         capability,
         model,
         provider,
+        model_id,
+        selection: None,
         price,
         features,
         max_input_pictures,
@@ -1106,6 +1218,97 @@ mod tests {
             .unwrap()
             .entries[0]
             .clone()
+    }
+
+    #[test]
+    fn model_selection_uses_explicit_preferences_and_exact_metadata() {
+        let mut catalog = table(json!([
+            {"capability": "image.generate", "route": "native-a@acme", "model_id": "org/img-a", "price": {"usd": 0.01}},
+            {"capability": "image.generate", "route": "org/native-a@other", "model_id": "org/img-a", "price": {"usd": 0.02}},
+            {"capability": "image.generate", "route": "img-b@acme", "price": {"usd": 0.03}}
+        ])).unwrap();
+        let selected = |provider| {
+            catalog
+                .resolve_selector("image.generate", "org/img-a", Some(provider))
+                .unwrap()
+                .id()
+        };
+        assert_eq!(selected("acme"), "native-a@acme");
+        assert_eq!(selected("other"), "org/native-a@other");
+        assert_eq!(
+            catalog
+                .resolve_selector("image.generate", "native-a@acme", Some("other"))
+                .unwrap()
+                .id(),
+            "native-a@acme"
+        );
+        assert_eq!(
+            catalog
+                .resolve_selector("image.generate", "img-b", Some("acme"))
+                .unwrap()
+                .id(),
+            "img-b@acme"
+        );
+        assert!(
+            catalog
+                .resolve_selector("image.generate", "org/img-a", None)
+                .unwrap_err()
+                .contains("provider_preferences.image.generate")
+        );
+        for selector in ["img-a", "native-a", "org/img-b"] {
+            assert!(
+                catalog
+                    .resolve_selector("image.generate", selector, Some("acme"))
+                    .is_err(),
+                "no inferred alias for {selector}"
+            );
+        }
+        assert!(
+            catalog
+                .resolve_selector("image.edit", "org/img-a", Some("acme"))
+                .is_err()
+        );
+        catalog.overlay(table(json!([
+            {"capability": "image.generate", "route": "native-a-alt@acme", "model_id": "org/img-a", "price": {"usd": 0.01}}
+        ])).unwrap());
+        assert_eq!(
+            catalog
+                .resolve_selector("image.generate", "org/img-a", Some("acme"))
+                .unwrap_err(),
+            "model org/img-a on provider acme is ambiguous for image.generate (routes: native-a-alt@acme, native-a@acme); use a qualified model@provider"
+        );
+        assert!(
+            catalog
+                .resolve_selector("image.generate", "native-a@acme", None)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn model_metadata_does_not_rekey_or_transfer_to_another_model() {
+        let base = table(json!([
+            {"capability": "image.generate", "route": "native-a@acme", "price": {"usd": 0.01}}
+        ]))
+        .unwrap();
+        let tagged = table(json!([
+            {"capability": "image.generate", "route": "native-a@acme", "model_id": "org/img-a", "price": {"usd": 0.01}}
+        ])).unwrap();
+        assert_eq!(
+            base.entries[0].fingerprint(),
+            tagged.entries[0].fingerprint()
+        );
+        let later = RouteTable::from_document_over(&json!({"fx": "routes/v1", "routes": [
+            {"capability": "image.generate", "route": "native-a@acme", "extends": "native-a@acme", "price": {"usd": 0.02}},
+            {"capability": "image.generate", "route": "native-b@acme", "extends": "native-a@acme"},
+            {"capability": "image.generate", "route": "native-c@acme", "extends": "native-a@acme", "model_id": "org/img-c"}
+        ]}), "routes.yaml", &[&tagged], &Declarations::built_in()).unwrap();
+        assert_eq!(later.entries[0].canonical_model(), "org/img-a");
+        assert_eq!(
+            later.entries[0].fingerprint(),
+            tagged.entries[0].fingerprint()
+        );
+        assert_eq!(later.entries[1].canonical_model(), "native-b");
+        assert_eq!(later.entries[2].canonical_model(), "org/img-c");
     }
 
     fn with(values: &[(&str, Val)]) -> IndexMap<String, Val> {

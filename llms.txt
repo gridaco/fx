@@ -90,8 +90,11 @@ fx: project/v1
 budget:
   max_usd: 10                       # ceiling for any one run; --max-usd overrides it
 routes:                             # the model for each capability, where a step names none
-  image.generate: openai/gpt-image-2.5-sunburst@gg
-  structured.generate: { route: openai/gpt-5.6-sol@gg, concurrency: 4 }   # at most 4 calls at once
+  image.generate: openai/gpt-image-2.5-sunburst
+  structured.generate: { route: openai/gpt-5.6-sol, concurrency: 4 }   # at most 4 calls at once
+provider_preferences:               # independent of model choice; keys alone never select it
+  image.generate: gg
+  structured.generate: gg
 # route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
@@ -187,7 +190,7 @@ steps:
 | `at: plan` | run this free, local, deterministic step while planning: its outputs become plan-time values |
 | `budget:` | `{ max_usd: N }` for this step, group or each repeat instance (the innermost counts) |
 | `concurrency:` | at most N instances of a repeated node step at once (no effect on groups yet) |
-| `route:` | which model serves this step (`model@provider`) |
+| `route:` | this step's model, overriding its capability default; a canonical ID uses its provider preference, `model@provider` is exact |
 | `requires:` | features the route must support: `image_input`, `mask`, `alpha`, `exact_size` |
 | `independent_of:` | refuse a route that shares a model with these steps |
 | `timeout:` | seconds; past it the step fails and is not run again |
@@ -280,21 +283,39 @@ The canonical [text-to-3D example](https://github.com/gridaco/fx/tree/main/examp
 provides `asset.py:generate_3d_asset(text: str)`: a Python builder that returns a two-step
 workflow for the engine to plan and run. It generates a reference image, then passes it to
 `P2-20260801@tripo` with triangle output (`quad: false`), textures and PBR enabled.
-The outputs are `reference` and `model`. The supplied `image.generate` route is
-`openai/gpt-image-2.5-sunburst@openrouter`, using `OPENROUTER_API_KEY` alongside `TRIPO_API_KEY`.
-OpenRouter is sample configuration, not a pipeline requirement: change the project's image
-route to another compatible route, for example `gpt-image-2.5-sunburst@openai` with
-`OPENAI_API_KEY`, and re-plan for its price and cache identity. FX currently requires
-`model@provider`; it does not select a provider from available credentials. Live execution
-needs explicit approval and a USD ceiling. The supplied routes do not use Grida Gateway.
+The outputs are `reference` and `model`. The supplied image model is
+`openai/gpt-image-2.5-sunburst`, with `provider_preferences.image.generate: openrouter`, using
+`OPENROUTER_API_KEY` alongside `TRIPO_API_KEY`. OpenRouter is sample configuration, not a
+pipeline requirement: change only that preference to `openai` with `OPENAI_API_KEY`, keeping
+the model and workflow, and re-plan for its price and cache identity. FX resolves a concrete
+route before execution; credentials do not select the provider. Live execution needs explicit
+approval and a USD ceiling. The supplied routes do not use Grida Gateway.
 Its self-contained stand-in synthesizes the reference and model for offline wiring and
 cache checks without keys or provider calls. Open the producing mesh step's details to
 preview an available GLB; its producing card automatically renders a model thumbnail.
 
 ## Routes and providers
 
-A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or per step with
-`route:`. `grida fx nodes <type>` lists routes; `grida fx doctor` says which a live run can serve.
+A concrete route is `model@provider`. In `fx.yaml`, `routes:` sets a model default per
+capability, and `provider_preferences:` independently sets one provider per capability.
+An unqualified model ID resolves through the catalog's canonical `model_id` metadata, or the
+native model exactly when metadata is absent. It needs an explicit provider preference;
+missing or ambiguous bindings are planning errors. Names are not matched fuzzily and available
+keys never choose the provider. A qualified route overrides the preference and works as before.
+
+These are defaults, not one model forced on every node. A step's `route:` can choose a different
+model using its capability's preference, or a qualified route including its own provider.
+A custom node calling one distinct capability has the same override; several calls inside it
+share that route. A node calling several capabilities uses each capability's project default;
+body calls do not override routes. Separate steps can use different image models, as the
+fallback recipe below demonstrates.
+
+The workflow source project's defaults are overlaid by the planning project's, independently
+for models and preferences; this is not user-wide configuration. Selection completes before
+pricing, approval, identity or execution. The same concrete route keeps its cache; a different
+model or provider changes the plan, so an incompatible resume is refused. No provider is tried
+as a paid fallback. `grida fx nodes <type>` lists concrete routes; `grida fx doctor` shares the
+selection policy and reports local configuration readiness, not remote model availability.
 
 | Capability | Built-in routes | Key |
 |---|---|---|
@@ -437,6 +458,7 @@ providers:
       provider_options:
         openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
 ```
+
 - **A model FX does not list** runs on a route of your own table, with a cap when you do not know
   its price (recipe below). On OpenRouter a new chat model needs only its id, for structured output
   and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
@@ -478,6 +500,9 @@ routes:
   and state only what differs: it takes the base's price, features, limits, pacing and
   `contract`, a member it states replaces the base's, and `contract` merges member by member.
   `extends` is not part of a route's identity, so repricing a route this way keeps every cache.
+  An optional `model_id` identifies the canonical model for unqualified selection with a
+  provider preference. It is metadata: adding it does not change the concrete route's
+  fingerprint or invalidate cached calls. Qualified routes keep the provider's native model.
   On a provider and capability FX has an adapter for, a `contract` that leaves out `adapter` gets
   the provider's default (the generic image adapter on OpenRouter and fal), and one that leaves
   out `adapter_behavior` gets the behaviour of the adapter it names. The contract's `adapter`

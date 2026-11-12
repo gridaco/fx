@@ -20,6 +20,25 @@ export function graph(): GraphDocument {
 }
 
 describe("plan boundary and graph projection", () => {
+  test("reads safe model selection provenance without changing the canvas projection", () => {
+    const input = graph();
+    const projected = canvasGraph(input);
+    const selection = {
+      model: "acme/img-a", model_source: "step" as const,
+      provider_preference: "acme", provider_source: "planning_project" as const,
+    };
+    input.instances[0].routing = { "image.generate": selection };
+    expect(parseGraph(input)).toEqual(input);
+    expect(canvasGraph(input)).toEqual(projected);
+    for (const change of [
+      { model: "" }, { model: "img-a@acme" }, { model_source: "environment" },
+      { provider_preference: "ACME" }, { provider_source: "step" }, { path: "/private/project" },
+    ]) {
+      const refused = structuredClone(input) as unknown as Record<string, any>;
+      refused.instances[0].routing["image.generate"] = { ...selection, ...change };
+      expect(() => parseGraph(refused)).toThrow("does not match");
+    }
+  });
   test("the view discriminator reads a static graph without inventing run fields", () => {
     const input = graph();
     expect(parseViewerView(input)).toEqual(input);

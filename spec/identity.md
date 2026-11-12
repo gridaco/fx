@@ -134,6 +134,11 @@ A versioned type's source digest is not part of its identity. It is recorded in 
 
 A route is `<model>@<provider>`, split at the last `@`.
 
+Authored model selectors may omit the provider and use independent preferences
+([model-selection.md](model-selection.md)). They resolve to this concrete native-model route
+before identity. Optional route-table `model_id` is selection metadata only; it does not enter the
+fingerprint below.
+
 ```
 route_fingerprint = digest({
   "kind": "fx-route-v1",

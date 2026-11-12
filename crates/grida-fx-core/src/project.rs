@@ -498,14 +498,13 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
     }
     crate::adapters::load_declared(&mut project, host)?;
     let locks = read_lock_at(&home.root)?;
-    let mut route_defaults = home.route_defaults();
-    route_defaults.extend(project.route_defaults());
-    let registry = Registry::new(
+    let mut registry = Registry::new(
         home.root.clone(),
         home.document.sources.clone(),
         locks,
-        route_defaults,
+        IndexMap::new(),
     );
+    registry.configure_routing(&home, &project);
     host.open_project(&home.root, &home.document.sources)
         .map_err(Error::from)?;
     // 6. The route catalog.

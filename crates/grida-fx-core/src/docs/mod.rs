@@ -308,9 +308,10 @@ mod tests {
             "w.yaml: budget.max_usd: -1 is less than the minimum of 0"
         );
         assert!(
-            message(step(json!({"route": "nope"}))).starts_with("w.yaml: steps.s.route: \"nope\" "),
+            message(step(json!({"route": "nope@"})))
+                .starts_with("w.yaml: steps.s.route: \"nope@\" "),
             "{}",
-            message(step(json!({"route": "nope"})))
+            message(step(json!({"route": "nope@"})))
         );
         assert!(
             message(step(json!({"on_reject": "maybe", "judges": "a"})))
