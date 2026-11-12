@@ -16,7 +16,7 @@ def generate_3d_asset(text: str = DEFAULT_TEXT) -> Workflow:
     workflow = Workflow(
         "text-to-3d",
         title="Text to 3D asset",
-        description="OpenRouter draws one reference; Tripo P2 builds its textured mesh.",
+        description="Generate one reference image; Tripo P2 builds its textured mesh.",
         inputs={"description": {"type": "string", "default": text}},
     )
     reference = workflow.step(

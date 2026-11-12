@@ -470,9 +470,10 @@ those compressed formats.
 
 The canonical [text-to-3D example](examples/text-to-3d/) connects generation to
 this inspection job: its Python `generate_3d_asset(text: str)` builder returns
-two steps, an OpenRouter reference image and a direct Tripo P2 single-image mesh.
+two steps, a reference image and a direct Tripo P2 single-image mesh.
 It keeps both as named outputs, requests a textured PBR triangle mesh, and uses
-the existing CLI/SDK builder and run interfaces. Its routes are explicit; no GG
+the existing CLI/SDK builder and run interfaces. Its image route is replaceable;
+the supplied OpenRouter configuration is incidental to the pipeline. Routes remain explicit; no GG
 credential or route is needed. The example checker plans the graph, refuses paid
 work without `--live`, and uses a synthesized stand-in to prove image-to-mesh
 wiring, model delivery and cache reuse at $0. These are provider-free checks,

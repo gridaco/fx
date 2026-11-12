@@ -278,14 +278,18 @@ and collects the same kind of long job as multiview. No second view is manufactu
 
 The canonical [text-to-3D example](https://github.com/gridaco/fx/tree/main/examples/text-to-3d)
 provides `asset.py:generate_3d_asset(text: str)`: a Python builder that returns a two-step
-workflow for the engine to plan and run. It generates a reference image with
-`openai/gpt-image-2.5-sunburst@openrouter`, then passes that image to
+workflow for the engine to plan and run. It generates a reference image, then passes it to
 `P2-20260801@tripo` with triangle output (`quad: false`), textures and PBR enabled.
-The outputs are `reference` and `model`. It needs `OPENROUTER_API_KEY` and `TRIPO_API_KEY`
-for live execution, with explicit approval and a USD ceiling; it does not use Grida Gateway.
+The outputs are `reference` and `model`. The supplied `image.generate` route is
+`openai/gpt-image-2.5-sunburst@openrouter`, using `OPENROUTER_API_KEY` alongside `TRIPO_API_KEY`.
+OpenRouter is sample configuration, not a pipeline requirement: change the project's image
+route to another compatible route, for example `gpt-image-2.5-sunburst@openai` with
+`OPENAI_API_KEY`, and re-plan for its price and cache identity. FX currently requires
+`model@provider`; it does not select a provider from available credentials. Live execution
+needs explicit approval and a USD ceiling. The supplied routes do not use Grida Gateway.
 Its self-contained stand-in synthesizes the reference and model for offline wiring and
 cache checks without keys or provider calls. Open the producing mesh step's details to
-  preview an available GLB; its producing card automatically renders a model thumbnail.
+preview an available GLB; its producing card automatically renders a model thumbnail.
 
 ## Routes and providers
 

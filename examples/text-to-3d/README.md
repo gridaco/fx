@@ -4,18 +4,18 @@
 that image. Let me inspect both results."
 
 ```text
-text description → reference image (OpenRouter) → textured model (Tripo P2)
+text description → reference image → textured model (Tripo P2)
 ```
 
 [`asset.py`](asset.py) exposes `generate_3d_asset(text: str) -> Workflow`. It describes exactly
 two engine-managed steps. Calling the builder only constructs a workflow; planning does not
 spend. The engine owns execution, pricing, cache identities and provider-job recovery.
 
-[`fx.yaml`](fx.yaml) explicitly selects `openai/gpt-image-2.5-sunburst@openrouter` for the reference
-and `P2-20260801@tripo` for the mesh. This project uses `OPENROUTER_API_KEY` and `TRIPO_API_KEY`;
-it does not route either call through Grida Gateway. Tripo receives the generated reference as
-its single-image input. The mesh requests 5,000 triangular faces (`quad: false`), textures and
-PBR materials. This is a mesh example: it does not rig the asset or generate animation.
+Tripo P2 is the model generator this example demonstrates. The reference image can come from
+another compatible image route; the workflow itself requests `image.generate` without naming
+an image provider. Tripo receives that generated reference as its single-image input. The mesh
+requests 5,000 triangular faces (`quad: false`), textures and PBR materials. This is a mesh
+example: it does not rig the asset or generate animation.
 
 ## Install and configure
 
@@ -32,7 +32,25 @@ Use the Python environment for FX's builder host. From this folder:
 export GRIDA_FX_PYTHON="$PWD/.venv/bin/python"
 ```
 
-Set `OPENROUTER_API_KEY` and `TRIPO_API_KEY` in your shell or in a local `.env`. Keep `.env`,
+The supplied [`fx.yaml`](fx.yaml) selects `openai/gpt-image-2.5-sunburst@openrouter` for the
+reference and `P2-20260801@tripo` for the mesh. OpenRouter was used for live verification
+because that credential was available; it is not a requirement of the image-to-3D pipeline.
+For example, with an OpenAI key, change only the image route:
+
+```yaml
+routes:
+  image.generate: gpt-image-2.5-sunburst@openai
+  mesh.generate: P2-20260801@tripo
+```
+
+FX currently requires a fully qualified `model@provider` route; it does not infer the provider
+from available keys. Choose a route that supports the requested image settings and re-plan
+after changing it: provider prices and cache identities differ. The estimate below is for
+the supplied OpenRouter configuration. Separating model choice from provider selection is
+tracked in [#130](https://github.com/gridaco/fx/issues/130).
+
+With the supplied configuration, set `OPENROUTER_API_KEY` and `TRIPO_API_KEY` in your shell or
+in a local `.env`; the OpenAI alternative uses `OPENAI_API_KEY` and `TRIPO_API_KEY`. Keep `.env`,
 generated artwork, run records and caches out of version control. FX reads credentials through
 its allowlisted environment loader; this example neither reads nor writes keys. See
 [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md).
