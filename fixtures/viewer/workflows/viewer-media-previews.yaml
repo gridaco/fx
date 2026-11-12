@@ -1,0 +1,52 @@
+fx: workflow/v1
+id: viewer-media-previews
+title: Media preview playground
+description: Original media synthesized locally at no cost. Dashed dependencies only order fixture preparation; the cards are separate preview cases, not media transformations.
+
+steps:
+  image:
+    title: Image
+    uses: ./nodes/media_previews.py#image
+  video:
+    title: Video
+    uses: ./nodes/media_previews.py#video
+    needs: [image]
+    with: {codec: vp9}
+  unsupported_video:
+    title: Unsupported video
+    uses: ./nodes/media_previews.py#video
+    needs: [image]
+    with: {codec: ffv1}
+  custom_poster:
+    title: Custom video poster
+    uses: ./nodes/media_previews.py#video_poster
+    needs: [image]
+    with: {codec: vp9}
+    preview: {video: video, poster: poster}
+  unsupported_poster:
+    title: Unsupported video with poster
+    uses: ./nodes/media_previews.py#video_poster
+    needs: [image]
+    with: {codec: ffv1}
+    preview: {video: video, poster: poster}
+  static_model:
+    title: Static 3D model
+    uses: ./nodes/media_previews.py#model
+    needs: [image]
+    with: {animated: false}
+  animated_model:
+    title: Animated 3D model
+    uses: ./nodes/media_previews.py#model
+    needs: [image]
+    with: {animated: true}
+
+outputs:
+  image: ${{ steps.image.outputs.image }}
+  video: ${{ steps.video.outputs.video }}
+  unsupported_video: ${{ steps.unsupported_video.outputs.video }}
+  video_with_poster: ${{ steps.custom_poster.outputs.video }}
+  video_poster: ${{ steps.custom_poster.outputs.poster }}
+  unsupported_with_poster: ${{ steps.unsupported_poster.outputs.video }}
+  unsupported_poster: ${{ steps.unsupported_poster.outputs.poster }}
+  static_model: ${{ steps.static_model.outputs.model }}
+  animated_model: ${{ steps.animated_model.outputs.model }}

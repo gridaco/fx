@@ -730,6 +730,156 @@
           "poster": "poster"
         }
       ]
+    },
+    {
+      "file": "media-previews.json",
+      "node_count": 7,
+      "edge_count": 6,
+      "requires_nodes": [
+        "image#1",
+        "video#1",
+        "unsupported_video#1",
+        "custom_poster#1",
+        "unsupported_poster#1",
+        "static_model#1",
+        "animated_model#1"
+      ],
+      "requires_ports": [
+        {
+          "id": "image#1",
+          "inputs": {},
+          "outputs": {
+            "image": "image/png"
+          },
+          "params": []
+        },
+        {
+          "id": "video#1",
+          "inputs": {},
+          "outputs": {
+            "video": "video"
+          },
+          "params": [
+            "codec"
+          ]
+        },
+        {
+          "id": "unsupported_video#1",
+          "inputs": {},
+          "outputs": {
+            "video": "video"
+          },
+          "params": [
+            "codec"
+          ]
+        },
+        {
+          "id": "custom_poster#1",
+          "inputs": {},
+          "outputs": {
+            "video": "video",
+            "poster": "image/png"
+          },
+          "params": [
+            "codec"
+          ]
+        },
+        {
+          "id": "unsupported_poster#1",
+          "inputs": {},
+          "outputs": {
+            "video": "video",
+            "poster": "image/png"
+          },
+          "params": [
+            "codec"
+          ]
+        },
+        {
+          "id": "static_model#1",
+          "inputs": {},
+          "outputs": {
+            "model": "model/gltf-binary"
+          },
+          "params": [
+            "animated"
+          ]
+        },
+        {
+          "id": "animated_model#1",
+          "inputs": {},
+          "outputs": {
+            "model": "model/gltf-binary"
+          },
+          "params": [
+            "animated"
+          ]
+        }
+      ],
+      "requires_previews": [
+        {
+          "id": "custom_poster#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "unsupported_poster#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ],
+      "pending_count": 0,
+      "preview_count": 0,
+      "requires_edges": [
+        {
+          "source": "image#1",
+          "target": "video#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "unsupported_video#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "custom_poster#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "unsupported_poster#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "static_model#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "animated_model#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        }
+      ]
     }
   ],
   "views": [
@@ -1594,6 +1744,89 @@
           "id": "native#1",
           "video": "video",
           "poster": "poster"
+        }
+      ]
+    },
+    {
+      "file": "media-previews.json",
+      "node_count": 7,
+      "edge_count": 6,
+      "requires_nodes": [
+        "image#1",
+        "video#1",
+        "unsupported_video#1",
+        "custom_poster#1",
+        "unsupported_poster#1",
+        "static_model#1",
+        "animated_model#1"
+      ],
+      "requires_previews": [
+        {
+          "id": "custom_poster#1",
+          "video": "video",
+          "poster": "poster"
+        },
+        {
+          "id": "unsupported_poster#1",
+          "video": "video",
+          "poster": "poster"
+        }
+      ],
+      "state": "succeeded",
+      "preview_count": 7,
+      "preview_kinds": {
+        "image": 1,
+        "video": 4,
+        "model": 2
+      },
+      "requires_edges": [
+        {
+          "source": "image#1",
+          "target": "video#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "unsupported_video#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "custom_poster#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "unsupported_poster#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "static_model#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
+        },
+        {
+          "source": "image#1",
+          "target": "animated_model#1",
+          "kind": "control",
+          "kinds": [
+            "needs"
+          ]
         }
       ]
     }

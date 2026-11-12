@@ -47,6 +47,7 @@ interface CaseExpectation {
   edge_count?: number;
   pending_count?: number;
   preview_count?: number;
+  preview_kinds?: Partial<Record<"image" | "video" | "model", number>>;
   state?: string;
   cache_hits?: number;
   requires_nodes?: string[];
@@ -97,6 +98,9 @@ function cases(value: unknown, section: string): asserts value is CaseExpectatio
     for (const field of ["node_count", "edge_count", "pending_count", "preview_count", "cache_hits", "root_node_count"]) {
       if (!(field in item)) continue;
       assert(typeof item[field] === "number" && Number.isInteger(item[field]) && item[field] >= 0, `${item.file}: ${field} must be a nonnegative integer`);
+    }
+    if ("preview_kinds" in item) {
+      assert(record(item.preview_kinds) && Object.entries(item.preview_kinds).every(([kind, total]) => ["image", "video", "model"].includes(kind) && typeof total === "number" && Number.isInteger(total) && total >= 0), `${item.file}: invalid media preview counts`);
     }
     if ("state" in item) assert(typeof item.state === "string", `${item.file}: state must be a string`);
     if ("legacy" in item) assert(typeof item.legacy === "boolean", `${item.file}: legacy must be a boolean`);
@@ -170,9 +174,9 @@ function outputFiles(value: unknown): string[] {
   if (Array.isArray(value.collection)) return value.collection.flatMap((entry) => Array.isArray(entry) && entry.length === 2 ? outputFiles(entry[1]) : []);
   return [];
 }
-function checkImages(view: ViewerView, graph: CanvasGraph, label: string) {
+function checkMedia(view: ViewerView, graph: CanvasGraph, label: string) {
   if (view.kind === "fx-graph-v1") {
-    assert(graph.nodes.every((node) => !node.preview), `${label}: a static plan must not show output image previews`);
+    assert(graph.nodes.every((node) => !node.preview), `${label}: a static plan must not show output media previews`);
     return;
   }
   const artifacts = new Map(view.artifacts.map((artifact) => [artifact.digest, artifact]));
@@ -196,12 +200,35 @@ function checkImages(view: ViewerView, graph: CanvasGraph, label: string) {
       assert(hasPoster ? preview.poster?.digest === posterId && preview.poster.url === poster?.url : preview.poster === undefined, `${label}/${node.id}: authored poster availability or identity changed`);
       continue;
     }
-    const eligible = [...new Set(Object.values(node.outputs).flatMap(outputFiles))].filter((digest) => {
+    const files = [...new Set(Object.values(node.outputs).flatMap(outputFiles))];
+    const eligible = files.filter((digest) => {
       const artifact = artifacts.get(digest);
       return artifact?.available && imageKinds.has(artifact.kind) && artifact.url === `/api/artifacts/${digest}`;
     });
     if (!eligible.length) {
-      assert(!projected.preview, `${label}/${node.id}: preview invented for unavailable or nonimage output`);
+      const videos = files.filter((digest) => {
+        const artifact = artifacts.get(digest);
+        return artifact?.available && /^video\/[a-z0-9][a-z0-9.+-]*$/.test(artifact.kind) && artifact.url === `/api/artifacts/${digest}`;
+      });
+      if (videos.length) {
+        const preview = projected.preview;
+        assert(preview?.kind === "video" && preview.digest === videos[0], `${label}/${node.id}: first recorded video output has no canvas preview`);
+        assert(preview.url === `/api/artifacts/${videos[0]}` && preview.count === videos.length && !preview.poster, `${label}/${node.id}: automatic video preview changed its source, count or poster`);
+        continue;
+      }
+      const models = files.filter((digest) => {
+        const artifact = artifacts.get(digest);
+        return artifact?.kind === "model/gltf-binary" && Number.isSafeInteger(artifact.size) && artifact.size >= 0;
+      });
+      const available = models.filter(digest => artifacts.get(digest)!.available && artifacts.get(digest)!.url === `/api/artifacts/${digest}`);
+      const candidates = available.length ? available : models;
+      if (candidates.length) {
+        const original = artifacts.get(candidates[0])!, preview = projected.preview;
+        assert(preview?.kind === "model" && preview.digest === candidates[0], `${label}/${node.id}: first recorded GLB output has no canvas preview`);
+        assert(preview.url === (available.length ? original.url : null) && preview.count === candidates.length && preview.size === original.size && preview.name === original.name, `${label}/${node.id}: model preview changed its recorded inventory or availability`);
+        continue;
+      }
+      assert(!projected.preview, `${label}/${node.id}: preview invented for unavailable or unsupported output`);
       continue;
     }
     const preview = projected.preview;
@@ -445,7 +472,8 @@ async function checkCase(root: string, section: "plans" | "views", expected: Cas
   count(expected.node_count, graph.nodes.length, `${label} nodes`);
   count(expected.edge_count, graph.edges.length, `${label} edges`);
   count(expected.pending_count, graph.nodes.filter((node) => node.pending).length, `${label} pending repeats`);
-  count(expected.preview_count, graph.nodes.filter((node) => node.preview).length, `${label} image previews`);
+  count(expected.preview_count, graph.nodes.filter((node) => node.preview).length, `${label} media previews`);
+  for (const [kind, total] of Object.entries(expected.preview_kinds ?? {})) count(total, graph.nodes.filter((node) => node.preview?.kind === kind).length, `${label} ${kind} previews`);
   for (const id of expected.requires_nodes ?? []) assert(graph.nodes.some((node) => node.source_id === id), `${label}: missing required instance or pending repeat ${id}`);
   for (const { id, ...preview } of expected.requires_previews ?? []) assert(JSON.stringify(sourceNodes.find((node) => node.id === id)?.preview) === JSON.stringify(preview), `${label}/${id}: authored preview metadata changed`);
   for (const state of expected.required_states ?? []) assert(graph.nodes.some((node) => node.state === state), `${label}: missing required node state ${state}`);
@@ -460,7 +488,7 @@ async function checkCase(root: string, section: "plans" | "views", expected: Cas
     assert(expected.state === undefined && expected.cache_hits === undefined, `${label}: static plans cannot assert run status or cache hits`);
     count(view.pending.length, graph.nodes.filter((node) => node.pending).length, `${label} preserved pending repeats`);
   }
-  checkImages(view, graph, label);
+  checkMedia(view, graph, label);
   checkPorts(view, graph, expected, label);
   checkLayout(graph, label);
   checkScopes(view, expected, label);

@@ -16,7 +16,9 @@
     "test:www": "bun --no-env-file run --cwd www test",
     "build:www": "bun --no-env-file run --cwd www build",
     "preview:www": "bun --no-env-file run --cwd www preview",
-    "test:viewer:model-browser": "bun --no-env-file tools/check_model_browser.mjs"
+    "test:viewer:model-browser": "bun --no-env-file tools/check_model_browser.mjs",
+    "test:viewer:media-browser": "bun --no-env-file tools/check_media_preview_browser.mjs",
+    "demo:viewer:media": "uv run --project python python tools/demo_media_previews.py"
   },
   "devDependencies": {
     "playwright-core": "1.58.2"

@@ -224,9 +224,15 @@ jobs:
       - name: Use Ubuntu's public package archive
         run: printf '%s\n' https://archive.ubuntu.com/ubuntu/ | sudo tee /etc/apt/apt-mirrors.txt
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: bun --no-env-file x playwright-core install --with-deps chromium
       - run: uv pip install --python python/.venv/bin/python -r examples/requirements-ci.txt
       - run: python/.venv/bin/python tools/check_showcase_examples.py
-      - run: uv run --locked --project python python tools/check_viewer_fixtures.py
+      - run: uv run --locked --project python python tools/check_viewer_fixtures.py --output "$RUNNER_TEMP/viewer-fixtures"
+      - name: Combined media-preview browser acceptance
+        run: >-
+          bun --no-env-file run test:viewer:media-browser
+          --run "$RUNNER_TEMP/viewer-fixtures/runs/media-previews"
+          --command "$PWD/python/src/grida/fx/_bin/grida-fx"
       - run: uv run --locked --project python python tools/check_observation.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
       - run: uv run --locked --project python python tools/check_control.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 

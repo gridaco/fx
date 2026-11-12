@@ -52,6 +52,7 @@ WORKFLOWS = {
     "nesting": "viewer-nesting",
     "nesting-failure": "viewer-nesting-failure",
     "posters": "viewer-posters",
+    "media-previews": "viewer-media-previews",
 }
 
 
@@ -229,7 +230,8 @@ def checked_run(
     return result
 
 
-def generate(output: Path) -> dict[str, Any]:
+def prepare_project(output: Path, focus: str | None = None) -> tuple[Path, dict[str, Any]]:
+    """Copy source only, with either the broad baseline or one focused case's expectations."""
     home = output / "project"
     shutil.copytree(
         SOURCE,
@@ -237,7 +239,61 @@ def generate(output: Path) -> dict[str, Any]:
         ignore=shutil.ignore_patterns(".env*", ".fx", "runs", "__pycache__", "*.pyc"),
     )
     expected = json.loads((SOURCE / "expected.json").read_text(encoding="utf-8"))
+    if focus is not None:
+        for section in ["plans", "views"]:
+            expected[section] = [
+                case for case in expected[section] if case["file"] == f"{focus}.json"
+            ]
+            expect(expected[section], f"no {section} expectation for {focus}")
     write_json(output / "expected.json", expected)
+    return home, expected
+
+
+def check_browser_contracts(output: Path) -> None:
+    subprocess.run(
+        [
+            "bun",
+            "--no-env-file",
+            "run",
+            str(ROOT / "tools" / "check_viewer_fixtures.ts"),
+            str(output),
+        ],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def generate_media_previews(output: Path) -> dict[str, Any]:
+    """Generate the combined media case alone for a short, inspectable preview session."""
+    offline()
+    home, _ = prepare_project(output, "media-previews")
+    workflow = WORKFLOWS["media-previews"]
+    planned = fx.plan(workflow, cwd=home, max_usd=0)
+    expect(planned.ok, f"{workflow}: planning problems: {planned.problems}")
+    expect(planned.estimate() == (0.0, 0.0), f"{workflow}: nonzero plan estimate")
+    write_json(output / "plans" / "media-previews.json", planned.document)
+    result = checked_run(home, workflow, output / "runs" / "media-previews")
+    validate_media_previews(result)
+    document = project_run(output / "runs" / "media-previews", output, "media-previews")
+    check_browser_contracts(output)
+    report = {
+        "kind": "fx-viewer-fixture-report-v1",
+        "provider_calls": 0,
+        "charged_usd": 0,
+        "views": {
+            "media-previews": {
+                "state": document["state"],
+                "nodes": len(document["nodes"]),
+                "available_artifacts": sum(item["available"] for item in document["artifacts"]),
+            }
+        },
+    }
+    write_json(output / "report.json", report)
+    return report
+
+
+def generate(output: Path) -> dict[str, Any]:
+    home, expected = prepare_project(output)
     for name, workflow in WORKFLOWS.items():
         planned = fx.plan(workflow, cwd=home, max_usd=0)
         expect(planned.ok, f"{workflow}: planning problems: {planned.problems}")
@@ -262,6 +318,9 @@ def generate(output: Path) -> dict[str, Any]:
     takes = checked_run(home, WORKFLOWS["takes"], output / "runs" / "takes")
     ports = checked_run(home, WORKFLOWS["ports"], output / "runs" / "ports")
     posters = checked_run(home, WORKFLOWS["posters"], output / "runs" / "posters")
+    media_previews = checked_run(
+        home, WORKFLOWS["media-previews"], output / "runs" / "media-previews"
+    )
     for missing, port in [("posters-missing", "poster"), ("posters-source-missing", "video")]:
         missing_artifact(
             output / "runs" / "posters",
@@ -306,6 +365,7 @@ def generate(output: Path) -> dict[str, Any]:
             "posters",
             "posters-missing",
             "posters-source-missing",
+            "media-previews",
         ]
     }
     validate_scenarios(output, documents, cold, cached, alternative, takes)
@@ -313,17 +373,8 @@ def generate(output: Path) -> dict[str, Any]:
     validate_dynamic_failure(dynamic_failure, documents["dynamic-failure"])
     validate_nesting(nesting, nesting_failure)
     validate_posters(posters)
-    subprocess.run(
-        [
-            "bun",
-            "--no-env-file",
-            "run",
-            str(ROOT / "tools" / "check_viewer_fixtures.ts"),
-            str(output),
-        ],
-        cwd=ROOT,
-        check=True,
-    )
+    validate_media_previews(media_previews)
+    check_browser_contracts(output)
     report = {
         "kind": "fx-viewer-fixture-report-v1",
         "provider_calls": 0,
@@ -374,6 +425,88 @@ def validate_posters(result: fx.RunResult) -> None:
                 poster.size == (96, 64) and poster.getpixel((0, 0)) == (244, 233, 205),
                 f"{name}: the authored cream poster changed",
             )
+
+
+def validate_media_previews(result: fx.RunResult) -> None:
+    """Hold the combined showcase to real images, distinct codecs, posters and GLB clips."""
+    image_ports = ["image", "video_poster", "unsupported_poster"]
+    expect(
+        len({result.outputs[name].digest for name in image_ports}) == 3,
+        "the image and two authored posters must remain visibly distinct artifacts",
+    )
+    for name in image_ports:
+        expect(result.outputs[name].kind == "image/png", f"{name}: expected a PNG image")
+        with Image.open(result.outputs[name].path) as picture:
+            expect(
+                picture.size == (320, 180) and picture.getpixel((0, 0)) == (244, 233, 205),
+                f"{name}: the original cream-backed image contract changed",
+            )
+    for name, codec, kind in [
+        ("video", "vp9", "video/webm"),
+        ("unsupported_video", "ffv1", "video/x-matroska"),
+        ("video_with_poster", "vp9", "video/webm"),
+        ("unsupported_with_poster", "ffv1", "video/x-matroska"),
+    ]:
+        original = result.outputs[name]
+        expect(original.kind == kind, f"{name}: video media type changed")
+        probe = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-count_frames",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name,width,height,nb_read_frames,r_frame_rate",
+                "-of",
+                "json",
+                str(original.path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        expect(
+            json.loads(probe.stdout)["streams"]
+            == [
+                {
+                    "codec_name": codec,
+                    "width": 320,
+                    "height": 180,
+                    "r_frame_rate": "12/1",
+                    "nb_read_frames": "48",
+                }
+            ],
+            f"{name}: expected four seconds of real {codec} video",
+        )
+    for name, clips in [("static_model", []), ("animated_model", ["Turn", "Bob"])]:
+        original = result.outputs[name]
+        data = original.path.read_bytes()
+        expect(original.kind == "model/gltf-binary", f"{name}: model media type changed")
+        expect(
+            data[:4] == b"glTF"
+            and int.from_bytes(data[4:8], "little") == 2
+            and int.from_bytes(data[8:12], "little") == len(data),
+            f"{name}: expected an intact GLB 2 container",
+        )
+        document = json.loads(data[20 : 20 + int.from_bytes(data[12:16], "little")])
+        expect(
+            len(document["meshes"]) == 1
+            and len(document["materials"]) == 1
+            and len(document["images"]) == 1
+            and "bufferView" in document["images"][0]
+            and all("uri" not in buffer for buffer in document["buffers"]),
+            f"{name}: expected textured mesh geometry with embedded resources",
+        )
+        expect(
+            [clip["name"] for clip in document.get("animations", [])] == clips,
+            f"{name}: static/animated clip scope changed",
+        )
+    expect(
+        result.outputs["static_model"].digest != result.outputs["animated_model"].digest,
+        "static and animated cards must retain their own recorded models",
+    )
 
 
 def validate_nesting(result: fx.RunResult, failure: fx.RunResult) -> None:
@@ -560,16 +693,20 @@ def main() -> int:
     parser.add_argument(
         "--output", type=Path, help="keep generated evidence in a new empty directory"
     )
+    parser.add_argument(
+        "--case", choices=["media-previews"], help="check only the combined media preview showcase"
+    )
     args = parser.parse_args()
     offline()
+    generate_selected = generate_media_previews if args.case == "media-previews" else generate
     try:
         if args.output is not None:
             destination = prepare_output(args.output)
-            report = generate(destination)
+            report = generate_selected(destination)
             print(f"check_viewer_fixtures: passed; evidence at {destination}")
         else:
             with tempfile.TemporaryDirectory(prefix="fx-viewer-fixtures-") as temporary:
-                report = generate(Path(temporary))
+                report = generate_selected(Path(temporary))
             print("check_viewer_fixtures: passed; temporary evidence removed")
         print(f"{len(report['views'])} real run views checked, provider calls 0, recorded spend $0")
         return 0

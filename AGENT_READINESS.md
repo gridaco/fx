@@ -469,6 +469,11 @@ under the viewer's actual content security policy. KTX2 and Meshopt resources
 are bundled, but the browser suite does not yet include dedicated models for
 those compressed formats.
 
+The combined [media-preview fixture](fixtures/viewer/README.md#try-all-media-previews-together)
+also places images, native and unsupported videos, authored video posters and
+static/animated GLBs in one real code-only run. Its focused launcher and browser
+check exercise the actual saved-run host; generated media stays outside Git.
+
 The canonical [text-to-3D example](examples/text-to-3d/) connects generation to
 this inspection job: its Python `generate_3d_asset(text: str)` builder returns
 two steps, a reference image and a direct Tripo P2 single-image mesh.

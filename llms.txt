@@ -737,6 +737,9 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   Model camera/playback controls never change workflow picks, identities or records. Canvas
   cards keep stills instead of one active renderer per card. Preview failure does not imply node failure or missing
   original bytes. See https://github.com/gridaco/fx/blob/main/spec/model-previews.md.
+  The provider-free [media-preview fixture](https://github.com/gridaco/fx/blob/main/fixtures/viewer/README.md#try-all-media-previews-together)
+  brings images, native/unsupported videos, custom posters and static/animated GLBs together
+  in one locally generated saved run for development and manual inspection.
 - **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
   delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
 - **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send
