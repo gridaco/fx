@@ -673,6 +673,11 @@ impl Drop for ControlServer {
 fn serve(mut stream: std::os::unix::net::UnixStream, owner: &Owner, control: &RunControl) {
     use std::io::{Read, Write};
     let started = Instant::now();
+    // BSD accepted sockets inherit the listener's nonblocking flag. This connection uses
+    // blocking I/O bounded by timeouts, so an early read must wait for the client's bytes.
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
     let mut bytes = Vec::new();
     loop {
         let remaining = TRANSPORT_TIMEOUT.saturating_sub(started.elapsed());
@@ -1277,6 +1282,56 @@ mod tests {
             1
         );
         assert!(control.admit().is_none());
+        let _ = std::fs::remove_file(pointer_path(&server.root, &server.owner.folder_digest));
+    }
+
+    #[test]
+    fn nonblocking_accepted_stream_waits_for_the_complete_request() {
+        use std::io::{Read, Write};
+        use std::net::Shutdown;
+
+        let folder = tempfile::tempdir().unwrap();
+        let (control, server) = start(folder.path(), "0123456789abcdef");
+        let owner = server.owner.clone();
+        let request = serde_json::to_vec(&Request {
+            version: 1,
+            operation: "cancel".into(),
+            folder_digest: owner.folder_digest.clone(),
+            plan: owner.plan.clone(),
+            invocation_id: owner.invocation_id.clone(),
+            owner_nonce: owner.owner_nonce.clone(),
+            token: owner.token.clone(),
+            source: "sdk".into(),
+        })
+        .unwrap();
+        let (accepted, mut client) = std::os::unix::net::UnixStream::pair().unwrap();
+        // BSD inherits the listener's nonblocking flag. Set it explicitly so Linux also
+        // exercises a server read before the client has finished writing its request.
+        accepted.set_nonblocking(true).unwrap();
+        client.set_read_timeout(Some(TRANSPORT_TIMEOUT)).unwrap();
+        client.write_all(&request[..1]).unwrap();
+        let state = control.clone();
+        let (ready, started) = std::sync::mpsc::channel();
+        let (finished, done) = std::sync::mpsc::channel();
+        let handler = std::thread::spawn(move || {
+            ready.send(()).unwrap();
+            serve(accepted, &owner, &state);
+            finished.send(()).unwrap();
+        });
+        started.recv().unwrap();
+        let returned_early = done.recv_timeout(Duration::from_millis(50)).is_ok();
+        let sent = client
+            .write_all(&request[1..])
+            .and_then(|_| client.shutdown(Shutdown::Write));
+        let mut response = Vec::new();
+        let read = client.read_to_end(&mut response);
+        handler.join().unwrap();
+        assert!(!returned_early, "the server dropped an incomplete request");
+        sent.unwrap();
+        read.unwrap();
+        let reply: Reply = serde_json::from_slice(&response).unwrap();
+        assert_eq!(reply.request_status, "accepted");
+        assert!(control.cancellation_requested());
         let _ = std::fs::remove_file(pointer_path(&server.root, &server.owner.folder_digest));
     }
 

@@ -13,7 +13,9 @@ scenario below works today, nor approval to implement every proposed capability.
 **Last source review: 2026-11-10 for provider result downloads and native video previews; 2026-10-15 for other entries.**
 Current entries were checked against the CLI,
 SDKs and specifications. The cancellation delivery includes provider-free execution evidence from
-`tools/check_control.py`; run listing and removal rest on the `runs` CLI tests, the
+`tools/check_control.py` and runtime transport tests, including a nonblocking
+connection whose request arrives after the server accepts the socket (the macOS race);
+run listing and removal rest on the `runs` CLI tests, the
 `runs-remove` and `cache-prune` conformance cases and the SDK tests; the TypeScript node host
 rests on the `@grida/fx` host tests, the engine's host tests and the TypeScript conformance
 cases; models and providers FX does not ship (AR-20) rest on the replay, adapter-host and SDK
