@@ -225,6 +225,79 @@ def item_icons_refused(home: Path) -> str:
     return "each icon is refused at $0 without a stand-in"
 
 
+TEXT_TO_3D = "asset.py:generate_3d_asset"
+
+
+def text_to_3d(home: Path) -> str:
+    arguments = {"text": "A small moss-green lantern with a literal ${{ untouched }} mark."}
+    plan = planned(TEXT_TO_3D, home, arguments=arguments)
+    expect(len(plan.document["instances"]) == 2, "text-to-3d is not two steps")
+    routes = {
+        capability: route["route"]
+        for instance in plan.document["instances"]
+        for capability, route in instance["routes"].items()
+    }
+    expect(
+        routes
+        == {
+            "image.generate": "openai/gpt-image-2.5-sunburst@openrouter",
+            "mesh.generate": "P2-20260801@tripo",
+        },
+        f"text-to-3d uses unexpected routes: {routes}",
+    )
+    spec = importlib.util.spec_from_file_location("text_to_3d_stand_in", home / "stand_in.py")
+    expect(spec is not None and spec.loader is not None, "the stand-in cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    calls: list[str] = []
+    mesh_inputs: list[str] = []
+
+    def answer(call: fx.StandInCall) -> fx.Answer:
+        calls.append(call.capability)
+        if call.capability == "image.generate":
+            expect(arguments["text"] in call.request["prompt"], "the prompt lost the description")
+        if call.capability == "mesh.generate":
+            mesh_inputs.append(call.request["image"].digest)
+        return module.answer(call)
+
+    first = finished(
+        fx.run(TEXT_TO_3D, arguments=arguments, stand_in=answer, cwd=home), "text-to-3d"
+    )
+    expect(first.stand_in, "the synthetic run is not identified as a stand-in")
+    expect(calls == ["image.generate", "mesh.generate"], f"unexpected calls: {calls}")
+    expect(set(first.outputs) == {"reference", "model"}, "the two deliverables are missing")
+    expect(first.outputs["reference"].kind == "image/png", "the reference is not PNG")
+    expect(first.outputs["model"].kind == "model/gltf-binary", "the model is not GLB")
+    expect(first.outputs["model"].read_bytes()[:4] == b"glTF", "the model is not a GLB container")
+    expect(
+        mesh_inputs == [first.outputs["reference"].digest],
+        "the model did not read its generated reference",
+    )
+    first.deliver(
+        {"reference": str(home / "out/reference.png"), "model": str(home / "out/model.glb")}
+    )
+    expect((home / "out/model.glb").is_file(), "the model was not delivered")
+    second = finished(
+        fx.run(TEXT_TO_3D, arguments=arguments, stand_in=answer, cwd=home), "cached text-to-3d"
+    )
+    expect(all(step.cache == "hit" for step in second.steps.values()), "the second run missed")
+    expect(len(calls) == 2, "a cached run asked the stand-in again")
+    expect(second.outputs["model"].digest == first.outputs["model"].digest, "the cache changed GLB")
+    return (
+        "two direct-provider steps at $0 with a stand-in, exact image handoff, delivery and cache"
+    )
+
+
+def text_to_3d_refused(home: Path) -> str:
+    run = fx.run(TEXT_TO_3D, cwd=home)
+    refused(run, "text-to-3d without live approval")
+    expect(
+        not any(event.get("event") == "budget_reserved" for event in run.events),
+        "an offline run reserved a provider attempt",
+    )
+    return "OpenRouter generation is refused at $0; Tripo is not submitted"
+
+
 def looping_parallax(home: Path) -> str:
     planned("looping-parallax", home, input_files=["inputs/harbor.yaml"])
     run = fx.run("looping-parallax", input_files=["inputs/mirror-only.yaml"], cwd=home)
@@ -420,6 +493,8 @@ CHECKS: dict[str, tuple[str, Callable[[Path], str]]] = {
     "looping-parallax:meadow-refused": ("looping-parallax", meadow_parallax_refused),
     "item-icons": ("item-icons", item_icons),
     "item-icons:refused": ("item-icons", item_icons_refused),
+    "text-to-3d": ("text-to-3d", text_to_3d),
+    "text-to-3d:refused": ("text-to-3d", text_to_3d_refused),
     "concept-gallery": ("concept-gallery", concept_gallery),
     "concept-gallery:refused": ("concept-gallery", concept_gallery_refused),
     "game-build": ("game-build", game_build),
@@ -610,7 +685,13 @@ def main(names: list[str]) -> int:
                         EXAMPLES / example,
                         home,
                         ignore=shutil.ignore_patterns(
-                            ".fx", "runs", ".venv", ".showcase-inputs", "node_modules"
+                            ".fx",
+                            "runs",
+                            ".venv",
+                            ".showcase-inputs",
+                            "node_modules",
+                            ".env",
+                            ".env.*",
                         ),
                     )
                 if (home / "package.json").is_file():

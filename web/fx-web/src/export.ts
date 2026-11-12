@@ -228,7 +228,7 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
     const preview = cardPreview(source.outputs, (id) => {
       const artifact = inventory.get(id);
       const url = artifact ? exportArtifactUrl(loaded, id) : null;
-      return artifact ? { media_type: artifact.media_type, name: artifact.name, url, ...(!url ? { unavailable_reason: "not_included" as const } : {}) } : null;
+      return artifact ? { media_type: artifact.media_type, name: artifact.name, size: artifact.size, url, ...(!url ? { unavailable_reason: "not_included" as const } : {}) } : null;
     }, source.preview);
     if (preview) node.preview = preview;
     else delete node.preview;

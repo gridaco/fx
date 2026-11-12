@@ -194,7 +194,7 @@ export class CardVideos {
   private hideTimer = 0;
   private unloadTimer = 0;
 
-  constructor(private readonly host: HTMLElement, private readonly hoverPlays: () => boolean, private readonly covered: (element: Element) => boolean) {
+  constructor(private readonly host: HTMLElement, private readonly hoverPlays: () => boolean, private readonly covered: (element: Element) => boolean, private readonly onActivate: () => void = () => {}) {
     const signal = this.abort.signal;
     // Leaving a hovered video stops it. Pressing it keeps it playing, and a press on its picture
     // turns its sound on rather than pausing it.
@@ -326,8 +326,9 @@ export class CardVideos {
 
   private play(playing: Omit<Playing, "hover">, hover = false) {
     const interaction = this.interaction(playing.preview.digest);
-    if (!playing.preview.url || interaction.control === "unavailable" || (hover && !interaction.hover) || this.covered(playing.video)) return;
+    if (!playing.preview.url || interaction.control === "unavailable" || (hover && (!this.hoverPlays() || !interaction.hover)) || this.covered(playing.video)) return;
     this.stop();
+    this.onActivate();
     window.clearTimeout(this.hideTimer);
     window.clearTimeout(this.unloadTimer);
     this.playing = { ...playing, hover };

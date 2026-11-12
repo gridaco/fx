@@ -12,6 +12,48 @@ No external assets, providers, stand-ins or live mode are needed. Every custom n
 fixture-private explicit version, so different exports in the shared module retain distinct
 identities.
 
+## Try all media previews together
+
+The focused `viewer-media-previews` workflow places seven cases in one canvas:
+
+| Card | Experience |
+|---|---|
+| Image | A locally drawn PNG |
+| Video | A native VP9/WebM clip with its automatically captured first frame |
+| Unsupported video | A valid FFV1/Matroska clip that Chromium cannot play; the node succeeds and the original remains downloadable |
+| Custom poster | A playable VP9 clip with an authored poster distinct from the video frames |
+| Unsupported + poster | The authored image stays visible when FFV1 playback is unavailable |
+| Static 3D | An automatically rendered GLB thumbnail; click anywhere to inspect, go Back, or use fullscreen |
+| Animated 3D | A GLB with two embedded clips, compact playback controls and the same in-place/fullscreen inspection |
+
+After the contributor setup and engine build, launch just this fixture:
+
+```sh
+uv run --project python python tools/demo_media_previews.py --open
+```
+
+The launcher makes a fresh verified run, prints its retained path and reopening
+command, then serves the ordinary read-only viewer until Ctrl-C. No keys, paid
+calls, downloaded media or stand-ins are involved. Pillow, FFmpeg and FFprobe are
+required. The dashed connections only sequence local fixture preparation; no
+video is transformed into a model. Browser codec support can vary; FFV1 is the
+deliberate unsupported case in the Chromium acceptance test.
+
+To retain the focused fixture at a chosen new/empty location, without opening a viewer:
+
+```sh
+uv run --project python python tools/check_viewer_fixtures.py --case media-previews --output .fx/viewer-fixtures/media-previews
+bun --no-env-file x playwright-core install chromium
+bun --no-env-file run test:viewer:media-browser --run .fx/viewer-fixtures/media-previews/runs/media-previews
+```
+
+`bun --no-env-file run demo:viewer:media --open` is the equivalent launcher shortcut.
+The browser check uses that actual saved run and engine host, rather than fabricated
+viewer records, and saves an overview under ignored `output/playwright/`.
+Playwright's Chromium is installed separately from the JavaScript dependencies.
+On Linux, use `install --with-deps chromium` to install its system dependencies too.
+Both browser checks also accept `FX_CHROMIUM_EXECUTABLE` for an existing compatible browser.
+
 ## Generate, verify, and inspect
 
 From the repository root, after the normal contributor setup and engine build:
@@ -30,8 +72,9 @@ uv run --project python python -m grida.fx inspect .fx/viewer-fixtures/demo/runs
 
 To inspect a different case, replace `cold` with `cached`, `alternative`, `failure`,
 `takes`, `running`, `missing`, `ports`, `ports-legacy`, `dynamic-failure`, `nesting`,
-`nesting-failure`, `nesting-legacy`, `posters`, `posters-missing`, or `posters-source-missing`.
-The suite produces eleven plans and sixteen run views. Viewing saved data never reruns the workflow.
+`nesting-failure`, `nesting-legacy`, `posters`, `posters-missing`, `posters-source-missing`,
+or `media-previews`. The suite produces twelve plans and seventeen run views.
+Viewing saved data never reruns the workflow.
 Each viewer stays in the foreground until Ctrl-C. The running case is a static
 recorded prefix; observation does not advance it. For an actual short running workflow:
 
@@ -143,6 +186,7 @@ holds local addresses only; portable workflow records stay unchanged. See
 | `viewer-posters.yaml` / `posters` | Two original four-frame videos: FFV1/Matroska for browser failure presentation and VP9/WebM for native playback, each with an explicit cream/coral poster distinct from the blue/green video. The checker verifies codecs, frames, descriptor recording and exact source/poster projection; actual browser codec support remains browser-dependent |
 | `posters-missing` | A copy of that real run with both placed PNG posters removed; the original videos remain available for native frame capture |
 | `posters-source-missing` | A copy with both placed video sources removed; authored PNG posters remain available while playback is inert |
+| `viewer-media-previews.yaml` / `media-previews` | One focused canvas with original PNG, native VP9, unsupported FFV1, authored posters for both video paths, and static/animated GLBs; all seven nodes succeed at $0 |
 
 JSON content includes `false`, `0`, `[]` and `null`. The image bundle contains both
 a list and a keyed collection, with repeated references to the same three files.
@@ -187,6 +231,44 @@ The recorded-prefix fixture keeps exact original event bytes through the delay's
 The missing-artifact case changes only a copied run. These two derived cases are
 explicitly different from a fresh completed invocation.
 
+## 3D artifact browser harness
+
+The focused [model generator](../../tools/make_model_fixture.mjs) synthesizes a
+self-contained GLB 2 model from original geometry, a four-color PNG checker,
+material settings, skin weights and two animation clips. It needs no modeling
+application or downloaded artwork. Its static, rig-without-clips, motion-only,
+external-resource and unsupported-extension variants exercise the inspector's
+supported scope and fallback boundaries. The
+[Draco helper](../../tools/make_draco_fixture.mjs) compresses this original
+geometry with the installed, pinned encoder so browser acceptance exercises the
+bundled decoder and its WASM worker. Generated GLBs stay outside Git.
+
+After building the viewer, run the focused browser acceptance:
+
+```sh
+bun --no-env-file run build:viewer
+bun --no-env-file x playwright-core install chromium
+bun --no-env-file run test:viewer:model-browser
+```
+
+[The checker](../../tools/check_model_browser.mjs) serves synthetic recorded run
+and plan documents with the generated model bytes. It is separate from the
+real workflow/host fixture checker above: it exercises browser rendering without
+a provider, credentials or generation. It checks actual texture pixels, original
+PBR factors and visible skin deformation as well as inline play/pause and clip
+selection, camera gestures, polling retention, exact takes, downloads and
+failures. Static models present just a frame and original-filename link;
+animated models add only the applicable compact controls. GLB cards automatically
+render their own thumbnails and expose one in-place interactive overlay without
+a sidebar or authored poster. The browser checker verifies thumbnail pixels,
+card gestures, exact takes, overlay placement, polling, Back/focus, native fullscreen
+state retention and offline loading.
+Renderer and decoder
+resources come from the built viewer, and outbound requests are refused. The
+[3D inspection contract](../../spec/model-previews.md) defines supported models,
+resource handling and the distinction between a failed preview and available
+original bytes.
+
 ## Storage and current limits
 
 Generated projects, caches, plans, runs, viewer responses and reports live under the
@@ -196,7 +278,8 @@ is no generated HTML, portable publication format or CDN dependency here.
 
 This first suite covers common topology and viewer states, not every engine feature.
 Cancellation/incomplete runs, nested repeats, explicit manual takes, very large
-graphs, 3D and paid-call retries can be added as focused cases. Existing
+graphs and paid-call retries can be added as focused cases. The focused 3D browser
+harness above is independent of these workflow cases. Existing
 reader tests own malformed records, traversal, corrupted bytes and torn tails.
 
 Known viewer limits exposed by the suite:

@@ -1029,6 +1029,56 @@ async fn rejects_remote_origin_host_and_unknown_digests() {
 }
 
 #[tokio::test]
+async fn viewer_assets_allow_local_wasm_workers_and_verified_model_blobs_only() {
+    let fixture = Fixture::new("model/gltf-binary");
+    let response = fixture
+        .app()
+        .oneshot(Fixture::request("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let policy = response.headers()[header::CONTENT_SECURITY_POLICY]
+        .to_str()
+        .unwrap();
+    assert!(policy.contains("script-src 'self' 'wasm-unsafe-eval';"));
+    assert!(policy.contains("worker-src 'self' blob:;"));
+    assert!(policy.contains("connect-src 'self' data: blob:;"));
+    assert!(!policy.contains("'unsafe-eval'"));
+    assert!(!policy.contains("https:"));
+    for (path, content_type) in [
+        (
+            "/assets/model-decoders/draco_decoder.wasm",
+            "application/wasm",
+        ),
+        (
+            "/assets/model-decoders/basis_transcoder.wasm",
+            "application/wasm",
+        ),
+        (
+            "/assets/model-decoders/draco_wasm_wrapper.js",
+            "text/javascript",
+        ),
+        (
+            "/assets/model-decoders/basis_transcoder.js",
+            "text/javascript",
+        ),
+        ("/assets/licenses.md", "text/markdown"),
+    ] {
+        let response = fixture
+            .app()
+            .oneshot(Fixture::request(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        assert_eq!(
+            response.headers()[header::CONTENT_TYPE],
+            content_type,
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn active_artifacts_are_downloads_and_missing_assets_are_not_html() {
     let fixture = Fixture::new("text/html");
     let path = format!("/api/artifacts/{}", fixture.digest);

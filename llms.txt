@@ -276,6 +276,21 @@ supports named views only. The plan refuses `image` on a route without `image_in
 Tripo uploads the source PNG, JPEG or WebP, submits its image-to-model operation,
 and collects the same kind of long job as multiview. No second view is manufactured.
 
+The canonical [text-to-3D example](https://github.com/gridaco/fx/tree/main/examples/text-to-3d)
+provides `asset.py:generate_3d_asset(text: str)`: a Python builder that returns a two-step
+workflow for the engine to plan and run. It generates a reference image, then passes it to
+`P2-20260801@tripo` with triangle output (`quad: false`), textures and PBR enabled.
+The outputs are `reference` and `model`. The supplied `image.generate` route is
+`openai/gpt-image-2.5-sunburst@openrouter`, using `OPENROUTER_API_KEY` alongside `TRIPO_API_KEY`.
+OpenRouter is sample configuration, not a pipeline requirement: change the project's image
+route to another compatible route, for example `gpt-image-2.5-sunburst@openai` with
+`OPENAI_API_KEY`, and re-plan for its price and cache identity. FX currently requires
+`model@provider`; it does not select a provider from available credentials. Live execution
+needs explicit approval and a USD ceiling. The supplied routes do not use Grida Gateway.
+Its self-contained stand-in synthesizes the reference and model for offline wiring and
+cache checks without keys or provider calls. Open the producing mesh step's details to
+preview an available GLB; its producing card automatically renders a model thumbnail.
+
 ## Routes and providers
 
 A route is `model@provider`. Pick one per capability in `fx.yaml` `routes:`, or per step with
@@ -690,6 +705,45 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   Node output/body edits still follow the existing version and lock rules. Node-type defaults,
   cross-step selectors, arbitrary URLs and callbacks are not part of this contract.
   Portable exports retain their media allowlist; omitted files cannot be previewed.
+- **3D artifact inspection.** A card with no available image or video automatically renders
+  a thumbnail of its own recorded `model/gltf-binary` output, lazily when visible. No poster or
+  workflow setting is needed. Click anywhere on the 3D poster, or activate `Inspect 3D`, to
+  open the model in place without opening the sidebar, expanding a deck or changing selection
+  or picks. Only one media preview is interactive per canvas. The top-left `Back to poster`
+  arrow restores the still and focus. A bottom-right `Full screen` toggle, or F while the
+  player is focused, enters or leaves native fullscreen when the browser supports it.
+  Fullscreen preserves camera and animation state; Escape exits fullscreen first, then
+  returns to the poster from inline inspection. Back always returns to the poster.
+  Thumbnails use a bounded browser-local cache,
+  never a generated reference image in place of the actual mesh, and require no provider calls.
+  If all 64 cached thumbnails are needed by visible cards, additional cards offer
+  `Activate to preview this model`; panning frees space for automatic capture.
+  In step or run details, a recorded `model/gltf-binary` file
+  appears in an inline frame with orbit, pan and zoom gestures; gesture help is in its tooltip.
+  Images and models in the details sidebar share a bottom-right fullscreen toggle and F
+  shortcut, where supported. Escape returns to the sidebar first; the mounted media, model
+  camera and playback remain intact. Video retains its native player's fullscreen control.
+  Embedded textures and original materials are shown under neutral lighting. An animated model
+  starts paused and offers an icon play/pause button, plus a compact native clip selector only
+  when it has multiple clips. A static model has just the frame and quiet original-filename
+  download link. Existing details retain the run/step/take context. FX does not infer or
+  generate motion; preview controls stay inline without a dialog or modal.
+  The square frame and footer reserve their final space while the file and renderer load,
+  so loading feedback and animation controls do not move surrounding details.
+  FBX, JSON glTF, standalone motion, skeleton-only files, external resource dependencies and
+  unsupported required extensions keep an explanation and the original download when available.
+  A succeeded card without a supported preview shows `Preview unavailable` in its reserved area.
+  Models are limited to 128 MiB and checked against their recorded size and digest before
+  rendering. A preview that has not loaded within 30 seconds stops with a timeout.
+  The renderer, including Meshopt, loads on the first visible model preview; Draco/KTX2
+  decoders load when needed. All come from the installed viewer, with no CDN. Inspection
+  works on cached and exported GLBs without new generation.
+  Model camera/playback controls never change workflow picks, identities or records. Canvas
+  cards keep stills instead of one active renderer per card. Preview failure does not imply node failure or missing
+  original bytes. See https://github.com/gridaco/fx/blob/main/spec/model-previews.md.
+  The provider-free [media-preview fixture](https://github.com/gridaco/fx/blob/main/fixtures/viewer/README.md#try-all-media-previews-together)
+  brings images, native/unsupported videos, custom posters and static/animated GLBs together
+  in one locally generated saved run for development and manual inspection.
 - **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
   delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
 - **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send

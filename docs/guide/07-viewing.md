@@ -289,8 +289,13 @@ stand-in run is visibly marked.
 
 Select a step to see its recorded values and artifacts. The viewer follows the record
 automatically, polling about once a second. Reloading the page also reattaches to the
-latest consistent snapshot. Images, text/JSON,
-audio, and video use generic previews; other file types can be opened in a new tab.
+latest consistent snapshot. Images, text/JSON, audio, video and supported 3D models
+use generic previews; other file types can be opened in a new tab.
+
+Images and 3D objects in the details sidebar have a bottom-right fullscreen toggle.
+Use it, or press F while the preview is focused, to inspect the same media at full
+screen; Escape returns to the sidebar without closing it. Video keeps its native
+player's fullscreen control. The model camera and animation continue across size changes.
 
 Run canvas cards also show the first available recorded image output. A step without
 one offers its first available video output to the browser's native player. Whether it
@@ -355,6 +360,53 @@ Recorded spend is what the engine booked. It is distinct from a plan estimate an
 does not imply that detailed provider usage was retained. Absent cost evidence is
 shown as unknown. The viewer does not change the source run or recover missing files
 by rerunning anything.
+
+## Inspect 3D results
+
+Completed GLB outputs receive an automatic thumbnail on their producing card,
+after image and video previews in the existing priority order. No poster file
+or extra workflow step is needed: the viewer renders the actual recorded model
+when its card is visible. Click anywhere on the 3D thumbnail, or choose **Inspect 3D**,
+to rotate and zoom in place without opening the sidebar or expanding a deck;
+the top-left Back arrow returns to the still. Use the bottom-right fullscreen toggle
+or press F while the preview is focused to inspect it at full screen, where supported.
+Your model camera and animation state stay intact when changing size. Escape leaves
+fullscreen first; from inline inspection, it returns to the still.
+Only one video or model is interactive per canvas, and model gestures preserve
+the workflow camera. Thumbnail generation and reuse never contact a provider.
+
+You can also select the producing step to inspect its recorded model output in
+details. Drag to orbit, scroll to zoom and Shift-drag to pan; the frame's tooltip
+reminds you of the gestures. Textures and material settings come from the
+original model, shown under neutral lighting. The surrounding step and take
+identify the result you are examining. Moving the model camera preserves the
+workflow canvas and execution take.
+
+Animation starts paused. Use the play/pause icon to inspect motion; a compact
+clip selector appears when the model includes more than one clip. A model
+without animation shows its frame and original-filename download link. Rigging
+does not necessarily supply clips, and the viewer does not attach a separate
+motion file to a character or retarget it. Inspection stays inline on the card or in details.
+
+The first supported format is `model/gltf-binary` (GLB 2) with embedded resources,
+up to 128 MiB. FBX, JSON glTF, skeleton-only or standalone motion files, models
+that reference external buffers or textures, unsupported required extensions,
+and browser graphics failures receive an explanation. The original file link
+remains available whenever the recorded file bytes are available, even when the
+browser cannot preview them. A preview failure does not mean the producing step
+failed. Missing or changed bytes remain explicitly unavailable.
+A succeeded card without a supported preview shows **Preview unavailable** in
+its reserved preview area.
+
+The renderer and its Meshopt decoder load on the first visible model preview;
+Draco and KTX2 decoders load when a model needs them. All are bundled with the
+installed viewer. Pages without visible model previews do not load the 3D renderer, and 3D
+inspection needs no CDN or new generation. A preview that has not loaded within
+30 seconds stops with a timeout and retains the original download. Cached
+results and included GLBs in portable exports use the same inspector. The
+preview does not change the recording, file bytes, workflow pick or cache
+identity. The
+[3D inspection contract](../../spec/model-previews.md) defines these boundaries.
 
 ## Distribution and later work
 

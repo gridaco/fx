@@ -2,6 +2,7 @@ import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from ".
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { validateViewerApiBase } from "./route";
 import { isSkipReason, type SkipReason } from "./skip";
+export { VisualPreviewController } from "./visual-preview";
 
 export interface Artifact {
   digest: string;
@@ -219,3 +220,5 @@ export * from "./outputs";
 export * from "./skip";
 export * from "./presentation";
 export * from "./viewer-page";
+export * from "./model";
+export * from "./model-view";

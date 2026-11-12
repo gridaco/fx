@@ -515,6 +515,9 @@ fn byte_range(value: &str, size: u64) -> Option<(u64, u64)> {
     }
 }
 
+// Three.js fetches embedded data-URI buffers and textures as well as verified model blobs.
+const VIEWER_ASSET_CSP: &str = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' data: blob:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+
 async fn asset(request: Request) -> Response {
     let path = request.uri().path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
@@ -524,7 +527,7 @@ async fn asset(request: Request) -> Response {
     let mime = mime_guess::from_path(path).first_or_octet_stream();
     Response::builder()
         .header(header::CONTENT_TYPE, mime.as_ref())
-        .header(header::CONTENT_SECURITY_POLICY, "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+        .header(header::CONTENT_SECURITY_POLICY, VIEWER_ASSET_CSP)
         .header(header::CACHE_CONTROL, "no-cache")
         .body(Body::from(asset.data.into_owned()))
         .expect("static viewer response headers")

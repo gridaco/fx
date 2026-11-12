@@ -176,7 +176,8 @@ strips it; a node that re-encodes a file before it is recorded makes new bytes.
 Paths contain no scheme, host, absolute path, backslash, traversal, query or
 fragment. Consumers use a chosen trusted base URL and never auto-discover
 external references in HTML, JSON, glTF or arbitrary attachment bytes. The first
-canvas previews images and offers links for other included media; HTML is never
+canvas previews images, videos and supported self-contained GLBs through the shared viewer;
+HTML is never
 executed automatically.
 
 Copy each selected artifact from the same confined, digest-verified file handle

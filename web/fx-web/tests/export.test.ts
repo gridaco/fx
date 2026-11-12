@@ -12,6 +12,13 @@ function withImage(omitted = false): RunExport {
   value.view.nodes[0].outputs = { image: { file: { digest: imageDigest, kind: "image/png", name: "preview.png", size: 20 } } };
   return value;
 }
+function withModel(omitted = false): RunExport {
+  const value = fixture();
+  value.artifacts = [{ digest: imageDigest, media_type: "model/gltf-binary", name: "asset.glb", size: 300, path: omitted ? null : `artifacts/${imageDigest}.glb`, omitted_reason: omitted ? "unplaced_input" : null }];
+  value.view.artifacts = [{ digest: imageDigest, kind: "model/gltf-binary", name: "asset.glb", size: 300, available: !omitted, url: null }];
+  value.view.nodes[0].outputs = { model: { file: { digest: imageDigest, kind: "model/gltf-binary", name: "asset.glb", size: 300 } } };
+  return value;
+}
 function loaded(manifest = fixture()): LoadedRunExport { return { manifest: parseRunExport(manifest), manifest_url: "https://assets.example.com/runs/example/manifest.json" }; }
 function hash(bytes: Uint8Array) { return new Bun.CryptoHasher("sha256").update(bytes).digest("hex"); }
 function nested(): RunExport {
@@ -25,6 +32,16 @@ function nested(): RunExport {
 }
 
 describe("portable inspection boundary", () => {
+  test("static GLB cards use their trusted export URL, recorded size and omitted-source fallback", () => {
+    expect(exportCanvasGraph(loaded(withModel())).nodes[0].preview).toEqual({
+      kind: "model", digest: imageDigest, name: "asset.glb", size: 300, count: 1,
+      url: `https://assets.example.com/runs/example/artifacts/${imageDigest}.glb`, label: "model: asset.glb",
+    });
+    expect(exportCanvasGraph(loaded(withModel(true))).nodes[0].preview).toEqual({
+      kind: "model", digest: imageDigest, name: "asset.glb", size: 300, count: 1,
+      url: null, label: "model: asset.glb", unavailable_reason: "not_included",
+    });
+  });
   test("reads the independent frozen v1 vector and permits unknown optional metadata", () => {
     const value = fixture();
     expect(parseRunExport(value)).toEqual(value);

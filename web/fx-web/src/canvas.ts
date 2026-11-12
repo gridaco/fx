@@ -7,17 +7,21 @@ import { DECK_BACK, bookmarkLayout, deckBadge, deckStack, deckTicks, expandedCol
 import { DeckSelection } from "./deck-selection";
 import { element, nodeCard, runningLabel, short } from "./card";
 import { CardVideos } from "./video";
+import { CardModels } from "./card-models";
 
 const EXPANDED_GAP = 32;
 /** A card's labelled controls do what they say (§5.7): a press on one neither pans nor opens its deck. */
-const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play";
+const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-model-open";
 
 /**
- * Whether a key event's target keeps its own keys: a text field, or a card's video player, whose
+ * Whether a key event's target keeps its own keys: a text field, or a card's media player, whose
  * Esc closes it. A page's own Esc (closing a panel, a deck) leaves such a target alone.
  */
 export function ownsKeys(target: EventTarget | null) {
-  return Boolean((target as Element | null)?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player"));
+  const element = target as Element | null;
+  // Native fullscreen gets Escape before surrounding details, decks or scope navigation.
+  return Boolean(element?.ownerDocument?.fullscreenElement?.contains(element)
+    || element?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player"));
 }
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
 const LEGIBLE_ZOOM = 11 / 13;
@@ -100,6 +104,8 @@ export class CanvasController {
   /** An open deck's bookmark, fixed at the canvas's left edge while its grid moves. */
   private readonly scrubber = document.createElement("div");
   private readonly videos: CardVideos;
+  private readonly models: CardModels;
+  private redrawing = false;
   /** The badge's text size on screen last written to `--fx-text`, within its fade. */
   private textSize = "";
   private layout: CanvasLayout = { nodes: [], edges: [], frames: [], decks: [], width: 0, height: 0 };
@@ -174,8 +180,9 @@ export class CanvasController {
       const index = this.open ? this.decks.indexOf(this.open.deck) : -1;
       if (index >= 0) this.markFront(this.decks[index], this.frontOf(index));
     }, { signal: this.abort.signal });
-    this.videos = new CardVideos(container, () => this.canHover.matches && !this.reducedMotion.matches, (element) => this.covered(element));
-    container.replaceChildren(this.svg, this.videos.player, this.toolbar, this.empty, this.deckBar, this.scrubber);
+    this.videos = new CardVideos(container, () => this.canHover.matches && !this.reducedMotion.matches && !this.models.interacting, (element) => this.covered(element), () => this.models.stop());
+    this.models = new CardModels(container, (element) => this.covered(element), () => { this.videos.stop(); this.cancelDrag(); });
+    container.replaceChildren(this.svg, this.videos.player, this.models.player, this.toolbar, this.empty, this.deckBar, this.scrubber);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
@@ -203,12 +210,14 @@ export class CanvasController {
   }
 
   setGraph(graph: CanvasGraph, scope: string | null = null, report: LayoutReport | null = null) {
+    this.redrawing = true;
     const navigating = scope !== this.scope;
     const restoringFocus = this.content.contains(document.activeElement);
     const reopen = navigating || !this.open ? null : { id: this.open.deck.placed.id, camera: this.open.camera };
     this.cancelDrag();
     this.collapse(true, !navigating);
     if (navigating) {
+      this.models.stop();
       this.cameras.set(this.scope, { viewport: this.viewport.getSnapshot(), didFit: this.didFit });
       this.scope = scope;
       const camera = this.cameras.get(scope);
@@ -240,6 +249,9 @@ export class CanvasController {
       else this.animateCamera(() => this.viewport.restore(reopen.camera));
     }
     if (navigating || restoringFocus) this.container.focus({ preventScroll: true });
+    this.models.redrawn(this.nodes);
+    this.redrawing = false;
+    this.models.recheck();
   }
 
   /** Frames nest as groups, so a frame card carries its steps and inner connections. */
@@ -284,6 +296,7 @@ export class CanvasController {
     for (const [index, node] of this.layout.nodes.entries()) {
       const group = nodeCard(node, this.id, index, signal, (scope) => this.onOpenScope(scope));
       if (node.preview?.kind === "video") this.videos.attach(group, node.id, node.preview, signal);
+      if (node.preview?.kind === "model") this.models.attach(group, node.id, node.preview, signal);
       group.addEventListener("pointerenter", () => this.highlightConnections(node.id), { signal });
       group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal });
       group.addEventListener("click", () => this.onSelect(node.id), { signal });
@@ -491,6 +504,7 @@ export class CanvasController {
     deck.cards.forEach((card, at) => card.classList.toggle("is-buried", !stack.shown[at]));
     deck.front = front;
     this.videos.recheck();
+    if (!this.redrawing) this.models.recheck();
     this.markFront(deck, front);
     // One tab stop per closed deck: its front card.
     deck.cards.forEach((card, at) => { if (card.hasAttribute("tabindex")) card.setAttribute("tabindex", at === front ? "0" : "-1"); });
@@ -602,6 +616,7 @@ export class CanvasController {
     veil.classList.add("is-shown");
     this.open = { deck, veil, camera, grid };
     this.videos.recheck();
+    if (!this.redrawing) this.models.recheck();
     this.showScrubber(index);
     this.deckBar.replaceChildren();
     const heading = document.createElement("span");
@@ -649,6 +664,7 @@ export class CanvasController {
       this.stack(open.deck, deckStack(open.deck.members.length, open.deck.front).slots);
     }
     this.videos.recheck();
+    if (!this.redrawing) this.models.recheck();
     open.veil.style.transition = `opacity ${duration}ms ease`;
     open.veil.classList.remove("is-shown");
     if (!keepCamera) this.animateCamera(() => this.viewport.restore(open.camera), duration);
@@ -756,6 +772,7 @@ export class CanvasController {
     this.content.classList.toggle("is-zoom-small", zoom * 13 < 9);
     this.content.classList.toggle("is-zoom-tiny", zoom * 13 < 6);
     this.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    if (!this.redrawing) this.models.recheck();
   }
   /** Keep every input delta, but write camera DOM only once per animation frame. */
   private scheduleViewport() {
@@ -766,6 +783,7 @@ export class CanvasController {
     });
   }
   private onWheel = (event: WheelEvent) => {
+    if ((event.target as Element).closest(".fx-canvas-model-player")) return;
     event.preventDefault();
     this.content.style.transition = "";
     const bounds = this.svg.getBoundingClientRect();
@@ -821,6 +839,6 @@ export class CanvasController {
   dispose() {
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
-    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.resize.disconnect(); this.container.replaceChildren();
+    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.models.dispose(); this.resize.disconnect(); this.container.replaceChildren();
   }
 }

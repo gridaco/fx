@@ -166,3 +166,57 @@
 /* §5.3: a member outside the closed stack rests hidden under its nearer end. */
 .fx-deck-card.is-buried { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .fx-deck-card, .fx-deck-veil { transition: none !important; } }
+.fx-model-preview { min-width: 0; color: #27272a; font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-model-viewport { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 6px; background: #f7f7f8; }
+.fx-model-viewport model-viewer { position: absolute; inset: 0; display: block; width: 100%; height: 100%; --progress-bar-height: 0px; }
+.fx-model-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; margin: 0; padding: 12px; color: #71717a; font-size: 11px; }
+.fx-model-status[hidden] { display: none; }
+.fx-model-footer { display: flex; min-width: 0; min-height: 28px; align-items: center; gap: 12px; margin-top: 6px; }
+.fx-model-controls { display: flex; min-width: 0; max-width: calc(50% - 12px); align-items: center; gap: 4px; }
+.fx-model-controls[hidden], .fx-model-controls select[hidden] { display: none; }
+.fx-model-controls button { display: inline-flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: #52525b; }
+.fx-model-controls button:hover { background: #f4f4f5; color: #27272a; }
+.fx-model-controls select { min-width: 0; max-width: 130px; height: 28px; padding: 0 2px; border: 0; background: transparent; color: #52525b; font: inherit; font-size: 11px; text-overflow: ellipsis; }
+.fx-model-download { min-width: 0; max-width: 50%; margin-left: auto; overflow: hidden; color: #71717a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.fx-model-download:hover { color: #27272a; text-decoration: underline; }
+.fx-model-preview[data-phase="error"] .fx-model-viewport { aspect-ratio: auto; }
+.fx-model-preview[data-phase="error"] .fx-model-status { position: static; justify-content: flex-start; }
+/* GLB cards keep one automatically rendered still; an explicit action opens one local player. */
+.fx-canvas-model-open { cursor: pointer; outline: none; }
+.fx-canvas-model-open circle { fill: #18181bb3; }
+.fx-canvas-model-open svg { color: #fff; pointer-events: none; }
+.fx-canvas-model-open:hover circle, .fx-canvas-model-open:focus-visible circle { fill: #18181b; }
+.fx-canvas-model-open:focus-visible circle { stroke: #2563eb; stroke-width: 2px; }
+.fx-canvas-model.is-shown .fx-canvas-model-open { visibility: hidden; }
+.fx-canvas-model.is-source-unavailable .fx-canvas-model-open { display: none; }
+.fx-canvas-model.is-preview-unavailable .fx-canvas-model-error, .fx-canvas-model.is-source-unavailable .fx-canvas-model-error { visibility: visible; }
+.fx-canvas-model-player { position: absolute; z-index: 2; overflow: hidden; border-radius: 6px; background: #f7f7f8; outline: none; }
+.fx-canvas-model-player[hidden] { display: none; }
+.fx-canvas-model-player:not(.is-shown) { opacity: 0; pointer-events: none; }
+.fx-canvas-model-player:focus-visible { box-shadow: 0 0 0 2px #2563eb; }
+.fx-canvas-model-player:fullscreen, .fx-canvas-model-player:fullscreen .fx-model-viewport { border-radius: 0; }
+.fx-canvas-model-player::backdrop { background: #f7f7f8; }
+.fx-canvas-model-mount, .fx-canvas-model-player .fx-model-preview { height: 100%; }
+.fx-canvas-model-player .fx-model-viewport { height: 100%; aspect-ratio: auto; }
+.fx-canvas-model-player .fx-model-footer { position: absolute; bottom: 4px; left: 4px; right: 32px; margin: 0; }
+.fx-canvas-model-player .fx-model-footer[hidden] { display: none; }
+.fx-canvas-model-player .fx-model-controls { max-width: 100%; border-radius: 4px; background: #fffffff0; }
+.fx-canvas-model-control, .fx-media-fullscreen { position: absolute; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: #fffffff0; color: #52525b; cursor: pointer; }
+.fx-canvas-model-control[hidden], .fx-media-fullscreen[hidden] { display: none; }
+.fx-canvas-model-control:hover, .fx-media-fullscreen:hover { background: white; color: #27272a; }
+.fx-canvas-model-control:focus-visible, .fx-media-fullscreen:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.fx-canvas-model-back { top: 4px; left: 4px; }
+.fx-canvas-model-fullscreen { bottom: 4px; right: 4px; }
+/* Every non-native visual renderer uses this shell; fullscreen keeps its existing DOM. */
+.fx-media-preview { position: relative; min-width: 0; }
+.fx-media-fullscreen { bottom: 4px; right: 4px; }
+.fx-media-content > .fx-model-preview .fx-model-footer { padding-right: 32px; }
+.fx-media-preview:fullscreen { display: flex; flex-direction: column; background: #f7f7f8; }
+.fx-media-preview::backdrop { background: #f7f7f8; }
+.fx-media-preview:fullscreen .fx-media-content { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; }
+.fx-media-preview:fullscreen .fx-media-content > * { width: 100%; }
+.fx-media-preview:fullscreen .fx-media-content > a { display: flex; height: 100%; align-items: center; justify-content: center; border: 0; border-radius: 0; padding: 0; }
+.fx-media-preview:fullscreen img { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
+.fx-media-preview:fullscreen .fx-model-preview { display: flex; height: 100%; flex-direction: column; }
+.fx-media-preview:fullscreen .fx-model-viewport { flex: 1; min-height: 0; aspect-ratio: auto; border-radius: 0; }
+.fx-media-preview:fullscreen .fx-model-footer { flex: none; margin: 0; padding: 4px 36px 4px 4px; }
