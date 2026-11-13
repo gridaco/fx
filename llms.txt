@@ -322,17 +322,21 @@ model. `grida fx doctor <target>` prepares missing used bindings through the sam
 reports configuration readiness; finding metadata is not a provider health check. Without a
 target, doctor stays local.
 
-For `image.generate` and `image.edit` on GG or OpenRouter, change the model ID and plan. If
-the local catalog has no binding, FX reads the selected provider's model metadata and admits
+For `image.generate` and `image.edit` on GG or OpenRouter, a selected binding missing from
+the local catalog triggers a lookup of that provider's model metadata. FX admits
 only what its installed adapter supports. It does not import a model, select another provider
 or download code. Existing bindings and your own route tables remain authoritative; explicit
 `--routes` disables discovery. Other capabilities and providers retain the authored-route path.
 
-Discovery admits a model only with a planning price FX can compute from documented facts.
-Absent sufficient pricing, FX refuses the binding; it does not guess a price. The existing
-authored route table remains the escape hatch: give a price you know or an explicit
-`price: {cap_usd: N}` for unknown cost. That cap is an FX reservation, not a provider-enforced
-limit or approval to spend. Live generation still needs the user's go and a run ceiling.
+Model metadata and planning allowances are separate facts. Route prices can be FX-maintained
+or project-authored estimates; exact provider quotes are not required. Automatic discovery
+currently derives an allowance only from supported flat per-output-image OpenRouter rates.
+When FX has no allowance for a compatible model, supply an authored route with an estimated
+price or `price: {cap_usd: N}` for unknown cost. Variable cost is a normal condition; provider
+changes or a new estimation service are not required. A few illustrative scenarios do not
+automatically establish a general request price. Missing pricing is never $0. A cap reserves
+against FX's budget; it is not a provider-enforced limit or approval to spend. Live generation
+still needs the user's go and a run ceiling.
 
 The optional `.fx/models/` cache holds sanitized normalized routes, never provider keys or raw
 responses. Metadata is fresh for one hour; stale metadata may be used with the network off or

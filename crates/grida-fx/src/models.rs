@@ -350,7 +350,7 @@ pub(crate) fn prepare_used(
                         ));
                         match found {
                             Ok(entry) if entry.get("price").is_none() => {
-                                Err("provider metadata does not provide a computable per-call price; supply an authored route with price or cap_usd".into())
+                                Err("FX has no planning allowance for this model; supply an authored route with price or cap_usd".into())
                             }
                             Ok(entry) => {
                                 let doc = json!({"fx":"routes/v1","routes":[entry.clone()]});

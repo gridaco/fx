@@ -94,8 +94,10 @@ adapter does not need a model-discovery service or a Grida Models catalog.
 Model discovery and pricing discovery are optional provider-integration capabilities, not
 requirements of a provider declaration. FX's route-price contract is the common planning
 boundary regardless of whether its facts come from a shipped table, a project table or a
-provider lookup. A provider's illustrative scenario is not a general rate formula; using
-an estimate requires an interpretation that applies to the route's supported requests.
+provider lookup. Prices may remain FX-maintained estimates or user-authored allowances;
+neither discovery nor execution requires a provider's request-estimation API. A provider's
+illustrative scenario is not a general rate formula; using an estimate requires an
+interpretation that applies to the route's supported requests.
 
 Provider metadata is normalized into ordinary concrete routes before the offline planner
 runs. A provider's published model facts are admitted only for the request and response
@@ -119,12 +121,21 @@ The existing build-time Models projection continues to check shipped routes. A p
 custom-resolver API is deferred; existing project route tables and adapters remain the
 extension paths.
 
-Discovery must also supply a planning price that the engine can compute from documented
-facts. Model and operation metadata alone do not establish a price. If pricing cannot be
-computed, the binding is refused; FX does not infer a rate from a model name or treat an
-unknown price as $0. An authored route with a price, or the existing explicit `price.cap_usd`
-escape hatch for unknown cost, remains independent of discovery. These are the ordinary
-route-table contracts, not another provider-preference or model-selection setting.
+The existing financial-admission contract is unchanged: an admitted route needs a planning
+allowance, not a prediction of its final bill. FX's shipped routes carry maintained allowances;
+a project may supply its own route price or the existing explicit `price.cap_usd` for unknown
+cost. Discovery may also supply a price where FX understands the published billing units;
+this implementation recognizes unconditional per-output-image USD rates on OpenRouter.
+Automatic pricing is an optimization, not a provider requirement or a promise of eventual
+exact pricing for every model.
+
+Compatible model metadata alone does not establish an allowance. If no allowance is available,
+planning reports that FX has none for the model and points to an authored route with a price
+or cap. This is a supported limitation, not a dependency on a future provider API. FX does not
+infer a rate from a model name, apply a scenario estimate to unrelated inputs or treat unknown
+cost as $0. Authored routes stay independent of discovery and replace complete entries; a
+price-only entry does not implicitly merge discovered features or contracts. These remain
+ordinary route-table contracts, with no new budgeting setting.
 
 One prepared plan admits at most 128 discovered image bindings, matching its snapshot
 reader's limit. A larger selection is refused before an unreadable snapshot can be produced.

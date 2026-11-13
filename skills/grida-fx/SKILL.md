@@ -174,11 +174,12 @@ FX 0.7 and later run models and providers its built-in table lacks; check
 
 - **A new image model on GG or OpenRouter**: change the model ID and plan. The engine
   discovers a missing binding from the already selected provider's metadata, without
-  generating or spending. Admission also needs a computable planning price. If pricing
-  cannot be computed, use the existing authored route-table price or explicitly agreed
-  `price.cap_usd` escape hatch below. Existing route tables win; explicit `--routes`
-  disables discovery. Network-off uses available cached metadata or authored routes,
-  and refuses a missing binding rather than searching another provider.
+  generating or spending. Admission needs a planning allowance, not an exact quote.
+  Automatic discovery can use supported flat per-image OpenRouter rates; otherwise supply
+  an authored route with an estimated price or explicitly agreed `price.cap_usd` below.
+  Variable cost does not require a provider estimation API. Existing route tables win;
+  explicit `--routes` disables discovery. Network-off uses available cached metadata or
+  authored routes, and refuses a missing binding rather than searching another provider.
 - **Other models FX does not list, on GG, OpenRouter or fal**, need only a route of
   the project's own table (`route_tables:`): the model id as the provider names
   it, and `price: { cap_usd: N }` when its price is unknown. Each call holds the

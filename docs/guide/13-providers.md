@@ -168,18 +168,20 @@ named another `adapter_behavior`.
 
 ## A model FX does not list
 
-For a new GG or OpenRouter image model, change the model ID and plan. If the selected
-`image.generate` or `image.edit` binding is missing locally, FX reads that provider's metadata
-before the offline planner runs. It admits the model only when the installed adapter supports
-its image interface and the metadata supports its requested features. There is no import or
-manual synchronization step, and discovery never generates an asset or authorizes spending.
+If a selected GG or OpenRouter `image.generate` or `image.edit` binding is missing locally,
+FX reads that provider's metadata before the offline planner runs. It admits the model only
+when the installed adapter supports its image interface and the metadata supports its requested
+features. There is no import or manual synchronization step, and discovery never generates
+an asset or authorizes spending.
 
-Discovery also needs a planning price FX can compute from documented facts. Metadata about
-what a model accepts is not itself pricing. If that price cannot be computed, resolution is
-refused; use the existing authored route-table path below with a known price or an explicit
-`price.cap_usd` when you accept unknown cost. The cap reserves against FX's budget; it is not
-a provider-enforced limit or approval to spend. Generation still needs the user's approval
-and a run ceiling.
+Model metadata and planning allowances are separate. FX maintains allowances for its shipped
+routes; your route table can supply an estimated price or an explicit `price.cap_usd` for
+unknown cost. Exact quotes are not required. Automatic discovery currently uses supported
+flat per-output-image OpenRouter rates; it does not turn scenario examples into a general
+pricing formula. When FX has no allowance for a compatible model, use the authored route-table
+path below. This is a normal limitation of variable cost, not a requirement for the provider
+to add an estimation API. A cap reserves against FX's budget; it is not a provider-enforced
+limit or approval to spend. Generation still needs the user's approval and a run ceiling.
 
 The optional metadata cache under `.fx/models/` is fresh for one hour. With
 `GRIDA_FX_NETWORK=off`, FX sends no lookup and may use older cached metadata. It can also use

@@ -355,7 +355,7 @@ fn gg_keyless_metadata_refuses_unpriced_binding_before_generation() {
     );
     let problems = refused["graph"]["problems"].to_string();
     assert!(
-        problems.contains("provider metadata does not provide a computable per-call price"),
+        problems.contains("FX has no planning allowance for this model"),
         "{problems}"
     );
     assert!(
@@ -407,7 +407,7 @@ fn published_prices_remain_available_from_expired_cache_offline_without_rekeying
 }
 
 #[test]
-fn uncomputable_price_refuses_until_an_authored_route_supplies_a_cap() {
+fn missing_allowance_refuses_until_an_authored_route_supplies_a_cap() {
     let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", false);
@@ -417,7 +417,7 @@ fn uncomputable_price_refuses_until_an_authored_route_supplies_a_cap() {
     );
     let problems = refused["graph"]["problems"].to_string();
     assert!(
-        problems.contains("provider metadata does not provide a computable per-call price"),
+        problems.contains("FX has no planning allowance for this model"),
         "{problems}"
     );
     assert!(
