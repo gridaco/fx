@@ -15,7 +15,7 @@ steps:
   status: 1
   mentions:
   - "stand-in  stand_in.ts#answer"
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "failed    refused#1: image.generate on img-a@acme was refused: the stand-in refuses this prompt"
   - "failed    failed#1: image.generate on img-a@acme failed: the stand-in failed this prompt"
   - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
@@ -39,7 +39,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/two, --stand-in, "stand_in.ts#answer"]
   status: 1
   mentions:
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "failed    declined#1: image.generate on img-a@acme is a paid call the stand-in declined"
   - "failed    body#1: image.generate on img-a@acme was refused: image.generate needs prompt"
 - read: count.txt

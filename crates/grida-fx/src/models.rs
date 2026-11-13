@@ -96,17 +96,18 @@ fn validate(document: &Value) -> Result<(), Error> {
                 "resolved model facts contain an invalid canonical model",
             ));
         }
-        let price = entry
-            .get("price")
-            .and_then(Value::as_object)
-            .ok_or_else(|| Error::usage("resolved model facts need a price"))?;
-        if price
-            .keys()
-            .any(|key| !["usd", "low_usd", "high_usd"].contains(&key.as_str()))
-        {
-            return Err(Error::usage(
-                "resolved model facts contain unsupported pricing members",
-            ));
+        if let Some(price) = entry.get("price") {
+            let fields = price
+                .as_object()
+                .ok_or_else(|| Error::usage("resolved model facts contain invalid pricing"))?;
+            if fields
+                .keys()
+                .any(|key| !["usd", "low_usd", "high_usd"].contains(&key.as_str()))
+            {
+                return Err(Error::usage(
+                    "resolved model facts contain unsupported pricing members",
+                ));
+            }
         }
         if let Some(contract) = entry.get("contract") {
             if contract.as_object().is_none_or(|fields| {
@@ -349,9 +350,6 @@ pub(crate) fn prepare_used(
                             setup, capability, &model, &provider,
                         ));
                         match found {
-                            Ok(entry) if entry.get("price").is_none() => {
-                                Err("FX has no planning allowance for this model; supply an authored route with price or cap_usd".into())
-                            }
                             Ok(entry) => {
                                 let doc = json!({"fx":"routes/v1","routes":[entry.clone()]});
                                 validate(&doc)?;

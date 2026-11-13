@@ -222,16 +222,25 @@ impl Record {
                 "The run plan has no readable document kind.",
             )
         })?;
-        if kind != "fx-graph-v1" {
+        if !matches!(kind, "fx-graph-v1" | "fx-graph-v2") {
             return Err(ObservationError::new(
                 "unsupported_version",
                 "The run plan version is unsupported.",
             ));
         }
-        validate(Schema::Graph, &plan, "plan").map_err(|_| {
+        validate(
+            if kind == "fx-graph-v2" {
+                Schema::GraphV2
+            } else {
+                Schema::Graph
+            },
+            &plan,
+            "plan",
+        )
+        .map_err(|_| {
             ObservationError::new(
                 "invalid_record",
-                "The run plan does not conform to fx-graph-v1.",
+                "The run plan does not conform to its graph schema.",
             )
         })?;
         let plan_digest = plan

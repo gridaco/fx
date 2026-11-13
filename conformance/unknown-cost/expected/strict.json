@@ -1,0 +1,231 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": null,
+  "known_high_usd": 0.12,
+  "known_low_usd": 0.12,
+  "low_usd": null,
+  "unpriced_calls": 3
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "unknown#1",
+   "identity": "842dbf02abb2f736a93ba1f8bb4fea8e4c2fea6209c8fea4aac5ec11a49fc1a5",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "unknown",
+   "phase": 1,
+   "price": {
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "4d41b81c56215efdd18574eab8e2b704a8ecc86af08d569f55cd29973c4e7ed4",
+     "route": "img-a@acme"
+    }
+   },
+   "state": "planned",
+   "step": "unknown",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a paper lantern",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "estimated#1",
+   "identity": "eb965d1fd66331084d95ba5a24e64f46e731138d8a05aac417ff2ef1d8823411",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "estimated",
+   "phase": 1,
+   "price": {
+    "high_usd": 0.12,
+    "low_usd": 0.12
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "42a60906bc85d849c8c0dbb7e0d37bd710488aec649a78a580b6fcd26cbd56f9",
+     "route": "img-b@acme"
+    }
+   },
+   "state": "planned",
+   "step": "estimated",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a folded kite",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "allowance#1",
+   "identity": "63345c95c689d4556ecd36e3d57fe22f7174eb1625624f021912747eaf57a727",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "allowance",
+   "phase": 1,
+   "price": {
+    "capped": true,
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "10e15ff461893b35fac78130e6f83595f4bd6be06dae5897c1e94e4e50adc5f4",
+     "route": "img-c@acme"
+    }
+   },
+   "state": "planned",
+   "step": "allowance",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a wooden boat",
+    "vars": {}
+   }
+  },
+  {
+   "bindings": [],
+   "id": "reset#1",
+   "identity": "7059ec106202e2af2b72e8d98f1e21ddc848906d8775f20e799d667bec3904ca",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "reset",
+   "phase": 1,
+   "price": {
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
+   },
+   "reads": [],
+   "routes": {
+    "image.generate": {
+     "fingerprint": "25f2595b1d3f755eefc5025ee9df27bdbed5c3b777a134ef6727a45c475d9697",
+     "route": "img-d@acme"
+    }
+   },
+   "state": "planned",
+   "step": "reset",
+   "take": [
+    1
+   ],
+   "type": "fx/image.generate@1.1",
+   "uses": "fx/image.generate@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "background": "auto",
+    "prompt": "a ceramic bowl",
+    "vars": {}
+   }
+  }
+ ],
+ "kind": "fx-graph-v2",
+ "pending": [],
+ "problems": [
+  {
+   "message": "image.generate on img-a@acme has no cost estimate; supply an applicable route price or omit --require-estimates",
+   "where": "unknown"
+  },
+  {
+   "message": "image.generate on img-c@acme has no cost estimate; supply an applicable route price or omit --require-estimates",
+   "where": "allowance"
+  },
+  {
+   "message": "image.generate on img-d@acme has no cost estimate; supply an applicable route price or omit --require-estimates",
+   "where": "reset"
+  }
+ ],
+ "scopes": [],
+ "types": {
+  "fx/image.generate@1": {
+   "identity": "fx/image.generate@1.1",
+   "ports": {
+    "inputs": {
+     "references": "image[]?"
+    },
+    "outputs": {
+     "image": "image/png"
+    },
+    "params": {
+     "background": {
+      "default": "auto",
+      "enum": [
+       "opaque",
+       "transparent",
+       "auto"
+      ]
+     },
+     "prompt": {
+      "type": "string",
+      "x-fx-template": true
+     },
+     "provider_options": {
+      "type": "object",
+      "x-fx-optional": true
+     },
+     "size": {
+      "type": "string",
+      "x-fx-optional": true
+     },
+     "vars": {
+      "default": {},
+      "type": "object"
+     }
+    }
+   }
+  }
+ },
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Optional cost forecasts"
+ }
+}

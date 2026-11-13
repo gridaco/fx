@@ -16,7 +16,7 @@ steps:
   status: 1
   mentions:
   - "stand-in  stand_in.ts#answer"
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - 'failed    garbled#1: agent.turn on llm-a@acme failed: the reply is not {"text", "tool_calls"}: text is not a string'
   - 'failed    wrong#1: structured.generate on llm-a@acme failed: height: "three" is not of type "integer"'
 - read: count.txt

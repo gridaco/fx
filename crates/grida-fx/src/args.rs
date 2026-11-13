@@ -33,7 +33,8 @@ const VALUE_OPTIONS: [&str; 5] = [
     "--resolved-models",
 ];
 /// Flags of `plan` alone.
-const PLAN_FLAGS: [&str; 6] = [
+const PLAN_FLAGS: [&str; 7] = [
+    "--require-estimates",
     "--prepared",
     "--check",
     "--json",
@@ -51,7 +52,13 @@ const RUN_VALUE_OPTIONS: [&str; 6] = [
     "--resume",
 ];
 /// Flags of `run` alone.
-const RUN_FLAGS: [&str; 4] = ["--live", "--no-view", "--open", "--standalone"];
+const RUN_FLAGS: [&str; 5] = [
+    "--live",
+    "--no-view",
+    "--open",
+    "--standalone",
+    "--require-estimates",
+];
 /// Options of `view` alone that take a value.
 const VIEW_VALUE_OPTIONS: [&str; 3] = ["--run", "--plan", "--port"];
 /// Flags of `view` alone.
@@ -100,7 +107,10 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
                     for_clap.push(value.clone());
                 }
             }
-        } else if own_flags.contains(&text) || HELP_FLAGS.contains(&text) {
+        } else if own_flags.contains(&text)
+            || (verb != "view" && text == "--require-estimates")
+            || HELP_FLAGS.contains(&text)
+        {
             for_clap.push(argument.clone());
         } else if !target_seen && !text.starts_with('-') {
             target_seen = true;

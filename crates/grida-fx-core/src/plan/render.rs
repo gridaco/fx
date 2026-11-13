@@ -7,7 +7,7 @@
 //! phase {n}   {steps} steps   {calls}   {money}[   then: {pending, ", "}]
 //! phase {n}   {pending, ", "}   ≤ ${high}   priced exactly when its list exists
 //! cached    {cached} of {known} known steps
-//! estimate  {money}[   ceiling ${c}][   ⚠ the worst case exceeds the ceiling; the run stops before crossing it]
+//! estimate  {money}[   ceiling ${c}][   ⚠ the estimate exceeds the ceiling; calls require available budget]
 //! note      {warning}
 //! refused   {where}: {message}
 //! ```
@@ -100,13 +100,18 @@ fn lay_out(summary: &Summary<'_>) -> String {
     ));
     let mut estimate = format!(
         "estimate  {}",
-        money_range(summary.estimate.low, summary.estimate.high)
+        forecast_money(
+            summary.estimate.low,
+            summary.estimate.high,
+            summary.estimate.unpriced_calls
+        )
     );
     if let Some(ceiling) = summary.ceiling {
         estimate.push_str(&format!("   ceiling {}", dollars(ceiling)));
-        if summary.billed && summary.estimate.high > ceiling {
+        if summary.billed && summary.estimate.unpriced_calls == 0 && summary.estimate.high > ceiling
+        {
             estimate.push_str(&format!(
-                "   {WARNING} the worst case exceeds the ceiling; the run stops before crossing it"
+                "   {WARNING} the estimate exceeds the ceiling; calls require available budget"
             ));
         }
     }
@@ -122,12 +127,21 @@ fn lay_out(summary: &Summary<'_>) -> String {
 
 fn phase_line(phase: &PhaseSummary) -> String {
     if phase.steps == 0 && !phase.pending.is_empty() {
-        return format!(
-            "phase {}   {}   {AT_MOST} {}   priced exactly when its list exists",
-            phase.phase,
-            phase.pending.join(", "),
-            dollars(phase.high)
-        );
+        return if phase.unpriced_calls == 0 {
+            format!(
+                "phase {}   {}   {AT_MOST} {}   priced exactly when its list exists",
+                phase.phase,
+                phase.pending.join(", "),
+                dollars(phase.high)
+            )
+        } else {
+            format!(
+                "phase {}   {}   {}",
+                phase.phase,
+                phase.pending.join(", "),
+                forecast_money(phase.low, phase.high, phase.unpriced_calls)
+            )
+        };
     }
     let calls = if phase.calls_low == phase.calls_high {
         format!("{} provider calls", phase.calls_low)
@@ -146,8 +160,22 @@ fn phase_line(phase: &PhaseSummary) -> String {
         "phase {}   {} steps   {calls}   {}{then}",
         phase.phase,
         phase.steps,
-        money_range(phase.low, phase.high)
+        forecast_money(phase.low, phase.high, phase.unpriced_calls)
     )
+}
+
+fn forecast_money(low: Usd, high: Usd, unpriced_calls: u64) -> String {
+    if unpriced_calls == 0 {
+        return money_range(low, high);
+    }
+    if high == Usd::ZERO {
+        format!("unknown ({unpriced_calls} unpriced calls)")
+    } else {
+        format!(
+            "{} estimated + {unpriced_calls} unpriced calls",
+            money_range(low, high)
+        )
+    }
 }
 
 /// `$lo`, or `$lo – $hi` when the ends differ. Equality is decided on the amounts, before
@@ -188,6 +216,7 @@ mod tests {
             calls_high: calls.1,
             low: Usd(money.0),
             high: Usd(money.1),
+            unpriced_calls: 0,
             pending: pending.iter().map(|p| p.to_string()).collect(),
         }
     }
@@ -208,6 +237,7 @@ mod tests {
             estimate: Estimate {
                 low: Usd(estimate.0),
                 high: Usd(estimate.1),
+                unpriced_calls: 0,
             },
             ceiling: ceiling.map(Usd),
             billed: true,
@@ -327,7 +357,7 @@ mod tests {
             "case  ·  1 phase\n\
              phase 1   2 steps   1 provider calls   $0.01 – $0.04\n\
              cached    0 of 1 known steps\n\
-             estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the worst case exceeds the ceiling; the run stops before crossing it"
+             estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the estimate exceeds the ceiling; calls require available budget"
         );
     }
 

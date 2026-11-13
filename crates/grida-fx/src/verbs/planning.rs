@@ -54,7 +54,11 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             } else {
                 print_line(&render::render(&plan, &planner));
             }
-            let mut status = if args.check { refused } else { 0 };
+            let mut status = if args.check || args.require_estimates {
+                refused
+            } else {
+                0
+            };
             if args.expect_cached
                 && let Some(line) = not_cached(&plan)
             {
@@ -141,7 +145,10 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
     )?;
     let plan = crate::engine::plan(&engine, &mut planner, &mut host);
     crate::engine::shutdown(&runtime, &engine);
-    let plan = plan?;
+    let mut plan = plan?;
+    if args.require_estimates {
+        plan.require_estimates();
+    }
     Ok((plan, planner, resolved_models))
 }
 
@@ -291,6 +298,9 @@ mod tests {
                 waiting_on: BTreeSet::new(),
                 per_instance_low: Usd(0),
                 per_instance_high: Usd(0),
+                per_instance_known_high: Usd(0),
+                per_instance_unpriced_calls: 0,
+                per_instance_unknown_calls: 0,
                 phase: 2,
             });
         }

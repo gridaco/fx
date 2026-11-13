@@ -1779,7 +1779,7 @@ fn integrated_plan_text_of_tiered_price() {
     );
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(stdout(&output).ends_with(
-        "estimate  $2.61 – $8.36   ceiling $1.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it\n"
+        "estimate  $2.61 – $8.36   ceiling $1.00   ⚠ the estimate exceeds the ceiling; calls require available budget\n"
     ));
 }
 
@@ -2534,7 +2534,7 @@ fn integrated_inspect_of_a_hand_written_run() {
     let (folder, digest) = hand_made_run(project.path(), "runs/case/one");
     let expected = "case  ·  one\n\
                     state     failed   2 steps: 1 failed, 1 succeeded\n\
-                    spent     $0.04\n\
+                    booked    $0.04\n\
                     failed    other#1: refused on purpose\n";
     for given in ["runs/case/one", "case"] {
         let output = grida_fx(project.path(), &["inspect", given]);
@@ -2890,7 +2890,7 @@ fn integrated_a_live_call_without_its_key_is_refused_for_nothing() {
     assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
     let text = stdout(&output);
     assert!(
-        text.contains("\nresult    failed   spent $0.00\n"),
+        text.contains("\nresult    failed   booked $0.00\n"),
         "{text}"
     );
     // Refused before sending (capability_refused), so settled at $0.
@@ -2935,7 +2935,7 @@ fn integrated_a_live_call_with_the_network_off_sends_nothing() {
     assert_no_key(&output);
     let text = stdout(&output);
     assert!(
-        text.contains("\nresult    failed   spent $0.00\n"),
+        text.contains("\nresult    failed   booked $0.00\n"),
         "{text}"
     );
     let failed = text
@@ -3035,7 +3035,7 @@ fn integrated_run_replays_a_recorded_call_and_delivers_it() {
     let text = stdout(&output);
     assert!(
         text.ends_with(
-            "run       runs/one\nresult    ok   spent $0.00\ndelivered out/lantern.png\n"
+            "run       runs/one\nresult    ok   booked $0.00\ndelivered out/lantern.png\n"
         ),
         "{text}"
     );
@@ -3171,7 +3171,7 @@ fn integrated_run_project_end_to_end() {
     ];
     let output = grida_fx_with_python(project.path(), &python, &run);
     assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
-    assert!(stdout(&output).ends_with("run       runs/one\nresult    ok   spent $0.00\n"));
+    assert!(stdout(&output).ends_with("run       runs/one\nresult    ok   booked $0.00\n"));
     assert_eq!(
         std::fs::read_to_string(project.path().join("runs/one/outputs/all.txt")).unwrap(),
         "ada=ADA|bo=BO"
@@ -3510,7 +3510,7 @@ fn integrated_a_stand_in_on_standard_input_answers_the_run() {
     );
     let text = stdout(&output);
     assert!(text.contains("run       runs/one\nstand-in  -\n"), "{text}");
-    assert!(text.contains("result    ok   spent $0.00"), "{text}");
+    assert!(text.contains("result    ok   booked $0.00"), "{text}");
     // Kept apart: the stand-in store has the answer, the store has nothing.
     let store = project.path().join(".fx/cache");
     assert!(store.join("stand-in/calls").is_dir());

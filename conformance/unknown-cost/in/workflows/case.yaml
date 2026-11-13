@@ -1,0 +1,19 @@
+fx: workflow/v1
+id: case
+title: Optional cost forecasts
+steps:
+  unknown:
+    uses: fx/image.generate@1
+    with: {prompt: a paper lantern}
+  estimated:
+    uses: fx/image.generate@1
+    route: img-b@acme
+    with: {prompt: a folded kite}
+  allowance:
+    uses: fx/image.generate@1
+    route: img-c@acme
+    with: {prompt: a wooden boat}
+  reset:
+    uses: fx/image.generate@1
+    route: img-d@acme
+    with: {prompt: a ceramic bowl}

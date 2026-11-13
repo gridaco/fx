@@ -35,6 +35,9 @@
 //!   reports on each step that binds it. The core knows FX's adapters by these tables alone; the
 //!   providers crate's tests hold them to every adapter it registers.
 //!
+//! Pricing is optional: omission means unknown (or inherits `extends`), and explicit null
+//! clears an inherited price. Unknown and capped routes have no cost forecast; their numeric
+//! fields are reservation bookkeeping only, never a reported bill.
 //! Prices are read in micro-dollars ([`Usd`]); an amount with more than 6 decimal places is
 //! refused (identity.md §12), judged on the number's JCS text (`1e-7 has more than 6 decimal
 //! places`). A capped route's price is `cap_usd` alone: per call, $0 to the cap, and
@@ -90,9 +93,30 @@ pub struct RoutePrice {
     /// and untiered. Each attempt holds the cap and is charged what the provider reports, else the
     /// cap (spec/adapters.md §5).
     pub capped: bool,
+    /// No forecast or per-call allowance was supplied.
+    pub unknown: bool,
 }
 
 impl RoutePrice {
+    /// An executable route with no pricing information.
+    pub fn unknown() -> Self {
+        Self {
+            low: Usd::ZERO,
+            high: Usd::ZERO,
+            unit: PriceUnit::Call,
+            max_units: None,
+            by: None,
+            tiers: IndexMap::new(),
+            capped: false,
+            unknown: true,
+        }
+    }
+
+    /// Whether a cost forecast exists, independently of an explicit allowance.
+    pub fn has_forecast(&self) -> bool {
+        !self.unknown && !self.capped
+    }
+
     /// The low and high price of one call: the tier's range when `tier` names one, else the whole
     /// range; per call as is; per unit, `high = hi × min(known, max_units) / div` and
     /// `low = lo × units / div` when units are known (not capped), else 0.
@@ -519,6 +543,17 @@ pub struct RouteTable {
 }
 
 impl RouteTable {
+    /// Applies billing facts supplied by the installed adapter registry before expansion.
+    /// Only a trusted adapter can identify plan billing. Authored numeric prices and caps
+    /// retain their existing behavior; omitted pricing on these routes is known USD zero.
+    pub fn apply_plan_billing(&mut self, providers: &BTreeSet<String>) {
+        for route in self.entries.values_mut() {
+            if route.price.unknown && providers.contains(&route.provider) {
+                route.price.unknown = false;
+            }
+        }
+    }
+
     pub fn new() -> RouteTable {
         RouteTable::default()
     }
@@ -784,9 +819,10 @@ fn parse_route(
         Some(_) => return Err(format!("{at}.model_id: not text")),
     };
     let price = match (entry.get("price"), &base) {
+        (Some(Value::Null), _) => RoutePrice::unknown(),
         (Some(price), _) => parse_price(price, &format!("{at}.price"))?,
         (None, Some(base)) => base.price.clone(),
-        (None, None) => return Err(format!("{at}.price: missing")),
+        (None, None) => RoutePrice::unknown(),
     };
     let features = match entry.get("features") {
         None => base
@@ -930,6 +966,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
             by: None,
             tiers: IndexMap::new(),
             capped: true,
+            unknown: false,
         });
     }
     // An empty price was $0 up to 0.6.1; a route with no known price is capped instead.
@@ -971,6 +1008,7 @@ fn parse_price(price: &Value, at: &str) -> std::result::Result<RoutePrice, Strin
         by,
         tiers,
         capped: false,
+        unknown: false,
     })
 }
 
@@ -994,6 +1032,49 @@ mod tests {
 
     fn micros(pair: (Usd, Usd)) -> (i64, i64) {
         (pair.0.0, pair.1.0)
+    }
+
+    #[test]
+    fn unknown_pricing_is_executable_metadata_and_does_not_rekey_the_route() {
+        let unpriced = table(json!([{"capability":"c", "route":"m@p"}])).unwrap();
+        let priced =
+            table(json!([{"capability":"c", "route":"m@p", "price":{"usd":0.04}}])).unwrap();
+        assert!(unpriced.entries[0].price.unknown);
+        assert_eq!(
+            unpriced.entries[0].fingerprint(),
+            priced.entries[0].fingerprint()
+        );
+        let reset = table(json!([
+            {"capability":"c", "route":"m@p", "price":{"usd":0.04}},
+            {"capability":"c", "route":"next@p", "extends":"m@p", "price":null}
+        ]))
+        .unwrap();
+        assert!(reset.entries[1].price.unknown);
+        assert!(!priced.entries[0].price.unknown);
+    }
+
+    #[test]
+    fn adapter_supplied_plan_billing_normalizes_only_omitted_prices() {
+        let mut routes = table(json!([
+            {"capability":"c", "route":"unknown@plan_provider"},
+            {"capability":"c", "route":"priced@plan_provider", "price":{"usd":0.04}},
+            {"capability":"c", "route":"capped@plan_provider", "price":{"cap_usd":1}},
+            {"capability":"c", "route":"unknown@cash_provider"}
+        ]))
+        .unwrap();
+        let identity = routes.entries[0].fingerprint();
+        routes.apply_plan_billing(&BTreeSet::new());
+        assert!(
+            routes.entries[0].price.unknown,
+            "route metadata alone cannot claim plan billing"
+        );
+        routes.apply_plan_billing(&BTreeSet::from(["plan_provider".into()]));
+        assert!(!routes.entries[0].price.unknown);
+        assert_eq!(routes.entries[0].price.high, Usd::ZERO);
+        assert_eq!(routes.entries[0].fingerprint(), identity);
+        assert_eq!(routes.entries[1].price.high, Usd(40_000));
+        assert!(routes.entries[2].price.capped);
+        assert!(routes.entries[3].price.unknown);
     }
 
     #[test]
@@ -1134,6 +1215,7 @@ mod tests {
                 by: None,
                 tiers: IndexMap::new(),
                 capped: true,
+                unknown: false,
             }
         );
         assert_eq!(
@@ -1906,10 +1988,13 @@ mod tests {
             );
             assert!(route.price.tiers.is_empty() && route.price.by.is_none());
         }
-        // Without a base, an entry names its price.
-        assert_eq!(
-            table(json!([{"capability": "image.generate", "route": "img-a@gg"}])).unwrap_err(),
-            "routes.0.price: missing"
+        // Without pricing metadata, a compatible route has an unknown forecast.
+        assert!(
+            table(json!([{"capability": "image.generate", "route": "img-a@gg"}]))
+                .unwrap()
+                .entries[0]
+                .price
+                .unknown
         );
         // `extends` is not part of the fingerprint: stating the same members is the same route.
         let stated = read(json!([

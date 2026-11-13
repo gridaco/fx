@@ -135,7 +135,7 @@ export function parseViewerEntry(value: unknown, route: ViewerRoute): ViewerEntr
     return parseServiceIndex(value);
   }
   const view = parseViewerView(value, route.api_base);
-  if ((route.kind === "plan" && view.kind !== "fx-graph-v1")
+  if ((route.kind === "plan" && view.kind === "fx-viewer-run-v1")
     || (route.kind === "run" && view.kind !== "fx-viewer-run-v1")) throw new Error("The server returned a different kind of workflow entry.");
   return view;
 }

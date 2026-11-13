@@ -565,7 +565,10 @@ def check_expected_graphs(gate: Gate) -> None:
             except digest.RefusedInput as error:
                 gate.result("h", rel(path), [str(error)])
                 continue
-            if not isinstance(document, dict) or document.get("kind") != "fx-graph-v1":
+            if not isinstance(document, dict) or document.get("kind") not in (
+                "fx-graph-v1",
+                "fx-graph-v2",
+            ):
                 continue
             found += 1
             routes = _routes_for(case_dir, path.name)

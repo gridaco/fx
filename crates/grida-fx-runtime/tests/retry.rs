@@ -311,6 +311,7 @@ impl Rig {
             control: None,
             call: request(capability),
             hold: HOLD,
+            unknown: false,
             scopes: &self.scopes,
             hold_name: &*self.namer,
             limit: Some(2),

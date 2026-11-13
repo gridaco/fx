@@ -199,6 +199,7 @@ impl Rig {
             control: None,
             call,
             hold,
+            unknown: false,
             scopes: &self.scopes,
             hold_name: &*self.namer,
             limit: None,

@@ -45,6 +45,7 @@ fn img_a(contract: Value) -> Route {
             by: None,
             tiers: IndexMap::new(),
             capped: false,
+            unknown: false,
         },
         features: Default::default(),
         concurrency: None,

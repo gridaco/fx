@@ -1368,8 +1368,8 @@ class GraphCheck:
         if not isinstance(graph, dict):
             self.fail("the graph is not a JSON object")
             return
-        if graph.get("kind") != "fx-graph-v1":
-            self.fail(f"kind is {graph.get('kind')!r}, expected 'fx-graph-v1'")
+        if graph.get("kind") not in ("fx-graph-v1", "fx-graph-v2"):
+            self.fail(f"kind is {graph.get('kind')!r}, expected 'fx-graph-v1' or 'fx-graph-v2'")
         has_problems = bool(graph.get("problems"))
         instances = graph.get("instances")
         if not isinstance(instances, list):

@@ -32,7 +32,7 @@ steps:
   - "estimate  $0.01 – $0.04   ceiling $0.01\n"
   - "run       runs/one"
   - "stand-in  stand_in.py#answer"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: count.txt
   save: count.txt
 - read: asked.json
@@ -47,7 +47,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
   mentions:
   - "stand-in  stand_in.py#answer"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
   read: runs/one/plan.json
   save: plan-one.json
   json: true
@@ -58,7 +58,7 @@ steps:
   jsonl: true
 - argv: [run, case, --routes, routes.yaml, --run, runs/two, --deliver, image=delivered.png, --stand-in, "stand_in.py#answer"]
   mentions:
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
   - "delivered delivered.png"
 - read: count.txt
   save: count.txt
@@ -67,7 +67,7 @@ steps:
   jsonl: true
 - argv: [run, case, --routes, routes.yaml, --run, runs/other, --mood, stormy, --stand-in, "stand_in.py#answer"]
   mentions:
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
   absent:
   - .fx/cache/files
   - .fx/cache/results
@@ -82,7 +82,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/plain, --max-usd, "0.01"]
   status: 1
   mentions:
-  - "estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the worst case exceeds the ceiling"
+  - "estimate  $0.01 – $0.04   ceiling $0.01   ⚠ the estimate exceeds the ceiling"
   - "failed    draw#1: image.generate on img-a@acme is a paid call; run with --live"
   read: runs/plain/plan.json
   save: plan-plain.json

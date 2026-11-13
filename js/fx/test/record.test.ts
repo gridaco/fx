@@ -65,6 +65,16 @@ function fake() {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("saved run observation", () => {
+  test("recorded v2 forecasts remain unknown when attaching to an existing run", async () => {
+    const engine = fake();
+    try {
+      const record = await loadRun("case", engine.options);
+      const expected = { ...snapshot(), plan: { kind: "fx-graph-v2", estimate: { low_usd: null, high_usd: null, known_low_usd: 0, known_high_usd: 0, unpriced_calls: 1 } } };
+      engine.reply({ snapshot: expected });
+      expect(await record.snapshot() as unknown).toEqual(expected);
+    } finally { engine.cleanup(); }
+  }, SLOW);
+
   test("preserves structured skip causes in observation documents", async () => {
     const engine = fake();
     try {

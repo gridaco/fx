@@ -7,7 +7,7 @@
 # `image.generate` call, not two.
 steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one]
-  mentions: ["result    ok   spent $0.00"]
+  mentions: ["result    ok   booked $0.00"]
 - read: runs/one/events.jsonl
   save: events.json
   jsonl: true

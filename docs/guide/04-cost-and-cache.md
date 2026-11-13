@@ -38,7 +38,7 @@ concept-gallery  ·  2 phases
 phase 1   9 steps   3–5 provider calls   $0.09 – $4.80
 phase 2   entity (up to 8)   ≤ $23.60   priced exactly when its list exists
 cached    0 of 1 known steps
-estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $0.09 – $28.40   ceiling $12.00   ⚠ the estimate exceeds the ceiling; calls require available budget
 ```
 
 How that is reckoned, with the allowances of FX's built-in routes (the writer model $0.02 –
@@ -53,16 +53,16 @@ $0.60 a call, the reviewer $0.05 – $1.50, an image edit $0.13 – $0.85, or it
   worst, 8 × $2.95 = $23.60. An entity's size is not known yet, so `draw` is priced at the
   route's whole range; once the list exists, each is priced at its size's tier ($0.79 at most).
 
-**Where prices come from.** Every paid call is priced by its route's entry in a route table. FX
+**Where prices come from.** Every paid call has a forecast from its route when available's entry in a route table. FX
 ships a built-in table with a route for each model and provider it can call (`grida fx nodes
 <type>` lists them); a project's `route_tables:` are read after it and override its entries, and
 `--routes` files replace it. The built-in prices are planning allowances, not provider quotes:
 they size the plan and every reservation against your ceiling, but a call costs what its provider
 reports, and when a provider reports nothing, the call is charged its whole reservation.
 
-**A route with no known price takes a cap.** When you do not know what a route's calls cost, for
-a model the built-in table does not list, give its entry in your route table a cap instead of a
-price. Here a new model id extends OpenRouter's built-in image route, so FX's OpenRouter adapter
+**A route with no known price has an unknown forecast.** Omit pricing on a complete route,
+or use `price: null` to clear an inherited price. You may supply a cap to partition execution
+authorization. Here a new model id extends OpenRouter's built-in image route, so FX's OpenRouter adapter
 serves it with that route's features and contract, and the cap replaces the route's size tiers.
 OpenRouter reports what each call cost, so that is what each call is booked at:
 
@@ -76,13 +76,12 @@ routes:
     price: { cap_usd: 1.50 }   # alone in price: no low, high, unit or tiers beside it
 ```
 
-The plan prices each of its calls at $0 to $1.50 and adds a `note` line for the route ("… has no
-price: each call holds its cap, $1.50, …"; a stand-in run, which holds nothing, leaves it out),
-`plan --json` marks the step's `price` with `capped: true`, and the viewer shows it as "up to
-$1.50". Each call reserves the whole cap against your ceiling, and is charged what the provider
-reports, else the whole cap. The cap is a reservation, not a limit the provider honours: a call
-that costs more is charged in full, and can take the run past its ceiling by the difference. A
-`price` must state an amount, so `price: {}` is refused; write `usd: 0` for a free route.
+The plan shows an unknown forecast and adds a `note` about the reservation. `plan --json`
+marks the step's `price` with `capped: true`; a cap remains separate from estimated cost.
+Each attempt reserves the cap and books the provider-reported charge, or the whole hold when
+none is reported. The cap cannot limit the provider's invoice: reported amounts above it are
+booked in full. A route can omit pricing; an empty `price: {}` remains invalid, and `usd: 0`
+explicitly declares a free route.
 
 In general:
 - **The plan never makes a paid model call.** A missing GG/OpenRouter image binding may need a
@@ -91,22 +90,21 @@ In general:
   fails on any error without spending.
 - **Calls priced by length** (speech by characters, music by seconds) use the step's `max_chars` or
   `duration`, or the route's worst case, and show as a range.
-- **The ceiling is enforced, not advised.** Before every paid call, and before every new attempt
-  of one, FX reserves its worst-case price, and settles the reservation at what the provider
-  reports once it answers. A call that would cross the ceiling is not made: the step that asked
-  for it fails, the steps that need that step are skipped, and the rest of the run goes on.
-  Everything finished is kept, and the run ends `failed`, naming each step that did not finish.
+- **The ceiling controls FX authorization.** Each attempt reserves its allowance or, for
+  unpriced work, remaining applicable budget. Unknown-cost reservation conflicts wait for temporary overlapping holds;
+  exhausted authorization prevents new paid attempts. Provider-reported charges settle in full,
+  including amounts above the reservation, so the ceiling cannot guarantee a provider invoice.
 - **The ceiling comes from** `--max-usd` if given, else the workflow's `budget:`, else
   `fx.yaml`.
 - **A live run needs a ceiling.** `grida fx run --live` with none of the three is refused before
   anything is written, unless every paid call is on [your own Codex](12-codex.md) or [Grok Build](14-grok.md): such a run
   needs none. It runs under a ceiling of $0, and refuses any call on another route.
-- **A later phase is priced exactly** once its list exists (a `phase_planned` event in the
+- **A later phase is assessed** once its list exists (a `phase_planned` event in the
   run's record). Without `--yes-up-to` the run goes on, inside the ceiling. With `--yes-up-to 12`,
   a later phase whose worst case would take the run's total past $12 does not start: the run ends
   *incomplete* with `stopped   phase 2 may cost up to $…, which takes the run past --yes-up-to
   12; approve it with a higher --yes-up-to`, and running again into the same folder with a higher
-  amount continues it. The first phase is never stopped this way: the plan already priced it.
+  amount continues it. The first phase is approved by starting the live run. Unknown later-phase work is assessed by authorization exposure, including applicable step budgets.
 
 ## Budgets inside a run
 
@@ -252,3 +250,20 @@ job id when it returned one, so you can find the job on its dashboard):
 - **It is an ordinary folder.** You may delete it; runs keep their own copies of their files, and
   anything deleted is made again (and billed again) when a run needs it. To delete only what no
   remaining run needs, prune it ([Cleaning up runs](10-cleanup.md#get-the-disk-back)).
+
+## Unknown forecasts
+
+Model compatibility does not require a predictable price. Plans preserve unknown costs and
+show known subtotals alongside unpriced calls. A cap is a reservation allowance, not an estimate.
+Use `grida fx plan <workflow> --require-estimates` to require forecast coverage; `run` accepts
+the same option. Python and JavaScript use `require_estimates` and `requireEstimates`.
+
+A live unpriced attempt reserves remaining applicable approved run/step budget. Other calls
+wait while it holds those funds. A provider-reported charge releases the unused reservation;
+when no charge is reported, the full reservation stays booked while actual cost stays unknown.
+One such call can therefore exhaust the accounting budget. Explicit caps or step budgets can
+partition authorization. A reservation cannot guarantee the provider's invoice.
+
+[Canonical routing cases](https://github.com/gridaco/fx/tree/main/conformance/model-selection)
+and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cost) show the
+combinations, including strict forecast coverage.

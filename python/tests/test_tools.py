@@ -1057,7 +1057,7 @@ def _retype_echo(graph: dict[str, Any], identity: str) -> None:
         lambda g: g["instances"][0].update(type="nodes/other.py#lines@1"),
         lambda g: g["instances"][3].update(identity=BUILTIN_STEP),
         lambda g: g["instances"][3]["with"].update(prompt="known"),
-        lambda g: g.update(kind="fx-graph-v2"),
+        lambda g: g.update(kind="fx-graph-v3"),
         lambda g: g["types"]["./nodes/n.py#echo"].update(
             identity="nodes/n.py#echo@source:" + "4" * 64
         ),

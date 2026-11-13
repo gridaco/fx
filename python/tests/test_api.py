@@ -70,7 +70,7 @@ if args and args[0] == "plan" and "--prepared" in args:
         graph = json.loads(reply.get("stdout", ""))
     except ValueError:
         graph = None
-    if isinstance(graph, dict) and graph.get("kind") == "fx-graph-v1":
+    if isinstance(graph, dict) and graph.get("kind") in ("fx-graph-v1", "fx-graph-v2"):
         reply = {**reply, "stdout": json.dumps({
             "kind": "fx-prepared-plan-v1", "graph": graph,
             "price": json.loads(config.get("price", {}).get("stdout", "{}")),
@@ -502,6 +502,31 @@ def test_a_prepared_run_reuses_model_facts_and_removes_temporary_files(
     "change",
     [
         {"kind": "fx-prepared-plan-v2"},
+        {
+            "graph": {
+                **GRAPH,
+                "estimate": {
+                    "low_usd": None,
+                    "high_usd": None,
+                    "known_low_usd": 0,
+                    "known_high_usd": 0,
+                    "unpriced_calls": 1,
+                    "ceiling_usd": 2,
+                },
+            }
+        },
+        {
+            "price": {
+                **PRICE,
+                "estimate": {
+                    "low_usd": None,
+                    "high_usd": None,
+                    "known_low_usd": 0,
+                    "known_high_usd": 0,
+                    "unpriced_calls": 1,
+                },
+            }
+        },
         {"graph": []},
         {"graph": {"kind": "fx-graph-v1"}},
         {"graph": {**GRAPH, "problems": {}}},
@@ -625,6 +650,38 @@ def test_a_plan_reads_the_engines_documents(fake: Fake, project: Path) -> None:
     assert planned.estimate() == (0.12, 0.5)
     assert planned.phases() == PRICE["phases"]
     assert repr(planned) == "<Plan gallery ok=True estimate=$0.12-$0.50>"
+
+
+def test_unknown_forecasts_preserve_partial_totals_and_strict_option(
+    fake: Fake, project: Path
+) -> None:
+    forecast = {
+        "low_usd": None,
+        "high_usd": None,
+        "known_low_usd": 0.12,
+        "known_high_usd": 0.3,
+        "unpriced_calls": 2,
+    }
+    fake.reply(
+        plan={
+            "stdout": json.dumps(
+                {**GRAPH, "kind": "fx-graph-v2", "estimate": {**forecast, "ceiling_usd": 3}}
+            )
+        },
+        price={"stdout": json.dumps({**PRICE, "kind": "fx-price-v2", "estimate": forecast})},
+    )
+    planned = fx.plan("gallery", cwd=project, require_estimates=True)
+    assert planned.estimate() == (None, None)
+    assert planned.forecast == forecast
+    assert "estimate=unknown" in repr(planned)
+    assert "--require-estimates" in fake.calls[0]["argv"]
+    for change in (
+        {"unpriced_calls": 0},
+        {"unpriced_calls": True},
+        {"known_high_usd": None},
+        {"low_usd": 0},
+    ):
+        assert not _api._price_range({**forecast, **change})
 
 
 def test_a_plan_with_problems_is_not_ok(fake: Fake, project: Path) -> None:

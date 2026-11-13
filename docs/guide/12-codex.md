@@ -174,7 +174,7 @@ image on your plan.
 - Each image counts against your Codex plan's usage limits, which FX can neither see nor
   enforce. OpenAI says image generation uses them
   [3–5 times faster](https://learn.chatgpt.com/docs/image-generation) on average than similar
-  turns without images. A run's `spent $0.00` is FX's bill, not your plan's. What Codex did count
+  turns without images. A run's `booked $0.00` is FX's bill, not your plan's. What Codex did count
   is kept in each call's record in the cache (`usage`: the Codex version, and the tokens of the
   turn), marked as billed to your plan.
 - At the limit, the step fails with the time the limit resets, and is not retried:

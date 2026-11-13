@@ -102,6 +102,7 @@ pub(crate) fn route(capability: &str, model: &str, provider: &str) -> Route {
             by: None,
             tiers: IndexMap::new(),
             capped: false,
+            unknown: false,
         },
         features: BTreeSet::new(),
         concurrency: None,
@@ -150,6 +151,7 @@ pub(crate) fn instance_of(
                 low: Usd(low),
                 high: Usd(high),
                 capped: false,
+                unknown: false,
             })
             .collect(),
         phase,
@@ -199,6 +201,9 @@ fn pending(path: &str, max: u32, phase: u32, low: i64, high: i64) -> PendingRepe
         waiting_on: BTreeSet::new(),
         per_instance_low: Usd(low),
         per_instance_high: Usd(high),
+        per_instance_known_high: Usd(high),
+        per_instance_unpriced_calls: 0,
+        per_instance_unknown_calls: 0,
         phase,
     }
 }

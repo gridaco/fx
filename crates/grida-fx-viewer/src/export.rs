@@ -411,7 +411,17 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
         },
     );
     projected["estimate"] = if view["estimate"].is_object() {
-        fields(&view["estimate"], &["low_usd", "high_usd", "ceiling_usd"])
+        fields(
+            &view["estimate"],
+            &[
+                "low_usd",
+                "high_usd",
+                "ceiling_usd",
+                "known_low_usd",
+                "known_high_usd",
+                "unpriced_calls",
+            ],
+        )
     } else {
         Value::Null
     };
@@ -497,7 +507,18 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
     if view.get("pending").is_some() {
         projected["pending"] = list_project(
             view.get("pending"),
-            &["path", "step", "max", "phase", "high_usd", "waiting_on"],
+            &[
+                "path",
+                "step",
+                "max",
+                "phase",
+                "high_usd",
+                "waiting_on",
+                "low_usd",
+                "known_low_usd",
+                "known_high_usd",
+                "unpriced_calls",
+            ],
         );
     }
     projected

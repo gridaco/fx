@@ -193,3 +193,15 @@ Project initialization, service management/browser opening, diagnostics, node lo
 take maintenance and job forgetting stay CLI operations. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
 Pause, active revision and cloud control remain separate contracts.
+
+## Optional cost forecasts
+
+The CLI, Python and JavaScript planning and execution jobs accept `--require-estimates`,
+`require_estimates=True` and `requireEstimates: true`, respectively. Ordinary planning admits
+compatible unpriced routes. Strict forecast coverage refuses uncached paid work without an
+applicable estimate; explicit reservation caps do not satisfy it.
+
+Prepared graphs may use `fx-graph-v2` with null total amounts, known numeric subtotals and
+`unpriced_calls`. SDK estimate accessors return absent amounts for unknown totals; `forecast`
+exposes known subtotals and the unpriced count. They never coerce unknown totals to zero.
+Existing numeric `fx-graph-v1` records remain readable.

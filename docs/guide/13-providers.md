@@ -174,14 +174,13 @@ when the installed adapter supports its image interface and the metadata support
 features. There is no import or manual synchronization step, and discovery never generates
 an asset or authorizes spending.
 
-Model metadata and planning allowances are separate. FX maintains allowances for its shipped
-routes; your route table can supply an estimated price or an explicit `price.cap_usd` for
-unknown cost. Exact quotes are not required. Automatic discovery currently uses supported
-flat per-output-image OpenRouter rates; it does not turn scenario examples into a general
-pricing formula. When FX has no allowance for a compatible model, use the authored route-table
-path below. This is a normal limitation of variable cost, not a requirement for the provider
-to add an estimation API. A cap reserves against FX's budget; it is not a provider-enforced
-limit or approval to spend. Generation still needs the user's approval and a run ceiling.
+Model execution facts and cost forecasts are independent. Compatible metadata resolves with
+unknown cost when no applicable estimate exists. Shipped or authored prices and supported
+flat per-output-image OpenRouter tariffs remain useful forecasts; scenario examples apply
+only when their assumptions fit the request. Use `--require-estimates` to require coverage.
+An explicit `price.cap_usd` remains an optional reservation allowance. Generation still needs
+approval and a ceiling; unpriced calls reserve remaining applicable budget and unreported
+charges book that reservation in full while actual cost stays unknown.
 
 The optional metadata cache under `.fx/models/` is fresh for one hour. With
 `GRIDA_FX_NETWORK=off`, FX sends no lookup and may use older cached metadata. It can also use

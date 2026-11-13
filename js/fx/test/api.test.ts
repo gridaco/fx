@@ -160,10 +160,11 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
   );
 
   test(
-    "a capped route's call is priced at nothing to its cap, and marked",
+    "a capped route has an unknown forecast and retains its allowance marker",
     async () => {
       const graph = await expand("workflows/capped.yaml", options);
-      expect(graph.instances[0]?.price).toEqual({ low_usd: 0, high_usd: 1.5, capped: true });
+      expect(graph.kind).toBe("fx-graph-v2");
+      expect(graph.instances[0]?.price).toEqual({ low_usd: null, high_usd: null, known_low_usd: 0, known_high_usd: 0, unpriced_calls: 1, capped: true });
       const uncapped = await expand("workflows/icon.yaml", { ...options, inputs: { name: "x" } });
       expect(uncapped.instances[0]?.price).toEqual({ low_usd: 0.01, high_usd: 0.04 });
     },

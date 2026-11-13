@@ -1,5 +1,5 @@
 import { parseViewerRun, type ViewerRun } from "./index";
-import { cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
+import { isPrice, cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
 
 export interface ExportArtifact {
@@ -87,7 +87,8 @@ function validateValue(value: unknown, includeValues: boolean, inventory: Set<st
 
 function pendingRepeat(item: unknown) {
   return record(item) && typeof item.path === "string" && count(item.max) && item.max >= 1 && count(item.phase) && item.phase >= 1
-    && typeof item.high_usd === "number" && Number.isFinite(item.high_usd) && item.high_usd >= 0
+    && (typeof item.high_usd === "number" && Number.isFinite(item.high_usd) && item.high_usd >= 0
+      || item.high_usd === null && typeof item.known_high_usd === "number" && Number.isFinite(item.known_high_usd) && item.known_high_usd >= 0 && count(item.unpriced_calls) && item.unpriced_calls > 0)
     && (item.step === undefined || typeof item.step === "string")
     && (item.waiting_on === undefined || (Array.isArray(item.waiting_on) && item.waiting_on.every((id) => typeof id === "string") && new Set(item.waiting_on).size === item.waiting_on.length));
 }
@@ -156,7 +157,7 @@ export function parseRunExport(value: unknown): RunExport {
   if (view.artifacts.some((item) => item.url !== null)) refuse("local or remote artifact URLs are forbidden in the inspection record.");
   if (!["succeeded", "failed", "cancelled"].includes(view.state)) refuse("the recording is not terminal.");
   if (view.charged_usd !== null && view.charged_usd < 0) refuse("the recorded charge is invalid.");
-  if (view.estimate !== null && (![view.estimate.low_usd, view.estimate.high_usd].every((amount) => Number.isFinite(amount) && amount >= 0))) refuse("the recorded estimate is invalid.");
+  if (view.estimate !== null && !isPrice(view.estimate)) refuse("the recorded estimate is invalid.");
   if ((view.scopes ?? []).some((scope) => scope.source !== null)) refuse("workflow source locations are forbidden in the inspection record.");
   for (const node of view.nodes) {
     if (!["pending", "succeeded", "failed", "skipped"].includes(node.state)

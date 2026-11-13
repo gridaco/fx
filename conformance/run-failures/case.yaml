@@ -20,7 +20,7 @@ steps:
   - runs/one
   status: 1
   mentions:
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "nope#1: refused on purpose"
   - "bang#1: RuntimeError: kaboom y"
   - "after#1: something it reads failed"

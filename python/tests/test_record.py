@@ -249,11 +249,14 @@ def test_loader_rejects_missing_selected_folder(fake: Fake, document: Any) -> No
         fx.load_run("case")
 
 
-def test_snapshot_and_events_preserve_unknown_wire_evidence(fake: Fake, tmp_path: Path) -> None:
+@pytest.mark.parametrize("graph_kind", ["fx-graph-v1", "fx-graph-v2"])
+def test_snapshot_and_events_preserve_unknown_wire_evidence(
+    fake: Fake, tmp_path: Path, graph_kind: str
+) -> None:
     record = fx.load_run("case", cwd=tmp_path)
     snapshot = {
         "kind": "fx-run-snapshot-v1",
-        "plan": {"kind": "fx-graph-v1", "future_graph": {"keep": True}},
+        "plan": {"kind": graph_kind, "future_graph": {"keep": True}},
         "events": [event()],
         "cursor": "opaque snapshot cursor",
         "future_snapshot": [1, 2],

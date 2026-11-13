@@ -129,7 +129,7 @@ function OutputsDownload({ run, artifacts }: { run: ViewerRun; artifacts: Map<st
 
 function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocument; instance?: GraphInstance; pending?: PendingRepeat; canvasNode?: CanvasStep }) {
   const none = new Map<string, Artifact>();
-  if (pending) return <Heading title={pending.path} id={pending.path} kind="step path" state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
+  if (pending) return <Heading title={pending.path} id={pending.path} kind="step path" state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd === null ? "cost unknown" : pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
   if (!instance) return <>
     <Heading title={plan.workflow.title} id={plan.workflow.id} kind="workflow id" meta={[plan.estimate.ceiling_usd !== null && `ceiling ${money(plan.estimate.ceiling_usd)}`]} />
     {plan.workflow.description && <p className="fx-detail-copy">{plan.workflow.description}</p>}
@@ -198,7 +198,7 @@ function WorkflowView() {
   const [about, setAbout] = useState(false);
   useEffect(() => setAbout(false), [scope]);
   const select = (id: string | null) => { setAbout(false); controller.select(id); };
-  const plan = view?.kind === "fx-graph-v1" ? view : null;
+  const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
   const selectedNode = graph.nodes.find((node) => node.id === selected);
   const instance = plan?.instances.find((node) => !selectedNode?.pending && node.id === selectedNode?.source_id);
@@ -268,7 +268,7 @@ function WorkflowView() {
           <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
             ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
             : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
-          {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost">{money(run.charged_usd)}</span></>}</>
+          {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost" title="Budget booked; includes reserved amounts when the provider reports no final charge">booked {money(run.charged_usd)}</span></>}</>
             : view.estimate && <span className="fx-bar-cost">{priceLabel(view.estimate, money, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}

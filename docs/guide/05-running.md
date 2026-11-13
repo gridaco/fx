@@ -369,7 +369,7 @@ Its result summary follows execution, each label in a column of ten:
 
 ```
 run       runs/one
-result    failed   spent $0.00
+result    failed   booked $0.00
 failed    nope#1: refused on purpose
 failed    after#1: something it reads failed
 failed    bang#1: RuntimeError: kaboom y
@@ -566,7 +566,7 @@ or available cached metadata. The stand-in never sends a generation request or r
   ```
   run       runs/icon/2026-10-06-1
   stand-in  tests/stand_in.py#answer
-  result    ok   spent $0.00
+  result    ok   booked $0.00
   ```
 
 **Never with `--live` or `--yes-up-to`** (exit 2): a stand-in run spends nothing and runs every

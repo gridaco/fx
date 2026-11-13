@@ -91,6 +91,7 @@ pub enum Event {
         charged_usd: Usd,
         estimate_low: Usd,
         estimate_high: Usd,
+        estimate_unpriced_calls: u64,
         /// A stand-in run (spec/protocol.md §5.7): `stand_in: true`, written only when true.
         stand_in: bool,
         /// The arguments that repeat the run (spec/store.md §8, "Repeating a run"), written only
@@ -307,6 +308,7 @@ impl Event {
                 charged_usd,
                 estimate_low,
                 estimate_high,
+                estimate_unpriced_calls,
                 stand_in,
                 repeat,
             } => {
@@ -321,6 +323,16 @@ impl Event {
                 let mut estimate = Map::new();
                 estimate.insert("low_usd".into(), estimate_low.to_value());
                 estimate.insert("high_usd".into(), estimate_high.to_value());
+                if *estimate_unpriced_calls > 0 {
+                    estimate.insert("known_low_usd".into(), estimate_low.to_value());
+                    estimate.insert("known_high_usd".into(), estimate_high.to_value());
+                    estimate.insert(
+                        "unpriced_calls".into(),
+                        Value::from(*estimate_unpriced_calls),
+                    );
+                    estimate.insert("low_usd".into(), Value::Null);
+                    estimate.insert("high_usd".into(), Value::Null);
+                }
                 fields.put("estimate", Value::Object(estimate));
                 if *stand_in {
                     fields.put("stand_in", Value::Bool(true));

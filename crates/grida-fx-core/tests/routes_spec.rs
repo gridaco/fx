@@ -37,6 +37,7 @@ fn route(capability: &str, model: &str, provider: &str, contract: Value) -> Rout
             by: None,
             tiers: IndexMap::new(),
             capped: false,
+            unknown: false,
         },
         features: BTreeSet::new(),
         concurrency: None,
@@ -115,6 +116,7 @@ fn tiered() -> Route {
             ("4k".to_string(), (Usd(300_000), Usd(375_000))),
         ]),
         capped: false,
+        unknown: false,
     })
 }
 
@@ -160,6 +162,7 @@ fn length_priced_calls() {
         by: None,
         tiers: IndexMap::new(),
         capped: false,
+        unknown: false,
     });
     // 11 characters: Unicode scalar values, not bytes.
     let text = Val::Str("h\u{e9}llo w\u{f6}rld".into());
@@ -200,6 +203,7 @@ fn call_counts_multiply_whole_prices() {
         by: None,
         tiers: IndexMap::new(),
         capped: false,
+        unknown: false,
     })
     .cost(&IndexMap::new());
     assert_eq!(

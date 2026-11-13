@@ -47,7 +47,7 @@
 //!    error (exit 2). A cancelled run (Ctrl-C) exits 130 and prints nothing more.
 //! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `stand-in
 //!    <source as typed>` for a stand-in run, `result    ok
-//!    | incomplete | failed   spent $<charged, 2 places>`, `failed    <id>: <error or "no reason
+//!    | incomplete | failed   booked $<charged, 2 places>`, `failed    <id>: <error or "no reason
 //!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
 //!    the home or the store left in an error is shown relative to the project.
 //! 7. `--deliver`, after the run, request by request. First every request is matched with the
@@ -219,7 +219,10 @@ fn plan_and_run(
 ) -> Result<u8, Error> {
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
-    let plan = crate::engine::plan(engine, planner, host)?;
+    let mut plan = crate::engine::plan(engine, planner, host)?;
+    if args.require_estimates {
+        plan.require_estimates();
+    }
     let text = if engine.stand_in_run() {
         grida_fx_core::plan::render::render_stand_in(&plan, planner)
     } else {
@@ -271,6 +274,7 @@ fn plan_and_run(
     };
     print_line(&text);
     let options = RunOptions {
+        require_estimates: args.require_estimates,
         folder: folder.clone(),
         label: label.clone(),
         name: args.name.clone(),
@@ -587,7 +591,7 @@ fn summary(
     }
     lines.push(labelled(
         "result",
-        &format!("{result}   spent {}", outcome.charged.dollars_2()),
+        &format!("{result}   booked {}", outcome.charged.dollars_2()),
     ));
     for (id, error) in &outcome.failed {
         let error = error.as_deref().unwrap_or("no reason recorded");
@@ -1165,7 +1169,7 @@ mod tests {
             summary("runs/one", None, &outcome(), &no_scrub()),
             [
                 "run       runs/one",
-                "result    failed   spent $0.12",
+                "result    failed   booked $0.12",
                 "failed    nope#1: refused on purpose",
                 "failed    bang#1: no reason recorded",
             ]
@@ -1181,7 +1185,7 @@ mod tests {
             ..outcome()
         };
         let lines = summary("runs/one", None, &stopped, &no_scrub());
-        assert_eq!(lines[1], "result    incomplete   spent $0.12");
+        assert_eq!(lines[1], "result    incomplete   booked $0.12");
         assert_eq!(
             lines[2],
             "stopped   phase 2 may cost up to $0.08, which takes the run past --yes-up-to 0.01; \
@@ -1197,7 +1201,7 @@ mod tests {
             summary("runs/case/2026-10-06-1", None, &ok, &no_scrub()),
             [
                 "run       runs/case/2026-10-06-1",
-                "result    ok   spent $0.00"
+                "result    ok   booked $0.00"
             ]
         );
     }

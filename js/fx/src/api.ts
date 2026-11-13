@@ -57,7 +57,7 @@ const resolvedModels = new WeakMap<Plan, string>();
 
 /** A plan the engine made: the expanded graph and its price. */
 export class Plan {
-  /** The expanded graph (fx-graph-v1), as `grida-fx plan --json` prints it. */
+  /** The expanded graph (fx-graph-v1 or fx-graph-v2), as `grida-fx plan --json` prints it. */
   readonly graph: Graph;
   /** The price by phase, as `grida-fx price` prints it. */
   readonly price: Price;
@@ -83,13 +83,25 @@ export class Plan {
     }));
   }
 
-  /** What the run may spend on what is not cached, and its ceiling, in US dollars. */
-  get estimate(): { lowUsd: number; highUsd: number; ceilingUsd: number | null } {
-    const estimate = this.graph.estimate;
+  /** The total forecast; null amounts mean it includes unpriced calls. */
+  get estimate(): { lowUsd: number | null; highUsd: number | null; ceilingUsd: number | null } {
+    const estimate = this.price.estimate ?? this.graph.estimate;
     return {
-      lowUsd: Number(this.price.estimate?.low_usd ?? estimate?.low_usd ?? 0),
-      highUsd: Number(this.price.estimate?.high_usd ?? estimate?.high_usd ?? 0),
-      ceilingUsd: this.price.ceiling_usd ?? estimate?.ceiling_usd ?? null,
+      lowUsd: estimate.low_usd,
+      highUsd: estimate.high_usd,
+      ceilingUsd: this.price.ceiling_usd ?? this.graph.estimate.ceiling_usd,
+    };
+  }
+
+  /** Forecast coverage and the known subtotal; allowances never stand in for a bill. */
+  get forecast(): { lowUsd: number | null; highUsd: number | null; knownLowUsd: number | null; knownHighUsd: number | null; unpricedCalls: number } {
+    const estimate = this.price.estimate ?? this.graph.estimate;
+    return {
+      lowUsd: estimate.low_usd,
+      highUsd: estimate.high_usd,
+      knownLowUsd: estimate.known_low_usd ?? estimate.low_usd,
+      knownHighUsd: estimate.known_high_usd ?? estimate.high_usd,
+      unpricedCalls: estimate.unpriced_calls ?? 0,
     };
   }
 
@@ -117,7 +129,7 @@ export class PlanRefused extends FxError {
   }
 }
 
-/** `grida-fx expand`: the expanded graph (fx-graph-v1), with `problems`. Never spends. */
+/** `grida-fx expand`: the expanded graph (fx-graph-v1 or fx-graph-v2), with `problems`. Never spends. */
 export async function expand(target: string, options: PlanOptions = {}): Promise<Graph> {
   return planningDocument<Graph>("expand", makeRequest(target, options), options.signal);
 }
@@ -154,20 +166,27 @@ async function planRequest(
     value !== null && typeof value === "object" && !Array.isArray(value);
   const amount = (value: unknown): value is number =>
     typeof value === "number" && Number.isFinite(value) && value >= 0;
-  const range = (value: unknown): boolean => object(value)
-    && amount(value.low_usd) && amount(value.high_usd) && value.low_usd <= value.high_usd;
+  const range = (value: unknown): boolean => object(value) && (
+    amount(value.low_usd) && amount(value.high_usd) && value.low_usd <= value.high_usd
+      && value.unpriced_calls === undefined && value.known_low_usd === undefined && value.known_high_usd === undefined
+    || value.low_usd === null && value.high_usd === null
+      && amount(value.known_low_usd) && amount(value.known_high_usd) && value.known_low_usd <= value.known_high_usd
+      && typeof value.unpriced_calls === "number" && Number.isSafeInteger(value.unpriced_calls) && value.unpriced_calls > 0
+  );
   const ceiling = (value: unknown): boolean => value === null || amount(value);
   if (
     prepared.kind !== "fx-prepared-plan-v1" ||
-    !object(prepared.graph) || prepared.graph.kind !== "fx-graph-v1" ||
+    !object(prepared.graph) || (prepared.graph.kind !== "fx-graph-v1" && prepared.graph.kind !== "fx-graph-v2") ||
     !object(prepared.graph.workflow) || typeof prepared.graph.workflow.id !== "string" ||
     typeof prepared.graph.workflow.title !== "string" ||
     !Array.isArray(prepared.graph.instances) || !Array.isArray(prepared.graph.pending) ||
     !Array.isArray(prepared.graph.problems) || !prepared.graph.problems.every((problem) =>
       object(problem) && typeof problem.where === "string" && typeof problem.message === "string") ||
     !object(prepared.graph.estimate) || !range(prepared.graph.estimate) ||
+    prepared.graph.kind === "fx-graph-v1" && prepared.graph.estimate.low_usd === null ||
     !ceiling(prepared.graph.estimate.ceiling_usd) ||
     !object(prepared.price) || !range(prepared.price.estimate) ||
+    object(prepared.price.estimate) && prepared.price.estimate.low_usd === null && prepared.price.kind !== "fx-price-v2" ||
     !ceiling(prepared.price.ceiling_usd) || !Array.isArray(prepared.price.phases) ||
     !prepared.price.phases.every(range) || !object(prepared.resolved_models) ||
     prepared.resolved_models.fx !== "routes/v1" || !Array.isArray(prepared.resolved_models.routes)
@@ -321,7 +340,7 @@ export class RunResult {
     return finished === undefined ? true : finished.incomplete === true;
   }
 
-  /** What the run folder has been charged, in US dollars, over every invocation. */
+  /** Budget booked in US dollars over every invocation; unreported charges consume their reservations. */
   get chargedUsd(): number {
     return Number(this.inspection.run?.charged_usd ?? this.finished?.charged_usd ?? 0);
   }

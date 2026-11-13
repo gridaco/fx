@@ -26,7 +26,7 @@ and no adapter of yours.
 ### A new model needs only a route
 
 When the provider is one FX speaks, a new model is a route of your own, not a provider. Name the
-model, and give a cap where you do not know its price:
+model and its execution contract. Pricing is optional; this example supplies a reservation cap:
 
 ```yaml
 # fx.yaml
@@ -82,11 +82,11 @@ grida fx plan lantern --max-usd 1
 
 ```
 lantern  ·  1 phase
-phase 1   2 steps   2 provider calls   $0.00 – $0.30
+phase 1   2 steps   2 provider calls   unknown (2 unpriced calls)
 cached    0 of 1 known steps
-estimate  $0.00 – $0.30   ceiling $1.00
-note      image.generate on acme/img-a@openrouter has no price: each call holds its cap, $0.20, and is charged what the provider reports, else the cap
-note      structured.generate on acme/text-b@openrouter has no price: each call holds its cap, $0.10, and is charged what the provider reports, else the cap
+estimate  unknown (2 unpriced calls)   ceiling $1.00
+note      image.generate on acme/img-a@openrouter has no price: each call holds its cap, $0.20, and is booked at what the provider reports, else the cap
+note      structured.generate on acme/text-b@openrouter has no price: each call holds its cap, $0.10, and is booked at what the provider reports, else the cap
 ```
 
 `grida fx doctor lantern` then says whether a live run could serve each route
@@ -288,10 +288,10 @@ grida fx doctor colour
 
 ```
 colour  ·  1 phase
-phase 1   2 steps   2 provider calls   $0.00 – $0.05
+phase 1   2 steps   2 provider calls   unknown (1 unpriced calls)
 cached    0 of 2 known steps
-estimate  $0.00 – $0.05
-note      structured.generate on acme/text-a@acme has no price: each call holds its cap, $0.05, and is charged what the provider reports, else the cap
+estimate  unknown (1 unpriced calls)
+note      structured.generate on acme/text-a@acme has no price: each call holds its cap, $0.05, and is booked at what the provider reports, else the cap
 ```
 
 ```
@@ -311,7 +311,7 @@ route     structured.generate small-a@local servable
   `provider_options`, and nothing chosen for one provider. The key as declared, or none.
 - **No cost is read by default.** Servers report usage differently, or not at all, so each call is booked at
   its whole reservation: the cap, or the route's high price. The tokens a reply counts are kept
-  with the call. Give each route a `cap_usd`, or a price you trust.
+  with the call. Leave the forecast unknown, supply an estimate, or use `cap_usd` to partition its reservation.
 - **Timeouts may cost money.** A 408 is booked at its reported cost, else the whole reservation,
   and trying again needs a new reservation. A 429 is sent again unbilled, unless the opted-in
   billing policy finds a cost, an invalid cost or an unreadable nonempty body; then it is booked and retried as a new
@@ -925,10 +925,10 @@ grida fx plan lantern
 
 ```
 lantern  ·  1 phase
-phase 1   2 steps   2 provider calls   $0.00 – $1.02
+phase 1   2 steps   2 provider calls   $0.00 – $0.02 estimated + 1 unpriced calls
 cached    0 of 2 known steps
-estimate  $0.00 – $1.02
-note      video.generate on clip-a@acme has no price: each call holds its cap, $1.00, and is charged what the provider reports, else the cap
+estimate  $0.00 – $0.02 estimated + 1 unpriced calls
+note      video.generate on clip-a@acme has no price: each call holds its cap, $1.00, and is booked at what the provider reports, else the cap
 ```
 
 The plan loaded the adapter: a module that does not import, or an attribute that is not
@@ -956,7 +956,7 @@ GRIDA_FX_NETWORK=off grida fx run lantern --live --max-usd 2
 
 ```
 …
-result    failed   spent $0.00
+result    failed   booked $0.00
 failed    colour#1: structured.generate on text-a@acme was refused: the network is off (GRIDA_FX_NETWORK=off)
 failed    clip#1: video.generate on clip-a@acme was refused: the network is off (GRIDA_FX_NETWORK=off)
 ```
@@ -986,7 +986,7 @@ grida fx run lantern --stand-in tests/stand_in.py#answer
 ```
 …
 stand-in  tests/stand_in.py#answer
-result    failed   spent $0.00
+result    failed   booked $0.00
 failed    clip#1: video.generate on clip-a@acme is a paid call the stand-in declined
 ```
 
@@ -1136,3 +1136,15 @@ submissions and terminal task failures. Integer mesh face counts are forwarded w
 an FX snapshot of the provider range; Tripo validates its model and topology limits. Other built-in adapters and older hosts may still supply
 only their existing reason. Both remain supported; no provider detail is invented
 for an older record.
+
+## Cost knowledge is optional
+
+A complete route can omit `price`. FX can plan and execute compatible work with unknown cost.
+An explicit `price: null` clears an inherited price; omission beside `extends` inherits it.
+Existing caps remain per-call reservation allowances. Use `--require-estimates` on `plan` or
+`run` when you require an applicable forecast for all uncached paid work.
+
+Unpriced calls reserve the remaining applicable approved run/step budget. A reported charge
+releases the remainder; missing charges book the full reservation while actual cost remains
+unknown. This can serialize work or exhaust the accounting budget after one unreported call.
+See the [canonical cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cost).

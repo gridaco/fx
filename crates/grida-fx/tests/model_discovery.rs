@@ -345,29 +345,47 @@ fn ordinary_prepared_plan_discovers_openrouter_and_prices_one_snapshot() {
 }
 
 #[test]
-fn gg_keyless_metadata_refuses_unpriced_binding_before_generation() {
+fn gg_keyless_metadata_admits_unknown_forecast_without_generation() {
     let root = project("gg");
     let server = MetadataServer::new();
     serve_model(&server, "gg", false);
-    let refused = document(
+    let prepared = document(
         &command_with_key(root.path(), "gg", &server, true, PREPARED, None),
+        0,
+    );
+    assert_eq!(prepared["graph"]["kind"], "fx-graph-v2");
+    assert_eq!(prepared["graph"]["problems"], json!([]));
+    assert!(prepared["graph"]["estimate"]["high_usd"].is_null());
+    assert_eq!(prepared["graph"]["estimate"]["unpriced_calls"], 1);
+    assert_eq!(
+        prepared["resolved_models"]["routes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let cached = document(
+        &command_with_key(root.path(), "gg", &server, false, PREPARED, None),
+        0,
+    );
+    assert_eq!(cached["graph"], prepared["graph"]);
+    let strict = document(
+        &command_with_key(
+            root.path(),
+            "gg",
+            &server,
+            false,
+            &["plan", "workflow.yaml", "--json", "--require-estimates"],
+            None,
+        ),
         1,
     );
-    let problems = refused["graph"]["problems"].to_string();
-    assert!(
-        problems.contains("FX has no planning allowance for this model"),
-        "{problems}"
-    );
-    assert!(
-        problems.contains("supply an authored route with price or cap_usd"),
-        "{problems}"
-    );
-    assert_eq!(refused["resolved_models"]["routes"], json!([]));
+    assert!(!strict["problems"].as_array().unwrap().is_empty());
     let requests = server.requests();
     assert_eq!(requests.len(), 3);
     assert!(requests.iter().all(|request| request.starts_with("GET ")
         && !request.to_ascii_lowercase().contains("authorization")));
-    assert!(!root.path().join(".fx/models").exists());
+    assert!(root.path().join(".fx/models").exists());
     assert!(!root.path().join("runs").exists());
 }
 
@@ -407,24 +425,17 @@ fn published_prices_remain_available_from_expired_cache_offline_without_rekeying
 }
 
 #[test]
-fn missing_allowance_refuses_until_an_authored_route_supplies_a_cap() {
+fn unpriced_openrouter_and_authored_cap_are_unknown_forecasts() {
     let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", false);
-    let refused = document(
+    let prepared = document(
         &command(root.path(), "openrouter", &server, true, PREPARED),
-        1,
+        0,
     );
-    let problems = refused["graph"]["problems"].to_string();
-    assert!(
-        problems.contains("FX has no planning allowance for this model"),
-        "{problems}"
-    );
-    assert!(
-        problems.contains("supply an authored route with price or cap_usd"),
-        "{problems}"
-    );
-    assert_eq!(refused["resolved_models"]["routes"], json!([]));
+    assert_eq!(prepared["graph"]["kind"], "fx-graph-v2");
+    assert!(prepared["graph"]["estimate"]["high_usd"].is_null());
+    assert_eq!(prepared["graph"]["estimate"]["unpriced_calls"], 1);
     let mut config: Value =
         serde_json::from_slice(&std::fs::read(root.path().join("fx.yaml")).unwrap()).unwrap();
     config["route_tables"] = json!(["authored.json"]);
@@ -445,7 +456,8 @@ fn missing_allowance_refuses_until_an_authored_route_supplies_a_cap() {
         &command(root.path(), "openrouter", &server, true, PREPARED),
         0,
     );
-    assert_eq!(prepared["price"]["estimate"]["high_usd"], 3);
+    assert!(prepared["price"]["estimate"]["high_usd"].is_null());
+    assert_eq!(prepared["price"]["estimate"]["unpriced_calls"], 1);
     assert_eq!(prepared["resolved_models"]["routes"], json!([]));
     assert_eq!(
         server.requests().len(),
@@ -654,140 +666,144 @@ fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed(
 
 #[test]
 fn discovered_model_runs_settles_and_replays_its_paid_call_without_a_key() {
-    let root = project("openrouter");
-    let server = MetadataServer::new();
-    serve_model(&server, "openrouter", true);
-    // Pixels are synthesized by the committed testing helper, never generated artwork.
-    let png = grida_fx_providers::testing::media::png(2, 2, None);
-    server.reply_method(
-        "POST",
-        "/v1/images",
-        200,
-        json!({"data":[{"b64_json":STANDARD.encode(&png)}],"usage":{"cost":0.02}}),
-    );
-    let live_args = [
-        "run",
-        "workflow.yaml",
-        "--run",
-        "runs/live",
-        "--live",
-        "--max-usd",
-        "1",
-        "--no-view",
-    ];
-    let live = command(root.path(), "openrouter", &server, true, &live_args);
-    assert_eq!(
-        live.status.code(),
-        Some(0),
-        "stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&live.stdout),
-        String::from_utf8_lossy(&live.stderr)
-    );
-    let inspected = document(
-        &command(
-            root.path(),
-            "openrouter",
-            &server,
-            false,
-            &["inspect", "runs/live", "--json", "--verify"],
-        ),
-        0,
-    );
-    assert_eq!(inspected["run"]["state"], "succeeded");
-    assert_eq!(inspected["run"]["charged_usd"], 0.02);
-    assert_eq!(inspected["verification"]["problems"], json!([]));
-    let snapshot: Value = serde_json::from_slice(
-        &std::fs::read(root.path().join("runs/live/resolved-models.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(snapshot["routes"][0]["route"], "acme/img-v2@openrouter");
-    let requests = server.requests();
-    assert_eq!(requests.len(), 2);
-    assert!(requests[0].starts_with(&format!("GET {OPENROUTER_PATH} ")));
-    assert!(requests[1].starts_with("POST /v1/images "));
-    let body: Value = serde_json::from_str(requests[1].split_once("\r\n\r\n").unwrap().1).unwrap();
-    assert_eq!(body["model"], MODEL);
-    assert_eq!(body["prompt"], "a small lantern");
-    let events = |folder: &str| -> Vec<Value> {
-        std::fs::read_to_string(root.path().join(folder).join("events.jsonl"))
-            .unwrap()
-            .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect()
-    };
-    let live_events = events("runs/live");
-    assert!(
-        live_events
-            .iter()
-            .any(|event| event["event"] == "budget_reserved" && event["amount_usd"] == 0.4)
-    );
-    assert!(live_events.iter().any(|event| event["event"] == "call"
-        && event["cached"] == false
-        && event["cost_usd"] == 0.02));
-    // Force the next body through the paid-call cache, rather than the step-result cache.
-    std::fs::remove_dir_all(root.path().join(".fx/cache/results")).unwrap();
-    let replay = command_with_key(
-        root.path(),
-        "openrouter",
-        &server,
-        false,
-        &[
-            "run",
-            "workflow.yaml",
-            "--run",
-            "runs/replay",
-            "--max-usd",
-            "1",
-            "--no-view",
-        ],
-        None,
-    );
-    assert_eq!(
-        replay.status.code(),
-        Some(0),
-        "{}",
-        String::from_utf8_lossy(&replay.stderr)
-    );
-    let replay_events = events("runs/replay");
-    assert!(replay_events.iter().any(|event| event["event"] == "call"
-        && event["cached"] == true
-        && event["cost_usd"] == 0));
-    assert!(
-        replay_events
-            .iter()
-            .any(|event| event["event"] == "run_finished" && event["charged_usd"] == 0)
-    );
-    // An existing run carries facts independently of the optional metadata cache.
-    std::fs::remove_dir_all(root.path().join(".fx/models")).unwrap();
-    let resumed = command_with_key(
-        root.path(),
-        "openrouter",
-        &server,
-        false,
-        &[
+    for priced in [false, true] {
+        let root = project("openrouter");
+        let server = MetadataServer::new();
+        serve_model(&server, "openrouter", priced);
+        // Pixels are synthesized by the committed testing helper, never generated artwork.
+        let png = grida_fx_providers::testing::media::png(2, 2, None);
+        server.reply_method(
+            "POST",
+            "/v1/images",
+            200,
+            json!({"data":[{"b64_json":STANDARD.encode(&png)}],"usage":{"cost":0.02}}),
+        );
+        let live_args = [
             "run",
             "workflow.yaml",
             "--run",
             "runs/live",
+            "--live",
             "--max-usd",
             "1",
             "--no-view",
-        ],
-        None,
-    );
-    assert_eq!(
-        resumed.status.code(),
-        Some(0),
-        "{}",
-        String::from_utf8_lossy(&resumed.stderr)
-    );
-    assert_eq!(
-        server.requests().len(),
-        2,
-        "replay and resume send no lookup or generation requests"
-    );
-    assert_eq!(
-        std::fs::read(root.path().join("runs/replay/outputs/image.png")).unwrap(),
-        png
-    );
+        ];
+        let live = command(root.path(), "openrouter", &server, true, &live_args);
+        assert_eq!(
+            live.status.code(),
+            Some(0),
+            "stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&live.stdout),
+            String::from_utf8_lossy(&live.stderr)
+        );
+        let inspected = document(
+            &command(
+                root.path(),
+                "openrouter",
+                &server,
+                false,
+                &["inspect", "runs/live", "--json", "--verify"],
+            ),
+            0,
+        );
+        assert_eq!(inspected["run"]["state"], "succeeded");
+        assert_eq!(inspected["run"]["charged_usd"], 0.02);
+        assert_eq!(inspected["verification"]["problems"], json!([]));
+        let snapshot: Value = serde_json::from_slice(
+            &std::fs::read(root.path().join("runs/live/resolved-models.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(snapshot["routes"][0]["route"], "acme/img-v2@openrouter");
+        let requests = server.requests();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].starts_with(&format!("GET {OPENROUTER_PATH} ")));
+        assert!(requests[1].starts_with("POST /v1/images "));
+        let body: Value =
+            serde_json::from_str(requests[1].split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["model"], MODEL);
+        assert_eq!(body["prompt"], "a small lantern");
+        let events = |folder: &str| -> Vec<Value> {
+            std::fs::read_to_string(root.path().join(folder).join("events.jsonl"))
+                .unwrap()
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect()
+        };
+        let live_events = events("runs/live");
+        assert!(
+            live_events
+                .iter()
+                .any(|event| event["event"] == "budget_reserved"
+                    && event["amount_usd"] == if priced { json!(0.4) } else { json!(1) })
+        );
+        assert!(live_events.iter().any(|event| event["event"] == "call"
+            && event["cached"] == false
+            && event["cost_usd"] == 0.02));
+        // Force the next body through the paid-call cache, rather than the step-result cache.
+        std::fs::remove_dir_all(root.path().join(".fx/cache/results")).unwrap();
+        let replay = command_with_key(
+            root.path(),
+            "openrouter",
+            &server,
+            false,
+            &[
+                "run",
+                "workflow.yaml",
+                "--run",
+                "runs/replay",
+                "--max-usd",
+                "1",
+                "--no-view",
+            ],
+            None,
+        );
+        assert_eq!(
+            replay.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&replay.stderr)
+        );
+        let replay_events = events("runs/replay");
+        assert!(replay_events.iter().any(|event| event["event"] == "call"
+            && event["cached"] == true
+            && event["cost_usd"] == 0));
+        assert!(
+            replay_events
+                .iter()
+                .any(|event| event["event"] == "run_finished" && event["charged_usd"] == 0)
+        );
+        // An existing run carries facts independently of the optional metadata cache.
+        std::fs::remove_dir_all(root.path().join(".fx/models")).unwrap();
+        let resumed = command_with_key(
+            root.path(),
+            "openrouter",
+            &server,
+            false,
+            &[
+                "run",
+                "workflow.yaml",
+                "--run",
+                "runs/live",
+                "--max-usd",
+                "1",
+                "--no-view",
+            ],
+            None,
+        );
+        assert_eq!(
+            resumed.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&resumed.stderr)
+        );
+        assert_eq!(
+            server.requests().len(),
+            2,
+            "replay and resume send no lookup or generation requests"
+        );
+        assert_eq!(
+            std::fs::read(root.path().join("runs/replay/outputs/image.png")).unwrap(),
+            png
+        );
+    }
 }

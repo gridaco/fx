@@ -16,7 +16,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one]
   mentions:
   - "cached    0 of 4 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - argv: [project, runs/one]
   save: project.json
   json: true
@@ -53,7 +53,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/two]
   mentions:
   - "cached    4 of 4 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - argv: [project, runs/two]
   save: project-two.json
   json: true

@@ -356,7 +356,7 @@ impl Expander<'_> {
         }
         let refs: BTreeSet<String> = waiting.iter().flat_map(Val::pending_refs).collect();
         let phase = self.phase_of(&refs, at.frame);
-        let (low, high) = self.shadow_price(at, phase);
+        let (low, high, known_high, unpriced_calls, unknown_calls) = self.shadow_price(at, phase);
         if self.escaped.take().is_some() {
             // The pricing fails: no pending repeat, the step absent.
             self.exps[into.0].kind = ExpKind::Absent;
@@ -370,6 +370,9 @@ impl Expander<'_> {
             waiting_on: refs.clone(),
             per_instance_low: low,
             per_instance_high: high,
+            per_instance_known_high: known_high,
+            per_instance_unpriced_calls: unpriced_calls,
+            per_instance_unknown_calls: unknown_calls,
             phase,
         });
         let shown: Vec<Value> = waiting.iter().map(Val::token_form).collect();
@@ -382,7 +385,7 @@ impl Expander<'_> {
     /// Prices one hypothetical item: `(per-instance low, per-instance high)`. Its item variable
     /// is pending (`<item>`, or `<axis>` per matrix axis); planned and maybe instances count
     /// towards the high price, planned ones towards the low, and nested pending repeats too.
-    pub(crate) fn shadow_price(&mut self, at: &Position, phase: u32) -> (Usd, Usd) {
+    pub(crate) fn shadow_price(&mut self, at: &Position, phase: u32) -> (Usd, Usd, Usd, u64, u64) {
         let saved_instances = self.instances.clone();
         let saved_display_scopes = self.display_scopes.clone();
         let saved_skip_reasons = self.skip_reasons.clone();
@@ -447,9 +450,17 @@ impl Expander<'_> {
         }
         let mut low = Usd::ZERO;
         let mut high = Usd::ZERO;
+        let mut known_high = Usd::ZERO;
+        let mut unpriced_calls = 0;
+        let mut unknown_calls = 0;
         for (id, instance) in &self.instances {
             if saved_instances.contains_key(id) {
                 continue;
+            }
+            if instance.state.is_live() {
+                known_high = known_high + instance.forecast_high();
+                unpriced_calls += instance.unpriced_calls();
+                unknown_calls += instance.unknown_calls();
             }
             match instance.state {
                 super::State::Planned => {
@@ -462,6 +473,9 @@ impl Expander<'_> {
         }
         for nested in self.pending.iter().skip(before_pending) {
             high = high + nested.high();
+            known_high = known_high + nested.forecast_high();
+            unpriced_calls += nested.unpriced_calls();
+            unknown_calls += nested.unknown_calls();
         }
 
         // Forget everything the hypothetical item expanded, steps it reached outside the repeat
@@ -480,7 +494,7 @@ impl Expander<'_> {
             self.problems.push(problem.clone());
             self.escaped = Some(problem);
         }
-        (low, high)
+        (low, high, known_high, unpriced_calls, unknown_calls)
     }
 }
 

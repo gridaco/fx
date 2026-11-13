@@ -22,18 +22,6 @@
           "route"
         ],
         "additionalProperties": false,
-        "if": {
-          "not": {
-            "required": [
-              "extends"
-            ]
-          }
-        },
-        "then": {
-          "required": [
-            "price"
-          ]
-        },
         "properties": {
           "capability": {
             "type": "string",
@@ -50,137 +38,145 @@
             "pattern": "^.+@[a-z0-9._-]+$"
           },
           "price": {
-            "description": "What one call costs, low to high: per call, per second, or per thousand characters; or, for a route with no known price, a per-call cap (`cap_usd`). Amounts are US dollars with at most 6 decimal places (identity.md \u00a712). A price states an amount (`usd`, `low_usd`, `high_usd` or `cap_usd`), `0 <= low_usd <= high_usd`, and every tier lies within that range; a reader refuses a table that breaks any of these rules.",
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "cap_usd": {
-                "description": "A capped route: its price is not known, so each call holds this amount and is charged what the provider reports, else the whole cap (adapters.md \u00a75). A call is priced at 0 to the cap. The cap is what FX holds, not a limit the provider honours: a reported cost above it is charged in full. It stands alone.",
-                "type": "number",
-                "exclusiveMinimum": 0
+            "description": "Optional forecast or explicit per-call allowance. Omission means unknown, except with extends where the base value is inherited. Null explicitly clears inherited pricing.",
+            "anyOf": [
+              {
+                "type": "null"
               },
-              "usd": {
-                "description": "Shorthand for `low_usd` and `high_usd` both set to this amount.",
-                "type": "number",
-                "minimum": 0
-              },
-              "low_usd": {
-                "description": "Default 0, or `usd`.",
-                "type": "number",
-                "minimum": 0
-              },
-              "high_usd": {
-                "description": "Default 0, or `usd`.",
-                "type": "number",
-                "minimum": 0
-              },
-              "unit": {
-                "description": "What the amounts are per. A call's length is its `text` (characters) or its `max_chars`; or its `duration` (seconds), or `duration_s`.",
-                "enum": [
-                  "call",
-                  "second",
-                  "1k_chars"
-                ],
-                "default": "call"
-              },
-              "max_units": {
-                "description": "For a length-priced route: the most units one call can carry, its worst case.",
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "by": {
-                "description": "The request setting whose text value picks a tier, such as `resolution` or `size`. A call whose setting is absent, is not text, is not known to the plan yet, or names no tier is priced at the whole range.",
-                "type": "string",
-                "minLength": 1
-              },
-              "tiers": {
-                "description": "A range per value of `by`, in the price's unit.",
+              {
+                "description": "What one call costs, low to high: per call, per second, or per thousand characters; or, for a route with no known price, a per-call cap (`cap_usd`). Amounts are US dollars with at most 6 decimal places (identity.md \u00a712). A price states an amount (`usd`, `low_usd`, `high_usd` or `cap_usd`), `0 <= low_usd <= high_usd`, and every tier lies within that range; a reader refuses a table that breaks any of these rules.",
                 "type": "object",
-                "minProperties": 1,
-                "additionalProperties": {
-                  "type": "object",
-                  "required": [
-                    "low_usd",
-                    "high_usd"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "low_usd": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "high_usd": {
-                      "type": "number",
-                      "minimum": 0
+                "additionalProperties": false,
+                "properties": {
+                  "cap_usd": {
+                    "description": "A capped route: its price is not known, so each call holds this amount and is charged what the provider reports, else the whole cap (adapters.md \u00a75). A call is priced at 0 to the cap. The cap is what FX holds, not a limit the provider honours: a reported cost above it is charged in full. It stands alone.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "usd": {
+                    "description": "Shorthand for `low_usd` and `high_usd` both set to this amount.",
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "low_usd": {
+                    "description": "Default 0, or `usd`.",
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "high_usd": {
+                    "description": "Default 0, or `usd`.",
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unit": {
+                    "description": "What the amounts are per. A call's length is its `text` (characters) or its `max_chars`; or its `duration` (seconds), or `duration_s`.",
+                    "enum": [
+                      "call",
+                      "second",
+                      "1k_chars"
+                    ],
+                    "default": "call"
+                  },
+                  "max_units": {
+                    "description": "For a length-priced route: the most units one call can carry, its worst case.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "by": {
+                    "description": "The request setting whose text value picks a tier, such as `resolution` or `size`. A call whose setting is absent, is not text, is not known to the plan yet, or names no tier is priced at the whole range.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tiers": {
+                    "description": "A range per value of `by`, in the price's unit.",
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "object",
+                      "required": [
+                        "low_usd",
+                        "high_usd"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "low_usd": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "high_usd": {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      }
                     }
                   }
-                }
-              }
-            },
-            "dependentRequired": {
-              "by": [
-                "tiers"
-              ],
-              "tiers": [
-                "by"
-              ]
-            },
-            "allOf": [
-              {
-                "description": "A length-priced route declares the most units one call carries.",
-                "if": {
-                  "required": [
-                    "unit"
+                },
+                "dependentRequired": {
+                  "by": [
+                    "tiers"
                   ],
-                  "properties": {
-                    "unit": {
-                      "enum": [
-                        "second",
-                        "1k_chars"
+                  "tiers": [
+                    "by"
+                  ]
+                },
+                "allOf": [
+                  {
+                    "description": "A length-priced route declares the most units one call carries.",
+                    "if": {
+                      "required": [
+                        "unit"
+                      ],
+                      "properties": {
+                        "unit": {
+                          "enum": [
+                            "second",
+                            "1k_chars"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "max_units"
                       ]
                     }
-                  }
-                },
-                "then": {
-                  "required": [
-                    "max_units"
-                  ]
-                }
-              },
-              {
-                "description": "`cap_usd` stands alone.",
-                "if": {
-                  "required": [
-                    "cap_usd"
-                  ]
-                },
-                "then": {
-                  "maxProperties": 1
-                }
-              },
-              {
-                "description": "`usd` stands alone.",
-                "if": {
-                  "required": [
-                    "usd"
-                  ]
-                },
-                "then": {
-                  "not": {
-                    "anyOf": [
-                      {
-                        "required": [
-                          "low_usd"
-                        ]
-                      },
-                      {
-                        "required": [
-                          "high_usd"
+                  },
+                  {
+                    "description": "`cap_usd` stands alone.",
+                    "if": {
+                      "required": [
+                        "cap_usd"
+                      ]
+                    },
+                    "then": {
+                      "maxProperties": 1
+                    }
+                  },
+                  {
+                    "description": "`usd` stands alone.",
+                    "if": {
+                      "required": [
+                        "usd"
+                      ]
+                    },
+                    "then": {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "low_usd"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "high_usd"
+                            ]
+                          }
                         ]
                       }
-                    ]
+                    }
                   }
-                }
+                ]
               }
             ]
           },

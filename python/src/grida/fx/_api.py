@@ -21,8 +21,9 @@
   after ``input_files``; ``routes`` paths go as ``--routes``; ``max_usd`` as ``--max-usd``.
 - :func:`plan` / :func:`plan_async`: one engine invocation returns the graph, price and
   resolved model facts used by a subsequent run; a
-  :class:`Plan` with ``document`` (fx-graph-v1), ``ok``, ``problems``, ``estimate()`` and
-  ``phases()``. Exit 2 raises :class:`FxError` with the engine's stderr line.
+  :class:`Plan` with ``document`` (fx-graph-v1 or fx-graph-v2), ``ok``, ``problems``,
+  ``estimate()``, ``forecast`` and ``phases()``. Exit 2 raises :class:`FxError` with the
+  engine's stderr line.
 - :func:`run` / :func:`run_async`: plans new runs first and raises :class:`PlanRefused` (``the
   plan is refused:`` and its problems) before any folder exists. Resumes are planned directly
   by the engine using recorded model facts; its refusals raise :class:`FxError`. Then
@@ -154,6 +155,7 @@ class _Request:
     cwd: Path
     routes: tuple[str, ...]
     arguments: tuple[tuple[str, str], ...]
+    require_estimates: bool = False
     _resolved_models: str | None = None
 
     def args(self, inputs_file: str | None) -> list[str]:
@@ -166,6 +168,8 @@ class _Request:
         args += [f"--arg={name}={value}" for name, value in self.arguments]
         if self.max_usd is not None:
             args.append(f"--max-usd={self.max_usd}")
+        if self.require_estimates:
+            args.append("--require-estimates")
         return args
 
 
@@ -190,10 +194,24 @@ class Plan:
             for problem in self.document.get("problems") or []
         ]
 
-    def estimate(self) -> tuple[float, float]:
-        """``(low, high)`` in US dollars: what the run may spend on what is not cached."""
-        estimate = self.price.get("estimate") or self.document.get("estimate") or {}
-        return (float(estimate.get("low_usd", 0)), float(estimate.get("high_usd", 0)))
+    def estimate(self) -> tuple[float | None, float | None]:
+        """Total forecast in USD; ``(None, None)`` when any paid work is unpriced."""
+        estimate = self.price.get("estimate") or self.document["estimate"]
+        low, high = estimate["low_usd"], estimate["high_usd"]
+        return (None if low is None else float(low), None if high is None else float(high))
+
+    @property
+    def forecast(self) -> dict[str, float | int | None]:
+        """Total forecast, known subtotal and count of unpriced calls, in US dollars."""
+        estimate = self.price.get("estimate") or self.document["estimate"]
+        low, high = self.estimate()
+        return {
+            "low_usd": low,
+            "high_usd": high,
+            "known_low_usd": estimate.get("known_low_usd", low),
+            "known_high_usd": estimate.get("known_high_usd", high),
+            "unpriced_calls": estimate.get("unpriced_calls", 0),
+        }
 
     def phases(self) -> list[dict[str, Any]]:
         """The price by phase, as ``grida-fx price`` prints it: ``phase``, ``steps``, ``calls``
@@ -203,7 +221,8 @@ class Plan:
     def __repr__(self) -> str:
         workflow = (self.document.get("workflow") or {}).get("id", "?")
         low, high = self.estimate()
-        return f"<Plan {workflow} ok={self.ok} estimate=${low:.2f}-${high:.2f}>"
+        amount = "unknown" if low is None or high is None else f"${low:.2f}-${high:.2f}"
+        return f"<Plan {workflow} ok={self.ok} estimate={amount}>"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -315,7 +334,7 @@ class RunResult:
 
     @property
     def cost(self) -> float:
-        """What the run folder has been charged, in US dollars, over every invocation."""
+        """Budget booked in USD; unreported charges consume their reservations."""
         ending = self._ending()
         return float(ending.get("charged_usd") or 0) if ending is not None else 0.0
 
@@ -640,6 +659,7 @@ def _request(
     inputs: Mapping[str, Any] | None,
     input_files: Sequence[str | Path],
     max_usd: float | None,
+    require_estimates: bool = False,
     cwd: str | Path | None,
     routes: Sequence[str | Path] | None,
     arguments: Mapping[str, str] | None,
@@ -651,6 +671,7 @@ def _request(
                 ("inputs", inputs),
                 ("input_files", input_files or None),
                 ("max_usd", max_usd),
+                ("require_estimates", require_estimates or None),
                 ("cwd", cwd),
                 ("routes", routes or None),
                 ("arguments", arguments or None),
@@ -665,6 +686,8 @@ def _request(
         if target._request is None:
             raise ValueError("this Plan was not made by grida.fx.plan, so it names nothing to run")
         return target._request
+    if not isinstance(require_estimates, bool):
+        raise TypeError("require_estimates is true or false")
     if inputs is not None and not isinstance(inputs, Mapping):
         raise TypeError("inputs is a mapping of input names to values")
     return _Request(
@@ -672,6 +695,7 @@ def _request(
         inputs=dict(inputs) if inputs else None,
         input_files=tuple(os.fspath(path) for path in input_files),
         max_usd=None if max_usd is None else _amount("max_usd", max_usd),
+        require_estimates=require_estimates,
         cwd=Path(cwd).absolute() if cwd is not None else Path.cwd(),
         routes=tuple(os.fspath(path) for path in routes or ()),
         arguments=tuple((str(name), str(value)) for name, value in (arguments or {}).items()),
@@ -1033,7 +1057,7 @@ async def _plan(request: _Request) -> Plan:
     if (
         prepared.get("kind") != "fx-prepared-plan-v1"
         or not isinstance(graph, dict)
-        or graph.get("kind") != "fx-graph-v1"
+        or graph.get("kind") not in ("fx-graph-v1", "fx-graph-v2")
         or not isinstance(graph.get("workflow"), dict)
         or not isinstance(graph["workflow"].get("id"), str)
         or not isinstance(graph["workflow"].get("title"), str)
@@ -1047,10 +1071,14 @@ async def _plan(request: _Request) -> Plan:
             for problem in graph["problems"]
         )
         or not _price_range(graph.get("estimate"))
+        or graph["kind"] == "fx-graph-v1"
+        and graph["estimate"]["low_usd"] is None
         or "ceiling_usd" not in graph["estimate"]
         or not _ceiling(graph["estimate"].get("ceiling_usd"))
         or not isinstance(price, dict)
         or not _price_range(price.get("estimate"))
+        or price["estimate"]["low_usd"] is None
+        and price.get("kind") != "fx-price-v2"
         or "ceiling_usd" not in price
         or not _ceiling(price["ceiling_usd"])
         or not isinstance(price.get("phases"), list)
@@ -1075,11 +1103,23 @@ def _amount_value(value: Any) -> bool:
 
 
 def _price_range(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if _amount_value(value.get("low_usd")) and _amount_value(value.get("high_usd")):
+        return value["low_usd"] <= value["high_usd"] and not any(
+            key in value for key in ("known_low_usd", "known_high_usd", "unpriced_calls")
+        )
     return (
-        isinstance(value, dict)
-        and _amount_value(value.get("low_usd"))
-        and _amount_value(value.get("high_usd"))
-        and value["low_usd"] <= value["high_usd"]
+        "low_usd" in value
+        and value["low_usd"] is None
+        and "high_usd" in value
+        and value["high_usd"] is None
+        and _amount_value(value.get("known_low_usd"))
+        and _amount_value(value.get("known_high_usd"))
+        and value["known_low_usd"] <= value["known_high_usd"]
+        and isinstance(value.get("unpriced_calls"), int)
+        and not isinstance(value["unpriced_calls"], bool)
+        and value["unpriced_calls"] > 0
     )
 
 
@@ -1138,6 +1178,7 @@ async def plan_async(
     inputs: Mapping[str, Any] | None = None,
     input_files: Sequence[str | Path] = (),
     max_usd: float | None = None,
+    require_estimates: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1149,6 +1190,7 @@ async def plan_async(
         inputs=inputs,
         input_files=input_files,
         max_usd=max_usd,
+        require_estimates=require_estimates,
         cwd=cwd,
         routes=routes,
         arguments=arguments,
@@ -1162,6 +1204,7 @@ def plan(
     inputs: Mapping[str, Any] | None = None,
     input_files: Sequence[str | Path] = (),
     max_usd: float | None = None,
+    require_estimates: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1174,6 +1217,7 @@ def plan(
             inputs=inputs,
             input_files=input_files,
             max_usd=max_usd,
+            require_estimates=require_estimates,
             cwd=cwd,
             routes=routes,
             arguments=arguments,
@@ -1188,6 +1232,7 @@ async def run_async(
     input_files: Sequence[str | Path] = (),
     live: bool = False,
     max_usd: float | None = None,
+    require_estimates: bool = False,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
     name: str | None = None,
@@ -1223,6 +1268,7 @@ async def run_async(
         inputs=inputs,
         input_files=input_files,
         max_usd=max_usd,
+        require_estimates=require_estimates,
         cwd=cwd,
         routes=routes,
         arguments=arguments,
@@ -1316,6 +1362,7 @@ def run(
     input_files: Sequence[str | Path] = (),
     live: bool = False,
     max_usd: float | None = None,
+    require_estimates: bool = False,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
     name: str | None = None,
@@ -1334,6 +1381,7 @@ def run(
             input_files=input_files,
             live=live,
             max_usd=max_usd,
+            require_estimates=require_estimates,
             yes_up_to=yes_up_to,
             run_dir=run_dir,
             name=name,

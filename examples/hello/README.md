@@ -31,7 +31,7 @@ phase 1   11 steps   0 provider calls   $0.00
 cached    0 of 3 known steps
 estimate  $0.00
 run       runs/hello/<date>-1
-result    ok   spent $0.00
+result    ok   booked $0.00
 ```
 
 - **11 steps:** for each of the three badges, `draw`, `clear` and `small`; then `sheet` and

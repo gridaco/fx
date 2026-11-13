@@ -31,8 +31,12 @@ export interface Problem {
 
 /** An amount range in US dollars. */
 export interface PriceRange {
-  low_usd: number;
-  high_usd: number;
+  low_usd: number | null;
+  high_usd: number | null;
+  /** Known subtotal when the total forecast is unavailable. */
+  known_low_usd?: number;
+  known_high_usd?: number;
+  unpriced_calls?: number;
 }
 
 /** A with-value of the graph: a plain value, or `{ pending: [<instance ids>] }` while it waits on
@@ -75,9 +79,9 @@ export interface GraphInstance {
   [field: string]: unknown;
 }
 
-/** `grida-fx expand`, and `plan --json`: the expanded graph (fx-graph-v1). */
+/** `grida-fx expand`, and `plan --json`: the expanded graph (fx-graph-v1 or fx-graph-v2). */
 export interface Graph {
-  kind: "fx-graph-v1";
+  kind: "fx-graph-v1" | "fx-graph-v2";
   workflow: { id: string; title: string; description?: string; file?: string };
   /** Each distinct `uses`, with its type identity (and a project type's source digests). */
   types?: {
@@ -95,7 +99,9 @@ export interface Graph {
     step?: string;
     max: number;
     phase: number;
-    high_usd: number;
+    high_usd: number | null;
+    known_high_usd?: number;
+    unpriced_calls?: number;
     waiting_on?: string[];
   }[];
   estimate: PriceRange & { ceiling_usd: number | null };
@@ -119,6 +125,8 @@ export interface PricePhase extends PriceRange {
 
 /** `grida-fx price`: the plan's price by phase. */
 export interface Price {
+  /** Present for forecasts containing unpriced calls. */
+  kind?: "fx-price-v2";
   phases: PricePhase[];
   estimate: PriceRange;
   ceiling_usd: number | null;

@@ -110,6 +110,33 @@ describe.skipIf(!NODE || process.platform === "win32")("prepared SDK plans", () 
     }
   });
 
+  test("prepared unknown forecasts retain their facts and strict planning policy", async () => {
+    const engine = fake();
+    try {
+      const forecast = { low_usd: null, high_usd: null, known_low_usd: 0.04, known_high_usd: 0.04, unpriced_calls: 1 };
+      const models = { fx: "routes/v1", routes: [{ capability: "image.generate", route: "img-new@acme" }] };
+      const snapshot = prepared(models);
+      const uncertain = {
+        ...snapshot,
+        graph: { ...snapshot.graph, kind: "fx-graph-v2", estimate: { ...forecast, ceiling_usd: 2 } },
+        price: { ...snapshot.price, kind: "fx-price-v2", estimate: forecast, phases: [{ phase: 1, steps: 2, calls: [2, 2], ...forecast, then: [] }] },
+      };
+      engine.reply({ prepared: uncertain });
+      const planned = await plan("lantern", { ...engine.options, requireEstimates: true });
+      expect(planned.estimate.lowUsd).toBeNull();
+      expect(planned.forecast.unpricedCalls).toBe(1);
+      await run(planned);
+      expect(engine.calls().filter((call) => ["plan", "run"].includes(call.args[0]!)).every((call) => call.args.includes("--require-estimates"))).toBe(true);
+      expect(Object.values(engine.calls()[1]?.files ?? {})).toEqual([models]);
+      for (const change of [{ unpriced_calls: 0 }, { unpriced_calls: true }, { known_low_usd: -1 }, { high_usd: 1 }]) {
+        engine.reply({ prepared: { ...uncertain, graph: { ...uncertain.graph, estimate: { ...uncertain.graph.estimate, ...change } } } });
+        await expect(plan("lantern", engine.options)).rejects.toBeInstanceOf(FxError);
+      }
+    } finally {
+      engine.cleanup();
+    }
+  });
+
   test("run(target) uses its prepared snapshot and removes files when execution fails", async () => {
     const engine = fake();
     try {
@@ -155,6 +182,9 @@ describe.skipIf(!NODE || process.platform === "win32")("prepared SDK plans", () 
     const engine = fake();
     try {
       for (const change of [
+        { graph: { ...prepared().graph, kind: ["fx-graph-v1"] } },
+        { graph: { ...prepared().graph, estimate: { low_usd: null, high_usd: null, known_low_usd: 0, known_high_usd: 0, unpriced_calls: 1, ceiling_usd: 2 } } },
+        { price: { ...prepared().price, estimate: { low_usd: null, high_usd: null, known_low_usd: 0, known_high_usd: 0, unpriced_calls: 1 } } },
         { kind: "fx-prepared-plan-v2" }, { graph: [] }, { price: [] },
         { graph: { kind: "fx-graph-v1" } },
         { graph: { ...prepared().graph, problems: {} } },

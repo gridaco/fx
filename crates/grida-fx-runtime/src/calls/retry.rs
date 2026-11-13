@@ -7,7 +7,9 @@
 //! starts a new attempt or resends under the current one. Before each send the route's slot and
 //! pacing are taken ([`super::pacing::Admission::admit`]; `Pacing` in a run), and only then is a
 //! new attempt's hold reserved: a request waiting for its slot holds none of the ceiling, and a
-//! refused reservation gives its slot back. Between sends the owner waits [`Backoff`] (0.5 s,
+//! refused reservation gives its slot back. Temporarily occupied budget also gives its slot
+//! back before waiting cancellably for a settlement. Unpriced attempts reserve the remaining
+//! applicable authorization instead of a route price. Between sends the owner waits [`Backoff`] (0.5 s,
 //! doubling, at most 8 s). After a `NotReceived` whose provider asked for a wait (`retry_after`,
 //! a `Retry-After` header), it waits the longer of the backoff and that wait, the wait capped at
 //! [`MAX_RETRY_AFTER`] (60 s) (spec/adapters.md §3.3).
@@ -160,6 +162,22 @@ pub trait HoldBook: Send + Sync {
         let _ = call;
         self.reserve(node_id, amount, scopes)
     }
+    /// Opens the remaining authorization for an unpriced attempt.
+    fn reserve_unknown_call(
+        &self,
+        node_id: String,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        let _ = (node_id, scopes, call);
+        Err(NotReserved::Unrecorded(
+            "this budget book cannot authorize unpriced work".into(),
+        ))
+    }
+    /// Budget changes, subscribed before attempting a reservation to avoid missed wakeups.
+    fn changes(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        None
+    }
     /// Settles a hold: what was charged, whether or not the log could record it.
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd;
     /// Why the book can no longer record what is spent (a settlement or a reservation its log
@@ -182,6 +200,19 @@ impl HoldBook for Ledger {
         call: &str,
     ) -> Result<Hold, NotReserved> {
         Ledger::reserve_recorded_for(self, node_id, amount, scopes, Some(call.to_string()))
+    }
+
+    fn reserve_unknown_call(
+        &self,
+        node_id: String,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        self.reserve_unknown_recorded_for(node_id, scopes, Some(call.to_string()))
+    }
+
+    fn changes(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        Some(Ledger::changes(self))
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
@@ -229,6 +260,8 @@ pub struct Attempts<'a> {
     pub call: CallRequest,
     /// The route's high price for this request: what each attempt reserves.
     pub hold: Usd,
+    /// No numeric reservation is supplied by the route; use remaining authorization.
+    pub unknown: bool,
     pub scopes: &'a Scopes,
     /// Names each new hold (`ledger::hold_id`).
     pub hold_name: &'a (dyn Fn() -> String + Sync),
@@ -295,24 +328,15 @@ async fn plain(
     let mut attempt = 0;
     let mut resend: Option<Hold> = None;
     loop {
-        // The slot first, then the hold (module doc, "Sends").
-        let Some((slot, _admission)) = attempts.admit(&route_id).await else {
-            if let Some(hold) = resend.take() {
-                attempts.settle(hold, Some(Usd::ZERO));
-            }
-            return Outcome::Cancelled;
+        let was_resend = resend.is_some();
+        let (slot, _admission, hold) = match attempts.start(&route_id, resend.take()).await {
+            Ok(started) => started,
+            Err(outcome) => return *outcome,
         };
-        let hold = match resend.take() {
-            Some(hold) => hold,
-            None => match attempts.reserve() {
-                Ok(hold) => {
-                    attempt += 1;
-                    call.attempt = attempt;
-                    hold
-                }
-                Err(not) => return not_reserved(not),
-            },
-        };
+        if !was_resend {
+            attempt += 1;
+            call.attempt = attempt;
+        }
         sends += 1;
         let sent = race(adapter.send(&call), attempts.cancel)
             .await
@@ -404,25 +428,23 @@ async fn submit(
     let mut attempt = 0;
     let mut resend: Option<Hold> = None;
     loop {
-        // The slot first, then the hold (module doc, "Sends").
-        let Some((slot, _admission)) = attempts.admit(&route_id).await else {
-            if let Some(hold) = resend.take() {
-                // The `submitting` record of the submit that was not received.
-                return attempts.unsent(fields, hold, Outcome::Cancelled);
-            }
-            return Outcome::Cancelled;
-        };
-        let hold = match resend.take() {
-            Some(hold) => hold,
-            None => match attempts.reserve() {
-                Ok(hold) => {
-                    attempt += 1;
-                    call.attempt = attempt;
-                    hold
+        let was_resend = resend.is_some();
+        let (slot, _admission, hold) = match attempts.start(&route_id, resend.take()).await {
+            Ok(started) => started,
+            Err(outcome) => {
+                if matches!(*outcome, Outcome::Cancelled) && was_resend {
+                    // The earlier submit provably was not received.
+                    if let Err(error) = attempts.jobs.remove_job(&fields.key) {
+                        return Outcome::Store(error);
+                    }
                 }
-                Err(not) => return not_reserved(not),
-            },
+                return *outcome;
+            }
         };
+        if !was_resend {
+            attempt += 1;
+            call.attempt = attempt;
+        }
         // spec/store.md §5: `submitting` is written before the submit may leave.
         if let Err(error) = attempts.save(fields, JobState::Submitting, None) {
             drop(slot);
@@ -703,6 +725,7 @@ fn not_reserved(not: NotReserved) -> Outcome {
     match not {
         NotReserved::Refused(refusal) => Outcome::Ceiling(refusal),
         NotReserved::Unrecorded(reason) => Outcome::Unrecorded(reason),
+        NotReserved::Waiting => Outcome::Unrecorded("budget waiting was not handled".into()),
     }
 }
 
@@ -723,8 +746,51 @@ fn no_job_fields(call: &CallRequest) -> Outcome {
 impl Attempts<'_> {
     /// Reserves a new attempt's hold under a new name.
     fn reserve(&self) -> Result<Hold, NotReserved> {
-        self.book
-            .reserve_call((self.hold_name)(), self.hold, self.scopes, &self.call.key)
+        if self.unknown {
+            self.book
+                .reserve_unknown_call((self.hold_name)(), self.scopes, &self.call.key)
+        } else {
+            self.book
+                .reserve_call((self.hold_name)(), self.hold, self.scopes, &self.call.key)
+        }
+    }
+
+    /// Never keep a provider slot or an invocation admission while waiting for another hold.
+    async fn start(
+        &self,
+        route_id: &str,
+        mut resend: Option<Hold>,
+    ) -> Result<(Slot, Option<crate::run_control::Admission>, Hold), Box<Outcome>> {
+        let mut changes = self.book.changes();
+        loop {
+            let Some((slot, admission)) = self.admit(route_id).await else {
+                if let Some(hold) = resend.take() {
+                    self.settle(hold, Some(Usd::ZERO));
+                }
+                return Err(Box::new(Outcome::Cancelled));
+            };
+            let reserved = resend.take().map_or_else(|| self.reserve(), Ok);
+            match reserved {
+                Ok(hold) => return Ok((slot, admission, hold)),
+                Err(NotReserved::Waiting) => {
+                    drop(admission);
+                    drop(slot);
+                    let Some(changes) = changes.as_mut() else {
+                        return Err(Box::new(Outcome::Unrecorded(
+                            "budget book cannot wait for reservations".into(),
+                        )));
+                    };
+                    tokio::select! {
+                        biased;
+                        () = self.cancel.cancelled() => return Err(Box::new(Outcome::Cancelled)),
+                        changed = changes.changed() => if changed.is_err() {
+                            return Err(Box::new(Outcome::Unrecorded("budget notifications ended".into())));
+                        },
+                    }
+                }
+                Err(not) => return Err(Box::new(not_reserved(not))),
+            }
+        }
     }
 
     /// The checks of an answer (module doc, "Checking an answer"): the answer with its canonical
@@ -1081,6 +1147,7 @@ mod tests {
                 control: None,
                 call: call(),
                 hold: Usd(40_000),
+                unknown: false,
                 scopes: &self.scopes,
                 hold_name: &*self.hold_name,
                 limit: None,

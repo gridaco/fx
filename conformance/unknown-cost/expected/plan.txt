@@ -1,0 +1,5 @@
+case  ·  1 phase
+phase 1   4 steps   4 provider calls   $0.12 estimated + 3 unpriced calls
+cached    0 of 4 known steps
+estimate  $0.12 estimated + 3 unpriced calls
+note      image.generate on img-c@acme has no price: each call holds its cap, $1.00, and is booked at what the provider reports, else the cap

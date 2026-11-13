@@ -100,7 +100,12 @@ pub async fn bind_plan(graph: Value, port: u16) -> io::Result<Server> {
 }
 
 fn plan_source(graph: Value) -> io::Result<Source> {
-    validate(Schema::Graph, &graph, "plan")
+    let schema = if graph["kind"] == "fx-graph-v2" {
+        Schema::GraphV2
+    } else {
+        Schema::Graph
+    };
+    validate(schema, &graph, "plan")
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.message))?;
     scopes::validate_plan(&graph)
         .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;

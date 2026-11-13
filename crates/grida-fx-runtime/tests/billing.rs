@@ -46,6 +46,7 @@ fn route(capability: &str, model: &str, high: i64) -> Route {
             by: None,
             tiers: IndexMap::new(),
             capped: false,
+            unknown: false,
         },
         features: Default::default(),
         concurrency: None,
@@ -1059,4 +1060,305 @@ async fn arguments_the_model_wrote_never_read_as_fx_values() {
         &[1],
     );
     assert!(rig.services.engine.store.load_call(&key).is_some());
+}
+
+fn unpriced_site(instance: &str) -> CallSite {
+    let mut selected = site(instance, "image.generate", "img-a");
+    let route = selected.routes.get_mut("image.generate").unwrap();
+    route.price.unknown = true;
+    route.price.low = Usd::ZERO;
+    route.price.high = Usd::ZERO;
+    selected
+}
+
+#[tokio::test]
+async fn unpriced_calls_reserve_remaining_authorization_and_release_reported_remainders() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![Sent::Answered(picture(1)), Sent::Answered(picture(2))]);
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", fake.as_request()),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    let mut selected = unpriced_site("draw#1");
+    selected.scopes = vec![("draw".into(), Usd(500_000))];
+    for prompt in ["a", "b"] {
+        assert_eq!(
+            rig.call(&selected, "image.generate", json!({"prompt":prompt}))
+                .await
+                .answer()
+                .cost,
+            Some(Usd(10_000))
+        );
+    }
+    let held = rig.events("budget_reserved");
+    assert_eq!(
+        held.iter()
+            .map(|event| event["amount_usd"].clone())
+            .collect::<Vec<_>>(),
+        [json!(0.5), json!(0.49)]
+    );
+    assert_eq!(rig.ledger.charged(), Usd(20_000));
+    rig.assert_settled();
+}
+
+#[tokio::test]
+async fn an_unpriced_unreported_call_books_its_reservation_but_preserves_unknown_actual() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut answer = picture(1);
+    answer.cost = None;
+    let fake = FakeAdapter::plain(vec![Sent::Answered(answer)]);
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", fake.as_request()),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    let selected = unpriced_site("draw#1");
+    let first = rig
+        .call(&selected, "image.generate", json!({"prompt":"a"}))
+        .await;
+    assert_eq!(first.answer().cost, None);
+    assert_eq!(first.answer().charged, Usd(1_000_000));
+    assert_eq!(rig.events("call")[0]["cost_usd"], Value::Null);
+    assert_eq!(rig.events("budget_settled")[0]["reported"], false);
+    // Cached work is still usable after the accounting budget is consumed.
+    assert!(
+        rig.call(&selected, "image.generate", json!({"prompt":"a"}))
+            .await
+            .answer()
+            .cached
+    );
+    assert_eq!(
+        rig.call(&selected, "image.generate", json!({"prompt":"b"}))
+            .await
+            .rpc()
+            .code,
+        ErrorCode::CeilingExceeded.code()
+    );
+    assert_eq!(fake.log().len(), 1);
+    let replayed = Ledger::new(Some(Usd(1_000_000)), None);
+    replayed.replay(
+        &read_events(&dir.path().join("events.jsonl")).unwrap(),
+        &|_| Vec::new(),
+    );
+    assert_eq!(replayed.charged(), Usd(1_000_000));
+    rig.assert_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn unpriced_billed_retries_reacquire_remaining_authorization() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![
+        Sent::Failed {
+            reason: "billed failure".into(),
+            cost: Some(Usd(20_000)),
+            retryable: true,
+        },
+        Sent::Answered(picture(1)),
+    ]);
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", fake.as_request()),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    assert_eq!(
+        rig.call(
+            &unpriced_site("draw#1"),
+            "image.generate",
+            json!({"prompt":"a"})
+        )
+        .await
+        .answer()
+        .charged,
+        Usd(30_000)
+    );
+    let held = rig.events("budget_reserved");
+    assert_eq!(
+        held.iter()
+            .map(|event| event["amount_usd"].clone())
+            .collect::<Vec<_>>(),
+        [json!(1), json!(0.98)]
+    );
+    rig.assert_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn competing_calls_wait_for_an_unknown_hold_without_failing_or_keeping_the_route_slot() {
+    let dir = tempfile::tempdir().unwrap();
+    let slow = Slow::new(Duration::from_secs(3));
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", Adapter::Request(slow.clone())),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    let mut unknown = unpriced_site("draw#1");
+    unknown.limits.insert("image.generate".into(), Some(1));
+    let mut known = site("draw#2", "image.generate", "img-a");
+    known.limits.insert("image.generate".into(), Some(1));
+    let (first, second) = tokio::join!(
+        rig.call(&unknown, "image.generate", json!({"prompt":"a"})),
+        rig.call(&known, "image.generate", json!({"prompt":"b"})),
+    );
+    assert_eq!(first.answer().charged, Usd(10_000));
+    assert_eq!(second.answer().charged, Usd(10_000));
+    assert_eq!(slow.sends(), 2);
+    assert!(rig.events("budget_refused").is_empty());
+    rig.assert_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_budget_waiters_leaves_no_unsent_reservation() {
+    let dir = tempfile::tempdir().unwrap();
+    let slow = Slow::new(Duration::from_secs(30));
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", Adapter::Request(slow.clone())),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    let cancel = rig.services.cancel.clone();
+    let first_site = unpriced_site("draw#1");
+    let second_site = unpriced_site("draw#2");
+    let (first, second, ()) = tokio::join!(
+        rig.call(&first_site, "image.generate", json!({"prompt":"a"})),
+        rig.call(&second_site, "image.generate", json!({"prompt":"b"})),
+        async {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            cancel.cancel();
+        },
+    );
+    assert!(first.result.is_err());
+    assert!(second.result.is_err());
+    assert_eq!(slow.sends(), 1);
+    assert_eq!(rig.events("budget_reserved").len(), 1);
+    rig.assert_settled();
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unpriced_provably_unreceived_resend_keeps_the_same_reservation() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![
+        Sent::NotReceived {
+            reason: "not sent".into(),
+            retry_after: None,
+        },
+        Sent::Answered(picture(1)),
+    ]);
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", fake.as_request()),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    assert_eq!(
+        rig.call(
+            &unpriced_site("draw#1"),
+            "image.generate",
+            json!({"prompt":"a"})
+        )
+        .await
+        .answer()
+        .charged,
+        Usd(10_000)
+    );
+    assert_eq!(rig.events("budget_reserved").len(), 1);
+    assert_eq!(fake.log().len(), 2);
+    rig.assert_settled();
+}
+
+struct SlowJob;
+
+impl LongJob for SlowJob {
+    fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+        Box::pin(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Submitted::Accepted {
+                handle: json!({"key":call.key}),
+            }
+        })
+    }
+
+    fn collect<'a>(&'a self, _: &'a CallRequest, _: &'a Value) -> BoxFuture<'a, Collected> {
+        Box::pin(async {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Collected::Answered(picture(1))
+        })
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn budget_waiters_release_a_route_slot_needed_to_collect_the_funding_job() {
+    let dir = tempfile::tempdir().unwrap();
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", Adapter::Job(Arc::new(SlowJob))),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    let mut first = unpriced_site("draw#1");
+    let mut second = unpriced_site("draw#2");
+    for site in [&mut first, &mut second] {
+        site.limits.insert("image.generate".into(), Some(1));
+    }
+    let (first, second) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(
+            rig.call(&first, "image.generate", json!({"prompt":"a"})),
+            rig.call(&second, "image.generate", json!({"prompt":"b"})),
+        )
+    })
+    .await
+    .expect("collection must not deadlock behind an unfunded call");
+    assert_eq!(first.answer().charged, Usd(10_000));
+    assert_eq!(second.answer().charged, Usd(10_000));
+    rig.assert_settled();
+}
+
+struct PlanBilled;
+
+impl RequestAdapter for PlanBilled {
+    fn billing(&self) -> grida_fx_providers::adapter::Billing {
+        grida_fx_providers::adapter::Billing::Plan
+    }
+
+    fn send<'a>(&'a self, _: &'a CallRequest) -> BoxFuture<'a, Sent> {
+        Box::pin(async {
+            let mut answer = picture(1);
+            answer.cost = None;
+            Sent::Answered(answer)
+        })
+    }
+}
+
+#[tokio::test]
+async fn an_unpriced_plan_billed_call_reserves_zero_without_dollar_authorization() {
+    let dir = tempfile::tempdir().unwrap();
+    // The runner puts an invocation without a USD ceiling under an internal zero-dollar ledger.
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", Adapter::Request(Arc::new(PlanBilled))),
+        true,
+        Some(Usd::ZERO),
+    );
+    assert!(
+        rig.services
+            .engine
+            .adapters
+            .plan_providers()
+            .contains("acme")
+    );
+    let answered = rig
+        .call(
+            &unpriced_site("draw#1"),
+            "image.generate",
+            json!({"prompt":"a"}),
+        )
+        .await;
+    assert_eq!(answered.answer().charged, Usd::ZERO);
+    assert_eq!(rig.events("budget_reserved")[0]["amount_usd"], json!(0));
+    assert!(rig.events("budget_refused").is_empty());
+    rig.assert_settled();
 }

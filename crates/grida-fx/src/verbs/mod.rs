@@ -33,7 +33,7 @@ use serde_json::Value;
 use std::path::Path;
 
 /// The `kind` of a run folder's `plan.json`.
-const GRAPH_KIND: &str = "fx-graph-v1";
+const GRAPH_KINDS: [&str; 2] = ["fx-graph-v1", "fx-graph-v2"];
 
 /// The workflow's takes file, relative to the planning project (its file name when it lies
 /// outside it, which planning never makes). A run's `plan.json` and a materialized plan record
@@ -65,7 +65,10 @@ pub(crate) fn read_plan(folder: &Path, label: &str) -> Result<Value, Error> {
     let bytes = std::fs::read(folder.join("plan.json")).map_err(|_| refused())?;
     let text = std::str::from_utf8(&bytes).map_err(|_| refused())?;
     let document = grida_fx_core::value::parse_json(text).map_err(|_| refused())?;
-    let is_graph = document.get("kind").and_then(Value::as_str) == Some(GRAPH_KIND);
+    let is_graph = document
+        .get("kind")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| GRAPH_KINDS.contains(&kind));
     let has_id = document
         .get("workflow")
         .and_then(|w| w.get("id"))

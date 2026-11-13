@@ -15,6 +15,25 @@ skill disagree, trust this file. Only the contracts in `spec/` (normative) and t
 rank above it. An installed FX may be older or newer than the version above: `grida fx --version`
 says which you have, and `grida fx --help` and `grida fx <verb> --help` are always right for it.
 
+Cost forecasts are optional. A compatible new GG/OpenRouter image model may resolve without
+a price: ordinary planning succeeds and displays unknown cost. A partial estimate names its
+unpriced calls instead of presenting the known subtotal as the total. Shipped, authored and
+discovered routes use the same rule; a complete authored route may omit `price`, and `price: null`
+clears an inherited price. Existing `price.cap_usd` is a reservation allowance, not a forecast.
+
+`grida fx plan <workflow> --require-estimates` and the same option on `run` require applicable
+forecasts for uncached paid work. Python uses `require_estimates=True`; JavaScript uses
+`requireEstimates: true`. This checks coverage, not billing accuracy.
+
+A live unpriced call still requires approval and a ceiling. It reserves the remaining applicable
+run/step budget; competing work waits while funds are held. Reported cost releases unused funds.
+When the provider reports none, FX books the full reservation and retains unknown actual cost;
+that can exhaust the accounting budget after one call. Explicit per-call caps or step budgets
+can partition authorization. FX reservations do not guarantee the provider's final invoice.
+SDK `estimate` accessors preserve unknown totals; `forecast` exposes known subtotals and the
+unpriced call count. See the canonical [routing cases](https://github.com/gridaco/fx/tree/main/conformance/model-selection)
+and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cost).
+
 ## Rules for agents
 
 - **Plan first; it is free.** `grida fx plan <workflow>` never makes a paid model call.
@@ -328,15 +347,13 @@ only what its installed adapter supports. It does not import a model, select ano
 or download code. Existing bindings and your own route tables remain authoritative; explicit
 `--routes` disables discovery. Other capabilities and providers retain the authored-route path.
 
-Model metadata and planning allowances are separate facts. Route prices can be FX-maintained
-or project-authored estimates; exact provider quotes are not required. Automatic discovery
-currently derives an allowance only from supported flat per-output-image OpenRouter rates.
-When FX has no allowance for a compatible model, supply an authored route with an estimated
-price or `price: {cap_usd: N}` for unknown cost. Variable cost is a normal condition; provider
-changes or a new estimation service are not required. A few illustrative scenarios do not
-automatically establish a general request price. Missing pricing is never $0. A cap reserves
-against FX's budget; it is not a provider-enforced limit or approval to spend. Live generation
-still needs the user's go and a run ceiling.
+Model execution facts and cost forecasts are independent. Compatible metadata resolves even
+without a price. Forecasts may come from FX, an authored route or a supported published rate;
+missing cost stays unknown. Automatic pricing currently recognizes unconditional per-output-image
+OpenRouter rates. Illustrative scenarios apply only when their assumptions fit the request.
+Use `--require-estimates` when forecast coverage is required. Live work still needs approval
+and a ceiling; unpriced attempts reserve remaining applicable budget, and an unreported charge
+books that reservation in full while actual cost stays unknown.
 
 The optional `.fx/models/` cache holds sanitized normalized routes, never provider keys or raw
 responses. Metadata is fresh for one hour; stale metadata may be used with the network off or
@@ -397,7 +414,7 @@ appears as a `models` diagnostic after the provider report; other diagnostics co
   `max_tokens`, a strict `json_schema` response format or strict function tools, and the
   provider's member of `provider_options`, and nothing chosen for one provider; the key as
   declared, or none for a provider declared without a `credential`. By default they read no cost,
-  so every call is booked at its whole reservation: give each route a `cap_usd` (or a price you trust).
+  so every call is booked at its whole reservation: optionally give each route a `cap_usd` to partition authorization, or supply an applicable estimate.
   A 408 is possibly billed: book its reservation, then reserve a new attempt before retrying.
   A 429 is sent again unbilled; another 4xx fails without retrying, and a 5xx is booked and tried again.
   Optional route `contract` settings: `image_detail` (`auto`, `low`, `high`, `original`, absent
@@ -466,12 +483,12 @@ providers:
 - Built-in prices are planning allowances; a call is booked at what the provider reports, else at
   its whole reservation. A route on a provider with no adapter still plans; live it is refused,
   and so is one whose `contract` names an `adapter` FX does not have (doctor: `no adapter`).
-- **A route whose price you do not know** takes a cap instead: `price: { cap_usd: N }`, alone in
-  `price`. Each call is planned at $0 to N and holds N against the ceiling, and is booked at what
-  the provider reports, else at N. The cap is what FX holds, not a limit the provider honours: a
-  dearer call is booked in full. The plan text adds a `note` per capped route (not in a stand-in
-  run, which holds nothing), and `plan --json` marks each step that calls one with `capped: true`
-  in its `price`. A `price` must state an amount: `usd: 0` is free, and `price: {}` is refused.
+- **A route whose price you do not know** may omit `price`, or use `price: null` to clear an
+  inherited price. Its forecast is unknown. Optionally supply `price: { cap_usd: N }` to reserve
+  N per call instead of the remaining applicable budget. A cap is an allowance, not a forecast
+  or a provider-enforced limit. Reported cost is booked in full; without one, the whole hold is
+  booked and actual cost stays unknown. `price: {}` is invalid; `usd: 0` explicitly declares free.
+
 - **Parameters FX does not expose** go in `provider_options`, an object by provider whose members
   are the provider's own parameters: a paid step's `with:` takes it, and so does a route's
   `contract`. Only the member of the provider the call runs on is sent, after FX's own members; a
@@ -491,8 +508,8 @@ providers:
 ```
 
 - **An authored model route** remains independent of automatic image discovery. A model FX
-  does not list runs on a route of your own table, with a cap when you do not know
-  its price (recipe below). On OpenRouter a new chat model needs only its id, for structured output
+  does not list runs on a route of your own table, optionally with a cap to partition
+  authorization when its forecast is unknown (recipe below). On OpenRouter a new chat model needs only its id, for structured output
   and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
   FX's generic image adapter: it sends the prompt, the input pictures and the
   `provider_options`, and nothing chosen for one model, and turns the answer into a PNG. On fal the model is the endpoint id as
@@ -566,7 +583,7 @@ routes:
   names `jpeg_output`, `webp_output` or `hosted_url_reference_input` is now refused while planning
   as no feature of its capability: drop the name, since every route answers PNG and sends input
   pictures inline. A route whose `price` states no amount (`price: {}`, which was $0) is now
-  refused: write `usd: 0` for a free route, or `cap_usd` for one whose price you do not know. A
+  refused: write `usd: 0` for a free route, omit `price` for unknown cost, or supply an optional `cap_usd` allowance. A
   route of your own whose `contract` already named `provider_options`, which most adapters ignored,
   now sends its provider's member, or is refused when the call is sent if that member sets a
   parameter FX owns (on Codex and Grok Build, if it is not empty); its identity is unchanged, so a
@@ -680,8 +697,9 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
 
 - **Ceiling.** A live run needs one: `--max-usd`, else the workflow's `budget:`, else `fx.yaml`'s.
-  Before every paid call and attempt FX reserves its worst case; a call that would cross the
-  ceiling is not made, its step fails, dependents are skipped, and the rest of the run goes on.
+  Before every paid attempt FX reserves its allowance, or remaining applicable budget for
+  unpriced work. Calls wait for temporary holds; an exhausted budget stops new paid attempts.
+  Reported charges above a reservation are booked in full, so this is not a provider invoice guarantee.
 - **Runs.** Each run is a folder, `runs/<id>/<date>-<n>/`, with `events.jsonl` (the record),
   `plan.json`, `outputs/` and `files/`. A run ends `ok`, `failed` (naming each failure) or
   `incomplete`. `--name NAME` creates a named run once; `--resume NAME` (same target, inputs and
@@ -1274,7 +1292,7 @@ grida fx doctor lantern
 grida fx run lantern --live --max-usd 1
 ```
 
-The plan prices each call at $0 to its cap and adds a `note` per capped route; `doctor` says
+The plan shows unknown forecasts and adds a reservation `note` per capped route; `doctor` says
 `no key (OPENROUTER_API_KEY)` and `no key (FAL_KEY)` for the two routes until the keys are set,
 then `servable`. The routes name no `contract` adapter, so each gets its provider's default:
 OpenRouter's chat adapter, and fal's generic image adapter, which sends the prompt, then
@@ -1340,7 +1358,7 @@ grida fx doctor
 grida fx run colour --live --max-usd 1
 ```
 
-The plan prices the call at $0 to $0.05 and notes its cap. `doctor` says `no key (ACME_API_KEY)`
+The plan shows an unknown forecast and notes its $0.05 reservation cap. `doctor` says `no key (ACME_API_KEY)`
 for the routes until the key is set (environment or `.env`), then `servable`. The routes name no
 `adapter` in their contracts, so each gets the family's adapter (`openai-compatible-structured`,
 `openai-compatible-tool-loop`). The structured route explicitly selects `max_completion_tokens`,
@@ -1439,7 +1457,7 @@ grida fx run colour --live --max-usd 1
 ```
 
 The plan loads the adapter in the project's Python, which needs `grida` (`GRIDA_FX_PYTHON`
-names another), and prices the call at $0 to $0.05. `lock` pins the adapter's source in
+names another), and shows an unknown forecast with a $0.05 reservation cap. `lock` pins the adapter's source in
 `fx.lock`: commit it, and bump `version` when its behaviour changes. `doctor` says `adapter   acme
 adapters/acme.py#acme version 1: structured.generate (request)`, and `servable` for the route
 once `ACME_API_KEY` is set. With the network off, the adapter runs and its `fetch` is refused
@@ -1596,7 +1614,7 @@ changed-file/field/operation identities and redacted provider errors, tested thr
 | `… was refused: this route draws from a first frame` (or `last_frame needs first_frame`, `this route draws whole seconds from 3 to <n>, not <d>`, `this route draws no <resolution> clip at <ratio>`) | a fal video route: give `first_frame` (or declare `features: [text_to_video]` on a route of your own for a model that draws from the prompt alone), or ask for a length, tier and ratio its price declares |
 | `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
 | `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
-| `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | give the route its price, or `cap_usd: N` when its price is not known; an empty `price` is not $0 |
+| `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | omit `price` for unknown cost, supply an estimate, or optionally use `cap_usd: N` to partition authorization; an empty `price` is invalid |
 | `routes.<n>.price: {…} has more than 1 property` | `cap_usd` stands alone in `price`: drop the other members |
 | `routes.<n>.price.cap_usd: 0 is less than or equal to the minimum of 0` | a cap is more than 0: write `usd: 0` for a free route |
 | `… was refused: provider_options.<provider>.<name> is a member FX owns` (or `contract.provider_options…`) | FX sets that parameter itself: use the type's own setting, or leave it out |
@@ -1653,3 +1671,7 @@ changed-file/field/operation identities and redacted provider errors, tested thr
 - [Viewing runs](https://github.com/gridaco/fx/blob/main/docs/guide/07-viewing.md), [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md), [SDK runs](https://github.com/gridaco/fx/blob/main/docs/guide/09-sdk-runs.md), [cleanup](https://github.com/gridaco/fx/blob/main/docs/guide/10-cleanup.md), [exports](https://github.com/gridaco/fx/blob/main/docs/guide/11-exports.md)
 - [The Python SDK](https://github.com/gridaco/fx/blob/main/python/README.md) and [the JavaScript SDK](https://github.com/gridaco/fx/blob/main/js/fx/README.md)
 - [The FX agent skill](https://github.com/gridaco/fx/blob/main/skills/grida-fx/SKILL.md): `npx skills add gridaco/fx`
+
+Run summaries label conservative budget accounting as `booked`. A booked reservation does not
+assert that the provider reported that amount as its final charge. Provider-reported call costs
+remain separate and may be absent.

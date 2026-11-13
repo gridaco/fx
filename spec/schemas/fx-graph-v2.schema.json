@@ -1,0 +1,1016 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-graph-v2",
+  "title": "FX graph with optional cost forecasts",
+  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md \u00a78), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run. A plan a viewer serves (`plan --open`, `plan --standalone`, `view` of a workflow) adds `steps` and `takes_file`. Optional ports and bindings preserve named connection metadata for readers without changing identity.",
+  "type": "object",
+  "required": [
+    "kind",
+    "workflow",
+    "instances",
+    "pending",
+    "estimate"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "const": "fx-graph-v2"
+    },
+    "workflow": {
+      "type": "object",
+      "required": [
+        "id",
+        "title"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 96
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "file": {
+          "description": "Where the workflow came from: its project-relative POSIX path, or `<path>:<function>` for a builder (identity.md \u00a710).",
+          "type": "string"
+        }
+      }
+    },
+    "plan": {
+      "description": "The plan digest (identity.md \u00a710).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "steps": {
+      "description": "Each declared step, by its declaration path, as a reader sees it.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uses": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "view": {
+            "type": [
+              "boolean",
+              "string"
+            ]
+          },
+          "order": {
+            "description": "The step's position, from 0, in a pre-order walk of the workflow's declarations: a group before its steps, each level in authored order. Readers order steps by it, since an object keeps no member order. Absent in documents written before it existed.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "preview": {
+            "$ref": "#/$defs/preview"
+          }
+        }
+      }
+    },
+    "view_origins": {
+      "description": "Views are planned: `view_origins` from fx.yaml, recorded.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inputs": {
+      "description": "The run's inputs as plain values (identity.md \u00a73).",
+      "type": "object"
+    },
+    "takes_file": {
+      "description": "The workflow's takes file, which `reroll` and `pick` write: its POSIX path relative to the planning project's root (store.md \u00a78).",
+      "$ref": "#/$defs/relative_path"
+    },
+    "stand_in": {
+      "description": "In plan.json only, and only for a stand-in run (protocol.md \u00a75.7; store.md \u00a78, Stand-in runs): the run answers its paid calls with a stand-in. Not part of the plan digest (identity.md \u00a710).",
+      "const": true
+    },
+    "types": {
+      "description": "Each distinct `uses` of the instances, as written, with its type identity (identity.md \u00a76). A `uses` whose type could not be resolved is left out. A project type, with a version or without, also carries `source`: the digests behind its `fx-node-source-v1` object, so a checker recomputes `digest(source)` without running a node host. For a type without a version it is the digest after `@source:`; for a versioned type it is what fx.lock must hold. A built-in type has no `source`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/type_entry"
+      }
+    },
+    "instances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "path",
+          "step",
+          "take",
+          "uses",
+          "type",
+          "with",
+          "routes",
+          "state",
+          "identity",
+          "phase",
+          "key",
+          "judges",
+          "judged_by",
+          "waiting_on",
+          "needs",
+          "reads",
+          "price"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The instance id (identity.md \u00a711).",
+            "type": "string"
+          },
+          "path": {
+            "description": "The step path, with repeat keys: `entity['ada'].draw`.",
+            "type": "string"
+          },
+          "step": {
+            "description": "The declared step's path, without repeat keys.",
+            "type": "string"
+          },
+          "take": {
+            "description": "One take per regenerating level, outermost first.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          },
+          "uses": {
+            "description": "The step's `uses`, as written.",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type identity (identity.md \u00a76); null when the type could not be resolved.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "with": {
+            "description": "The plain with-values (identity.md \u00a73, \u00a78). A value not known until something runs is `{\"pending\": [<what it waits on>]}`: the ids (identity.md \u00a711) of the instances whose results it needs, sorted and distinct, each also in `waiting_on`.",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/with_value"
+            }
+          },
+          "routes": {
+            "description": "Each capability the type calls, with the route bound to it.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "route",
+                "fingerprint"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "route": {
+                  "type": "string",
+                  "pattern": "^.+@[a-z0-9._-]+$"
+                },
+                "fingerprint": {
+                  "description": "identity.md \u00a77.",
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          "state": {
+            "description": "`planned`: will run. `maybe`: runs only if a condition known at run time holds. `absent`: will not run. `blocked`: something it reads failed. `failed`: it has a result that failed (its body or an assertion failed). `done`: it has a result, from this run, an earlier one or a step `at: plan`.",
+            "enum": [
+              "planned",
+              "maybe",
+              "absent",
+              "blocked",
+              "failed",
+              "done"
+            ]
+          },
+          "identity": {
+            "description": "The step identity (identity.md \u00a78); null while a with-value is pending.",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "description": "1, or the phase a repeat over a run-time list starts.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "description": "A repeated item's key.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judges": {
+            "description": "The instance this judge gives a verdict on.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judged_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "waiting_on": {
+            "description": "Instances whose results it needs before its identity is known.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "needs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reads": {
+            "description": "The instances it reads or waits on: its upstream in the graph.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "low_usd",
+                  "high_usd"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "low_usd": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "high_usd": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "capped": {
+                    "description": "Present when one of its calls is on a capped route (fx-routes-v1 `cap_usd`): that call counts $0 in `low_usd` and its cap in `high_usd`, and is charged what the provider reports, else the cap.",
+                    "const": true
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "low_usd",
+                  "high_usd",
+                  "known_low_usd",
+                  "known_high_usd",
+                  "unpriced_calls"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "low_usd": {
+                    "type": "null"
+                  },
+                  "high_usd": {
+                    "type": "null"
+                  },
+                  "known_low_usd": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "known_high_usd": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "unpriced_calls": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "capped": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          },
+          "view": {
+            "description": "Views are planned, not implemented: the step's `view`, recorded.",
+            "type": [
+              "boolean",
+              "string"
+            ]
+          },
+          "reason": {
+            "description": "Why it is `absent`, `blocked` or `failed`.",
+            "type": "string"
+          },
+          "bindings": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/binding"
+            }
+          },
+          "interface_bindings": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/interface_binding"
+            }
+          },
+          "preview": {
+            "$ref": "#/$defs/preview"
+          },
+          "routing": {
+            "description": "Optional explanation of unqualified model resolution, keyed by capability (model-selection.md). Presentation metadata; no absolute paths and no identity effect.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "model",
+                "model_source",
+                "provider_preference",
+                "provider_source"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^@\\s]+$"
+                },
+                "model_source": {
+                  "enum": [
+                    "step",
+                    "planning_project",
+                    "workflow_home"
+                  ]
+                },
+                "provider_preference": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[a-z0-9._-]+$"
+                },
+                "provider_source": {
+                  "enum": [
+                    "planning_project",
+                    "workflow_home"
+                  ]
+                }
+              }
+            },
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            }
+          }
+        }
+      }
+    },
+    "pending": {
+      "description": "Repeats whose instances a later phase expands, with their worst case.",
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "path",
+              "max",
+              "phase",
+              "high_usd"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "step": {
+                "description": "The declared step's path, without repeat keys: `entity.draw` for `entity['ada'].draw`. Absent in documents written before it existed.",
+                "type": "string"
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "phase": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "high_usd": {
+                "type": "number",
+                "minimum": 0
+              },
+              "waiting_on": {
+                "description": "The ids (identity.md \u00a711) of the instances whose results its list needs, sorted and distinct. Absent in documents written before it existed.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "path",
+              "max",
+              "phase",
+              "high_usd",
+              "known_high_usd",
+              "unpriced_calls"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "step": {
+                "description": "The declared step's path, without repeat keys: `entity.draw` for `entity['ada'].draw`. Absent in documents written before it existed.",
+                "type": "string"
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "phase": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "high_usd": {
+                "type": "null"
+              },
+              "waiting_on": {
+                "description": "The ids (identity.md \u00a711) of the instances whose results its list needs, sorted and distinct. Absent in documents written before it existed.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              },
+              "known_high_usd": {
+                "type": "number",
+                "minimum": 0
+              },
+              "unpriced_calls": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "estimate": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "low_usd",
+            "high_usd",
+            "ceiling_usd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "low_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "high_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "ceiling_usd": {
+              "description": "`--max-usd`, else the workflow's `budget`, else the project's; null when none.",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "low_usd",
+            "high_usd",
+            "known_low_usd",
+            "known_high_usd",
+            "unpriced_calls",
+            "ceiling_usd"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "low_usd": {
+              "type": "null"
+            },
+            "high_usd": {
+              "type": "null"
+            },
+            "known_low_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "known_high_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "unpriced_calls": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ceiling_usd": {
+              "description": "`--max-usd`, else the workflow's `budget`, else the project's; null when none.",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "problems": {
+      "description": "Why the plan is refused; empty when it is not.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "where",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scope"
+      },
+      "description": "Optional engine-owned display scopes. Absence means a legacy flat graph; an empty array authoritatively means no nested scopes."
+    }
+  },
+  "$defs": {
+    "with_value": {
+      "description": "A plain value (identity.md \u00a73), at any depth; a pending one is an object whose only member is `pending`, an array of the instance ids it waits on.",
+      "if": {
+        "type": "object",
+        "required": [
+          "pending"
+        ],
+        "maxProperties": 1
+      },
+      "then": {
+        "properties": {
+          "pending": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "else": {
+        "items": {
+          "$ref": "#/$defs/with_value"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/with_value"
+        }
+      }
+    },
+    "relative_path": {
+      "description": "A POSIX path relative to its base: no leading `/`, no empty, `.` or `..` segment.",
+      "type": "string",
+      "pattern": "^[^/]+(?:/[^/]+)*$",
+      "not": {
+        "pattern": "(?:^|/)\\.\\.?(?:/|$)"
+      }
+    },
+    "type_entry": {
+      "type": "object",
+      "required": [
+        "identity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "description": "`fx/<name>@<major>.<version>` for a built-in, `<path>#<attr>@<version>` for a versioned project type, `<path>#<attr>@source:` and `digest(source)` for a project type without a version.",
+          "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^fx/[^@]+@(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$"
+            },
+            {
+              "pattern": "^[^./#][^#]*#[A-Za-z_][A-Za-z0-9_]*@(?:0|[1-9][0-9]*|source:[0-9a-f]{64})$"
+            }
+          ]
+        },
+        "source": {
+          "description": "The type's `fx-node-source-v1` object without its `kind` (identity.md \u00a76): relative labels and resource paths, each mapped to a file digest. It never holds an absolute path.",
+          "type": "object",
+          "required": [
+            "files",
+            "resources"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "description": "Each file of the source closure: its label (POSIX, relative to the project root or to the folder that contains a declared source package, the nearer one) to its file digest.",
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "$ref": "#/$defs/relative_path"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "resources": {
+              "description": "Each declared resource: its path, POSIX and relative to the project root, to its file digest.",
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/relative_path"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "ports": {
+          "$ref": "#/$defs/ports"
+        }
+      },
+      "if": {
+        "properties": {
+          "identity": {
+            "pattern": "^fx/"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "source"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "source"
+        ]
+      }
+    },
+    "ports": {
+      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputs",
+        "outputs",
+        "params"
+      ],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+          }
+        },
+        "params": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "binding": {
+      "description": "An evaluated reference from one resolved instance output or node fact to a named with entry. A compound expression or collection may have several references. Unresolved instance/take choices are omitted; readers keep dependency edges instead of guessing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "target_port",
+        "source_kind"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "const": "output"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent",
+        "kind",
+        "path",
+        "step",
+        "take",
+        "title",
+        "source",
+        "ports",
+        "input_bindings",
+        "output_bindings",
+        "nodes",
+        "pending"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^scope:.+#"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "group",
+            "workflow"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "type": "string",
+          "minLength": 1
+        },
+        "take": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Portable loaded workflow source for imports; null for inline groups. Never an absolute filesystem path."
+        },
+        "ports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputs",
+            "outputs"
+          ],
+          "properties": {
+            "inputs": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "additionalProperties": true
+            },
+            "outputs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        },
+        "input_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "output_bindings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/interface_binding"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "pending": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "interface_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "source_port",
+        "source_kind",
+        "target_port"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_port": {
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "output",
+            "fact",
+            "scope_input",
+            "scope_output"
+          ]
+        },
+        "target_port": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "enum": [
+                  "output",
+                  "scope_input",
+                  "scope_output"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "preview": {
+      "description": "An explicit video preview using literal scalar output-port names from this node instance (previews.md). No expressions, file paths, URLs, collections or cross-step references.",
+      "type": "object",
+      "required": [
+        "video"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "video": {
+          "description": "This node's singleton video output port; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "poster": {
+          "description": "This node's singleton image output port used as the video's poster; an optional singleton is allowed.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      }
+    }
+  }
+}

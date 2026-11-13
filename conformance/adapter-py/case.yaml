@@ -45,7 +45,7 @@ steps:
     ACME_API_KEY: acme-made-up-key-5e1f
   status: 1
   mentions:
-  - "result    failed   spent $0.03"
+  - "result    failed   booked $0.03"
   - "failed    refused#1: structured.generate on text-a@acme was refused: no colours for [redacted]"
   never_mentions:
   - acme-made-up-key-5e1f
@@ -64,7 +64,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/two, --live, --max-usd, "1"]
   status: 1
   mentions:
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "failed    refused#1: structured.generate on text-a@acme was refused: ACME_API_KEY is not set"
 - argv: [project, runs/two]
   save: project-two.json
@@ -73,7 +73,7 @@ steps:
   status: 1
   mentions:
   - "stand-in  stand_in.py#answer"
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "failed    slowly#1: structured.generate on text-b@acme-jobs failed: name: 3 is not of type \"string\""
   - "failed    refused#1: structured.generate on text-a@acme is a paid call the stand-in declined"
 - read: runs/stand-in/outputs/name.json

@@ -1,6 +1,8 @@
 //! The machine documents of the planning verbs, and the plan digest.
 //!
-//! - [`graph_document`]: `grida-fx expand` and `plan --json` print fx-graph-v1
+//! - [`graph_document`]: `grida-fx expand` and `plan --json` print fx-graph-v1 for
+//!   forecastable graphs, or fx-graph-v2 with nullable totals and explicit known subtotals
+//!   and unpriced call counts
 //!   (spec/schemas/fx-graph-v1.schema.json): `kind`, `workflow` `{id, title, description?,
 //!   file}`, `types` (each distinct uses: `{identity, source?}`), `instances`, `pending`
 //!   ([`pending_document`]), `estimate` `{low_usd, high_usd, ceiling_usd}`, `problems`.
@@ -58,18 +60,22 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
         .map(|(uses, resolved)| (uses.clone(), type_entry(resolved)))
         .collect();
     let estimate = plan.estimate();
+    let v2 = plan.expansion.ordered().any(|i| i.unpriced_calls() > 0)
+        || plan
+            .expansion
+            .pending
+            .iter()
+            .any(|r| r.unpriced_calls() > 0);
+    let mut forecast = forecast_document(estimate.low, estimate.high, estimate.unpriced_calls);
+    forecast["ceiling_usd"] = ceiling(plan.ceiling);
     json!({
-        "kind": "fx-graph-v1",
+        "kind": if v2 { "fx-graph-v2" } else { "fx-graph-v1" },
         "workflow": workflow,
         "types": types,
         "scopes": plan.expansion.scopes,
         "instances": plan.expansion.ordered().map(instance_document).collect::<Vec<_>>(),
         "pending": plan.expansion.pending.iter().map(pending_document).collect::<Vec<_>>(),
-        "estimate": {
-            "low_usd": usd(estimate.low),
-            "high_usd": usd(estimate.high),
-            "ceiling_usd": ceiling(plan.ceiling),
-        },
+        "estimate": forecast,
         "problems": problems(&plan.problems),
     })
 }
@@ -107,7 +113,11 @@ pub fn instance_document(instance: &Instance) -> Value {
             ))
         })
         .collect();
-    let mut price = json!({"low_usd": usd(instance.low()), "high_usd": usd(instance.high())});
+    let mut price = forecast_document(
+        instance.forecast_low(),
+        instance.forecast_high(),
+        instance.unpriced_calls(),
+    );
     if instance.capped() {
         price["capped"] = Value::Bool(true);
     }
@@ -253,14 +263,20 @@ pub fn ports_document(spec: &crate::spec::NodeSpec) -> Value {
 
 /// One pending repeat of the graph (module doc).
 pub fn pending_document(repeat: &PendingRepeat) -> Value {
-    json!({
+    let mut document = json!({
         "path": repeat.path,
         "step": repeat.step,
         "max": repeat.max,
         "phase": repeat.phase,
-        "high_usd": usd(repeat.high()),
+        "high_usd": usd(repeat.forecast_high()),
         "waiting_on": repeat.waiting_on,
-    })
+    });
+    if repeat.unpriced_calls() > 0 {
+        document["high_usd"] = Value::Null;
+        document["known_high_usd"] = usd(repeat.forecast_high());
+        document["unpriced_calls"] = repeat.unpriced_calls().into();
+    }
+    document
 }
 
 /// Each declared step by its declaration path (a group's steps as `<group>.<step>`): `{title,
@@ -309,21 +325,40 @@ fn price_of(phases: &[PhaseSummary], estimate: Estimate, ceiling_usd: Option<Usd
     let phases: Vec<Value> = phases
         .iter()
         .map(|phase| {
-            json!({
+            let mut document = forecast_document(phase.low, phase.high, phase.unpriced_calls);
+            let extra = json!({
                 "phase": phase.phase,
                 "steps": phase.steps,
                 "calls": [phase.calls_low, phase.calls_high],
-                "low_usd": usd(phase.low),
-                "high_usd": usd(phase.high),
                 "then": phase.pending,
-            })
+            });
+            document
+                .as_object_mut()
+                .expect("forecast object")
+                .extend(extra.as_object().expect("phase object").clone());
+            document
         })
         .collect();
-    json!({
+    let mut document = json!({
         "phases": phases,
-        "estimate": {"low_usd": usd(estimate.low), "high_usd": usd(estimate.high)},
+        "estimate": forecast_document(estimate.low, estimate.high, estimate.unpriced_calls),
         "ceiling_usd": ceiling(ceiling_usd),
-    })
+    });
+    if estimate.unpriced_calls > 0 {
+        document["kind"] = "fx-price-v2".into();
+    }
+    document
+}
+
+/// A complete forecast or an explicitly incomplete subtotal. Unknown is never zero.
+pub fn forecast_document(low: Usd, high: Usd, unpriced_calls: u64) -> Value {
+    if unpriced_calls == 0 {
+        json!({"low_usd": usd(low), "high_usd": usd(high)})
+    } else {
+        json!({"low_usd": null, "high_usd": null,
+            "known_low_usd": usd(low), "known_high_usd": usd(high),
+            "unpriced_calls": unpriced_calls})
+    }
 }
 
 /// An amount as an FX number of dollars: the micro-dollars divided by a million, as the nearest
@@ -353,7 +388,12 @@ mod tests {
     }
 
     fn assert_valid_graph(document: &Value) {
-        let validator = graph_schema();
+        let validator = if document["kind"] == "fx-graph-v2" {
+            let schema: Value = serde_json::from_str(Schema::GraphV2.text()).unwrap();
+            jsonschema::validator_for(&schema).unwrap()
+        } else {
+            graph_schema()
+        };
         let errors: Vec<String> = validator
             .iter_errors(document)
             .map(|e| format!("{}: {e}", e.instance_path()))
@@ -474,7 +514,7 @@ mod tests {
         let document = instance_document(&draw);
         assert_eq!(
             document["price"],
-            json!({"low_usd": 0.02, "high_usd": 1.58, "capped": true})
+            json!({"low_usd": null, "high_usd": null, "known_low_usd": 0.02, "known_high_usd": 0.08, "unpriced_calls": 1, "capped": true})
         );
         let (mut plan, planner) = builtin_plan();
         plan.expansion.instances.insert(draw.id.clone(), draw);
@@ -529,6 +569,7 @@ mod tests {
                 calls_high: 3,
                 low: Usd(13_000),
                 high: Usd(46_000),
+                unpriced_calls: 0,
                 pending: vec![],
             },
             PhaseSummary {
@@ -538,12 +579,14 @@ mod tests {
                 calls_high: 0,
                 low: Usd(0),
                 high: Usd(0),
+                unpriced_calls: 0,
                 pending: vec!["unbounded (up to 1)".into()],
             },
         ];
         let estimate = Estimate {
             low: Usd(13_000),
             high: Usd(46_000),
+            unpriced_calls: 0,
         };
         let document = price_of(&phases, estimate, None);
         assert_eq!(
@@ -680,6 +723,9 @@ mod tests {
             waiting_on: BTreeSet::from(["split#1".to_string(), "count#1".to_string()]),
             per_instance_low: Usd(10_000),
             per_instance_high: Usd(40_000),
+            per_instance_known_high: Usd(40_000),
+            per_instance_unpriced_calls: 0,
+            per_instance_unknown_calls: 0,
             phase: 2,
         };
         let document = pending_document(&repeat);

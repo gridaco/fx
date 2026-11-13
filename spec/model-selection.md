@@ -121,21 +121,32 @@ The existing build-time Models projection continues to check shipped routes. A p
 custom-resolver API is deferred; existing project route tables and adapters remain the
 extension paths.
 
-The existing financial-admission contract is unchanged: an admitted route needs a planning
-allowance, not a prediction of its final bill. FX's shipped routes carry maintained allowances;
-a project may supply its own route price or the existing explicit `price.cap_usd` for unknown
-cost. Discovery may also supply a price where FX understands the published billing units;
-this implementation recognizes unconditional per-output-image USD rates on OpenRouter.
-Automatic pricing is an optimization, not a provider requirement or a promise of eventual
-exact pricing for every model.
+Execution compatibility and cost forecasting are independent. A discovered binding MUST identify
+a supported adapter contract and satisfy required features, but MAY have no price. Authored
+routes retain deferred adapter checks: they can plan without an installed adapter, and execution
+refuses when none serves them. Shipped,
+authored and discovered routes follow this same rule. A missing price is an unknown forecast,
+never zero. An explicit `price: null` clears an inherited price; omission beside `extends`
+continues to inherit it. A supplied price or range is an estimate, not a guaranteed invoice.
+An existing `price.cap_usd` is an authorization allowance, not a forecast.
 
-Compatible model metadata alone does not establish an allowance. If no allowance is available,
-planning reports that FX has none for the model and points to an authored route with a price
-or cap. This is a supported limitation, not a dependency on a future provider API. FX does not
-infer a rate from a model name, apply a scenario estimate to unrelated inputs or treat unknown
-cost as $0. Authored routes stay independent of discovery and replace complete entries; a
-price-only entry does not implicitly merge discovered features or contracts. These remain
-ordinary route-table contracts, with no new budgeting setting.
+Compatible facts with no applicable price are cached and retained in prepared plans normally.
+A provider's illustrated scenario is usable as a forecast only when its assumptions apply.
+A known tariff without the request quantities needed to use it does not establish a total.
+No provider estimation endpoint, manual synchronization or per-model allowance is required.
+Authored entries still replace whole entries; discovery does not merge into them implicitly.
+
+`--require-estimates` on planning and execution refuses missing forecasts for uncached paid
+work, including capped-only routes. The equivalent SDK option has the same meaning. It
+requires forecast coverage, not exact future billing. Ordinary planning succeeds with
+unknown forecasts and presents cost incompleteness as information.
+
+Unknown forecasts propagate through instances, pending repeats, phases and totals. A partial
+subtotal MUST NOT be labeled a complete total. Graphs containing unknown forecast components
+use `fx-graph-v2`; their affected money objects have null `low_usd` and `high_usd`, numeric
+`known_low_usd` and `known_high_usd`, and positive integer `unpriced_calls`. Price documents with an unknown aggregate add `kind: fx-price-v2` and use the same amount
+objects. Fully forecastable graphs retain `fx-graph-v1`. Readers support existing records; pricing changes alone do not
+change route fingerprints, call keys or generated-result cache identity.
 
 One prepared plan admits at most 128 discovered image bindings, matching its snapshot
 reader's limit. A larger selection is refused before an unreadable snapshot can be produced.

@@ -1,0 +1,17 @@
+# Compatible routes may be unpriced. Explicit caps are allowances, not forecasts.
+steps:
+- argv: [plan, case, --routes, routes.yaml, --check]
+  save: plan.txt
+- argv: [expand, case, --routes, routes.yaml]
+  save: expand.json
+  json: true
+- argv: [price, case, --routes, routes.yaml]
+  save: price.json
+  json: true
+- argv: [plan, case, --routes, routes.yaml, --require-estimates, --json]
+  status: 1
+  save: strict.json
+  json: true
+- argv: [run, case, --routes, routes.yaml, --live, --max-usd, '3', --require-estimates, --no-view]
+  status: 1
+  mentions: [cost estimate]

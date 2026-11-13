@@ -1,0 +1,14 @@
+fx: routes/v1
+routes:
+  - capability: image.generate
+    route: img-a@acme
+  - capability: image.generate
+    route: img-b@acme
+    price: {usd: 0.12}
+  - capability: image.generate
+    route: img-c@acme
+    price: {cap_usd: 1}
+  - capability: image.generate
+    route: img-d@acme
+    extends: img-b@acme
+    price: null

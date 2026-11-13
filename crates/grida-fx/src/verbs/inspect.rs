@@ -36,7 +36,7 @@
 //! ```text
 //! <workflow id>  ·  <folder name>[  ·  stand-in]
 //! state     <run state>   <n> steps: <count state, …, sorted by state; or none>
-//! spent     $<charged, 2 places>                   (when the run finished or was cancelled)
+//! booked    $<charged, 2 places>                   (when the run finished or was cancelled)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
 //! differs   <id>: <relative path> is missing | differs from its recorded digest   (--verify)
 //! verified  <n> files                              (--verify, nothing differs)
@@ -500,7 +500,7 @@ fn text_lines(
         ),
     ];
     if let Some(spent) = view.charged.as_ref().and_then(|c| Usd::from_value(c).ok()) {
-        lines.push(labelled("spent", &spent.dollars_2()));
+        lines.push(labelled("booked", &spent.dollars_2()));
     }
     for step in view.steps.iter().filter(|s| s.state == "failed") {
         let error = step.error.as_deref().unwrap_or("no reason recorded");
@@ -799,7 +799,7 @@ mod tests {
             [
                 "fails  \u{b7}  f1",
                 "state     failed   7 steps: 3 failed, 2 skipped, 2 succeeded",
-                "spent     $0.12",
+                "booked    $0.12",
                 "failed    nope#1: refused on purpose",
                 "failed    slow#1: the run ended before this step finished",
                 "failed    late['k']#1: no reason recorded",

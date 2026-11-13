@@ -39,11 +39,13 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 pub const AT_PLAN_UNAVAILABLE: &str =
     "running an at: plan step needs a plan-time runner, and planning has none";
 
-/// The plan's price range.
+/// The forecastable subtotal and count of unforecastable calls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Estimate {
     pub low: Usd,
     pub high: Usd,
+    /// Calls whose bill cannot be forecast, including capped allowances.
+    pub unpriced_calls: u64,
 }
 
 /// One phase's summary.
@@ -56,6 +58,8 @@ pub struct PhaseSummary {
     pub calls_high: u64,
     pub low: Usd,
     pub high: Usd,
+    /// Calls whose bill cannot be forecast, including capped allowances.
+    pub unpriced_calls: u64,
     /// `"<path> (up to <max>)"` per pending repeat of this phase.
     pub pending: Vec<String>,
 }
@@ -96,24 +100,87 @@ impl Plan {
         self.expansion.ordered().filter(|i| i.state.is_live())
     }
 
-    /// The price range (module doc).
+    /// Normalizes concrete omitted-price calls using adapter-supplied billing facts.
+    /// The route table must also be normalized before expansion so pending repeats receive
+    /// the same facts while their shadow calls are still available.
+    pub fn apply_plan_billing(&mut self, providers: &BTreeSet<String>) {
+        for instance in self.expansion.instances.values_mut() {
+            for route in instance.routes.values_mut() {
+                if route.price.unknown && providers.contains(&route.provider) {
+                    route.price.unknown = false;
+                }
+            }
+            for price in &mut instance.prices {
+                if price.unknown
+                    && price
+                        .route
+                        .rsplit_once('@')
+                        .is_some_and(|(_, provider)| providers.contains(provider))
+                {
+                    price.unknown = false;
+                }
+            }
+        }
+    }
+
+    /// Unforecastable uncached work, with the same identity deduplication as pricing.
+    pub fn unpriced_calls(&self) -> u64 {
+        priced(self.live().filter(|i| !self.cached.contains(&i.id)))
+            .into_iter()
+            .map(Instance::unpriced_calls)
+            .sum::<u64>()
+            + self
+                .expansion
+                .pending
+                .iter()
+                .map(|r| r.unpriced_calls())
+                .sum::<u64>()
+    }
+
+    /// Opt-in forecast coverage check. An allowance is not a forecast.
+    pub fn require_estimates(&mut self) {
+        let mut problems = Vec::new();
+        for instance in priced(self.live().filter(|i| !self.cached.contains(&i.id))) {
+            for price in &instance.prices {
+                if price.capped || price.unknown {
+                    problems.push(Problem::new(&instance.path, format!(
+                        "{} on {} has no cost estimate; supply an applicable route price or omit --require-estimates",
+                        price.capability, price.route)));
+                }
+            }
+        }
+        for repeat in &self.expansion.pending {
+            if repeat.unpriced_calls() > 0 {
+                problems.push(Problem::new(&repeat.path,
+                    "pending work has no cost estimate; supply applicable route prices or omit --require-estimates"));
+            }
+        }
+        self.problems.extend(problems);
+        self.problems = unique(std::mem::take(&mut self.problems));
+    }
+
+    /// Forecastable subtotal and unpriced count (module doc).
     pub fn estimate(&self) -> Estimate {
         let uncached = || self.live().filter(|i| !self.cached.contains(&i.id));
         let low = priced(uncached().filter(|i| i.state == State::Planned))
             .into_iter()
-            .map(Instance::low)
+            .map(Instance::forecast_low)
             .sum();
         let high = priced(uncached())
             .into_iter()
-            .map(Instance::high)
+            .map(Instance::forecast_high)
             .sum::<Usd>()
             + self
                 .expansion
                 .pending
                 .iter()
-                .map(|repeat| repeat.high())
+                .map(|repeat| repeat.forecast_high())
                 .sum();
-        Estimate { low, high }
+        Estimate {
+            low,
+            high,
+            unpriced_calls: self.unpriced_calls(),
+        }
     }
 
     /// The summary per phase (module doc): phase numbers are live phases ∪ pending phases ∪ {1}.
@@ -146,9 +213,11 @@ impl Plan {
                     steps: members.len(),
                     calls_low: planned.iter().map(calls).sum(),
                     calls_high: paid.iter().map(calls).sum(),
-                    low: planned.iter().map(|i| i.low()).sum(),
-                    high: paid.iter().map(|i| i.high()).sum::<Usd>()
-                        + repeats.iter().map(|r| r.high()).sum(),
+                    low: planned.iter().map(|i| i.forecast_low()).sum(),
+                    high: paid.iter().map(|i| i.forecast_high()).sum::<Usd>()
+                        + repeats.iter().map(|r| r.forecast_high()).sum(),
+                    unpriced_calls: paid.iter().map(|i| i.unpriced_calls()).sum::<u64>()
+                        + repeats.iter().map(|r| r.unpriced_calls()).sum::<u64>(),
                     pending: repeats
                         .iter()
                         .map(|r| format!("{} (up to {})", r.path, r.max))
@@ -187,7 +256,7 @@ impl Plan {
 
     /// One note per capability and capped route a live instance binds, sorted by capability and
     /// route: `{capability} on {route} has no price: each call holds its cap, ${cap}, and is
-    /// charged what the provider reports, else the cap`. [`render::render`] prints them, for
+    /// booked at what the provider reports, else the cap`. [`render::render`] prints them, for
     /// `plan` and for a run that bills; [`render::render_stand_in`] leaves them out, since a
     /// stand-in run holds and charges nothing.
     pub fn capped_notes(&self) -> Vec<String> {
@@ -202,7 +271,7 @@ impl Plan {
             .map(|((capability, route), cap)| {
                 format!(
                     "{capability} on {route} has no price: each call holds its cap, {}, and is \
-                     charged what the provider reports, else the cap",
+                     booked at what the provider reports, else the cap",
                     render::dollars(cap)
                 )
             })

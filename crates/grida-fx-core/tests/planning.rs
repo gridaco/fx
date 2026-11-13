@@ -1990,6 +1990,7 @@ fn inst(path: &str, phase: u32, state: State, prices: &[(&str, &str, u32, i64, i
                 low: usd(*low),
                 high: usd(*high),
                 capped: false,
+                unknown: false,
             })
             .collect(),
         phase,
@@ -2021,6 +2022,9 @@ fn pending(path: &str, max: u32, high: i64, phase: u32) -> PendingRepeat {
         waiting_on: BTreeSet::new(),
         per_instance_low: Usd::ZERO,
         per_instance_high: usd(high),
+        per_instance_known_high: usd(high),
+        per_instance_unpriced_calls: 0,
+        per_instance_unknown_calls: 0,
         phase,
     }
 }
@@ -2069,7 +2073,8 @@ fn refusals_estimate_and_phases() {
         plan.estimate(),
         Estimate {
             low: usd(13_000),
-            high: usd(46_000)
+            high: usd(46_000),
+            unpriced_calls: 0
         }
     );
     assert_eq!(
@@ -2082,6 +2087,7 @@ fn refusals_estimate_and_phases() {
                 calls_high: 3,
                 low: usd(13_000),
                 high: usd(46_000),
+                unpriced_calls: 0,
                 pending: Vec::new(),
             },
             PhaseSummary {
@@ -2091,6 +2097,7 @@ fn refusals_estimate_and_phases() {
                 calls_high: 0,
                 low: Usd::ZERO,
                 high: Usd::ZERO,
+                unpriced_calls: 0,
                 pending: vec!["unbounded (up to 1)".into()],
             },
         ]
@@ -2109,7 +2116,8 @@ fn phase_estimate_and_phases() {
         plan.estimate(),
         Estimate {
             low: Usd::ZERO,
-            high: usd(240_000)
+            high: usd(240_000),
+            unpriced_calls: 0
         }
     );
     let phases = plan.phases();
@@ -2123,6 +2131,7 @@ fn phase_estimate_and_phases() {
             calls_high: 0,
             low: Usd::ZERO,
             high: Usd::ZERO,
+            unpriced_calls: 0,
             pending: Vec::new(),
         }
     );
@@ -2150,7 +2159,8 @@ fn maybe_cached_and_done_instances() {
         plan.estimate(),
         Estimate {
             low: usd(10_000),
-            high: usd(80_000)
+            high: usd(80_000),
+            unpriced_calls: 0
         }
     );
     let phases = plan.phases();
@@ -2190,7 +2200,8 @@ fn one_identity_is_priced_once_per_phase() {
         plan.estimate(),
         Estimate {
             low: usd(30_000),
-            high: usd(120_000)
+            high: usd(120_000),
+            unpriced_calls: 0
         }
     );
     assert_eq!(
@@ -2303,8 +2314,8 @@ fn capped_routes_are_noted_once_each_after_the_takes_notes_when_the_run_bills() 
     );
     let moved = "the takes file names gone, which no step is any more; move it with grida-fx takes mv case \"gone\" <new path>";
     let capped = [
-        "image.edit on img-x@acme has no price: each call holds its cap, $0.75, and is charged what the provider reports, else the cap",
-        "image.generate on img-x@acme has no price: each call holds its cap, $1.50, and is charged what the provider reports, else the cap",
+        "image.edit on img-x@acme has no price: each call holds its cap, $0.75, and is booked at what the provider reports, else the cap",
+        "image.generate on img-x@acme has no price: each call holds its cap, $1.50, and is booked at what the provider reports, else the cap",
     ];
     assert_eq!(plan.warnings(&planner), [moved]);
     assert_eq!(plan.capped_notes(), capped);
@@ -2545,4 +2556,97 @@ fn lock_names_unlocked_adapters_and_writes_them() {
     let written = lock(&project, &[], false, &mut host).unwrap();
     assert_eq!(written.lines, ["fx.lock: 0 versioned node types"]);
     assert!(written.write.unwrap().adapters.is_empty());
+}
+
+#[test]
+fn unknown_forecasts_preserve_subtotals_deduplication_and_cache_coverage() {
+    let known = inst(
+        "known",
+        1,
+        State::Planned,
+        &[("image.generate", "img-a@acme", 1, 40_000, 40_000)],
+    );
+    let mut unknown = inst(
+        "unknown",
+        1,
+        State::Planned,
+        &[("image.generate", "img-b@acme", 2, 0, 0)],
+    );
+    unknown.prices[0].unknown = true;
+    let mut duplicate = unknown.clone();
+    duplicate.id = "copy#1".into();
+    duplicate.path = "copy".into();
+    let mut cap = inst(
+        "cap",
+        1,
+        State::Planned,
+        &[("image.generate", "img-c@acme", 1, 0, 1_000_000)],
+    );
+    cap.prices[0].capped = true;
+    let mut plan = plan_of(vec![known, unknown, duplicate, cap], vec![]);
+    assert!(plan.ok());
+    assert_eq!(
+        plan.estimate(),
+        Estimate {
+            low: usd(40_000),
+            high: usd(40_000),
+            unpriced_calls: 3
+        }
+    );
+    assert_eq!(plan.phases()[0].unpriced_calls, 3);
+    let document = grida_fx_core::plan::output::price_document(&plan);
+    assert_eq!(document["kind"], "fx-price-v2");
+    assert_eq!(document["estimate"]["low_usd"], Value::Null);
+    assert_eq!(document["estimate"]["known_high_usd"], json!(0.04));
+    plan.require_estimates();
+    assert_eq!(plan.problems.len(), 2);
+    plan.problems.clear();
+    plan.cached
+        .extend(["unknown#1".into(), "copy#1".into(), "cap#1".into()]);
+    plan.require_estimates();
+    assert!(plan.ok());
+    assert_eq!(plan.unpriced_calls(), 0);
+}
+
+#[test]
+fn pending_unknown_forecasts_count_the_declared_bound() {
+    let mut repeat = pending("items", 3, 1_000_000, 2);
+    repeat.per_instance_known_high = usd(40_000);
+    repeat.per_instance_unpriced_calls = 2;
+    repeat.per_instance_unknown_calls = 1;
+    let mut plan = plan_of(vec![], vec![repeat]);
+    assert_eq!(
+        plan.estimate(),
+        Estimate {
+            low: Usd::ZERO,
+            high: usd(120_000),
+            unpriced_calls: 6
+        }
+    );
+    plan.require_estimates();
+    assert_eq!(plan.problems.len(), 1);
+}
+
+#[test]
+fn injected_plan_billing_removes_only_matching_unknown_forecasts() {
+    let mut free = inst(
+        "free",
+        1,
+        State::Planned,
+        &[("image.generate", "img-a@plan_provider", 1, 0, 0)],
+    );
+    free.prices[0].unknown = true;
+    let mut paid = inst(
+        "paid",
+        1,
+        State::Planned,
+        &[("image.generate", "img-b@cash_provider", 1, 0, 0)],
+    );
+    paid.prices[0].unknown = true;
+    let mut plan = plan_of(vec![free, paid], vec![]);
+    plan.apply_plan_billing(&BTreeSet::from(["plan_provider".into()]));
+    assert_eq!(plan.unpriced_calls(), 1);
+    plan.require_estimates();
+    assert_eq!(plan.problems.len(), 1);
+    assert_eq!(plan.problems[0].where_, "paid");
 }

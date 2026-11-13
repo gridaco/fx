@@ -5,7 +5,10 @@ import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBin
 import { skipExplanation, type SkipExplanation } from "./skip";
 
 export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | "done";
-export interface Price { low_usd: number; high_usd: number }
+export interface Price {
+  low_usd: number | null; high_usd: number | null;
+  known_low_usd?: number; known_high_usd?: number; unpriced_calls?: number;
+}
 /** An instance's price; `capped` when one of its calls is on a capped route, which holds its cap. */
 export interface InstancePrice extends Price { capped?: true }
 /** A step's own scalar output names; expressions and cross-instance references are never evaluated. */
@@ -29,9 +32,9 @@ export interface GraphInstance {
   interface_bindings?: InterfaceBinding[];
   preview?: PreviewDescriptor;
 }
-export interface PendingRepeat { path: string; step?: string; max: number; phase: number; high_usd: number; waiting_on?: string[] }
+export interface PendingRepeat { path: string; step?: string; max: number; phase: number; high_usd: number | null; known_high_usd?: number; unpriced_calls?: number; waiting_on?: string[] }
 export interface GraphDocument {
-  kind: "fx-graph-v1";
+  kind: "fx-graph-v1" | "fx-graph-v2";
   workflow: { id: string; title: string; description?: string; file?: string };
   instances: GraphInstance[];
   pending: PendingRepeat[];
@@ -71,18 +74,36 @@ function fields(value: Record<string, unknown>, required: string[], optional: st
 function optional(value: Record<string, unknown>, name: string, validate: (item: unknown) => boolean) {
   return !(name in value) || validate(value[name]);
 }
-function price(value: unknown): value is InstancePrice {
-  return isRecord(value) && fields(value, ["low_usd", "high_usd"], ["capped"]) && isAmount(value.low_usd) && isAmount(value.high_usd)
-    && optional(value, "capped", (item) => item === true);
+/** A complete numeric forecast or an explicitly incomplete forecast with a known subtotal. */
+export function isPrice(value: unknown): value is Price {
+  if (!isRecord(value)) return false;
+  if (isAmount(value.low_usd) && isAmount(value.high_usd)) {
+    return value.low_usd <= value.high_usd && value.unpriced_calls === undefined
+      && value.known_low_usd === undefined && value.known_high_usd === undefined;
+  }
+  return value.low_usd === null && value.high_usd === null
+    && isAmount(value.known_low_usd) && isAmount(value.known_high_usd) && value.known_low_usd <= value.known_high_usd
+    && isPositiveInteger(value.unpriced_calls);
+}
+function price(value: unknown, incomplete: boolean): value is InstancePrice {
+  return isRecord(value) && fields(value, ["low_usd", "high_usd"], ["capped", "known_low_usd", "known_high_usd", "unpriced_calls"])
+    && isPrice(value) && (incomplete || value.low_usd !== null) && optional(value, "capped", (item) => item === true);
 }
 
-/** "est. $0.40" or "est. $0.40 – $1.20"; "up to $1.50" when a call is capped, since only its
- * worst case is known; `free` for a price of nothing. `money` formats an amount of dollars. */
+/** Honest forecast label; a known subtotal never masquerades as a complete total. */
 export function priceLabel(price: InstancePrice, money: (usd: number) => string, free = ""): string {
-  if (price.capped) return `up to ${money(price.high_usd)}`;
+  if (price.low_usd === null || price.high_usd === null) {
+    const low = price.known_low_usd;
+    const high = price.known_high_usd;
+    if (low === undefined || high === undefined) return "cost unknown";
+    const known = high > 0 ? `est. ${money(low)}${low === high ? "" : ` – ${money(high)}`} + ` : "";
+    return known ? `${known}${price.unpriced_calls} unpriced ${price.unpriced_calls === 1 ? "call" : "calls"}` : "cost unknown";
+  }
+  if (price.capped) return `allowance ${money(price.high_usd)}; cost unknown`;
   if (price.high_usd === 0) return free;
   return `est. ${money(price.low_usd)}${price.high_usd === price.low_usd ? "" : ` – ${money(price.high_usd)}`}`;
 }
+
 function withValue(value: unknown, depth = 0): boolean {
   if (depth > 512) return false;
   if (value === null || isString(value) || typeof value === "boolean") return true;
@@ -94,7 +115,7 @@ function withValue(value: unknown, depth = 0): boolean {
   }
   return Object.values(value).every((item) => withValue(item, depth + 1));
 }
-function instance(value: unknown): value is GraphInstance {
+function instance(value: unknown, incomplete: boolean): value is GraphInstance {
   if (!isRecord(value) || !fields(value, ["id", "path", "step", "take", "uses", "type", "with", "routes", "state", "identity", "phase", "key", "judges", "judged_by", "waiting_on", "needs", "reads", "price"], ["view", "reason", "bindings", "interface_bindings", "preview", "routing"])) return false;
   return [value.id, value.path, value.step, value.uses].every(isString)
     && Array.isArray(value.take) && value.take.length > 0 && value.take.every(isPositiveInteger)
@@ -111,13 +132,15 @@ function instance(value: unknown): value is GraphInstance {
     && states.has(value.state as PlanState) && (value.identity === null || isDigest(value.identity))
     && isPositiveInteger(value.phase) && isNullableString(value.key) && isNullableString(value.judges)
     && [value.judged_by, value.waiting_on, value.needs, value.reads].every(isStrings)
-    && price(value.price) && optional(value, "reason", isString) && optional(value, "view", isView)
+    && price(value.price, incomplete) && optional(value, "reason", isString) && optional(value, "view", isView)
     && optional(value, "bindings", isPortBindings) && optional(value, "interface_bindings", isInterfaceBindings)
     && optional(value, "preview", isPreviewDescriptor);
 }
-function pendingRepeat(value: unknown): value is PendingRepeat {
-  return isRecord(value) && fields(value, ["path", "max", "phase", "high_usd"], ["step", "waiting_on"])
-    && isString(value.path) && isPositiveInteger(value.max) && isPositiveInteger(value.phase) && isAmount(value.high_usd)
+function pendingRepeat(value: unknown, incomplete: boolean): value is PendingRepeat {
+  return isRecord(value) && fields(value, ["path", "max", "phase", "high_usd"], ["step", "waiting_on", "known_high_usd", "unpriced_calls"])
+    && isString(value.path) && isPositiveInteger(value.max) && isPositiveInteger(value.phase)
+    && (isAmount(value.high_usd) && value.unpriced_calls === undefined && value.known_high_usd === undefined
+      || incomplete && value.high_usd === null && isAmount(value.known_high_usd) && isPositiveInteger(value.unpriced_calls))
     && optional(value, "step", isString) && optional(value, "waiting_on", isDistinctStrings);
 }
 function typeEntry(value: unknown): boolean {
@@ -133,17 +156,18 @@ function typeEntry(value: unknown): boolean {
 
 /** Browser validation of the fields defined by spec/schemas/fx-graph-v1.schema.json. */
 export function parseGraph(value: unknown): GraphDocument {
-  if (!isRecord(value) || value.kind !== "fx-graph-v1") throw new Error("This viewer does not support the returned graph format.");
+  if (!isRecord(value) || (value.kind !== "fx-graph-v1" && value.kind !== "fx-graph-v2")) throw new Error("This viewer does not support the returned graph format.");
+  const incomplete = value.kind === "fx-graph-v2";
   const valid = fields(value, ["kind", "workflow", "instances", "pending", "estimate"], ["problems", "plan", "inputs", "stand_in", "takes_file", "view_origins", "steps", "types", "scopes"])
     && isRecord(value.workflow) && fields(value.workflow, ["id", "title"], ["description", "file"])
     && isString(value.workflow.id) && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.workflow.id) && value.workflow.id.length <= 96
     && isString(value.workflow.title) && optional(value.workflow, "description", isString) && optional(value.workflow, "file", isString)
-    && Array.isArray(value.instances) && value.instances.every(instance)
+    && Array.isArray(value.instances) && value.instances.every((item) => instance(item, incomplete))
     && new Set(value.instances.map((item) => item.id)).size === value.instances.length
-    && Array.isArray(value.pending) && value.pending.every(pendingRepeat)
+    && Array.isArray(value.pending) && value.pending.every((item) => pendingRepeat(item, incomplete))
     && new Set(value.pending.map((item) => item.path)).size === value.pending.length
-    && isRecord(value.estimate) && fields(value.estimate, ["low_usd", "high_usd", "ceiling_usd"])
-    && isAmount(value.estimate.low_usd) && isAmount(value.estimate.high_usd)
+    && isRecord(value.estimate) && fields(value.estimate, ["low_usd", "high_usd", "ceiling_usd"], ["known_low_usd", "known_high_usd", "unpriced_calls"])
+    && isPrice(value.estimate) && (incomplete || value.estimate.low_usd !== null)
     && (value.estimate.ceiling_usd === null || isAmount(value.estimate.ceiling_usd))
     && optional(value, "problems", (items) => Array.isArray(items) && items.every((item) => isRecord(item)
       && fields(item, ["where", "message"]) && isString(item.where) && isString(item.message)))
@@ -157,7 +181,7 @@ export function parseGraph(value: unknown): GraphDocument {
       && optional(item, "order", isCount) && optional(item, "preview", isPreviewDescriptor)))
     && optional(value, "types", (items) => isRecord(items) && Object.entries(items).every(([key, item]) => key.length > 0 && typeEntry(item)))
     && optional(value, "scopes", isWorkflowScopes);
-  if (!valid) throw new Error("The graph response does not match fx-graph-v1.");
+  if (!valid) throw new Error("The graph response does not match its declared graph format.");
   return value as unknown as GraphDocument;
 }
 
@@ -326,7 +350,7 @@ function recordedExecution(node: ViewerRun["nodes"][number]): boolean {
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
 export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api"): CanvasGraph {
   validateViewerApiBase(apiBase);
-  const plan = view.kind === "fx-graph-v1";
+  const plan = view.kind !== "fx-viewer-run-v1";
   const artifacts = new Map(plan ? [] : view.artifacts.map((item) => [item.digest, item]));
   const source = plan ? view.instances : view.nodes;
   const nodes: CanvasStep[] = source.map((item) => {

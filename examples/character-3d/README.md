@@ -54,7 +54,7 @@ The fresh plan with the supplied showcase settings prints:
 character-3d  ·  1 phase
 phase 1   20 steps   45–93 provider calls   $2.60 – $128.90
 cached    0 of 3 known steps
-estimate  $2.60 – $128.90   ceiling $30.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $2.60 – $128.90   ceiling $30.00   ⚠ the estimate exceeds the ceiling; calls require available budget
 ```
 
 Planning is offline. A run without `--live` refuses its first paid call at $0; it still

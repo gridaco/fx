@@ -38,10 +38,10 @@ export class ViewerPresentation {
     const view = state.view;
     if (!view) throw new ViewerPresentationError("not_ready", "No workflow evidence is loaded.");
     const subject: ViewerProtocol.Subject = {
-      kind: view.kind === "fx-graph-v1" ? "plan" : "run",
+      kind: view.kind !== "fx-viewer-run-v1" ? "plan" : "run",
       workflow: { id: view.workflow.id },
     };
-    if (view.kind === "fx-graph-v1" && ViewerProtocol.isPortableSource(view.workflow.file)) subject.workflow!.source = view.workflow.file;
+    if (view.kind !== "fx-viewer-run-v1" && ViewerProtocol.isPortableSource(view.workflow.file)) subject.workflow!.source = view.workflow.file;
     const reference = this.source.reference?.();
     if (reference && ViewerProtocol.isReference(reference)) subject.reference = reference;
     const card = state.graph.nodes.find((node) => node.id === state.selected);
@@ -50,7 +50,7 @@ export class ViewerPresentation {
     else if (card?.kind === "boundary" && card.scope_id && card.side) selection = { kind: "scope_boundary", scope_id: card.scope_id, side: card.side };
     else if (card?.pending) selection = { kind: "pending_repeat", path: card.source_id };
     else if (card) {
-      const records = view.kind === "fx-graph-v1" ? view.instances : view.nodes;
+      const records = view.kind !== "fx-viewer-run-v1" ? view.instances : view.nodes;
       const record = records.find((node) => node.id === card.source_id);
       if (record) {
         selection = { kind: "instance", instance_id: record.id, path: record.path };
@@ -75,7 +75,7 @@ export class ViewerPresentation {
     let focus: string | "fit" | null = null;
     switch (action.action) {
       case "reveal_instance": {
-        const records = view.kind === "fx-graph-v1" ? view.instances : view.nodes;
+        const records = view.kind !== "fx-viewer-run-v1" ? view.instances : view.nodes;
         if (!records.some((record) => record.id === action.instance_id)) throw new ViewerPresentationError("not_found", "The recorded instance does not exist in this view.");
         const scopes = new Map((view.scopes ?? []).map((item) => [item.id, item]));
         let owner = (view.scopes ?? []).find((item) => item.nodes.includes(action.instance_id));
