@@ -118,11 +118,14 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 
 - `plan(target, options)`: the expanded graph (`plan.graph`, fx-graph-v1) and its price
   (`plan.price`), with `ok`, `problems`, `estimate` and `phases`, from one engine invocation.
-  A subsequent `run(plan)` reuses its resolved model facts; authored project configuration
+  A new `run(plan)` reuses its resolved model facts; authored project configuration
   is still checked again.
 - `expand`, `identity`, `price`: the documents of `grida-fx expand`, `identity` and `price`.
-- `run(target | plan, options)`: plans first (a plan with problems rejects with `PlanRefused`),
+- `run(target | plan, options)`: plans new runs first (problems reject with `PlanRefused`),
   runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`.
+  Named resumes and existing `runDir` folders are planned directly by the engine using their
+  recorded model facts, including when passed a `Plan`; an engine refusal rejects with
+  `FxError` and its explanation.
   A failed step does not reject.
 - `project(runDir)` and `inspect(runOrWorkflowId, { verify })`: a run's record and summary.
 - `loadRun(target, { verify })`: a `RunRecord` with a pinned absolute `runDir` and

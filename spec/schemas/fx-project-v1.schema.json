@@ -113,17 +113,6 @@
         "workflows"
       ]
     },
-    "model_allowances": {
-      "description": "Optional positive per-attempt USD allowances for automatically discovered models, by provider and capability. Used only when published rates cannot establish a planning price. These are FX holds, not provider-enforced limits; they do not authorize spending or replace the run ceiling. Owned by the planning project.",
-      "type": "object",
-      "propertyNames": { "pattern": "^[a-z0-9._-]+$" },
-      "additionalProperties": {
-        "type": "object",
-        "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$" },
-        "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
-      },
-      "default": {}
-    },
     "provider_preferences": {
       "description": "Optional provider choice per capability for unqualified model selectors. Workflow-home preferences are overlaid by the planning project independently of model defaults. Qualified routes override preferences; keys do not select providers (model-selection.md).",
       "type": "object",

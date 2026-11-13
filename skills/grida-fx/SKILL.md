@@ -174,9 +174,9 @@ FX 0.7 and later run models and providers its built-in table lacks; check
 
 - **A new image model on GG or OpenRouter**: change the model ID and plan. The engine
   discovers a missing binding from the already selected provider's metadata, without
-  generating or spending. If its rates are insufficient, agree a reusable positive
-  provider/capability `model_allowances` amount in `fx.yaml`; it is a per-attempt cap,
-  separate from the run ceiling. Existing route tables win; explicit `--routes`
+  generating or spending. Admission also needs a computable planning price. If pricing
+  cannot be computed, use the existing authored route-table price or explicitly agreed
+  `price.cap_usd` escape hatch below. Existing route tables win; explicit `--routes`
   disables discovery. Network-off uses available cached metadata or authored routes,
   and refuses a missing binding rather than searching another provider.
 - **Other models FX does not list, on GG, OpenRouter or fal**, need only a route of

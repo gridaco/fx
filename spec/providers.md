@@ -125,9 +125,9 @@ A provider the planning project declares with a `family` (§1) is served by its 
 [Model selection](model-selection.md) specifies independent provider preferences, canonical
 model metadata and automatic discovery of a selected missing image binding on GG or
 OpenRouter. Discovery reads that provider's APIs before offline core planning; authored
-tables remain authoritative and explicit `--routes` disables discovery. Reusable
-`model_allowances` supply a positive per-attempt cap when a discovered route has insufficient
-rate information. Other providers and capabilities retain the project-route path.
+tables remain authoritative and explicit `--routes` disables discovery. A discovered route
+needs a computable planning price; absent one, the existing authored-route price or cap is
+the explicit escape hatch. Other providers and capabilities retain the project-route path.
 
 FX ships a default route table, embedded in `grida-fx`. It is the first table of the catalog ([identity.md](identity.md) §7): a project's `route_tables` override its entries, and any `--routes` file leaves it out.
 

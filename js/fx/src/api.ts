@@ -15,7 +15,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { open, readFile, unlink } from "node:fs/promises";
+import { lstat, open, readFile, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type {
   Encoded,
@@ -152,10 +152,24 @@ async function planRequest(
   );
   const object = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === "object" && !Array.isArray(value);
+  const amount = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const range = (value: unknown): boolean => object(value)
+    && amount(value.low_usd) && amount(value.high_usd) && value.low_usd <= value.high_usd;
+  const ceiling = (value: unknown): boolean => value === null || amount(value);
   if (
     prepared.kind !== "fx-prepared-plan-v1" ||
     !object(prepared.graph) || prepared.graph.kind !== "fx-graph-v1" ||
-    !object(prepared.price) || !object(prepared.resolved_models) ||
+    !object(prepared.graph.workflow) || typeof prepared.graph.workflow.id !== "string" ||
+    typeof prepared.graph.workflow.title !== "string" ||
+    !Array.isArray(prepared.graph.instances) || !Array.isArray(prepared.graph.pending) ||
+    !Array.isArray(prepared.graph.problems) || !prepared.graph.problems.every((problem) =>
+      object(problem) && typeof problem.where === "string" && typeof problem.message === "string") ||
+    !object(prepared.graph.estimate) || !range(prepared.graph.estimate) ||
+    !ceiling(prepared.graph.estimate.ceiling_usd) ||
+    !object(prepared.price) || !range(prepared.price.estimate) ||
+    !ceiling(prepared.price.ceiling_usd) || !Array.isArray(prepared.price.phases) ||
+    !prepared.price.phases.every(range) || !object(prepared.resolved_models) ||
     prepared.resolved_models.fx !== "routes/v1" || !Array.isArray(prepared.resolved_models.routes)
   ) {
     throw new FxError("grida-fx plan returned an invalid prepared plan");
@@ -167,6 +181,16 @@ async function planRequest(
   );
   resolvedModels.set(planned, JSON.stringify(prepared.resolved_models));
   return planned;
+}
+
+async function mayExist(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    // The engine owns diagnostics for an inaccessible or otherwise invalid existing path.
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
 }
 
 async function withResolvedModels<T>(
@@ -382,9 +406,11 @@ const RUN_ONLY: readonly string[] = [
 ];
 
 /**
- * Runs `target`, or a plan, after planning it: a plan with problems rejects with
+ * Starts a new run of `target`, or a plan, after planning it: a plan with problems rejects with
  * {@link PlanRefused} before any folder exists. `live: true` admits paid calls, within a
  * ceiling. Then reads the folder back through `grida-fx project` and `inspect --json`.
+ * A named resume or existing explicit folder is planned directly by the engine using its
+ * recorded model facts; an engine refusal rejects with {@link FxError}.
  *
  * With `standIn`, the function answers the run's paid calls (`spec/protocol.md` §5.7): it is
  * served in this process, over a socket that is the engine's standard input, and the run is not
@@ -412,9 +438,11 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   const own = runArgs(options);
   const signal = options.signal;
   const answerer = options.standIn === undefined ? null : new Answerer(options.standIn);
-  // A stand-in run plans nothing first: the run plans, and refuses problems.
-  const planned =
-    target instanceof Plan ? target : answerer === null ? await planRequest(request, signal) : null;
+  const resuming = options.resume !== undefined ||
+    (options.runDir !== undefined && await mayExist(resolve(request.cwd, options.runDir)));
+  // The CLI loads recorded model facts before planning an existing run.
+  const planned = resuming ? null
+    : target instanceof Plan ? target : answerer === null ? await planRequest(request, signal) : null;
   if (planned !== null && !planned.ok) {
     throw new PlanRefused(planned);
   }
@@ -460,6 +488,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
         args: done.args,
       });
     }
+    if (resuming) throw failure("run", done);
     const replanned = await planRequest(request, signal, models);
     if (!replanned.ok) {
       throw new PlanRefused(replanned);

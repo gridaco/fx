@@ -44,8 +44,8 @@ step, and mix them freely:
 
 [AI providers](docs/guide/13-providers.md) says what each one serves and where to get each key.
 For a new GG or OpenRouter image model, change its ID and plan: FX looks up missing metadata
-without generating or spending. If no sufficient price is published, a reusable provider/capability
-allowance supplies the per-attempt cap. Your own route tables remain independent. Other models
+without generating or spending. Discovery needs a computable planning price; your own route
+tables remain the independent escape hatch for unknown cost. Other models
 FX does not list run from a route of your own; a provider FX does not ship, from a
 declaration in `fx.yaml` and, unless it speaks OpenAI's chat API, an adapter of your own in Python
 or TypeScript ([Community providers](docs/guide/15-community-providers.md)).

@@ -10,14 +10,13 @@ Python and JavaScript plan through the same engine path as the CLI. For a select
 image-model binding on a supported provider, the engine may make a bounded, read-only
 metadata lookup before offline core planning ([model-selection.md](model-selection.md) §3).
 This needs neither `live` nor spending approval and never generates an asset. Network-off,
-authored-route precedence, reusable allowances and lookup failures are identical through
+authored-route precedence, price admission and lookup failures are identical through
 every invoker. Importing an SDK does not make a lookup.
 
 A `Plan` retains the engine's normalized discovered routes as a preparation snapshot,
-independently of the optional metadata cache. `run(plan)` sends that snapshot back to the engine
-instead of discovering those model bindings again. The engine validates the snapshot and
-current authored configuration. A changed fallback allowance used by the plan requires a new
-plan, rather than silently changing its prepared reservation. SDKs compute no route identity. This adds no public resolver
+independently of the optional metadata cache. Creating a new run with `run(plan)` sends that
+snapshot back to the engine instead of discovering those model bindings again. The engine
+validates the snapshot and current authored configuration. SDKs compute no route identity. This adds no public resolver
 or synchronization API. Preparing a new plan still resolves current configuration and
 provider metadata under the normal freshness policy.
 
@@ -35,6 +34,13 @@ Omitting all three selectors creates a fresh record. `name` is create-only; `res
 existing named run. An explicit folder retains its existing create/resume behavior.
 Resuming repeats current target/input/route/builder options; old options are not
 restored. A name does not force generation or alter any cache identity.
+
+For a named resume or an existing explicit run folder, SDKs invoke the engine without
+preplanning or injecting a `Plan`'s preparation snapshot. The engine loads the run's recorded
+model facts before planning, retaining the usual current-configuration and plan-digest
+checks. Deleting the optional metadata cache or removing a provider key does not force
+rediscovery before a resume that can use recorded facts and cached results. An engine
+refusal before execution raises `FxError`; SDKs do not repeat discovery to diagnose it.
 
 SDKs start `run` with `GRIDA_FX_CANCEL_SOURCE=sdk` in the engine's environment. Besides naming
 the source of a signal's cancellation, it tells the engine that the invocation's inputs file is

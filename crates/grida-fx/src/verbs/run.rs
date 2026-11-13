@@ -145,9 +145,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         .map(|folder| folder.join("resolved-models.json"))
         .filter(|file| file.exists())
     {
-        let mut models = crate::models::read(&file)?;
-        crate::models::refresh_allowances(&mut models, &planner.project);
-        Some(models)
+        Some(crate::models::read(&file)?)
     } else {
         None
     };

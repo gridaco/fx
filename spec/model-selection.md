@@ -91,6 +91,12 @@ invocation's isolated catalog. Other providers and capabilities continue to use 
 route tables, including project tables for models FX does not ship. A project provider or
 adapter does not need a model-discovery service or a Grida Models catalog.
 
+Model discovery and pricing discovery are optional provider-integration capabilities, not
+requirements of a provider declaration. FX's route-price contract is the common planning
+boundary regardless of whether its facts come from a shipped table, a project table or a
+provider lookup. A provider's illustrative scenario is not a general rate formula; using
+an estimate requires an interpretation that applies to the route's supported requests.
+
 Provider metadata is normalized into ordinary concrete routes before the offline planner
 runs. A provider's published model facts are admitted only for the request and response
 wire the installed adapter implements. An unsupported wire, missing image capability or
@@ -113,34 +119,17 @@ The existing build-time Models projection continues to check shipped routes. A p
 custom-resolver API is deferred; existing project route tables and adapters remain the
 extension paths.
 
-## 4. Reusable model allowances
+Discovery must also supply a planning price that the engine can compute from documented
+facts. Model and operation metadata alone do not establish a price. If pricing cannot be
+computed, the binding is refused; FX does not infer a rate from a model name or treat an
+unknown price as $0. An authored route with a price, or the existing explicit `price.cap_usd`
+escape hatch for unknown cost, remains independent of discovery. These are the ordinary
+route-table contracts, not another provider-preference or model-selection setting.
 
-The planning project's `fx.yaml` may set `model_allowances`, a provider-to-capability map of
-positive USD amounts:
+One prepared plan admits at most 128 discovered image bindings, matching its snapshot
+reader's limit. A larger selection is refused before an unreadable snapshot can be produced.
 
-```yaml
-model_allowances:
-  gg:
-    image.generate: 0.10
-    image.edit: 0.15
-```
-
-An allowance supplies the per-attempt cap for a discovered model whose provider metadata
-does not supply a sufficient planning price. It applies to every discovered model of that
-provider and capability that needs this fallback, including a step's model override. It is
-optional when a sufficient price is known, and is not a provider quote or permission to
-spend. Without a price or applicable allowance, the route is not admitted. Authored routes'
-prices and caps are unchanged.
-
-The planning project owns this setting; the workflow home's value is not inherited, and
-provider preferences do not imply an allowance. Values use the existing positive USD
-grammar and precision. A capped call plans at $0 to its cap, reserves that cap per attempt
-and settles at the provider's reported cost, else the cap, under
-[identity.md](identity.md) §12 and [protocol.md](protocol.md) §6.1. Run and phase ceilings
-remain separate admission controls. Repricing or changing an allowance does not change the
-route fingerprint.
-
-## 5. Metadata cache and prepared plans
+## 4. Metadata cache and prepared plans
 
 The planning project's `.fx/models/` is an optional metadata cache, separate from the paid
 call and result store. It holds sanitized normalized routes, a connection-scope hash and a
@@ -157,14 +146,11 @@ an optimization, not an offline-availability guarantee or a source of paid answe
 
 A prepared SDK plan carries its engine-resolved model routes independently of this cache.
 Running that plan reuses its bound discovered routes, not a fresh model lookup; deleting or
-expiring the metadata cache does not substitute a different model or contract. If a fallback
-allowance used by that plan has changed, execution refuses and asks for a new plan. The engine
+expiring the metadata cache does not substitute a different model or contract. The engine
 still checks current authored configuration and the usual run admission rules. SDKs transport
 the normalized route data; only the engine validates and resolves it.
 
 A CLI resume may reuse the run's recorded discovered model facts without consulting the
-metadata cache or provider. It reapplies the planning project's current allowance policy,
-as for an authored route's current price; removing a required allowance refuses the binding.
-Allowance changes do not alter route identity or authorize spending. Fresh plans obtain
-current metadata under the policy above; all resumes retain the current-configuration and
+metadata cache or provider. Fresh plans obtain current metadata under the policy above;
+all resumes retain the current-configuration and
 plan-digest checks in §2.

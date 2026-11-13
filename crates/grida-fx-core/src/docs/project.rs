@@ -41,8 +41,6 @@ pub struct ProjectDoc {
     pub routes: IndexMap<String, RouteDefault>,
     /// One explicitly preferred provider per capability (spec/model-selection.md).
     pub provider_preferences: IndexMap<String, String>,
-    /// Per-provider/capability allowances for discovered models, owned by this project.
-    pub model_allowances: IndexMap<String, IndexMap<String, Usd>>,
     pub route_tables: Vec<String>,
     /// The providers it declares, in its order (spec/providers.md §1).
     pub providers: Vec<Declaration>,
@@ -62,7 +60,6 @@ impl Default for ProjectDoc {
             budget: None,
             routes: IndexMap::new(),
             provider_preferences: IndexMap::new(),
-            model_allowances: IndexMap::new(),
             route_tables: Vec::new(),
             providers: Vec::new(),
             view_origins: Vec::new(),
@@ -244,27 +241,11 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
             routes.insert(capability.clone(), default);
         }
     }
-    let mut model_allowances = IndexMap::new();
-    if let Some(Value::Object(providers)) = value.get("model_allowances") {
-        for (provider, capabilities) in providers {
-            let mut allowances = IndexMap::new();
-            for (capability, amount) in capabilities.as_object().expect("validated allowances") {
-                let at = format!("model_allowances.{provider}.{capability}");
-                let amount = Usd::from_value(amount).map_err(|message| refuse(&at, &message))?;
-                if amount == Usd::ZERO {
-                    return Err(refuse(&at, "an allowance is positive"));
-                }
-                allowances.insert(capability.clone(), amount);
-            }
-            model_allowances.insert(provider.clone(), allowances);
-        }
-    }
     Ok(ProjectDoc {
         runs: text("runs", "runs")?,
         cache: text("cache", ".fx/cache")?,
         budget,
         routes,
-        model_allowances,
         provider_preferences: value
             .get("provider_preferences")
             .and_then(Value::as_object)
@@ -298,20 +279,6 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn model_allowances_are_positive_exact_money() {
-        let project = parse_project(&serde_json::json!({"fx":"project/v1","model_allowances":{"acme":{"image.generate":0.000001}}}), "fx.yaml").unwrap();
-        assert_eq!(project.model_allowances["acme"]["image.generate"], Usd(1));
-        for invalid in [
-            serde_json::json!(0),
-            serde_json::json!(-1),
-            serde_json::json!(0.0000001),
-            serde_json::json!("secret-value"),
-        ] {
-            assert!(parse_project(&serde_json::json!({"fx":"project/v1","model_allowances":{"acme":{"image.generate":invalid}}}), "fx.yaml").is_err());
-        }
-    }
     use serde_json::json;
 
     #[test]

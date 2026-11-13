@@ -16,9 +16,8 @@ Optional `provider_preferences` merge independently in the same workflow-home th
 project order as route defaults ([model-selection.md](model-selection.md)). They do not add
 a user-wide configuration scope or change ownership of the catalog, providers or store.
 
-The planning project alone owns `model_allowances` and the optional `.fx/models/` metadata
-cache ([model-selection.md](model-selection.md) §4–§5). A workflow home's allowances are not
-inherited. This metadata cache is separate from the result/call store below and contains no
+The planning project alone owns the optional `.fx/models/` metadata cache
+([model-selection.md](model-selection.md) §4). This metadata cache is separate from the result/call store below and contains no
 paid answers or credentials.
 
 ## 1. Layout

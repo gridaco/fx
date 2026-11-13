@@ -23,8 +23,10 @@
   resolved model facts used by a subsequent run; a
   :class:`Plan` with ``document`` (fx-graph-v1), ``ok``, ``problems``, ``estimate()`` and
   ``phases()``. Exit 2 raises :class:`FxError` with the engine's stderr line.
-- :func:`run` / :func:`run_async`: plans first and raises :class:`PlanRefused` (``the plan is
-  refused:`` and its problems) before any folder exists; then ``grida-fx run … --run <folder>``
+- :func:`run` / :func:`run_async`: plans new runs first and raises :class:`PlanRefused` (``the
+  plan is refused:`` and its problems) before any folder exists. Resumes are planned directly
+  by the engine using recorded model facts; its refusals raise :class:`FxError`. Then
+  ``grida-fx run … --run <folder>``
   (``run_dir``, else a new folder chosen by the engine and read back from its summary), ``--live``
   and ``--yes-up-to`` as given. A failed step does not raise; a run the engine refuses to start
   raises :class:`FxError` (``refused: <message>``). The :class:`RunResult` is read from the
@@ -61,6 +63,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import os
 import re
 import secrets
@@ -1031,7 +1034,27 @@ async def _plan(request: _Request) -> Plan:
         prepared.get("kind") != "fx-prepared-plan-v1"
         or not isinstance(graph, dict)
         or graph.get("kind") != "fx-graph-v1"
+        or not isinstance(graph.get("workflow"), dict)
+        or not isinstance(graph["workflow"].get("id"), str)
+        or not isinstance(graph["workflow"].get("title"), str)
+        or not isinstance(graph.get("instances"), list)
+        or not isinstance(graph.get("pending"), list)
+        or not isinstance(graph.get("problems"), list)
+        or not all(
+            isinstance(problem, dict)
+            and isinstance(problem.get("where"), str)
+            and isinstance(problem.get("message"), str)
+            for problem in graph["problems"]
+        )
+        or not _price_range(graph.get("estimate"))
+        or "ceiling_usd" not in graph["estimate"]
+        or not _ceiling(graph["estimate"].get("ceiling_usd"))
         or not isinstance(price, dict)
+        or not _price_range(price.get("estimate"))
+        or "ceiling_usd" not in price
+        or not _ceiling(price["ceiling_usd"])
+        or not isinstance(price.get("phases"), list)
+        or not all(_price_range(phase) for phase in price["phases"])
         or not isinstance(models, dict)
         or models.get("fx") != "routes/v1"
         or not isinstance(models.get("routes"), list)
@@ -1040,6 +1063,39 @@ async def _plan(request: _Request) -> Plan:
     planned = Plan(graph, price)
     planned._request = replace(request, _resolved_models=json.dumps(models, allow_nan=False))
     return planned
+
+
+def _amount_value(value: Any) -> bool:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:
+        return False
+
+
+def _price_range(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and _amount_value(value.get("low_usd"))
+        and _amount_value(value.get("high_usd"))
+        and value["low_usd"] <= value["high_usd"]
+    )
+
+
+def _ceiling(value: Any) -> bool:
+    return value is None or _amount_value(value)
+
+
+def _may_exist(path: Path) -> bool:
+    """Let the engine inspect an existing or inaccessible explicit run path."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        pass
+    return True
 
 
 def _no_running_loop(function: str) -> None:
@@ -1182,8 +1238,13 @@ async def run_async(
         options.append(f"--resume={resume}")
     if answerer is not None:
         options.append("--stand-in=-")
-    if isinstance(target, Plan):
-        planned: Plan | None = target
+    resuming = resume is not None or (run_dir is not None and _may_exist(request.cwd / run_dir))
+    if resuming:
+        # The CLI loads recorded facts before planning. A fresh SDK plan would miss them.
+        request = replace(request, _resolved_models=None)
+        planned: Plan | None = None
+    elif isinstance(target, Plan):
+        planned = target
     elif answerer is None:
         planned = await _plan(request)
     else:
@@ -1219,6 +1280,9 @@ async def run_async(
         refused = [line for line in done.stdout.splitlines() if line.startswith(_REFUSED)]
         if refused:
             raise FxError(refused[-1], done.status)
+        if resuming:
+            # A diagnostic replan would repeat discovery without the recorded run's facts.
+            raise _failure("run", done)
         replanned = await _plan(request)
         if not replanned.ok:
             raise PlanRefused(replanned)

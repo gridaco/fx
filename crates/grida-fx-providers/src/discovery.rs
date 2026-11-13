@@ -1,9 +1,10 @@
 //! Nonspending metadata lookup for a selected image model, through the invocation's transport.
 //!
-//! A successful lookup returns one ordinary `fx: routes/v1` entry. It does not select a model,
+//! A successful lookup returns route-shaped facts, with a price only when it can be computed
+//! from the published metadata. Unpriced facts cannot be admitted as a route table. This does not select a model,
 //! persist a cache, grant permission to spend, or perform a model request. Remote descriptions,
 //! URLs and error bodies never become diagnostics or route contracts. Missing facts do not
-//! enable features; tariffs that do not define a computable one-image amount need an allowance.
+//! enable features, and missing prices never become zero.
 
 use crate::keys::KeyName;
 use crate::setup::{Client, Setup};
@@ -18,16 +19,15 @@ pub const MAX_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
 /// Metadata reads have a shorter deadline than generation requests and are never retried here.
 pub const DEADLINE: Duration = Duration::from_secs(15);
 
-/// Resolve a selected GG or OpenRouter image model into a route-table entry.
+/// Resolve a selected GG or OpenRouter image model into partial route-shaped facts.
 ///
-/// `allowance` is a reusable, positive per-attempt USD allowance, not a quote or authorization
-/// to spend. The caller owns discovery policy, cache freshness and the later financial approval.
+/// `price` is absent when the public metadata does not define a computable per-call amount.
+/// The caller owns cache freshness, completion of financial facts and later admission/approval.
 pub async fn resolve(
     setup: &Setup,
     capability: &str,
     model: &str,
     provider: &str,
-    allowance: Option<Usd>,
 ) -> Result<Value, String> {
     if !matches!(capability, "image.generate" | "image.edit")
         || !matches!(provider, "gg" | "openrouter")
@@ -45,14 +45,9 @@ pub async fn resolve(
                 .into(),
         );
     }
-    if allowance.is_some_and(|amount| amount <= Usd::ZERO) {
-        return Err(format!(
-            "model_allowances.{provider}.{capability}: an allowance is more than 0"
-        ));
-    }
     match provider {
-        "gg" => gg(setup, capability, model, allowance).await,
-        "openrouter" => openrouter(setup, capability, model, allowance).await,
+        "gg" => gg(setup, capability, model).await,
+        "openrouter" => openrouter(setup, capability, model).await,
         _ => unreachable!(),
     }
 }
@@ -72,13 +67,6 @@ fn invalid(provider: &str) -> String {
 fn not_found(provider: &str) -> String {
     format!(
         "{provider} model was not found in provider metadata; provide an authored route instead"
-    )
-}
-
-fn needs_allowance(provider: &str, capability: &str) -> String {
-    format!(
-        "{provider} model metadata does not provide a computable per-call price: set \
-         model_allowances.{provider}.{capability} or provide an authored route price"
     )
 }
 
@@ -133,22 +121,16 @@ fn entry(
     capability: &str,
     model: &str,
     provider: &str,
-    price: Value,
+    price: Option<Value>,
     features: BTreeSet<&str>,
     contract: Value,
 ) -> Value {
-    json!({"capability": capability, "route": format!("{model}@{provider}"),
-        "model_id": model, "price": price, "features": features, "contract": contract})
-}
-
-fn allowance_price(
-    allowance: Option<Usd>,
-    provider: &str,
-    capability: &str,
-) -> Result<Value, String> {
-    allowance
-        .map(|amount| json!({"cap_usd": amount.to_value()}))
-        .ok_or_else(|| needs_allowance(provider, capability))
+    let mut entry = json!({"capability": capability, "route": format!("{model}@{provider}"),
+        "model_id": model, "features": features, "contract": contract});
+    if let Some(price) = price {
+        entry["price"] = price;
+    }
+    entry
 }
 
 fn array<'a>(
@@ -170,14 +152,20 @@ fn lists(value: &Value, text: &str) -> bool {
         .is_some_and(|items| items.iter().any(|item| item.as_str() == Some(text)))
 }
 
-async fn gg(
-    setup: &Setup,
-    capability: &str,
-    model: &str,
-    allowance: Option<Usd>,
-) -> Result<Value, String> {
+async fn gg(setup: &Setup, capability: &str, model: &str) -> Result<Value, String> {
     let client = setup.client(KeyName::GridaGateway);
     let models = get(&client, client.url("models"), false).await?;
+    // A definitive absence must not be hidden by a later endpoint/schema outage.
+    let matching: Vec<_> = array(&models, "data", "gg", 2048)?
+        .iter()
+        .filter(|item| item.get("id").and_then(Value::as_str) == Some(model))
+        .collect();
+    if matching.is_empty() {
+        return Err(not_found("gg"));
+    }
+    let [offered] = matching.as_slice() else {
+        return Err(invalid("gg"));
+    };
     let endpoints = get(&client, client.url("endpoints"), false).await?;
     let Some(revision) = models
         .get("revision")
@@ -199,16 +187,6 @@ async fn gg(
         .to_string();
     schema_base.set_path(&format!("{prefix}/schemas/operations.json"));
     let bundle = get(&client, schema_base.to_string(), false).await?;
-    let matching: Vec<_> = array(&models, "data", "gg", 2048)?
-        .iter()
-        .filter(|item| item.get("id").and_then(Value::as_str) == Some(model))
-        .collect();
-    if matching.is_empty() {
-        return Err(not_found("gg"));
-    }
-    let [offered] = matching.as_slice() else {
-        return Err(invalid("gg"));
-    };
     let facts = &offered["gg"];
     let (interface, path, content_type, request_view) = if capability == "image.generate" {
         (
@@ -325,14 +303,7 @@ async fn gg(
             features.insert(feature);
         }
     }
-    let mut route = entry(
-        capability,
-        model,
-        "gg",
-        allowance_price(allowance, "gg", capability)?,
-        features,
-        contract,
-    );
+    let mut route = entry(capability, model, "gg", None, features, contract);
     if capability == "image.edit" {
         let images = &schema["properties"]["image"];
         if images["type"] != "array" {
@@ -394,12 +365,7 @@ fn accepts(bundle: &Value, schema: &Value, value: Value) -> bool {
     crate::checks::schema_validator(&schema).is_ok_and(|validator| validator.is_valid(&value))
 }
 
-async fn openrouter(
-    setup: &Setup,
-    capability: &str,
-    model: &str,
-    allowance: Option<Usd>,
-) -> Result<Value, String> {
+async fn openrouter(setup: &Setup, capability: &str, model: &str) -> Result<Value, String> {
     let client = setup.client(KeyName::OpenRouter);
     let (author, slug) = model
         .split_once('/')
@@ -443,9 +409,12 @@ async fn openrouter(
         })
     };
     let image_input = endpoints.iter().all(|endpoint| {
-        endpoint["supported_parameters"]["input_references"]["max"]
-            .as_u64()
-            .is_some_and(|max| max > 0)
+        let references = &endpoint["supported_parameters"]["input_references"];
+        // FX's edit request represents one image plus optional references. A model that
+        // requires two or more inputs needs a minimum-count contract this adapter lacks.
+        references["type"] == "range"
+            && references["min"].as_u64().is_some_and(|min| min <= 1)
+            && references["max"].as_u64().is_some_and(|max| max > 0)
     });
     if capability == "image.edit" && !image_input {
         return Err(invalid("openrouter"));
@@ -501,10 +470,7 @@ async fn openrouter(
         controls.insert("size".into(), json!(sizes));
         features.insert("exact_size");
     }
-    let price = match openrouter_price(endpoints) {
-        Some(price) => price,
-        None => allowance_price(allowance, "openrouter", capability)?,
-    };
+    let price = openrouter_price(endpoints);
     let contract = json!({"adapter": "openrouter-image-discovered-v1", "adapter_behavior": "1", "image_controls": controls});
     let mut route = entry(capability, model, "openrouter", price, features, contract);
     if image_input

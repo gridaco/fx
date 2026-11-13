@@ -1,7 +1,7 @@
 // A mutable fake metadata source cannot change the facts between SDK planning and execution.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FxError, Plan, plan, run } from "../src/index.js";
 import { makeRequest } from "../src/request.js";
@@ -23,6 +23,10 @@ fs.appendFileSync(process.env.FAKE_PREPARED_LOG, JSON.stringify({ args, files })
 if (args[0] === "plan" && args.includes("--prepared")) {
   process.stdout.write(JSON.stringify(config.prepared));
 } else if (args[0] === "run") {
+  if (config.problemRun) {
+    process.stdout.write("draw.with.prompt: the current request is invalid\\n");
+    process.exit(1);
+  }
   if (config.failRun) {
     process.stderr.write("grida-fx: execution refused\\n");
     process.exit(2);
@@ -152,6 +156,17 @@ describe.skipIf(!NODE || process.platform === "win32")("prepared SDK plans", () 
     try {
       for (const change of [
         { kind: "fx-prepared-plan-v2" }, { graph: [] }, { price: [] },
+        { graph: { kind: "fx-graph-v1" } },
+        { graph: { ...prepared().graph, problems: {} } },
+        { graph: { ...prepared().graph, problems: [{ where: 3, message: "invalid" }] } },
+        { graph: { ...prepared().graph, pending: {} } },
+        { graph: { ...prepared().graph, estimate: { low_usd: 2, high_usd: 1, ceiling_usd: 2 } } },
+        { price: {} },
+        { price: { ...prepared().price, estimate: { low_usd: -1, high_usd: 2 } } },
+        { price: { ...prepared().price, estimate: { low_usd: 0, high_usd: Infinity } } },
+        { price: { ...prepared().price, estimate: { low_usd: false, high_usd: 1 } } },
+        { price: { ...prepared().price, phases: [null] } },
+        { price: { ...prepared().price, ceiling_usd: "2" } },
         { resolved_models: { fx: "routes/v2", routes: [] } },
         { resolved_models: { fx: "routes/v1", routes: {} } },
       ]) {
@@ -164,4 +179,39 @@ describe.skipIf(!NODE || process.platform === "win32")("prepared SDK plans", () 
       engine.cleanup();
     }
   });
+
+  for (const named of [false, true]) {
+    for (const withPlan of [false, true]) {
+      test(`delegates ${named ? "named" : "explicit"} resume facts to the engine${withPlan ? " with a Plan" : ""}`, async () => {
+        const engine = fake();
+        try {
+          engine.reply({ prepared: prepared() });
+          const target = withPlan ? await plan("lantern", engine.options) : "lantern";
+          const before = engine.calls().length;
+          if (!named) mkdirSync(join(engine.path, "runs/existing"), { recursive: true });
+          engine.reply({ prepared: null });
+          const selected = named ? { resume: "take-A" } : { runDir: "runs/existing" };
+          await run(target, withPlan ? selected : { ...engine.options, ...selected });
+          const calls = engine.calls().slice(before);
+          expect(calls.map((call) => call.args[0])).toEqual(["run", "project", "inspect"]);
+          expect(calls[0]?.files).toEqual({});
+          expect(engine.temporaryFiles()).toEqual([]);
+        } finally {
+          engine.cleanup();
+        }
+      });
+    }
+    test(`reports ${named ? "named" : "explicit"} resume problems without a fresh diagnostic plan`, async () => {
+      const engine = fake();
+      try {
+        if (!named) mkdirSync(join(engine.path, "runs/existing"), { recursive: true });
+        engine.reply({ prepared: null, problemRun: true });
+        const selected = named ? { resume: "take-A" } : { runDir: "runs/existing" };
+        await expect(run("lantern", { ...engine.options, ...selected })).rejects.toThrow("the current request is invalid");
+        expect(engine.calls().map((call) => call.args[0])).toEqual(["run"]);
+      } finally {
+        engine.cleanup();
+      }
+    });
+  }
 });

@@ -75,10 +75,13 @@ missing = result.deliver({"images": "out/{key}.png"})
   it. A `Plan` takes no planning options when it runs: plan again to change them.
 - **`plan`** gets the graph and price from one engine invocation. `Plan.document` is the
   fx-graph-v1 document; `ok`, `problems` (`where`, `message`), `estimate()` and `phases()` read it.
-  A subsequent `run(plan)` reuses the resolved model facts from that plan; authored project
+  A new `run(plan)` reuses the resolved model facts from that plan; authored project
   configuration is still checked again. Planning never spends.
-- **`run`** plans first, and raises `PlanRefused` (`the plan is refused:` and one line per
-  problem) before any run folder exists. A failed step does not raise: check `result.ok` and
+- **`run`** plans new runs first, and raises `PlanRefused` (`the plan is refused:` and one line
+  per problem) before any run folder exists. Named resumes and existing `run_dir` folders are
+  planned directly by the engine using their recorded model facts, including when passed a
+  `Plan`; an engine refusal raises
+  `FxError` with its explanation. A failed step does not raise: check `result.ok` and
   `result.failed`. The result is read from the run folder's `events.jsonl`: `ok`, `incomplete`,
   `cost` (the folder's charge over every invocation, in US dollars), `run_dir`, `failed`,
   `failures`, `stopped`, `stand_in`, `outputs` and `steps`.

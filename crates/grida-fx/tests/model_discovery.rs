@@ -157,18 +157,15 @@ impl Drop for MetadataServer {
     }
 }
 
-fn configure(root: &Path, provider: &str, allowance: Option<u32>) {
-    let mut project = json!({"fx":"project/v1", "routes":{"image.generate":MODEL},
+fn configure(root: &Path, provider: &str) {
+    let project = json!({"fx":"project/v1", "routes":{"image.generate":MODEL},
         "provider_preferences":{"image.generate":provider}});
-    if let Some(cap) = allowance {
-        project["model_allowances"] = json!({provider:{"image.generate":cap}});
-    }
     std::fs::write(root.join("fx.yaml"), serde_json::to_vec(&project).unwrap()).unwrap();
 }
 
-fn project(provider: &str, allowance: Option<u32>) -> tempfile::TempDir {
+fn project(provider: &str) -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    configure(root.path(), provider, allowance);
+    configure(root.path(), provider);
     std::fs::write(root.path().join("workflow.yaml"), "fx: workflow/v1\nid: discovery\ntitle: Discovered image\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    with: {prompt: a small lantern}\noutputs:\n  image: '${{ steps.draw.outputs.image }}'\n").unwrap();
     root
 }
@@ -296,7 +293,7 @@ fn expire_cache(root: &Path) {
 
 #[test]
 fn ordinary_prepared_plan_discovers_openrouter_and_prices_one_snapshot() {
-    let root = project("openrouter", None);
+    let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", true);
     let prepared = document(
@@ -348,88 +345,118 @@ fn ordinary_prepared_plan_discovers_openrouter_and_prices_one_snapshot() {
 }
 
 #[test]
-fn gg_discovers_public_operation_facts_without_generation_or_credentials() {
-    let root = project("gg", Some(3));
+fn gg_keyless_metadata_refuses_unpriced_binding_before_generation() {
+    let root = project("gg");
     let server = MetadataServer::new();
     serve_model(&server, "gg", false);
-    let prepared = document(&command(root.path(), "gg", &server, true, PREPARED), 0);
-    assert_eq!(prepared["graph"]["problems"], json!([]));
-    assert_eq!(prepared["price"]["estimate"]["high_usd"], 3);
-    let entry = &prepared["resolved_models"]["routes"][0];
-    assert_eq!(entry["price"], json!({"cap_usd":3}));
-    assert_eq!(entry["contract"]["adapter"], "gg-image");
-    assert_eq!(
-        entry["contract"]["provider_options"],
-        json!({"gg":{"output_format":"png"}})
+    let refused = document(
+        &command_with_key(root.path(), "gg", &server, true, PREPARED, None),
+        1,
     );
+    let problems = refused["graph"]["problems"].to_string();
+    assert!(
+        problems.contains("provider metadata does not provide a computable per-call price"),
+        "{problems}"
+    );
+    assert!(
+        problems.contains("supply an authored route with price or cap_usd"),
+        "{problems}"
+    );
+    assert_eq!(refused["resolved_models"]["routes"], json!([]));
     let requests = server.requests();
     assert_eq!(requests.len(), 3);
     assert!(requests.iter().all(|request| request.starts_with("GET ")
         && !request.to_ascii_lowercase().contains("authorization")));
+    assert!(!root.path().join(".fx/models").exists());
+    assert!(!root.path().join("runs").exists());
 }
 
 #[test]
-fn cached_unknown_prices_use_current_reusable_allowance_offline_without_rekeying() {
-    for provider in ["gg", "openrouter"] {
-        let root = project(provider, Some(3));
-        let server = MetadataServer::new();
-        serve_model(&server, provider, false);
-        let initial = document(&command(root.path(), provider, &server, true, PREPARED), 0);
-        let count = server.requests().len();
-        configure(root.path(), provider, Some(4));
-        expire_cache(root.path());
-        let cached = document(&command(root.path(), provider, &server, false, PREPARED), 0);
-        assert_eq!(server.requests().len(), count);
-        assert_eq!(initial["price"]["estimate"]["high_usd"], 3);
-        assert_eq!(cached["price"]["estimate"]["high_usd"], 4);
-        assert_eq!(
-            cached["resolved_models"]["routes"][0]["price"],
-            json!({"cap_usd":4})
-        );
-        assert!(
-            initial["graph"]["instances"][0]["identity"]
-                .as_str()
-                .is_some()
-        );
-        assert_eq!(
-            initial["graph"]["instances"][0]["identity"],
-            cached["graph"]["instances"][0]["identity"]
-        );
-        assert_eq!(
-            initial["graph"]["instances"][0]["routes"],
-            cached["graph"]["instances"][0]["routes"]
-        );
-    }
+fn published_prices_remain_available_from_expired_cache_offline_without_rekeying() {
+    let root = project("openrouter");
+    let server = MetadataServer::new();
+    serve_model(&server, "openrouter", true);
+    let initial = document(
+        &command(root.path(), "openrouter", &server, true, PREPARED),
+        0,
+    );
+    expire_cache(root.path());
+    let cached = document(
+        &command(root.path(), "openrouter", &server, false, PREPARED),
+        0,
+    );
+    assert_eq!(server.requests().len(), 1);
+    assert_eq!(cached["price"]["estimate"]["high_usd"], 0.4);
+    assert_eq!(
+        cached["resolved_models"]["routes"][0]["price"],
+        json!({"low_usd":0.25,"high_usd":0.4})
+    );
+    assert!(
+        initial["graph"]["instances"][0]["identity"]
+            .as_str()
+            .is_some()
+    );
+    assert_eq!(
+        initial["graph"]["instances"][0]["identity"],
+        cached["graph"]["instances"][0]["identity"]
+    );
+    assert_eq!(
+        initial["graph"]["instances"][0]["routes"],
+        cached["graph"]["instances"][0]["routes"]
+    );
 }
 
 #[test]
-fn uncomputable_price_names_allowance_and_the_next_normal_plan_uses_it() {
-    let root = project("openrouter", None);
+fn uncomputable_price_refuses_until_an_authored_route_supplies_a_cap() {
+    let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", false);
     let refused = document(
         &command(root.path(), "openrouter", &server, true, PREPARED),
         1,
     );
+    let problems = refused["graph"]["problems"].to_string();
     assert!(
-        refused["graph"]["problems"]
-            .to_string()
-            .contains("model_allowances.openrouter.image.generate")
+        problems.contains("provider metadata does not provide a computable per-call price"),
+        "{problems}"
+    );
+    assert!(
+        problems.contains("supply an authored route with price or cap_usd"),
+        "{problems}"
     );
     assert_eq!(refused["resolved_models"]["routes"], json!([]));
-    configure(root.path(), "openrouter", Some(3));
-    serve_model(&server, "openrouter", false);
+    let mut config: Value =
+        serde_json::from_slice(&std::fs::read(root.path().join("fx.yaml")).unwrap()).unwrap();
+    config["route_tables"] = json!(["authored.json"]);
+    std::fs::write(
+        root.path().join("fx.yaml"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.path().join("authored.json"),
+        serde_json::to_vec(&json!({"fx":"routes/v1","routes":[{
+            "capability":"image.generate","route":"acme/img-v2@openrouter","price":{"cap_usd":3}
+        }]}))
+        .unwrap(),
+    )
+    .unwrap();
     let prepared = document(
         &command(root.path(), "openrouter", &server, true, PREPARED),
         0,
     );
     assert_eq!(prepared["price"]["estimate"]["high_usd"], 3);
-    assert_eq!(server.requests().len(), 2);
+    assert_eq!(prepared["resolved_models"]["routes"], json!([]));
+    assert_eq!(
+        server.requests().len(),
+        1,
+        "an authored cap needs no additional discovery"
+    );
 }
 
 #[test]
 fn authored_override_and_explicit_route_tables_do_not_discover() {
-    let root = project("openrouter", None);
+    let root = project("openrouter");
     let server = MetadataServer::new();
     let mut config: Value =
         serde_json::from_slice(&std::fs::read(root.path().join("fx.yaml")).unwrap()).unwrap();
@@ -453,7 +480,7 @@ fn authored_override_and_explicit_route_tables_do_not_discover() {
     );
     assert_eq!(authored["price"]["estimate"]["high_usd"], 0.07);
     assert_eq!(authored["resolved_models"]["routes"], json!([]));
-    configure(root.path(), "openrouter", None);
+    configure(root.path(), "openrouter");
     std::fs::write(
         root.path().join("isolated.json"),
         "{\"fx\":\"routes/v1\",\"routes\":[]}",
@@ -470,7 +497,7 @@ fn authored_override_and_explicit_route_tables_do_not_discover() {
 
 #[test]
 fn canonical_metadata_on_an_authored_native_route_cannot_be_overwritten_by_discovery() {
-    let root = project("gg", Some(3));
+    let root = project("gg");
     let server = MetadataServer::new();
     let mut config: Value =
         serde_json::from_slice(&std::fs::read(root.path().join("fx.yaml")).unwrap()).unwrap();
@@ -497,7 +524,7 @@ fn canonical_metadata_on_an_authored_native_route_cannot_be_overwritten_by_disco
 
 #[test]
 fn local_facts_need_no_key_but_another_account_refreshes_its_metadata() {
-    let root = project("openrouter", None);
+    let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", true);
     let original = document(
@@ -537,7 +564,7 @@ fn local_facts_need_no_key_but_another_account_refreshes_its_metadata() {
 
 #[test]
 fn explicit_not_found_does_not_fall_back_to_expired_metadata() {
-    let root = project("openrouter", None);
+    let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", true);
     document(
@@ -563,10 +590,13 @@ fn explicit_not_found_does_not_fall_back_to_expired_metadata() {
 
 #[test]
 fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed() {
-    let root = project("gg", Some(3));
+    let root = project("openrouter");
     let server = MetadataServer::new();
-    serve_model(&server, "gg", false);
-    let prepared = document(&command(root.path(), "gg", &server, true, PREPARED), 0);
+    serve_model(&server, "openrouter", true);
+    let prepared = document(
+        &command(root.path(), "openrouter", &server, true, PREPARED),
+        0,
+    );
     std::fs::write(
         root.path().join("prepared.json"),
         serde_json::to_vec(&prepared["resolved_models"]).unwrap(),
@@ -580,11 +610,11 @@ fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed(
         "runs/prepared",
         "--no-view",
         "--max-usd",
-        "3",
+        "1",
     ];
     let mut initial_args = run_args.to_vec();
     initial_args.extend(["--resolved-models", "prepared.json"]);
-    let first = command(root.path(), "gg", &server, false, &initial_args);
+    let first = command(root.path(), "openrouter", &server, false, &initial_args);
     assert_eq!(
         first.status.code(),
         Some(1),
@@ -597,7 +627,7 @@ fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed(
             .unwrap();
     assert_eq!(recorded, prepared["resolved_models"]);
     let first_plan = std::fs::read(folder.join("plan.json")).unwrap();
-    let resumed = command(root.path(), "gg", &server, false, &run_args);
+    let resumed = command(root.path(), "openrouter", &server, false, &run_args);
     assert_eq!(
         resumed.status.code(),
         Some(1),
@@ -618,13 +648,13 @@ fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed(
             .count(),
         2
     );
-    assert_eq!(server.requests().len(), 3);
+    assert_eq!(server.requests().len(), 1);
     assert!(!root.path().join(".fx/models").exists());
 }
 
 #[test]
 fn discovered_model_runs_settles_and_replays_its_paid_call_without_a_key() {
-    let root = project("openrouter", None);
+    let root = project("openrouter");
     let server = MetadataServer::new();
     serve_model(&server, "openrouter", true);
     // Pixels are synthesized by the committed testing helper, never generated artwork.

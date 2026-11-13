@@ -519,6 +519,56 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
 }
 
 #[test]
+fn integrated_doctor_keeps_diagnostics_when_model_preparation_refuses_configuration() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroutes:\n  image.generate: acme/image-next\nprovider_preferences:\n  image.generate: openrouter\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Diagnostic fixture\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    with: {prompt: a copper lantern}\n",
+    )
+    .unwrap();
+    for bad_dotenv in [true, false] {
+        let mut cmd = command(root, &["doctor", "case"]);
+        if bad_dotenv {
+            std::fs::write(
+                root.join(".env"),
+                "OPENROUTER_API_KEY=fx-private-first\nOPENROUTER_API_KEY=fx-private-second\n",
+            )
+            .unwrap();
+            cmd.env_remove("GRIDA_FX_DISABLE_DOTENV");
+        } else {
+            cmd.env("OPENROUTER_BASE_URL", "not-a-valid-url");
+        }
+        let output = cmd.output().unwrap();
+        assert_eq!(status(&output), 1, "{}", stderr(&output));
+        let text = stdout(&output);
+        for prefix in [
+            "engine    ",
+            "uses      image.generate ",
+            "routing   ",
+            "keys      ",
+            "key       OPENROUTER_API_KEY ",
+            "program   ",
+            "route     ",
+            "models    ",
+        ] {
+            assert!(
+                text.lines().any(|line| line.starts_with(prefix)),
+                "missing {prefix:?}: {text}"
+            );
+        }
+        assert!(!text.contains("fx-private-first"));
+        assert!(!text.contains("fx-private-second"));
+        assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+    }
+}
+
+#[test]
 fn integrated_a_model_fx_does_not_list_plans_and_doctor_serves_it() {
     // Made-up models on providers FX speaks, each with a cap: the providers' default adapters
     // serve them (spec/providers.md §2), and a contract naming an adapter FX does not have is

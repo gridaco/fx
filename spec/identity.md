@@ -162,7 +162,7 @@ When a selected image model on a supported provider has no admitted binding, pre
 supply a normalized discovered route under [model-selection.md](model-selection.md) §3.
 It does not replace a table entry and is disabled by any explicit `--routes` file. The
 discovered route has the same fingerprint rule and contract completion as an authored route.
-Metadata-source revisions, HTTP-cache timestamps and `model_allowances` are not hashed;
+Metadata-source revisions and metadata-cache timestamps are not hashed;
 changes to the resolved native model, provider or completed contract are. An SDK prepared
 plan carries its discovered routes so execution need not rediscover them.
 

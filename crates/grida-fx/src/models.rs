@@ -3,7 +3,6 @@
 
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::host::NodeHost;
-use grida_fx_core::money::Usd;
 use grida_fx_core::project::Planner;
 use grida_fx_core::routes::{RouteTable, parse_route_id};
 use grida_fx_core::value::{digest, parse_json};
@@ -18,37 +17,11 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_ENTRIES: usize = 128;
 const FRESH_SECONDS: u64 = 3600;
 
 pub(crate) fn empty() -> Value {
     json!({"fx": "routes/v1", "routes": []})
-}
-
-/// A resumed CLI invocation uses its current allowance policy, as authored prices do.
-pub(crate) fn refresh_allowances(document: &mut Value, project: &Project) {
-    for entry in document["routes"].as_array_mut().into_iter().flatten() {
-        if entry["price"].get("cap_usd").is_none() {
-            continue;
-        }
-        let Some(capability) = entry["capability"].as_str() else {
-            continue;
-        };
-        let Some(provider) = entry["route"]
-            .as_str()
-            .and_then(|id| id.rsplit_once('@'))
-            .map(|(_, provider)| provider)
-        else {
-            continue;
-        };
-        if let Some(allowance) = project
-            .document
-            .model_allowances
-            .get(provider)
-            .and_then(|caps| caps.get(capability))
-        {
-            entry["price"] = json!({"cap_usd":allowance.to_value()});
-        }
-    }
 }
 
 /// A supplied SDK snapshot freezes discovery, including when it contains no entries.
@@ -68,7 +41,7 @@ pub(crate) fn read(path: &Path) -> Result<Value, Error> {
 fn validate(document: &Value) -> Result<(), Error> {
     let table = RouteTable::from_document(document, "resolved model facts")
         .map_err(|_| Error::usage("resolved model facts fail route validation"))?;
-    if table.entries.len() > 128 {
+    if table.entries.len() > MAX_ENTRIES {
         return Err(Error::usage(
             "resolved model facts contain too many entries",
         ));
@@ -129,7 +102,7 @@ fn validate(document: &Value) -> Result<(), Error> {
             .ok_or_else(|| Error::usage("resolved model facts need a price"))?;
         if price
             .keys()
-            .any(|key| !["usd", "low_usd", "high_usd", "cap_usd"].contains(&key.as_str()))
+            .any(|key| !["usd", "low_usd", "high_usd"].contains(&key.as_str()))
         {
             return Err(Error::usage(
                 "resolved model facts contain unsupported pricing members",
@@ -309,12 +282,11 @@ pub(crate) fn prepare_used(
         {
             continue;
         }
-        let allowance = project
-            .document
-            .model_allowances
-            .get(&provider)
-            .and_then(|caps| caps.get(capability))
-            .copied();
+        if resolved.len() >= MAX_ENTRIES {
+            return Err(Error::usage(
+                "too many distinct model bindings for one plan; reduce the number of distinct image models",
+            ));
+        }
         let result = if let Some(snapshot) = snapshot {
             snapshot["routes"]
                 .as_array()
@@ -326,14 +298,6 @@ pub(crate) fn prepare_used(
                 .cloned()
                 .ok_or_else(|| {
                     "the prepared model facts do not include this binding; plan again".to_string()
-                })
-                .and_then(|entry| {
-                    if let Some(cap) = entry["price"].get("cap_usd")
-                        && Usd::from_value(cap).ok() != allowance
-                    {
-                        return Err("the model allowance changed since planning; plan again".into());
-                    }
-                    Ok(entry)
                 })
         } else {
             if setup.is_none() {
@@ -372,7 +336,7 @@ pub(crate) fn prepare_used(
                 .root
                 .join(".fx/models")
                 .join(format!("{scope}.json"));
-            let cached = cached(&cache, capability, &id, allowance, account.as_deref());
+            let cached = cached(&cache, capability, &id, account.as_deref());
             match cached {
                 Some((entry, at)) if !network || now().saturating_sub(at) < FRESH_SECONDS => {
                     Ok(entry)
@@ -382,9 +346,12 @@ pub(crate) fn prepare_used(
                         Err("model facts are not available locally and networking is disabled; supply an authored route or resolve online once".into())
                     } else {
                         let found = rt.block_on(grida_fx_providers::discovery::resolve(
-                            setup, capability, &model, &provider, allowance,
+                            setup, capability, &model, &provider,
                         ));
                         match found {
+                            Ok(entry) if entry.get("price").is_none() => {
+                                Err("provider metadata does not provide a computable per-call price; supply an authored route with price or cap_usd".into())
+                            }
                             Ok(entry) => {
                                 let doc = json!({"fx":"routes/v1","routes":[entry.clone()]});
                                 validate(&doc)?;
@@ -434,13 +401,7 @@ fn transient(reason: &str) -> bool {
         || reason.contains("HTTP 429")
 }
 
-fn cached(
-    path: &Path,
-    capability: &str,
-    id: &str,
-    allowance: Option<Usd>,
-    account: Option<&str>,
-) -> Option<(Value, u64)> {
+fn cached(path: &Path, capability: &str, id: &str, account: Option<&str>) -> Option<(Value, u64)> {
     let metadata = std::fs::symlink_metadata(path).ok()?;
     if !metadata.is_file() || metadata.len() > MAX_BYTES {
         return None;
@@ -456,14 +417,12 @@ fn cached(
     }
     let doc = &cache["models"];
     validate(doc).ok()?;
-    let mut entry = doc["routes"]
+    let entry = doc["routes"]
         .as_array()?
         .iter()
         .find(|entry| entry["capability"] == capability && entry["route"] == id)?
         .clone();
-    if entry["price"].get("cap_usd").is_some() {
-        entry["price"] = json!({"cap_usd": allowance?.to_value()});
-    }
+
     Some((entry, cache["fetched_at"].as_u64()?))
 }
 
@@ -478,8 +437,63 @@ fn now() -> u64 {
 mod tests {
     use super::*;
 
+    #[test]
+    fn prepared_models_share_the_reader_entry_limit() {
+        use grida_fx_core::routes::{RouteSelection, RoutingSource};
+
+        let root = tempfile::tempdir().unwrap();
+        let project = Project::find(root.path()).unwrap();
+        let entries: Vec<Value> = (0..MAX_ENTRIES)
+            .map(|index| {
+                let model = format!("acme/image-{index:03}");
+                json!({"capability":"image.generate","route":format!("{model}@openrouter"),"model_id":model,"price":{"usd":1},"features":["text_to_image"],"contract":{"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1","image_controls":{}}})
+            })
+            .collect();
+        let snapshot = json!({"fx":"routes/v1","routes":entries});
+        let mut used = crate::verbs::doctor::UsedRoutes::new();
+        for index in 0..=MAX_ENTRIES {
+            if index == MAX_ENTRIES {
+                let prepared = prepare_used(
+                    &project,
+                    &mut RouteTable::default(),
+                    &used,
+                    Some(&snapshot),
+                    false,
+                    &|_| None,
+                )
+                .unwrap();
+                assert_eq!(prepared["routes"].as_array().unwrap().len(), MAX_ENTRIES);
+                let path = root.path().join("prepared.json");
+                std::fs::write(&path, serde_json::to_vec(&prepared).unwrap()).unwrap();
+                assert_eq!(read(&path).unwrap(), prepared);
+            }
+            used.insert(
+                (
+                    "image.generate".into(),
+                    Some(RouteSelection {
+                        selector: format!("acme/image-{index:03}@openrouter"),
+                        provider: None,
+                        source: RoutingSource::Step,
+                        provider_source: None,
+                    }),
+                ),
+                1,
+            );
+        }
+        let error = prepare_used(
+            &project,
+            &mut RouteTable::default(),
+            &used,
+            Some(&snapshot),
+            false,
+            &|_| None,
+        )
+        .unwrap_err();
+        assert!(error.message.contains("too many distinct model bindings"));
+    }
+
     fn entry() -> Value {
-        json!({"capability":"image.generate","route":"acme/img-a@openrouter","model_id":"acme/img-a","price":{"cap_usd":1},"features":["text_to_image"],"contract":{"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1","image_controls":{}}})
+        json!({"capability":"image.generate","route":"acme/img-a@openrouter","model_id":"acme/img-a","price":{"usd":1},"features":["text_to_image"],"contract":{"adapter":"openrouter-image-discovered-v1","adapter_behavior":"1","image_controls":{}}})
     }
 
     #[test]
@@ -516,37 +530,28 @@ mod tests {
     }
 
     #[test]
-    fn cached_allowances_follow_current_policy_and_preserve_identity() {
+    fn cached_prices_preserve_binding_and_require_the_same_account_when_given() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("model.json");
-        std::fs::write(&path, serde_json::to_vec(&json!({"kind":"fx-model-cache-v1","fetched_at":1,"models":{"fx":"routes/v1","routes":[entry()]}})).unwrap()).unwrap();
-        let (one, _) = cached(
+        std::fs::write(&path, serde_json::to_vec(&json!({"kind":"fx-model-cache-v1","fetched_at":1,"account_scope":"account-a","models":{"fx":"routes/v1","routes":[entry()]}})).unwrap()).unwrap();
+        let (facts, at) = cached(
             &path,
             "image.generate",
             "acme/img-a@openrouter",
-            Some(Usd(1_000_000)),
-            None,
+            Some("account-a"),
         )
         .unwrap();
-        let (two, _) = cached(
-            &path,
-            "image.generate",
-            "acme/img-a@openrouter",
-            Some(Usd(2_000_000)),
-            None,
-        )
-        .unwrap();
-        assert_eq!(two["price"]["cap_usd"], 2);
-        assert!(cached(&path, "image.generate", "acme/img-a@openrouter", None, None).is_none());
-        let fingerprint = |entry| {
-            RouteTable::from_document(&json!({"fx":"routes/v1","routes":[entry]}), "test")
-                .unwrap()
-                .entries
-                .values()
-                .next()
-                .unwrap()
-                .fingerprint()
-        };
-        assert_eq!(fingerprint(one), fingerprint(two));
+        assert_eq!(facts, entry());
+        assert_eq!(at, 1);
+        assert!(
+            cached(
+                &path,
+                "image.generate",
+                "acme/img-a@openrouter",
+                Some("account-b")
+            )
+            .is_none()
+        );
+        assert!(cached(&path, "image.generate", "acme/img-a@openrouter", None).is_some());
     }
 }

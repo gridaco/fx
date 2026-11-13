@@ -503,7 +503,18 @@ def test_a_prepared_run_reuses_model_facts_and_removes_temporary_files(
     [
         {"kind": "fx-prepared-plan-v2"},
         {"graph": []},
+        {"graph": {"kind": "fx-graph-v1"}},
+        {"graph": {**GRAPH, "problems": {}}},
+        {"graph": {**GRAPH, "problems": [{"where": 3, "message": "invalid"}]}},
+        {"graph": {**GRAPH, "pending": {}}},
+        {"graph": {**GRAPH, "estimate": {"low_usd": 2, "high_usd": 1, "ceiling_usd": 2}}},
         {"price": []},
+        {"price": {}},
+        {"price": {**PRICE, "estimate": {"low_usd": -1, "high_usd": 2}}},
+        {"price": {**PRICE, "estimate": {"low_usd": 0, "high_usd": float("inf")}}},
+        {"price": {**PRICE, "estimate": {"low_usd": False, "high_usd": 1}}},
+        {"price": {**PRICE, "phases": [None]}},
+        {"price": {**PRICE, "ceiling_usd": "2"}},
         {"resolved_models": {"fx": "routes/v2", "routes": []}},
         {"resolved_models": {"fx": "routes/v1", "routes": {}}},
     ],
@@ -520,6 +531,38 @@ def test_a_malformed_prepared_plan_is_refused(fake: Fake, project: Path, change:
     with pytest.raises(fx.FxError, match="invalid prepared plan"):
         fx.plan("gallery", cwd=project, inputs={"poster": "inputs/poster.png"})
     assert not list(project.glob(".grida-fx-inputs-*"))
+
+
+@pytest.mark.parametrize("named", [False, True])
+@pytest.mark.parametrize("with_plan", [False, True])
+def test_resuming_delegates_recorded_facts_to_the_engine(
+    fake: Fake, project: Path, named: bool, with_plan: bool
+) -> None:
+    target = fx.plan("gallery", cwd=project) if with_plan else "gallery"
+    before = len(fake.invocations)
+    if not named:
+        (project / "runs/existing").mkdir(parents=True)
+    options = {"resume": "take-A"} if named else {"run_dir": "runs/existing"}
+    if not with_plan:
+        options["cwd"] = project
+    fake.reply(plan={"stderr": "grida-fx: a fresh lookup is unavailable", "status": 2})
+    fake.runs(folder="runs/existing")
+    fx.run(target, **options)
+    assert [args[0] for args in fake.invocations[before:]] == ["run"]
+    assert fake.calls[-1]["models"] == {}, "the recorded snapshot wins over a Plan's snapshot"
+
+
+@pytest.mark.parametrize("named", [False, True])
+def test_resume_refusal_reports_the_engine_without_a_fresh_diagnostic_plan(
+    fake: Fake, project: Path, named: bool
+) -> None:
+    if not named:
+        (project / "runs/existing").mkdir(parents=True)
+    options = {"resume": "take-A"} if named else {"run_dir": "runs/existing"}
+    fake.reply(run={"stdout": "draw.with.prompt: the current request is invalid\n", "status": 1})
+    with pytest.raises(fx.FxError, match="the current request is invalid"):
+        fx.run("gallery", cwd=project, **options)
+    assert [args[0] for args in fake.invocations] == ["run"]
 
 
 def test_plan_runs_in_the_current_directory_by_default(
@@ -585,7 +628,10 @@ def test_a_plan_reads_the_engines_documents(fake: Fake, project: Path) -> None:
 
 
 def test_a_plan_with_problems_is_not_ok(fake: Fake, project: Path) -> None:
-    fake.reply(plan={"stdout": json.dumps(REFUSED_GRAPH)}, price={"stdout": "{}", "status": 1})
+    fake.reply(
+        plan={"stdout": json.dumps(REFUSED_GRAPH)},
+        price={"stdout": json.dumps({**PRICE, "phases": []}), "status": 1},
+    )
     planned = fx.plan("gallery", cwd=project)
     assert not planned.ok
     assert planned.problems == REFUSED_GRAPH["problems"]
@@ -824,7 +870,10 @@ def test_a_broken_line_inside_the_record_is_an_error(tmp_path: Path) -> None:
 
 
 def test_a_refused_plan_runs_nothing(fake: Fake, project: Path) -> None:
-    fake.reply(plan={"stdout": json.dumps(REFUSED_GRAPH)}, price={"stdout": "{}", "status": 1})
+    fake.reply(
+        plan={"stdout": json.dumps(REFUSED_GRAPH)},
+        price={"stdout": json.dumps({**PRICE, "phases": []}), "status": 1},
+    )
     fake.runs()
     with pytest.raises(fx.PlanRefused) as raised:
         fx.run("gallery", cwd=project, run_dir="runs/never")
@@ -867,8 +916,9 @@ def test_run_forwards_named_options_only_to_execution(
         if asynchronous
         else fx.run("gallery", cwd=project, **options)
     )
+    expected = [] if option == "resume" else [["plan", "gallery", "--json", "--prepared"]]
     assert [_without_models(args) for args in fake.invocations] == [
-        ["plan", "gallery", "--json", "--prepared"],
+        *expected,
         ["run", "gallery", f"--{option}=take-A", "--no-view"],
     ]
     assert result.run_dir == project / "runs/selected"
@@ -931,7 +981,10 @@ def test_name_grammar_is_checked_by_the_engine(fake: Fake, project: Path) -> Non
 
 
 def test_a_refused_plan_object_does_not_run(fake: Fake, project: Path) -> None:
-    fake.reply(plan={"stdout": json.dumps(REFUSED_GRAPH)}, price={"stdout": "{}", "status": 1})
+    fake.reply(
+        plan={"stdout": json.dumps(REFUSED_GRAPH)},
+        price={"stdout": json.dumps({**PRICE, "phases": []}), "status": 1},
+    )
     planned = fx.plan("gallery", cwd=project)
     with pytest.raises(fx.PlanRefused):
         fx.run(planned)
@@ -1448,7 +1501,7 @@ def test_a_stand_in_run_whose_plan_has_problems(fake: Fake, project: Path) -> No
     # The run refuses the plan (exit 1, no run line); the SDK plans then, to say why.
     fake.reply(
         plan={"stdout": json.dumps(REFUSED_GRAPH)},
-        price={"stdout": "{}", "status": 1},
+        price={"stdout": json.dumps({**PRICE, "phases": []}), "status": 1},
         run={"stdout": "the plan, with its problems\n", "status": 1},
     )
     with pytest.raises(fx.PlanRefused):

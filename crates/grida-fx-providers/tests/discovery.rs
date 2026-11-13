@@ -1,5 +1,4 @@
 //! Selected-model discovery is replay-only. All IDs, metadata and keys here are made up.
-use grida_fx_core::money::Usd;
 use grida_fx_providers::discovery::{self, DEADLINE, MAX_RESPONSE_BYTES};
 use grida_fx_providers::keys::Keys;
 use grida_fx_providers::testing::{block_on, setup, test_keys};
@@ -85,18 +84,11 @@ fn gg_new_model_uses_anonymous_metadata_and_the_existing_wire_at_a_configured_or
     )));
     let mut setup = setup(transport.clone(), test_keys());
     setup.endpoints = setup.endpoints.with_base("gg", base);
-    let route = block_on(discovery::resolve(
-        &setup,
-        "image.edit",
-        MODEL,
-        "gg",
-        Some(Usd(500_000)),
-    ))
-    .unwrap();
+    let route = block_on(discovery::resolve(&setup, "image.edit", MODEL, "gg")).unwrap();
     transport.assert_done();
     assert_eq!(route["route"], "acme/img-a@gg");
     assert_eq!(route["model_id"], MODEL);
-    assert_eq!(route["price"], json!({"cap_usd":0.5}));
+    assert!(route.get("price").is_none());
     assert_eq!(route["max_input_pictures"], 4);
     assert!(has(&route, "image_input") && has(&route, "exact_size") && has(&route, "alpha"));
     assert!(!has(&route, "maximum_quality"));
@@ -118,9 +110,9 @@ fn unknown_gg_control_facts_enable_no_features_and_meter_rates_are_not_quotes() 
     bundle["$defs"]["Generate"]["properties"] =
         json!({"model":{"const":MODEL},"prompt":{"type":"string"},"n":{"const":1}});
     let transport = Arc::new(ReplayTransport::new(gg_exchanges(
-        models.clone(),
-        endpoints.clone(),
-        bundle.clone(),
+        models,
+        endpoints,
+        bundle,
         "https://gateway.grida.ai/v1",
     )));
     let route = block_on(discovery::resolve(
@@ -128,7 +120,6 @@ fn unknown_gg_control_facts_enable_no_features_and_meter_rates_are_not_quotes() 
         "image.generate",
         MODEL,
         "gg",
-        Some(Usd(1_000_000)),
     ))
     .unwrap();
     transport.assert_done();
@@ -142,22 +133,10 @@ fn unknown_gg_control_facts_enable_no_features_and_meter_rates_are_not_quotes() 
     ] {
         assert!(!has(&route, absent), "{absent}");
     }
-    let transport = Arc::new(ReplayTransport::new(gg_exchanges(
-        models,
-        endpoints,
-        bundle,
-        "https://gateway.grida.ai/v1",
-    )));
-    let reason = block_on(discovery::resolve(
-        &setup(transport.clone(), Keys::default()),
-        "image.generate",
-        MODEL,
-        "gg",
-        None,
-    ))
-    .unwrap_err();
-    transport.assert_done();
-    assert!(reason.contains("model_allowances.gg.image.generate"));
+    assert!(
+        route.get("price").is_none(),
+        "usage-meter tariffs are not a request quote"
+    );
 }
 
 #[test]
@@ -174,7 +153,6 @@ fn inconsistent_gg_revisions_are_not_transient_and_do_not_fetch_a_schema() {
         "image.generate",
         MODEL,
         "gg",
-        Some(Usd(1)),
     ))
     .unwrap_err();
     transport.assert_done();
@@ -194,14 +172,13 @@ fn openrouter_uses_the_intersection_of_endpoint_controls_and_the_full_price_rang
         "image.generate",
         MODEL,
         "openrouter",
-        Some(Usd(1_000_000)),
     ))
     .unwrap();
     transport.assert_done();
     assert_eq!(
         route["price"],
         json!({"low_usd":0.04,"high_usd":0.07}),
-        "published prices precede an unknown-price allowance"
+        "published unconditional prices cover every eligible endpoint"
     );
     assert_eq!(route["max_input_pictures"], 2);
     assert!(
@@ -215,35 +192,23 @@ fn openrouter_uses_the_intersection_of_endpoint_controls_and_the_full_price_rang
 }
 
 #[test]
-fn unknown_endpoint_prices_need_an_allowance_and_resolution_is_not_exact_pixels() {
+fn unknown_endpoint_prices_are_absent_and_resolution_is_not_exact_pixels() {
     let mut endpoint = or_endpoint(json!(0.04));
     endpoint["supported_parameters"]
         .as_object_mut()
         .unwrap()
         .remove("size");
     endpoint["pricing"][1]["cost_usd"] = json!(0.02);
-    let transport = or_transport(vec![endpoint.clone()]);
-    let reason = block_on(discovery::resolve(
-        &setup(transport.clone(), test_keys()),
-        "image.edit",
-        MODEL,
-        "openrouter",
-        None,
-    ))
-    .unwrap_err();
-    transport.assert_done();
-    assert!(reason.contains("model_allowances.openrouter.image.edit"));
     let transport = or_transport(vec![endpoint]);
     let route = block_on(discovery::resolve(
         &setup(transport.clone(), test_keys()),
         "image.edit",
         MODEL,
         "openrouter",
-        Some(Usd(500_000)),
     ))
     .unwrap();
     transport.assert_done();
-    assert_eq!(route["price"], json!({"cap_usd":0.5}));
+    assert!(route.get("price").is_none());
     assert!(!has(&route, "exact_size"));
 }
 
@@ -252,17 +217,14 @@ fn a_single_unknown_endpoint_prevents_an_underpriced_range_and_explicit_free_is_
     let mut unknown = or_endpoint(json!(0.01));
     unknown["pricing"][0]["when"] = json!({"size":"large"});
     let transport = or_transport(vec![or_endpoint(json!(0.04)), unknown]);
-    assert!(
-        block_on(discovery::resolve(
-            &setup(transport.clone(), test_keys()),
-            "image.generate",
-            MODEL,
-            "openrouter",
-            None
-        ))
-        .unwrap_err()
-        .contains("computable")
-    );
+    let unpriced = block_on(discovery::resolve(
+        &setup(transport.clone(), test_keys()),
+        "image.generate",
+        MODEL,
+        "openrouter",
+    ))
+    .unwrap();
+    assert!(unpriced.get("price").is_none());
     transport.assert_done();
     let transport = or_transport(vec![or_endpoint(json!(0))]);
     let route = block_on(discovery::resolve(
@@ -270,7 +232,6 @@ fn a_single_unknown_endpoint_prevents_an_underpriced_range_and_explicit_free_is_
         "image.generate",
         MODEL,
         "openrouter",
-        None,
     ))
     .unwrap();
     transport.assert_done();
@@ -293,7 +254,6 @@ fn status_diagnostics_are_fixed_and_only_transient_failures_can_use_stale_facts(
             "image.generate",
             MODEL,
             "openrouter",
-            Some(Usd(1)),
         ))
         .unwrap_err();
         transport.assert_done();
@@ -307,38 +267,10 @@ fn status_diagnostics_are_fixed_and_only_transient_failures_can_use_stale_facts(
 }
 
 #[test]
-fn unsupported_lookups_and_nonpositive_allowances_do_not_send() {
+fn unsupported_lookups_do_not_send() {
     let setup = setup(Arc::new(NoNetwork), Keys::default());
-    assert!(
-        block_on(discovery::resolve(
-            &setup,
-            "video.generate",
-            MODEL,
-            "gg",
-            None
-        ))
-        .is_err()
-    );
-    assert!(
-        block_on(discovery::resolve(
-            &setup,
-            "image.generate",
-            MODEL,
-            "acme",
-            None
-        ))
-        .is_err()
-    );
-    assert!(
-        block_on(discovery::resolve(
-            &setup,
-            "image.generate",
-            MODEL,
-            "gg",
-            Some(Usd::ZERO)
-        ))
-        .is_err()
-    );
+    assert!(block_on(discovery::resolve(&setup, "video.generate", MODEL, "gg")).is_err());
+    assert!(block_on(discovery::resolve(&setup, "image.generate", MODEL, "acme")).is_err());
 }
 
 #[test]
@@ -367,7 +299,6 @@ fn incompatible_required_controls_counts_and_external_refs_are_never_executed() 
             "image.generate",
             MODEL,
             "gg",
-            Some(Usd(1)),
         ))
         .unwrap_err();
         transport.assert_done();
@@ -382,8 +313,7 @@ fn incompatible_required_controls_counts_and_external_refs_are_never_executed() 
             &setup(transport.clone(), test_keys()),
             "image.generate",
             MODEL,
-            "openrouter",
-            Some(Usd(1))
+            "openrouter"
         ))
         .unwrap_err()
         .contains("invalid or incompatible")
@@ -393,20 +323,16 @@ fn incompatible_required_controls_counts_and_external_refs_are_never_executed() 
 
 #[test]
 fn absent_gg_models_and_oversized_metadata_do_not_enable_stale_fallback() {
-    let (mut models, endpoints, bundle) = gg_metadata();
+    let (mut models, _, _) = gg_metadata();
     models["data"] = json!([]);
-    let transport = Arc::new(ReplayTransport::new(gg_exchanges(
-        models,
-        endpoints,
-        bundle,
-        "https://gateway.grida.ai/v1",
-    )));
+    let transport = Arc::new(ReplayTransport::new(vec![
+        Expect::get("https://gateway.grida.ai/v1/models").reply(HttpResponse::json(200, &models)),
+    ]));
     let reason = block_on(discovery::resolve(
         &setup(transport.clone(), Keys::default()),
         "image.generate",
         MODEL,
         "gg",
-        Some(Usd(1)),
     ))
     .unwrap_err();
     transport.assert_done();
@@ -424,11 +350,26 @@ fn absent_gg_models_and_oversized_metadata_do_not_enable_stale_fallback() {
         "image.generate",
         MODEL,
         "openrouter",
-        Some(Usd(1)),
     ))
     .unwrap_err();
     transport.assert_done();
     assert!(reason.contains("invalid or incompatible") && !reason.contains("unavailable"));
+}
+
+#[test]
+fn openrouter_edits_requiring_multiple_initial_images_need_an_authored_contract() {
+    let mut endpoint = or_endpoint(json!(0.04));
+    endpoint["supported_parameters"]["input_references"]["min"] = json!(2);
+    let transport = or_transport(vec![endpoint]);
+    let reason = block_on(discovery::resolve(
+        &setup(transport.clone(), test_keys()),
+        "image.edit",
+        MODEL,
+        "openrouter",
+    ))
+    .unwrap_err();
+    transport.assert_done();
+    assert!(reason.contains("invalid or incompatible"));
 }
 
 #[test]
@@ -447,7 +388,6 @@ fn reordered_or_duplicate_size_enums_do_not_change_the_execution_contract() {
                 "image.generate",
                 MODEL,
                 "openrouter",
-                None,
             ))
             .unwrap(),
         );

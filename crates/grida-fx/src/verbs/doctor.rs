@@ -190,7 +190,8 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &mut Vec::new(),
         &mut used,
     );
-    crate::models::prepare_used(&project, &mut providers.catalog, &used, None, false, &env)?;
+    let preparation =
+        crate::models::prepare_used(&project, &mut providers.catalog, &used, None, false, &env);
     let (uses, unservable) = uses_lines(
         &used,
         &providers.catalog,
@@ -212,6 +213,10 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     }
     providers.print();
     let mut missing = usize::from(providers.refused);
+    if let Err(error) = preparation {
+        print_line(&labelled("models", &error.message));
+        missing += 1;
+    }
     let mut lines = Vec::new();
     let mut seen = HashSet::new();
     for step in all_steps(&workflow.workflow.steps) {

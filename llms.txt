@@ -98,7 +98,6 @@ provider_preferences:               # independent of model choice; keys alone ne
   image.generate: gg
   structured.generate: gg
 # route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
-# model_allowances: { gg: { image.generate: 0.10 } } # fallback cap per attempt for unpriced discovered models
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
 # sources: [acme_lib]                  # packages whose source counts toward your nodes' identity
@@ -329,19 +328,20 @@ only what its installed adapter supports. It does not import a model, select ano
 or download code. Existing bindings and your own route tables remain authoritative; explicit
 `--routes` disables discovery. Other capabilities and providers retain the authored-route path.
 
-When metadata has no sufficient planning price, optionally set one reusable positive allowance
-per provider and capability in the planning project's `fx.yaml`, for example
-`model_allowances: { gg: { image.generate: 0.10, image.edit: 0.15 } }`. This is a per-attempt
-reservation, not a provider quote or approval to spend. It applies to newly discovered models
-that need a fallback; authored prices and caps are unchanged. Without rates or an allowance,
-FX refuses the binding. Live generation still needs the user's go and a run ceiling.
+Discovery admits a model only with a planning price FX can compute from documented facts.
+Absent sufficient pricing, FX refuses the binding; it does not guess a price. The existing
+authored route table remains the escape hatch: give a price you know or an explicit
+`price: {cap_usd: N}` for unknown cost. That cap is an FX reservation, not a provider-enforced
+limit or approval to spend. Live generation still needs the user's go and a run ceiling.
 
 The optional `.fx/models/` cache holds sanitized normalized routes, never provider keys or raw
 responses. Metadata is fresh for one hour; stale metadata may be used with the network off or
 on a transient lookup failure, but an explicit missing-model response does not silently use a
 stale entry. `GRIDA_FX_NETWORK=off` forbids every metadata request. Without cached metadata or
 an authored route, a new model cannot resolve offline. An SDK `Plan` carries its resolved
-models independently of this cache; `run(plan)` does not discover them again.
+models independently of this cache; `run(plan)` does not discover them again. Prepared plans
+admit at most 128 discovered image bindings. A model-preparation error in `doctor <target>`
+appears as a `models` diagnostic after the provider report; other diagnostics continue.
 
 | Capability | Built-in routes | Key |
 |---|---|---|

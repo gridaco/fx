@@ -174,21 +174,12 @@ before the offline planner runs. It admits the model only when the installed ada
 its image interface and the metadata supports its requested features. There is no import or
 manual synchronization step, and discovery never generates an asset or authorizes spending.
 
-When the provider supplies no sufficient planning price, set an optional reusable allowance
-in the project you plan from:
-
-```yaml
-# fx.yaml, alongside routes and provider_preferences
-model_allowances:
-  gg:
-    image.generate: 0.10
-    image.edit: 0.15
-```
-
-These example amounts are per-attempt reservations, not provider quotes. They apply to any
-discovered model of the provider and capability that needs this fallback. Known rates and
-authored route prices remain unchanged. Without rates or an allowance, resolution is refused;
-generation still needs the user's approval and a run ceiling.
+Discovery also needs a planning price FX can compute from documented facts. Metadata about
+what a model accepts is not itself pricing. If that price cannot be computed, resolution is
+refused; use the existing authored route-table path below with a known price or an explicit
+`price.cap_usd` when you accept unknown cost. The cap reserves against FX's budget; it is not
+a provider-enforced limit or approval to spend. Generation still needs the user's approval
+and a run ceiling.
 
 The optional metadata cache under `.fx/models/` is fresh for one hour. With
 `GRIDA_FX_NETWORK=off`, FX sends no lookup and may use older cached metadata. It can also use
