@@ -18,7 +18,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { Plan } from "../src/api.js";
 import { engineVersion, run } from "../src/index.js";
 import { CallFailed, CallRefused } from "../src/engine-errors.js";
@@ -389,10 +389,15 @@ describe.skipIf(!NODE)("run with a stand-in", () => {
         const planned = new Plan({ problems: [] } as never, {} as never, makeRequest("wf.yaml", engine.options));
         const result = await run(planned, { standIn: answer });
         expect(result.standIn).toBe(true);
-        expect(engine.log()[0]?.args).toEqual([
+        const args = engine.log()[0]?.args as string[];
+        expect(args).toEqual([
           "run", "wf.yaml", "--stand-in=-", "--no-view",
-          expect.stringMatching(/^--resolved-models=\.grida-fx-models-[a-f0-9]+\.json$/),
+          expect.stringMatching(/^--resolved-models=.+$/),
         ]);
+        const snapshot = String(args.at(-1)).slice("--resolved-models=".length);
+        expect(isAbsolute(snapshot)).toBe(true);
+        expect(existsSync(snapshot)).toBe(false);
+        expect(existsSync(dirname(snapshot))).toBe(false);
       } finally {
         engine.cleanup();
       }
