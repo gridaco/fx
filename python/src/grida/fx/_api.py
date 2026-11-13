@@ -748,14 +748,12 @@ def _resolved_models_file(request: _Request) -> Iterator[str | None]:
     if request._resolved_models is None:
         yield None
         return
-    handle, path = tempfile.mkstemp(prefix=".grida-fx-models-", suffix=".json", dir=request.cwd)
-    try:
+    # Model facts contain no relative file references; the source directory may be read-only.
+    with tempfile.TemporaryDirectory(prefix="grida-fx-models-") as directory:
+        handle, path = tempfile.mkstemp(prefix="models-", suffix=".json", dir=directory)
         with os.fdopen(handle, "w", encoding="utf-8") as written:
             written.write(request._resolved_models)
-        yield Path(path).name
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(path)
+        yield path
 
 
 # ------------------------------------------------------------------------------------------------

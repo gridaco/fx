@@ -1362,3 +1362,34 @@ async fn an_unpriced_plan_billed_call_reserves_zero_without_dollar_authorization
     assert!(rig.events("budget_refused").is_empty());
     rig.assert_settled();
 }
+
+#[tokio::test(start_paused = true)]
+async fn zero_dollar_work_in_flight_does_not_block_an_unpriced_dollar_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::plain(vec![Sent::Answered(picture(1))]);
+    let rig = rig_in(
+        dir.path(),
+        adapters("image.generate", fake.as_request()),
+        true,
+        Some(Usd(1_000_000)),
+    );
+    // Subscription-backed calls retain a recorded zero-dollar hold until they finish.
+    let subscription = rig
+        .ledger
+        .reserve("subscription#1/attempt".into(), Usd::ZERO, &vec![])
+        .unwrap();
+    let answered = tokio::time::timeout(
+        Duration::from_secs(1),
+        rig.call(
+            &unpriced_site("draw#1"),
+            "image.generate",
+            json!({"prompt":"lantern"}),
+        ),
+    )
+    .await
+    .expect("no dollar funds are tied up by the subscription call");
+    assert_eq!(answered.answer().cost, Some(Usd(10_000)));
+    assert_eq!(rig.events("budget_reserved")[1]["amount_usd"], json!(1));
+    rig.ledger.settle(subscription, Some(Usd::ZERO));
+    rig.assert_settled();
+}

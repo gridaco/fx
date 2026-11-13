@@ -1,7 +1,7 @@
 //! Nonspending metadata lookup for a selected image model, through the invocation's transport.
 //!
 //! A successful lookup returns route-shaped facts, with a price only when it can be computed
-//! from the published metadata. Unpriced facts cannot be admitted as a route table. This does not select a model,
+//! from the published metadata. Compatible unpriced facts retain an unknown forecast. This does not select a model,
 //! persist a cache, grant permission to spend, or perform a model request. Remote descriptions,
 //! URLs and error bodies never become diagnostics or route contracts. Missing facts do not
 //! enable features, and missing prices never become zero.
@@ -265,11 +265,19 @@ async fn gg(setup: &Setup, capability: &str, model: &str) -> Result<Value, Strin
         features.insert("exact_size");
     }
     let mut contract = json!({"adapter": "gg-image", "adapter_behavior": "1"});
-    if accepts(
-        &bundle,
-        &schema["properties"]["output_format"],
-        json!("png"),
-    ) {
+    let output_format = &schema["properties"]["output_format"];
+    let png_output = accepts(&bundle, output_format, json!("png"));
+    // This wire preserves the provider's image bytes. A published format restriction
+    // excluding PNG cannot serve FX's mandatory PNG output, even if omitting the format
+    // itself would satisfy the request schema (for example, a JPEG default).
+    if output_format
+        .as_object()
+        .is_some_and(|fields| !fields.is_empty())
+        && !png_output
+    {
+        return Err(invalid("gg"));
+    }
+    if png_output {
         contract["provider_options"] = json!({"gg": {"output_format": "png"}});
         features.insert("png_output");
     }
@@ -419,16 +427,23 @@ async fn openrouter(setup: &Setup, capability: &str, model: &str) -> Result<Valu
     if capability == "image.edit" && !image_input {
         return Err(invalid("openrouter"));
     }
-    let mut features =
-        BTreeSet::from(["authored_prompt_passthrough", "flexible_size", "png_output"]);
+    // Generate can omit references. The installed contract has no minimum-input count,
+    // so every possible endpoint must accept that ordinary request, just as an edit's
+    // minimum above must fit its single required image. Merely omitting text_to_image
+    // would still admit a generate binding whose reference requirement cannot be enforced.
     if capability == "image.generate"
-        && endpoints.iter().all(|endpoint| {
+        && !endpoints.iter().all(|endpoint| {
             endpoint["supported_parameters"]
                 .get("input_references")
                 .is_none()
                 || endpoint["supported_parameters"]["input_references"]["min"].as_u64() == Some(0)
         })
     {
+        return Err(invalid("openrouter"));
+    }
+    let mut features =
+        BTreeSet::from(["authored_prompt_passthrough", "flexible_size", "png_output"]);
+    if capability == "image.generate" {
         features.insert("text_to_image");
     }
     if image_input {

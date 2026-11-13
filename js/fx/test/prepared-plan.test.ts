@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { FxError, Plan, plan, run } from "../src/index.js";
 import { makeRequest } from "../src/request.js";
 import { temporaryFolder } from "./support.js";
@@ -60,8 +60,14 @@ function fake() {
     calls: (): { args: string[]; files: Record<string, unknown> }[] => existsSync(log)
       ? readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line))
       : [],
-    temporaryFiles: () => readdirSync(folder.path).filter((name) =>
-      name.startsWith(".grida-fx-models-") || name.startsWith(".grida-fx-inputs-")),
+    temporaryFiles: () => {
+      const calls: { files: Record<string, unknown> }[] = existsSync(log)
+        ? readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line)) : [];
+      return [
+        ...readdirSync(folder.path).filter((name) => name.startsWith(".grida-fx-inputs-")),
+        ...calls.flatMap((call) => Object.keys(call.files).map(dirname)).filter(existsSync),
+      ];
+    },
   };
 }
 
@@ -102,7 +108,9 @@ describe.skipIf(!NODE || process.platform === "win32")("prepared SDK plans", () 
       const execution = engine.calls()[1];
       expect(Object.values(execution?.files ?? {})).toEqual([MODELS]);
       const name = Object.keys(execution?.files ?? {})[0];
-      expect(name?.startsWith(".grida-fx-models-")).toBe(true);
+      expect(isAbsolute(name!)).toBe(true);
+      expect(basename(dirname(name!)).startsWith("grida-fx-models-")).toBe(true);
+      expect(existsSync(dirname(name!))).toBe(false);
       expect(execution?.args).toContain(`--resolved-models=${name}`);
       expect(engine.temporaryFiles()).toEqual([]);
     } finally {

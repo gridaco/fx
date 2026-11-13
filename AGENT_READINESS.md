@@ -713,3 +713,8 @@ for #112, pending release. Canonical evidence: [unknown-cost](conformance/unknow
 and retry tests, SDK forecast validation, and browser graph/price validation. `--require-estimates`
 checks uncached paid work, including later expansion; estimates do not guarantee invoices.
 Unknown charges stay distinct from conservatively booked reservations.
+
+Review regressions for optional forecasts cover zero-dollar subscription holds alongside
+unpriced paid work, free strict stand-in execution (including later expansion), incompatible
+required-reference/PNG discovery facts, and SDK execution from read-only project sources
+with writable external run/cache storage. Model-fact transport uses private temporary storage.

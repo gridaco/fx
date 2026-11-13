@@ -23,7 +23,9 @@ clears an inherited price. Existing `price.cap_usd` is a reservation allowance, 
 
 `grida fx plan <workflow> --require-estimates` and the same option on `run` require applicable
 forecasts for uncached paid work. Python uses `require_estimates=True`; JavaScript uses
-`requireEstimates: true`. This checks coverage, not billing accuracy.
+`requireEstimates: true`. This checks coverage, not billing accuracy. Free stand-in runs are exempt. Strict planning
+checks potential calls of uncached steps; it cannot prove arbitrary node requests will all
+replay from the managed-call cache.
 
 A live unpriced call still requires approval and a ceiling. It reserves the remaining applicable
 run/step budget; competing work waits while funds are held. Reported cost releases unused funds.

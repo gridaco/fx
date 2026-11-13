@@ -14,8 +14,8 @@
  *   {@link PlanRefused}. A failed step does not reject: read `result.ok` and `result.failed`.
  */
 
-import { randomBytes } from "node:crypto";
-import { lstat, open, readFile, unlink } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type {
   Encoded,
@@ -155,7 +155,7 @@ async function planRequest(
   signal: AbortSignal | undefined,
   models: string | undefined = undefined,
 ): Promise<Plan> {
-  const prepared = await withResolvedModels(request, models, (modelsFile) =>
+  const prepared = await withResolvedModels(models, (modelsFile) =>
     planningDocument<Record<string, unknown>>("plan", request, signal, [
       "--json",
       "--prepared",
@@ -213,21 +213,18 @@ async function mayExist(path: string): Promise<boolean> {
 }
 
 async function withResolvedModels<T>(
-  request: PlanRequest,
   models: string | undefined,
   work: (modelsFile: string | null) => Promise<T>,
 ): Promise<T> {
   if (models === undefined) return work(null);
-  const name = `.grida-fx-models-${randomBytes(8).toString("hex")}.json`;
-  const path = join(request.cwd, name);
-  const file = await open(path, "wx", 0o600);
+  // Model facts contain no relative file references; keep them off the source tree.
+  const directory = await mkdtemp(join(tmpdir(), "grida-fx-models-"));
+  const path = join(directory, "models.json");
   try {
-    await file.writeFile(models, "utf8");
-    await file.close();
-    return await work(name);
+    await writeFile(path, models, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    return await work(path);
   } finally {
-    await file.close().catch(() => undefined);
-    await unlink(path).catch(() => undefined);
+    await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -467,7 +464,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   }
   const models = planned === null ? undefined
     : resolvedModels.get(planned) ?? '{"fx":"routes/v1","routes":[]}';
-  const done = await withResolvedModels(request, models, (modelsFile) =>
+  const done = await withResolvedModels(models, (modelsFile) =>
     withInputsFile(request, (inputsFile) => {
       const args = [
         "run", ...planningArgs(request, inputsFile), ...own, "--no-view",

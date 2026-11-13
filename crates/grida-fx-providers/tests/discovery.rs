@@ -395,3 +395,71 @@ fn reordered_or_duplicate_size_enums_do_not_change_the_execution_contract() {
     }
     assert_eq!(routes[0]["contract"], routes[1]["contract"]);
 }
+
+#[test]
+fn generate_rejects_required_references_on_any_endpoint_but_edit_accepts_one() {
+    for minimum in [1, 2] {
+        let mut required = or_endpoint(json!(0.04));
+        required["supported_parameters"]["input_references"]["min"] = json!(minimum);
+        for endpoints in [
+            vec![required.clone()],
+            vec![or_endpoint(json!(0.04)), required.clone()],
+        ] {
+            let transport = or_transport(endpoints);
+            let reason = block_on(discovery::resolve(
+                &setup(transport.clone(), test_keys()),
+                "image.generate",
+                MODEL,
+                "openrouter",
+            ))
+            .unwrap_err();
+            transport.assert_done();
+            assert!(reason.contains("invalid or incompatible"));
+        }
+    }
+    let mut required = or_endpoint(json!(0.04));
+    required["supported_parameters"]["input_references"]["min"] = json!(1);
+    let transport = or_transport(vec![required]);
+    let route = block_on(discovery::resolve(
+        &setup(transport.clone(), test_keys()),
+        "image.edit",
+        MODEL,
+        "openrouter",
+    ))
+    .unwrap();
+    transport.assert_done();
+    assert!(has(&route, "image_input"));
+    assert_eq!(route["max_input_pictures"], 4);
+}
+
+#[test]
+fn gg_explicit_jpeg_only_default_is_incompatible_with_the_png_output_contract() {
+    for capability in ["image.generate", "image.edit"] {
+        let (models, endpoints, mut bundle) = gg_metadata();
+        for definition in ["Generate", "Edit"] {
+            bundle["$defs"][definition]["properties"]["output_format"] =
+                json!({"enum":["jpeg"],"default":"jpeg"});
+        }
+        let transport = Arc::new(ReplayTransport::new(gg_exchanges(
+            models,
+            endpoints,
+            bundle,
+            "https://gateway.grida.ai/v1",
+        )));
+        let reason = block_on(discovery::resolve(
+            &setup(transport.clone(), Keys::default()),
+            capability,
+            MODEL,
+            "gg",
+        ))
+        .unwrap_err();
+        transport.assert_done();
+        assert!(reason.contains("invalid or incompatible"));
+        assert!(
+            transport
+                .requests()
+                .iter()
+                .all(|request| request.method == Method::Get)
+        );
+    }
+}

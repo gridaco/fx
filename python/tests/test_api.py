@@ -491,7 +491,9 @@ def test_a_prepared_run_reuses_model_facts_and_removes_temporary_files(
     run_call = fake.calls[-1]
     assert len(run_call["models"]) == 1
     ((name, text),) = run_call["models"].items()
-    assert not Path(name).is_absolute()
+    assert Path(name).is_absolute()
+    assert Path(name).parent.name.startswith("grida-fx-models-")
+    assert not Path(name).parent.exists()
     assert f"--resolved-models={name}" in run_call["argv"]
     assert json.loads(text) == models
     assert not list(project.glob(".grida-fx-models-*"))

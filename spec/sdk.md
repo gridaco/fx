@@ -15,7 +15,8 @@ every invoker. Importing an SDK does not make a lookup.
 
 A `Plan` retains the engine's normalized discovered routes as a preparation snapshot,
 independently of the optional metadata cache. Creating a new run with `run(plan)` sends that
-snapshot back to the engine instead of discovering those model bindings again. The engine
+snapshot back to the engine instead of discovering those model bindings again. Snapshot
+transport uses private temporary storage and does not require a writable project source root. The engine
 validates the snapshot and current authored configuration. SDKs compute no route identity. This adds no public resolver
 or synchronization API. Preparing a new plan still resolves current configuration and
 provider metadata under the normal freshness policy.
@@ -199,7 +200,9 @@ Pause, active revision and cloud control remain separate contracts.
 The CLI, Python and JavaScript planning and execution jobs accept `--require-estimates`,
 `require_estimates=True` and `requireEstimates: true`, respectively. Ordinary planning admits
 compatible unpriced routes. Strict forecast coverage refuses uncached paid work without an
-applicable estimate; explicit reservation caps do not satisfy it.
+applicable estimate; explicit reservation caps do not satisfy it. Free stand-in runs are exempt.
+Planning checks potential calls of uncached steps; it cannot prove arbitrary node requests
+will be served entirely by the managed-call cache.
 
 Prepared graphs may use `fx-graph-v2` with null total amounts, known numeric subtotals and
 `unpriced_calls`. SDK estimate accessors return absent amounts for unknown totals; `forecast`

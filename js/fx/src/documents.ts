@@ -69,9 +69,8 @@ export interface GraphInstance {
   waiting_on: string[];
   needs: string[];
   reads: string[];
-  /** `capped` when one of its calls is on a capped route (a route table's `cap_usd`): that call
-   * counts nothing in `low_usd` and its cap in `high_usd`, and is charged what the provider
-   * reports, else the cap. */
+  /** `capped` when one of its calls has an explicit reservation allowance (`cap_usd`).
+   * Its forecast is unknown in v2. Legacy v1 graphs included that allowance in `high_usd`. */
   price: PriceRange & { capped?: true };
   view?: boolean | string;
   /** Explicit video/poster output selection, when authored on this node step. */

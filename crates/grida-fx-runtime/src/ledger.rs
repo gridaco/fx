@@ -281,10 +281,11 @@ impl Ledger {
             self.ceiling.is_some() || scopes.iter().any(|(owner, _)| hold.scopes.contains(owner))
         };
         if amount != Some(Usd::ZERO)
-            && state
-                .open
-                .iter()
-                .any(|(id, hold)| overlaps(hold) && (unknown || state.unknown_holds.contains(id)))
+            && state.open.iter().any(|(id, hold)| {
+                hold.amount > Usd::ZERO
+                    && overlaps(hold)
+                    && (unknown || state.unknown_holds.contains(id))
+            })
         {
             return Err(NotReserved::Waiting);
         }

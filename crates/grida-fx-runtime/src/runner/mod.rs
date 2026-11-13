@@ -443,7 +443,7 @@ fn invoke(
         plan.expansion = expand(planner, host).map_err(RunError::Fatal)?;
     }
     plan.apply_plan_billing(&plan_providers);
-    if options.require_estimates {
+    if options.require_estimates && !engine.stand_in_run() {
         plan.require_estimates();
     }
     if let Some(refused) = refusal(&plan, engine.live, &plan_providers, &env) {
@@ -1010,7 +1010,7 @@ impl Scheduler<'_> {
                 Some(expansion) => expansion,
                 None => expand(self.planner, self.host)?,
             };
-            if self.options.require_estimates {
+            if self.options.require_estimates && !self.engine.stand_in_run() {
                 let strict = Plan {
                     expansion: expansion.clone(),
                     problems: Vec::new(),

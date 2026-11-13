@@ -103,6 +103,8 @@ Provider metadata is normalized into ordinary concrete routes before the offline
 runs. A provider's published model facts are admitted only for the request and response
 wire the installed adapter implements. An unsupported wire, missing image capability or
 unknown required feature is a refusal; metadata cannot install an adapter or execute code.
+Discovery also refuses published requirements the installed wire cannot honor: generation
+endpoints requiring reference inputs, and GG output-format restrictions excluding PNG.
 Model matching remains exact under §2. The serving adapter's identity completes the route
 contract under [identity.md](identity.md) §7.
 
@@ -124,8 +126,8 @@ extension paths.
 Execution compatibility and cost forecasting are independent. A discovered binding MUST identify
 a supported adapter contract and satisfy required features, but MAY have no price. Authored
 routes retain deferred adapter checks: they can plan without an installed adapter, and execution
-refuses when none serves them. Shipped,
-authored and discovered routes follow this same rule. A missing price is an unknown forecast,
+refuses when none serves them. Shipped, authored and discovered routes share the optional
+pricing contract. A missing price is an unknown forecast,
 never zero. An explicit `price: null` clears an inherited price; omission beside `extends`
 continues to inherit it. A supplied price or range is an estimate, not a guaranteed invoice.
 An existing `price.cap_usd` is an authorization allowance, not a forecast.
@@ -138,8 +140,10 @@ Authored entries still replace whole entries; discovery does not merge into them
 
 `--require-estimates` on planning and execution refuses missing forecasts for uncached paid
 work, including capped-only routes. The equivalent SDK option has the same meaning. It
-requires forecast coverage, not exact future billing. Ordinary planning succeeds with
-unknown forecasts and presents cost incompleteness as information.
+requires forecast coverage, not exact future billing. Free stand-in execution is exempt.
+Coverage conservatively checks potentially paid calls of uncached steps; planning cannot prove
+that arbitrary node bodies will replay every request from the managed-call cache.
+Ordinary planning succeeds with unknown forecasts and presents cost incompleteness as information.
 
 Unknown forecasts propagate through instances, pending repeats, phases and totals. A partial
 subtotal MUST NOT be labeled a complete total. Graphs containing unknown forecast components

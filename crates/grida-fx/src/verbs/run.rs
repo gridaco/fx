@@ -220,7 +220,7 @@ fn plan_and_run(
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
     let mut plan = crate::engine::plan(engine, planner, host)?;
-    if args.require_estimates {
+    if args.require_estimates && !engine.stand_in_run() {
         plan.require_estimates();
     }
     let text = if engine.stand_in_run() {

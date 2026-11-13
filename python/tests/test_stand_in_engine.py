@@ -442,3 +442,49 @@ def test_model_defaults_and_step_choices_resolve_before_cache_and_resume(project
     assert all(
         "provider_preferences.image.generate" in item["message"] for item in missing.problems
     )
+
+
+@pytest.mark.parametrize("pricing", ["omitted", "cap"])
+def test_strict_forecast_coverage_permits_free_stand_ins(project: Path, pricing: str) -> None:
+    price = "    price: { cap_usd: 1 }\n" if pricing == "cap" else ""
+    routes = ROUTES.replace("    price: { low_usd: 0.01, high_usd: 0.04 }\n", price)
+    (project / "routes.yaml").write_text(routes, "utf-8")
+    asked = []
+
+    def answer(call: StandInCall) -> Answer:
+        asked.append(call)
+        return picture(call)
+
+    result = fx.run(
+        "harbour", cwd=project, routes=["routes.yaml"], stand_in=answer, require_estimates=True
+    )
+    assert result.ok and result.stand_in and result.cost == 0
+    assert len(asked) == 3
+    assert not any(event["event"] == "budget_reserved" for event in result.events)
+    calls = [event for event in result.events if event["event"] == "call"]
+    assert len(calls) == 3
+    assert all(event["stand_in"] is True and event["cost_usd"] == 0 for event in calls)
+
+
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 0)() == 0,
+    reason="root bypasses read-only directory permissions",
+)
+def test_prepared_run_keeps_model_snapshot_outside_read_only_source(
+    project: Path, tmp_path: Path
+) -> None:
+    (project / ".fx").mkdir()
+    (project / "fx.yaml").write_text(f"fx: project/v1\ncache: {tmp_path / 'cache'}\n", "utf-8")
+    (project / "local.yaml").write_text(
+        "fx: workflow/v1\nid: local\ntitle: Read-only source\nsteps:\n"
+        "  choose:\n    uses: fx/select@1\n    with: {first_of: [kite]}\n"
+        "outputs:\n  selected: ${{ steps.choose.outputs.value }}\n",
+        "utf-8",
+    )
+    project.chmod(0o555)
+    try:
+        result = fx.run("local", cwd=project, run_dir=tmp_path / "run")
+        assert result.ok and result.outputs["selected"] == "kite"
+        assert not list(project.glob(".grida-fx-models-*"))
+    finally:
+        project.chmod(0o755)
