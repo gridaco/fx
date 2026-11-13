@@ -19,11 +19,15 @@
 - Inputs: ``inputs`` (a mapping) is written to a temporary inputs YAML file (strict subset: JSON is
   YAML) placed in ``cwd`` so its relative paths keep their meaning, passed with ``--inputs``
   after ``input_files``; ``routes`` paths go as ``--routes``; ``max_usd`` as ``--max-usd``.
-- :func:`plan` / :func:`plan_async`: ``grida-fx plan --json`` and ``grida-fx price``; a
-  :class:`Plan` with ``document`` (fx-graph-v1), ``ok``, ``problems``, ``estimate()`` and
-  ``phases()``. Exit 2 raises :class:`FxError` with the engine's stderr line.
-- :func:`run` / :func:`run_async`: plans first and raises :class:`PlanRefused` (``the plan is
-  refused:`` and its problems) before any folder exists; then ``grida-fx run … --run <folder>``
+- :func:`plan` / :func:`plan_async`: one engine invocation returns the graph, price and
+  resolved model facts used by a subsequent run; a
+  :class:`Plan` with ``document`` (fx-graph-v1 or fx-graph-v2), ``ok``, ``problems``,
+  ``estimate()``, ``forecast`` and ``phases()``. Exit 2 raises :class:`FxError` with the
+  engine's stderr line.
+- :func:`run` / :func:`run_async`: plans new runs first and raises :class:`PlanRefused` (``the
+  plan is refused:`` and its problems) before any folder exists. Resumes are planned directly
+  by the engine using recorded model facts; its refusals raise :class:`FxError`. Then
+  ``grida-fx run … --run <folder>``
   (``run_dir``, else a new folder chosen by the engine and read back from its summary), ``--live``
   and ``--yes-up-to`` as given. A failed step does not raise; a run the engine refuses to start
   raises :class:`FxError` (``refused: <message>``). The :class:`RunResult` is read from the
@@ -60,6 +64,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import os
 import re
 import secrets
@@ -71,7 +76,7 @@ import sys
 import tempfile
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -150,6 +155,8 @@ class _Request:
     cwd: Path
     routes: tuple[str, ...]
     arguments: tuple[tuple[str, str], ...]
+    require_estimates: bool = False
+    _resolved_models: str | None = None
 
     def args(self, inputs_file: str | None) -> list[str]:
         """The target and the planning options; ``inputs_file`` holds ``inputs``."""
@@ -161,6 +168,8 @@ class _Request:
         args += [f"--arg={name}={value}" for name, value in self.arguments]
         if self.max_usd is not None:
             args.append(f"--max-usd={self.max_usd}")
+        if self.require_estimates:
+            args.append("--require-estimates")
         return args
 
 
@@ -185,10 +194,24 @@ class Plan:
             for problem in self.document.get("problems") or []
         ]
 
-    def estimate(self) -> tuple[float, float]:
-        """``(low, high)`` in US dollars: what the run may spend on what is not cached."""
-        estimate = self.price.get("estimate") or self.document.get("estimate") or {}
-        return (float(estimate.get("low_usd", 0)), float(estimate.get("high_usd", 0)))
+    def estimate(self) -> tuple[float | None, float | None]:
+        """Total forecast in USD; ``(None, None)`` when any paid work is unpriced."""
+        estimate = self.price.get("estimate") or self.document["estimate"]
+        low, high = estimate["low_usd"], estimate["high_usd"]
+        return (None if low is None else float(low), None if high is None else float(high))
+
+    @property
+    def forecast(self) -> dict[str, float | int | None]:
+        """Total forecast, known subtotal and count of unpriced calls, in US dollars."""
+        estimate = self.price.get("estimate") or self.document["estimate"]
+        low, high = self.estimate()
+        return {
+            "low_usd": low,
+            "high_usd": high,
+            "known_low_usd": estimate.get("known_low_usd", low),
+            "known_high_usd": estimate.get("known_high_usd", high),
+            "unpriced_calls": estimate.get("unpriced_calls", 0),
+        }
 
     def phases(self) -> list[dict[str, Any]]:
         """The price by phase, as ``grida-fx price`` prints it: ``phase``, ``steps``, ``calls``
@@ -198,7 +221,8 @@ class Plan:
     def __repr__(self) -> str:
         workflow = (self.document.get("workflow") or {}).get("id", "?")
         low, high = self.estimate()
-        return f"<Plan {workflow} ok={self.ok} estimate=${low:.2f}-${high:.2f}>"
+        amount = "unknown" if low is None or high is None else f"${low:.2f}-${high:.2f}"
+        return f"<Plan {workflow} ok={self.ok} estimate={amount}>"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -310,7 +334,7 @@ class RunResult:
 
     @property
     def cost(self) -> float:
-        """What the run folder has been charged, in US dollars, over every invocation."""
+        """Budget booked in USD; unreported charges consume their reservations."""
         ending = self._ending()
         return float(ending.get("charged_usd") or 0) if ending is not None else 0.0
 
@@ -635,6 +659,7 @@ def _request(
     inputs: Mapping[str, Any] | None,
     input_files: Sequence[str | Path],
     max_usd: float | None,
+    require_estimates: bool = False,
     cwd: str | Path | None,
     routes: Sequence[str | Path] | None,
     arguments: Mapping[str, str] | None,
@@ -646,6 +671,7 @@ def _request(
                 ("inputs", inputs),
                 ("input_files", input_files or None),
                 ("max_usd", max_usd),
+                ("require_estimates", require_estimates or None),
                 ("cwd", cwd),
                 ("routes", routes or None),
                 ("arguments", arguments or None),
@@ -660,6 +686,8 @@ def _request(
         if target._request is None:
             raise ValueError("this Plan was not made by grida.fx.plan, so it names nothing to run")
         return target._request
+    if not isinstance(require_estimates, bool):
+        raise TypeError("require_estimates is true or false")
     if inputs is not None and not isinstance(inputs, Mapping):
         raise TypeError("inputs is a mapping of input names to values")
     return _Request(
@@ -667,6 +695,7 @@ def _request(
         inputs=dict(inputs) if inputs else None,
         input_files=tuple(os.fspath(path) for path in input_files),
         max_usd=None if max_usd is None else _amount("max_usd", max_usd),
+        require_estimates=require_estimates,
         cwd=Path(cwd).absolute() if cwd is not None else Path.cwd(),
         routes=tuple(os.fspath(path) for path in routes or ()),
         arguments=tuple((str(name), str(value)) for name, value in (arguments or {}).items()),
@@ -711,6 +740,20 @@ def _inputs_file(request: _Request) -> Iterator[str | None]:
     finally:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(path)
+
+
+@contextlib.contextmanager
+def _resolved_models_file(request: _Request) -> Iterator[str | None]:
+    """Keep prepared model facts available only for the engine invocation that uses them."""
+    if request._resolved_models is None:
+        yield None
+        return
+    # Model facts contain no relative file references; the source directory may be read-only.
+    with tempfile.TemporaryDirectory(prefix="grida-fx-models-") as directory:
+        handle, path = tempfile.mkstemp(prefix="models-", suffix=".json", dir=directory)
+        with os.fdopen(handle, "w", encoding="utf-8") as written:
+            written.write(request._resolved_models)
+        yield path
 
 
 # ------------------------------------------------------------------------------------------------
@@ -1001,13 +1044,96 @@ async def _document(verb: str, args: Sequence[str], cwd: Path) -> dict[str, Any]
 
 
 async def _plan(request: _Request) -> Plan:
-    with _inputs_file(request) as inputs_file:
+    with _inputs_file(request) as inputs_file, _resolved_models_file(request) as models_file:
         args = request.args(inputs_file)
-        graph = await _document("plan", [*args, "--json"], request.cwd)
-        price = await _document("price", args, request.cwd)
+        if models_file is not None:
+            args.append(f"--resolved-models={models_file}")
+        prepared = await _document("plan", [*args, "--json", "--prepared"], request.cwd)
+    graph = prepared.get("graph")
+    price = prepared.get("price")
+    models = prepared.get("resolved_models")
+    if (
+        prepared.get("kind") != "fx-prepared-plan-v1"
+        or not isinstance(graph, dict)
+        or graph.get("kind") not in ("fx-graph-v1", "fx-graph-v2")
+        or not isinstance(graph.get("workflow"), dict)
+        or not isinstance(graph["workflow"].get("id"), str)
+        or not isinstance(graph["workflow"].get("title"), str)
+        or not isinstance(graph.get("instances"), list)
+        or not isinstance(graph.get("pending"), list)
+        or not isinstance(graph.get("problems"), list)
+        or not all(
+            isinstance(problem, dict)
+            and isinstance(problem.get("where"), str)
+            and isinstance(problem.get("message"), str)
+            for problem in graph["problems"]
+        )
+        or not _price_range(graph.get("estimate"))
+        or graph["kind"] == "fx-graph-v1"
+        and graph["estimate"]["low_usd"] is None
+        or "ceiling_usd" not in graph["estimate"]
+        or not _ceiling(graph["estimate"].get("ceiling_usd"))
+        or not isinstance(price, dict)
+        or not _price_range(price.get("estimate"))
+        or price["estimate"]["low_usd"] is None
+        and price.get("kind") != "fx-price-v2"
+        or "ceiling_usd" not in price
+        or not _ceiling(price["ceiling_usd"])
+        or not isinstance(price.get("phases"), list)
+        or not all(_price_range(phase) for phase in price["phases"])
+        or not isinstance(models, dict)
+        or models.get("fx") != "routes/v1"
+        or not isinstance(models.get("routes"), list)
+    ):
+        raise FxError("grida-fx plan returned an invalid prepared plan")
     planned = Plan(graph, price)
-    planned._request = request
+    planned._request = replace(request, _resolved_models=json.dumps(models, allow_nan=False))
     return planned
+
+
+def _amount_value(value: Any) -> bool:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:
+        return False
+
+
+def _price_range(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if _amount_value(value.get("low_usd")) and _amount_value(value.get("high_usd")):
+        return value["low_usd"] <= value["high_usd"] and not any(
+            key in value for key in ("known_low_usd", "known_high_usd", "unpriced_calls")
+        )
+    return (
+        "low_usd" in value
+        and value["low_usd"] is None
+        and "high_usd" in value
+        and value["high_usd"] is None
+        and _amount_value(value.get("known_low_usd"))
+        and _amount_value(value.get("known_high_usd"))
+        and value["known_low_usd"] <= value["known_high_usd"]
+        and isinstance(value.get("unpriced_calls"), int)
+        and not isinstance(value["unpriced_calls"], bool)
+        and value["unpriced_calls"] > 0
+    )
+
+
+def _ceiling(value: Any) -> bool:
+    return value is None or _amount_value(value)
+
+
+def _may_exist(path: Path) -> bool:
+    """Let the engine inspect an existing or inaccessible explicit run path."""
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        pass
+    return True
 
 
 def _no_running_loop(function: str) -> None:
@@ -1050,6 +1176,7 @@ async def plan_async(
     inputs: Mapping[str, Any] | None = None,
     input_files: Sequence[str | Path] = (),
     max_usd: float | None = None,
+    require_estimates: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1061,6 +1188,7 @@ async def plan_async(
         inputs=inputs,
         input_files=input_files,
         max_usd=max_usd,
+        require_estimates=require_estimates,
         cwd=cwd,
         routes=routes,
         arguments=arguments,
@@ -1074,6 +1202,7 @@ def plan(
     inputs: Mapping[str, Any] | None = None,
     input_files: Sequence[str | Path] = (),
     max_usd: float | None = None,
+    require_estimates: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1086,6 +1215,7 @@ def plan(
             inputs=inputs,
             input_files=input_files,
             max_usd=max_usd,
+            require_estimates=require_estimates,
             cwd=cwd,
             routes=routes,
             arguments=arguments,
@@ -1100,6 +1230,7 @@ async def run_async(
     input_files: Sequence[str | Path] = (),
     live: bool = False,
     max_usd: float | None = None,
+    require_estimates: bool = False,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
     name: str | None = None,
@@ -1135,6 +1266,7 @@ async def run_async(
         inputs=inputs,
         input_files=input_files,
         max_usd=max_usd,
+        require_estimates=require_estimates,
         cwd=cwd,
         routes=routes,
         arguments=arguments,
@@ -1150,16 +1282,25 @@ async def run_async(
         options.append(f"--resume={resume}")
     if answerer is not None:
         options.append("--stand-in=-")
-    if isinstance(target, Plan):
-        planned: Plan | None = target
+    resuming = resume is not None or (run_dir is not None and _may_exist(request.cwd / run_dir))
+    if resuming:
+        # The CLI loads recorded facts before planning. A fresh SDK plan would miss them.
+        request = replace(request, _resolved_models=None)
+        planned: Plan | None = None
+    elif isinstance(target, Plan):
+        planned = target
     elif answerer is None:
         planned = await _plan(request)
     else:
         planned = None  # a stand-in run plans nothing first: the run plans, and refuses problems
     if planned is not None and not planned.ok:
         raise PlanRefused(planned)
-    with _inputs_file(request) as inputs_file:
+    if planned is not None and planned._request is not None:
+        request = planned._request
+    with _inputs_file(request) as inputs_file, _resolved_models_file(request) as models_file:
         args = ["run", *request.args(inputs_file), *options, "--no-view"]
+        if models_file is not None:
+            args.append(f"--resolved-models={models_file}")
         if answerer is None:
             done = await _call(args, request.cwd)
         else:
@@ -1183,6 +1324,9 @@ async def run_async(
         refused = [line for line in done.stdout.splitlines() if line.startswith(_REFUSED)]
         if refused:
             raise FxError(refused[-1], done.status)
+        if resuming:
+            # A diagnostic replan would repeat discovery without the recorded run's facts.
+            raise _failure("run", done)
         replanned = await _plan(request)
         if not replanned.ok:
             raise PlanRefused(replanned)
@@ -1216,6 +1360,7 @@ def run(
     input_files: Sequence[str | Path] = (),
     live: bool = False,
     max_usd: float | None = None,
+    require_estimates: bool = False,
     yes_up_to: float | None = None,
     run_dir: str | Path | None = None,
     name: str | None = None,
@@ -1234,6 +1379,7 @@ def run(
             input_files=input_files,
             live=live,
             max_usd=max_usd,
+            require_estimates=require_estimates,
             yes_up_to=yes_up_to,
             run_dir=run_dir,
             name=name,

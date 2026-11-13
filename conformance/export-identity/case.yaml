@@ -10,13 +10,13 @@ steps:
   save: expand.json
   json: true
 - argv: [run, case, --routes, routes.yaml, --run, runs/one]
-  mentions: ["cached    0 of 2 known steps", "result    ok   spent $0.00"]
+  mentions: ["cached    0 of 2 known steps", "result    ok   booked $0.00"]
 - read: runs/one/outputs/up.txt
   save: up.txt
 - read: runs/one/outputs/down.txt
   save: down.txt
 - argv: [run, case, --routes, routes.yaml, --run, runs/two]
-  mentions: ["cached    2 of 2 known steps", "result    ok   spent $0.00"]
+  mentions: ["cached    2 of 2 known steps", "result    ok   booked $0.00"]
 - read: runs/two/outputs/up.txt
   save: up.txt
 - read: runs/two/outputs/down.txt

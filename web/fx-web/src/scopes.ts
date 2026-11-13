@@ -114,7 +114,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   const scopes = view.scopes;
   const byId = new Map(scopes.map((scope) => [scope.id, scope]));
   if (active !== null && byId.get(active)?.kind !== "workflow") return flat;
-  const plan = view.kind === "fx-graph-v1";
+  const plan = view.kind !== "fx-viewer-run-v1";
   const allNodes: CanvasStep[] = plan ? flat.nodes : [...flat.nodes, ...scopes.flatMap((scope) => scope.pending).map((path) => ({
     id: `pending:${path}`, source_id: path, title: path, subtitle: "Waiting for repeat expansion", state: "unexpanded", pending: true,
   }))];

@@ -12,6 +12,11 @@ existing custom-capability adapter path is the extension foundation. Optional st
 provider diagnostics and dedicated native-capability acceptance evidence are now
 implemented in source; the linked decision names their contracts and tests.
 
+Amended 2026-11-13 for #112 by [model selection](../../spec/model-selection.md): preparing a
+selected missing GG/OpenRouter image binding may read provider metadata before the offline
+core plans it. Runtime discovery uses provider APIs, not Grida Models releases; authored
+routes remain independent. R9–R11 below include this amendment.
+
 ## Why
 
 - New models and providers arrive faster than FX can ship adapters, so FX will always be
@@ -39,9 +44,9 @@ Ratified 2026-10-14.
 | R6 | **An OpenAI-compatible family by declaration alone**, for the chat capabilities (`structured.generate`, `agent.turn`). |
 | R7 | **Routes.** `extends` lets a route take another route's price, features, limits and contract and restate only what differs. Namespaced `provider_options`, like the Vercel AI SDK's `providerOptions`, pass parameters FX does not expose; only the matching adapter reads them, and they are part of identity. The engine always supplies the serving adapter's identity to the route fingerprint: no built-in key moves, and a project route declared without a contract recomputes once. |
 | R8 | **A route gives a price or a per-call cap.** A capped route is unpriced: each call holds the cap and is charged what the provider reports, else the whole cap. A route with neither is refused, and an empty price no longer means $0. |
-| R9 | **Any model on a provider FX speaks.** A new model id, with `extends`, `provider_options` and a cap where needed, is enough to run a model FX does not list on GG, OpenRouter and fal. |
-| R10 | **Grida Models is used when FX is built, never when it runs.** FX pins a released snapshot of [Grida Models](https://github.com/gridaco/models), keeps a generated projection of the facts Models' JSON Schema defines, and CI checks the built-in route table against it. A route's effective features are the provider's documented facts that its adapter implements; an unknown fact never enables one. A project-level pin is a follow-up. |
-| R11 | **GG's planning prices are FX's allowances, and say so.** GG's image and video routes keep allowances taken from the same model elsewhere until GG's own rates can be planned from. A GG call is booked at GG's settled charge. |
+| R9 | **Any model on a provider FX speaks.** Preparing a selected missing image binding on GG or OpenRouter reads that provider's model metadata automatically; no per-model import is required. A project route with `extends`, `provider_options` and a cap where needed remains the independent path for any model on GG, OpenRouter or fal. Authored tables win and explicit `--routes` disables discovery. |
+| R10 | **Grida Models checks shipped routes; provider APIs supply runtime discovery.** FX pins a released snapshot of [Grida Models](https://github.com/gridaco/models), keeps a generated projection and checks built-in routes in CI. It does not consume Models releases at runtime. The engine may prepare a selected missing GG/OpenRouter image binding through bounded read-only provider metadata requests, before the offline core plans. Effective features are documented facts the installed adapter implements; an unknown fact never enables one. A project-level Models pin remains a follow-up, independent of this discovery path. |
+| R11 | **Planning allowances remain explicit; price uncertainty is normal.** FX maintains estimates for its shipped routes, projects may supply route prices or unknown-cost caps, and discovery may use published rates it understands. Automatic pricing is optional; no provider estimate endpoint or universal final-cost prediction is required. Model facts alone do not establish a price, and a scenario example does not price unrelated requests. The existing allowance/admission contract remains; no separate model-allowance configuration is introduced. An FX reservation is neither a provider quote nor spending permission. A GG call is booked at GG's settled charge. |
 | R12 | **Request fields become provider-neutral later,** in the one identity break before 1.0, with the naming review, so users migrate once. `provider_options` lands now, since it only adds a member. |
 | R13 | **One definition per capability is deferred.** A capability is consolidated when it next changes. |
 | R14 | **No arbitrary model aliases.** The capability default in `fx.yaml` is already a one-line bump. Clarified 2026-11-13 for #130: a canonical published model ID may select its explicit provider binding independently of provider preference; it is not a user-defined alias or an automatic model upgrade. |

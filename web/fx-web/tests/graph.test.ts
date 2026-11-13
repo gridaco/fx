@@ -76,14 +76,30 @@ describe("plan boundary and graph projection", () => {
     unknown.instances[0].price = { low_usd: 0, high_usd: 1.5, cap_usd: 1.5 };
     expect(() => parseGraph(unknown)).toThrow("does not match");
   });
-  test("a price reads as an estimate, or up to its worst case when capped", () => {
+  test("a price distinguishes forecasts from capped allowances", () => {
     const money = (usd: number) => `$${usd.toFixed(2)}`;
     expect(priceLabel({ low_usd: 0, high_usd: 0 }, money)).toBe("");
     expect(priceLabel({ low_usd: 0, high_usd: 0 }, money, "est. $0.00")).toBe("est. $0.00");
     expect(priceLabel({ low_usd: 0.4, high_usd: 0.4 }, money)).toBe("est. $0.40");
     expect(priceLabel({ low_usd: 0.4, high_usd: 1.2 }, money)).toBe("est. $0.40 – $1.20");
-    expect(priceLabel({ low_usd: 0, high_usd: 1.5, capped: true }, money)).toBe("up to $1.50");
-    expect(priceLabel({ low_usd: 0.02, high_usd: 1.58, capped: true }, money)).toBe("up to $1.58");
+    expect(priceLabel({ low_usd: 0, high_usd: 1.5, capped: true }, money)).toBe("allowance $1.50; cost unknown");
+    expect(priceLabel({ low_usd: 0.02, high_usd: 1.58, capped: true }, money)).toBe("allowance $1.58; cost unknown");
+  });
+  test("v2 carries unknown totals and a known subtotal through parsing and canvas projection", () => {
+    const input = graph();
+    const unknown = { low_usd: null, high_usd: null, known_low_usd: 0.12, known_high_usd: 0.12, unpriced_calls: 2 };
+    input.kind = "fx-graph-v2";
+    input.estimate = { ...unknown, ceiling_usd: 3 };
+    input.instances[0].price = unknown;
+    input.pending[0] = { ...input.pending[0], high_usd: null, known_high_usd: 0.12, unpriced_calls: 2 };
+    expect(parseViewerView(input)).toEqual(input);
+    expect(canvasGraph(parseGraph(input)).nodes.length).toBeGreaterThan(0);
+    expect(priceLabel(unknown, (amount) => `$${amount.toFixed(2)}`)).toBe("est. $0.12 + 2 unpriced calls");
+    expect(priceLabel({ ...unknown, known_low_usd: 0, known_high_usd: 0 }, String)).toBe("cost unknown");
+    expect(() => parseGraph({ ...input, kind: "fx-graph-v1" })).toThrow("does not match");
+    for (const change of [{ unpriced_calls: 0 }, { unpriced_calls: 1.5 }, { known_high_usd: null }, { known_high_usd: 0.1 }, { low_usd: 0 }]) {
+      expect(() => parseGraph({ ...input, estimate: { ...input.estimate, ...change } })).toThrow("does not match");
+    }
   });
   test("accepts an unversioned type named by its export and source, and refuses the retired form", () => {
     const digest = "a".repeat(64);

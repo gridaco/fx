@@ -19,6 +19,6 @@ steps:
   - "marker-async: spawn with inherited stdio"
   - "marker-grandchild: a child of a child"
   - "marker-stdin: a child read 0 bytes"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: runs/one/outputs/said.txt
   save: said.txt

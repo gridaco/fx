@@ -25,9 +25,17 @@ use std::ffi::OsString;
 /// The verbs whose extra arguments are workflow input flags.
 const PLANNING_VERBS: [&str; 6] = ["plan", "expand", "identity", "price", "run", "view"];
 /// Options of every planning verb that take a value.
-const VALUE_OPTIONS: [&str; 4] = ["--inputs", "--routes", "--arg", "--max-usd"];
+const VALUE_OPTIONS: [&str; 5] = [
+    "--inputs",
+    "--routes",
+    "--arg",
+    "--max-usd",
+    "--resolved-models",
+];
 /// Flags of `plan` alone.
-const PLAN_FLAGS: [&str; 5] = [
+const PLAN_FLAGS: [&str; 7] = [
+    "--require-estimates",
+    "--prepared",
     "--check",
     "--json",
     "--expect-cached",
@@ -44,7 +52,13 @@ const RUN_VALUE_OPTIONS: [&str; 6] = [
     "--resume",
 ];
 /// Flags of `run` alone.
-const RUN_FLAGS: [&str; 4] = ["--live", "--no-view", "--open", "--standalone"];
+const RUN_FLAGS: [&str; 5] = [
+    "--live",
+    "--no-view",
+    "--open",
+    "--standalone",
+    "--require-estimates",
+];
 /// Options of `view` alone that take a value.
 const VIEW_VALUE_OPTIONS: [&str; 3] = ["--run", "--plan", "--port"];
 /// Flags of `view` alone.
@@ -93,7 +107,10 @@ pub fn split_plan_args(argv: &[OsString]) -> (Vec<OsString>, Vec<String>) {
                     for_clap.push(value.clone());
                 }
             }
-        } else if own_flags.contains(&text) || HELP_FLAGS.contains(&text) {
+        } else if own_flags.contains(&text)
+            || (verb != "view" && text == "--require-estimates")
+            || HELP_FLAGS.contains(&text)
+        {
             for_clap.push(argument.clone());
         } else if !target_seen && !text.starts_with('-') {
             target_seen = true;

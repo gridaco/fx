@@ -330,6 +330,51 @@ impl Gate {
         held: Usd,
         yes_up_to: Option<Usd>,
     ) -> GateCheck {
+        self.check_with_ceiling(expansion, results, charged, held, yes_up_to, None)
+    }
+
+    /// Unknown-cost work exposes the remaining run authorization, independently of its forecast.
+    pub fn check_with_ceiling(
+        &mut self,
+        expansion: &Expansion,
+        results: &IndexMap<String, NodeResult>,
+        charged: Usd,
+        held: Usd,
+        yes_up_to: Option<Usd>,
+        ceiling: Option<Usd>,
+    ) -> GateCheck {
+        self.check_budget(
+            expansion,
+            results,
+            (charged, held, yes_up_to, ceiling),
+            &|_, max| max,
+        )
+    }
+
+    /// Uses the ledger's remaining scopes as authorization, never as a price forecast.
+    pub fn check_with_ledger(
+        &mut self,
+        expansion: &Expansion,
+        results: &IndexMap<String, NodeResult>,
+        ledger: &crate::ledger::Ledger,
+        yes_up_to: Option<Usd>,
+    ) -> GateCheck {
+        self.check_budget(
+            expansion,
+            results,
+            (ledger.charged(), ledger.held(), yes_up_to, ledger.ceiling()),
+            &|owner, max| ledger.scope_remaining(owner, max),
+        )
+    }
+
+    fn check_budget(
+        &mut self,
+        expansion: &Expansion,
+        results: &IndexMap<String, NodeResult>,
+        budget: (Usd, Usd, Option<Usd>, Option<Usd>),
+        scope_remaining: &dyn Fn(&str, Usd) -> Usd,
+    ) -> GateCheck {
+        let (charged, held, yes_up_to, ceiling) = budget;
         let unfinished = || {
             expansion
                 .ordered()
@@ -368,6 +413,54 @@ impl Gate {
                     .filter(|repeat| repeat.phase == phase)
                     .map(|repeat| repeat.high())
                     .sum();
+            let unknown = members
+                .iter()
+                .filter(|i| paying.contains(i.id.as_str()))
+                .any(|i| i.prices.iter().any(|price| price.unknown))
+                || expansion
+                    .pending
+                    .iter()
+                    .any(|repeat| repeat.phase == phase && repeat.unknown_calls() > 0);
+            let high = if unknown {
+                let run_remaining =
+                    ceiling.map(|ceiling| Usd((ceiling.0 - charged.0 - held.0).max(0)));
+                let mut scopes = BTreeMap::new();
+                let mut unscoped = expansion
+                    .pending
+                    .iter()
+                    .any(|repeat| repeat.phase == phase && repeat.unknown_calls() > 0);
+                for instance in members
+                    .iter()
+                    .filter(|i| paying.contains(i.id.as_str()) && i.unknown_calls() > 0)
+                {
+                    match &instance.budget {
+                        Some((owner, max)) => {
+                            scopes.insert(owner, scope_remaining(owner, *max));
+                        }
+                        None => unscoped = true,
+                    }
+                }
+                if unscoped {
+                    run_remaining.unwrap_or(high)
+                } else {
+                    let covered_known: Usd = members
+                        .iter()
+                        .filter(|instance| {
+                            paying.contains(instance.id.as_str())
+                                && instance
+                                    .budget
+                                    .as_ref()
+                                    .is_some_and(|(owner, _)| scopes.contains_key(owner))
+                        })
+                        .map(|instance| instance.high())
+                        .sum();
+                    let exposure =
+                        Usd((high.0 - covered_known.0).max(0)) + scopes.values().copied().sum();
+                    run_remaining.map_or(exposure, |remaining| exposure.min(remaining))
+                }
+            } else {
+                high
+            };
             let steps = members.len();
             if self.announced.get(&phase) != Some(&(steps, high)) {
                 self.announced.insert(phase, (steps, high));
@@ -379,7 +472,12 @@ impl Gate {
             }
             if let Some(limit) = yes_up_to
                 && phase > 1
-                && charged + held + high > limit
+                && ((unknown
+                    && ceiling.is_none()
+                    && members
+                        .iter()
+                        .any(|i| i.unknown_calls() > 0 && i.budget.is_none()))
+                    || charged + held + high > limit)
             {
                 let stop = format!(
                     "phase {phase} may cost up to {}, which takes the run past --yes-up-to \
@@ -520,6 +618,7 @@ mod tests {
             low: Usd::ZERO,
             high: usd(high),
             capped: false,
+            unknown: false,
         });
         i
     }
@@ -1009,6 +1108,69 @@ mod tests {
     }
 
     #[test]
+    fn an_unknown_phase_uses_authorization_exposure_for_an_explicit_approval_threshold() {
+        let mut unknown = priced(instance("draw#1"), 2, "0");
+        unknown.prices[0].unknown = true;
+        let expansion = expansion(vec![unknown]);
+        let mut gate = Gate::new();
+        let check = gate.check_with_ceiling(
+            &expansion,
+            &IndexMap::new(),
+            usd("0.2"),
+            Usd::ZERO,
+            Some(usd("1")),
+            Some(usd("3")),
+        );
+        assert!(check.stop.is_some());
+        assert_eq!(
+            check.planned[0],
+            Event::PhasePlanned {
+                phase: 2,
+                steps: 1,
+                high_usd: usd("2.8")
+            }
+        );
+        // Approving the available run budget admits the same unpriced work.
+        let approved = gate.check_with_ceiling(
+            &expansion,
+            &IndexMap::new(),
+            usd("0.2"),
+            Usd::ZERO,
+            Some(usd("3")),
+            Some(usd("3")),
+        );
+        assert!(approved.stop.is_none());
+    }
+
+    #[test]
+    fn unknown_phase_approval_respects_a_smaller_remaining_step_budget() {
+        let mut unknown = priced(instance("draw#1"), 2, "0");
+        unknown.prices[0].unknown = true;
+        unknown.budget = Some(("draw".into(), usd("0.25")));
+        let expansion = expansion(vec![unknown]);
+        let ledger = crate::ledger::Ledger::new(Some(usd("3")), None);
+        let hold = ledger
+            .reserve(
+                "previous".into(),
+                usd("0.1"),
+                &vec![("draw".into(), usd("0.25"))],
+            )
+            .unwrap();
+        ledger.settle(hold, Some(usd("0.1")));
+        let check =
+            Gate::new().check_with_ledger(&expansion, &IndexMap::new(), &ledger, Some(usd("1")));
+        assert!(check.stop.is_none());
+        assert_eq!(
+            check.planned[0],
+            Event::PhasePlanned {
+                phase: 2,
+                steps: 1,
+                high_usd: usd("0.15")
+            }
+        );
+    }
+
+    #[test]
     fn the_gate_waits_for_unpriceable_phases_and_counts_pending_repeats() {
         let mut e = expansion(vec![
             priced(instance("a#1"), 1, "0.1"),
@@ -1026,6 +1188,9 @@ mod tests {
             waiting_on: ["a#1".to_string()].into(),
             per_instance_low: Usd::ZERO,
             per_instance_high: usd("0.25"),
+            per_instance_known_high: usd("0.25"),
+            per_instance_unpriced_calls: 0,
+            per_instance_unknown_calls: 0,
             phase: 3,
         });
         let mut gate = Gate::new();

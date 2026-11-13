@@ -42,8 +42,13 @@ step, and mix them freely:
 | **Provider keys** | `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY` | each provider's models, on its own account |
 | **Grida Gateway** | `GG_API_KEY` | text, images, video and 3D with one key and one bill |
 
-[AI providers](docs/guide/13-providers.md) says what each one serves and where to get each key. A
-model FX does not list runs from a route of your own; a provider FX does not ship, from a
+[AI providers](docs/guide/13-providers.md) says what each one serves and where to get each key.
+For a selected missing GG or OpenRouter image binding, FX can look up model metadata without
+generating or spending. A compatible model can plan with unknown cost; available shipped,
+authored or discovered pricing improves the forecast. Use `--require-estimates` when forecast
+coverage is required. Execution still requires approval and a run ceiling; unknown-cost calls
+reserve remaining applicable budget and keep unreported charges separate from actual cost.
+Other models FX does not list run from a route of your own; a provider FX does not ship, from a
 declaration in `fx.yaml` and, unless it speaks OpenAI's chat API, an adapter of your own in Python
 or TypeScript ([Community providers](docs/guide/15-community-providers.md)).
 

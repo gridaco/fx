@@ -114,7 +114,7 @@ refused while planning. Use a route with `alpha` for cut-outs, or remove the bac
 ### Your subscription's limits apply
 
 - Each image counts against your Grok subscription, which FX can neither see nor enforce. A run's
-  `spent $0.00` is FX's bill, not your subscription's. What Grok Build did count is kept in each
+  `booked $0.00` is FX's bill, not your subscription's. What Grok Build did count is kept in each
   call's record in the cache (`usage`: the Grok Build version, its agent model, and the tokens of
   the turn), marked as billed to your plan.
 - An account whose subscription does not include image generation fails its first Grok step with

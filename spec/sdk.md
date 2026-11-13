@@ -4,6 +4,23 @@ Python and JavaScript expose useful user jobs through language-native APIs. CLI
 verb coverage is not a goal. This additive SDK contract changes no execution,
 identity, cache, spending, run-record or observation wire semantics.
 
+## Prepare a plan
+
+Python and JavaScript plan through the same engine path as the CLI. For a selected missing
+image-model binding on a supported provider, the engine may make a bounded, read-only
+metadata lookup before offline core planning ([model-selection.md](model-selection.md) §3).
+This needs neither `live` nor spending approval and never generates an asset. Network-off,
+authored-route precedence, price admission and lookup failures are identical through
+every invoker. Importing an SDK does not make a lookup.
+
+A `Plan` retains the engine's normalized discovered routes as a preparation snapshot,
+independently of the optional metadata cache. Creating a new run with `run(plan)` sends that
+snapshot back to the engine instead of discovering those model bindings again. Snapshot
+transport uses private temporary storage and does not require a writable project source root. The engine
+validates the snapshot and current authored configuration. SDKs compute no route identity. This adds no public resolver
+or synchronization API. Preparing a new plan still resolves current configuration and
+provider metadata under the normal freshness policy.
+
 ## Execute and resume
 
 Python `run`/`run_async` and JavaScript `run` accept `name` and `resume` as run
@@ -18,6 +35,13 @@ Omitting all three selectors creates a fresh record. `name` is create-only; `res
 existing named run. An explicit folder retains its existing create/resume behavior.
 Resuming repeats current target/input/route/builder options; old options are not
 restored. A name does not force generation or alter any cache identity.
+
+For a named resume or an existing explicit run folder, SDKs invoke the engine without
+preplanning or injecting a `Plan`'s preparation snapshot. The engine loads the run's recorded
+model facts before planning, retaining the usual current-configuration and plan-digest
+checks. Deleting the optional metadata cache or removing a provider key does not force
+rediscovery before a resume that can use recorded facts and cached results. An engine
+refusal before execution raises `FxError`; SDKs do not repeat discovery to diagnose it.
 
 SDKs start `run` with `GRIDA_FX_CANCEL_SOURCE=sdk` in the engine's environment. Besides naming
 the source of a signal's cancellation, it tells the engine that the invocation's inputs file is
@@ -170,3 +194,17 @@ Project initialization, service management/browser opening, diagnostics, node lo
 take maintenance and job forgetting stay CLI operations. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
 Pause, active revision and cloud control remain separate contracts.
+
+## Optional cost forecasts
+
+The CLI, Python and JavaScript planning and execution jobs accept `--require-estimates`,
+`require_estimates=True` and `requireEstimates: true`, respectively. Ordinary planning admits
+compatible unpriced routes. Strict forecast coverage refuses uncached paid work without an
+applicable estimate; explicit reservation caps do not satisfy it. Free stand-in runs are exempt.
+Planning checks potential calls of uncached steps; it cannot prove arbitrary node requests
+will be served entirely by the managed-call cache.
+
+Prepared graphs may use `fx-graph-v2` with null total amounts, known numeric subtotals and
+`unpriced_calls`. SDK estimate accessors return absent amounts for unknown totals; `forecast`
+exposes known subtotals and the unpriced count. They never coerce unknown totals to zero.
+Existing numeric `fx-graph-v1` records remain readable.

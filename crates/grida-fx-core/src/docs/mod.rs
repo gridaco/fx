@@ -34,6 +34,7 @@ pub enum Schema {
     Lock,
     Takes,
     Graph,
+    GraphV2,
     NodeProtocol,
 }
 
@@ -47,6 +48,7 @@ impl Schema {
             Schema::Lock => include_str!("../../../../spec/schemas/fx-lock-v1.schema.json"),
             Schema::Takes => include_str!("../../../../spec/schemas/fx-takes-v1.schema.json"),
             Schema::Graph => include_str!("../../../../spec/schemas/fx-graph-v1.schema.json"),
+            Schema::GraphV2 => include_str!("../../../../spec/schemas/fx-graph-v2.schema.json"),
             Schema::NodeProtocol => {
                 include_str!("../../../../spec/schemas/fx-node-protocol-v1.schema.json")
             }
@@ -73,7 +75,7 @@ impl Schema {
             Schema::Routes => "routes",
             Schema::Lock => "lock",
             Schema::Takes => "takes",
-            Schema::Graph => "graph",
+            Schema::Graph | Schema::GraphV2 => "graph",
             Schema::NodeProtocol => "node protocol",
         }
     }
@@ -86,6 +88,7 @@ impl Schema {
         static LOCK: OnceLock<std::result::Result<Validator, String>> = OnceLock::new();
         static TAKES: OnceLock<std::result::Result<Validator, String>> = OnceLock::new();
         static GRAPH: OnceLock<std::result::Result<Validator, String>> = OnceLock::new();
+        static GRAPH_V2: OnceLock<std::result::Result<Validator, String>> = OnceLock::new();
         static NODE_PROTOCOL: OnceLock<std::result::Result<Validator, String>> = OnceLock::new();
         match self {
             Schema::Workflow => &WORKFLOW,
@@ -94,6 +97,7 @@ impl Schema {
             Schema::Lock => &LOCK,
             Schema::Takes => &TAKES,
             Schema::Graph => &GRAPH,
+            Schema::GraphV2 => &GRAPH_V2,
             Schema::NodeProtocol => &NODE_PROTOCOL,
         }
     }
@@ -251,6 +255,7 @@ mod tests {
             Schema::Lock,
             Schema::Takes,
             Schema::Graph,
+            Schema::GraphV2,
             Schema::NodeProtocol,
         ] {
             schema

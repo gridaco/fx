@@ -288,6 +288,9 @@ pub fn plan(
     planner: &mut Planner,
     host: &mut dyn NodeHost,
 ) -> Result<Plan, Error> {
+    planner
+        .routes
+        .apply_plan_billing(&engine.adapters.plan_providers());
     let mut plan_time = PlanTime::new(Arc::clone(engine));
     let runner: &mut dyn PlanTimeRunner = &mut plan_time;
     make_plan(planner, host, Some(runner), &*engine.store)

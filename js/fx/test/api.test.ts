@@ -5,7 +5,7 @@
 // (see support.ts).
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import {
@@ -160,10 +160,11 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
   );
 
   test(
-    "a capped route's call is priced at nothing to its cap, and marked",
+    "a capped route has an unknown forecast and retains its allowance marker",
     async () => {
       const graph = await expand("workflows/capped.yaml", options);
-      expect(graph.instances[0]?.price).toEqual({ low_usd: 0, high_usd: 1.5, capped: true });
+      expect(graph.kind).toBe("fx-graph-v2");
+      expect(graph.instances[0]?.price).toEqual({ low_usd: null, high_usd: null, known_low_usd: 0, known_high_usd: 0, unpriced_calls: 1, capped: true });
       const uncapped = await expand("workflows/icon.yaml", { ...options, inputs: { name: "x" } });
       expect(uncapped.instances[0]?.price).toEqual({ low_usd: 0.01, high_usd: 0.04 });
     },
@@ -345,6 +346,71 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
       }
     },
     SLOW,
+  );
+
+  for (const pricing of ["omitted", "cap"] as const) {
+    test.skipIf(process.platform === "win32")(
+      `strict forecast coverage permits a free stand-in with ${pricing} pricing`,
+      async () => {
+        const standing = temporaryFolder("strict-stand-in");
+        try {
+          cpSync(join(repoRoot, "conformance", "stand-in-image", "in"), standing.path, { recursive: true });
+          writeFileSync(join(standing.path, "routes.yaml"), toYaml({
+            fx: "routes/v1",
+            routes: [{
+              capability: "image.generate", route: "img-a@acme",
+              features: ["alpha", "exact_size", "opaque_background"],
+              ...(pricing === "cap" ? { price: { cap_usd: 1 } } : {}),
+            }],
+          }));
+          let asked = 0;
+          const result = await run("case", {
+            cwd: standing.path, env, routes: ["routes.yaml"],
+            requireEstimates: true,
+            standIn: () => { asked += 1; return { files: { image: png(64, 64) } }; },
+          });
+          expect(result.ok).toBe(true);
+          expect(result.standIn).toBe(true);
+          expect(result.chargedUsd).toBe(0);
+          expect(asked).toBe(1);
+          const events = readFileSync(join(result.runDir, "events.jsonl"), "utf8")
+            .trim().split("\n").map((line) => JSON.parse(line));
+          expect(events.some((event) => event.event === "budget_reserved")).toBe(false);
+          expect(events.filter((event) => event.event === "call").every((event) =>
+            event.stand_in === true && event.cost_usd === 0)).toBe(true);
+        } finally {
+          standing.cleanup();
+        }
+      }, SLOW,
+    );
+  }
+
+  test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "a prepared run does not need to write its model snapshot into the source directory",
+    async () => {
+      const folder = temporaryFolder("read-only-source");
+      const source = join(folder.path, "source");
+      mkdirSync(source);
+      mkdirSync(join(source, ".fx"));
+      writeFileSync(join(source, "fx.yaml"), toYaml({
+        fx: "project/v1", cache: join(folder.path, "cache"),
+      }));
+      writeFileSync(join(source, "case.yaml"), toYaml({
+        fx: "workflow/v1", id: "case", title: "Read-only source",
+        steps: { choose: { uses: "fx/select@1", with: { first_of: ["kite"] } } },
+        outputs: { selected: expr("steps.choose.outputs.value") },
+      }));
+      chmodSync(source, 0o555);
+      try {
+        const result = await run("case", { cwd: source, env, runDir: join(folder.path, "run") });
+        expect(result.ok).toBe(true);
+        expect(result.outputs.selected).toBe("kite");
+        expect(readdirSync(source).some((name) => name.startsWith(".grida-fx-models-"))).toBe(false);
+      } finally {
+        chmodSync(source, 0o755);
+        folder.cleanup();
+      }
+    }, SLOW,
   );
 
   test.skipIf(process.platform === "win32")(

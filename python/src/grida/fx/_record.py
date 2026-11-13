@@ -117,7 +117,7 @@ async def _observe(
         valid = (
             valid
             and isinstance(document.get("plan"), dict)
-            and document["plan"].get("kind") == "fx-graph-v1"
+            and document["plan"].get("kind") in ("fx-graph-v1", "fx-graph-v2")
         )
     else:
         valid = (

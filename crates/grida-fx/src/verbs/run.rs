@@ -47,7 +47,7 @@
 //!    error (exit 2). A cancelled run (Ctrl-C) exits 130 and prints nothing more.
 //! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `stand-in
 //!    <source as typed>` for a stand-in run, `result    ok
-//!    | incomplete | failed   spent $<charged, 2 places>`, `failed    <id>: <error or "no reason
+//!    | incomplete | failed   booked $<charged, 2 places>`, `failed    <id>: <error or "no reason
 //!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
 //!    the home or the store left in an error is shown relative to the project.
 //! 7. `--deliver`, after the run, request by request. First every request is matched with the
@@ -129,6 +129,32 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     };
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
+    let recorded_folder = if let Some(name) = &args.resume {
+        Some(super::run_catalog::resume_named(
+            &planner.project.runs_dir(),
+            &planner.workflow.workflow.id,
+            &planner.workflow.source,
+            name,
+        )?)
+    } else {
+        args.run.as_ref().map(|folder| cwd.join(folder))
+    };
+    let snapshot = if let Some(file) = &args.resolved_models {
+        Some(crate::models::read(&cwd.join(file))?)
+    } else if let Some(file) = recorded_folder
+        .map(|folder| folder.join("resolved-models.json"))
+        .filter(|file| file.exists())
+    {
+        Some(crate::models::read(&file)?)
+    } else {
+        None
+    };
+    let resolved_models = crate::models::prepare(
+        &mut planner,
+        &mut host,
+        snapshot.as_ref(),
+        !args.routes.is_empty(),
+    )?;
     let declared: Vec<&str> = planner
         .workflow
         .workflow
@@ -170,12 +196,12 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     };
     let ran = plan_and_run(
         args,
-        &cwd,
         &engine,
         &mut planner,
         &mut host,
         yes_up_to,
         &deliveries,
+        resolved_models,
     );
     crate::engine::shutdown(&runtime, &engine);
     ran
@@ -184,14 +210,19 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
 /// Steps 3–8 of the module doc.
 fn plan_and_run(
     args: &RunArgs,
-    cwd: &Path,
     engine: &Arc<Engine>,
     planner: &mut Planner,
     host: &mut dyn NodeHost,
     yes_up_to: Option<grida_fx_core::money::Usd>,
     deliveries: &[Delivery],
+    resolved_models: serde_json::Value,
 ) -> Result<u8, Error> {
-    let plan = crate::engine::plan(engine, planner, host)?;
+    let working_directory = planner.cwd.clone();
+    let cwd = working_directory.as_path();
+    let mut plan = crate::engine::plan(engine, planner, host)?;
+    if args.require_estimates && !engine.stand_in_run() {
+        plan.require_estimates();
+    }
     let text = if engine.stand_in_run() {
         grida_fx_core::plan::render::render_stand_in(&plan, planner)
     } else {
@@ -243,6 +274,7 @@ fn plan_and_run(
     };
     print_line(&text);
     let options = RunOptions {
+        require_estimates: args.require_estimates,
         folder: folder.clone(),
         label: label.clone(),
         name: args.name.clone(),
@@ -253,6 +285,10 @@ fn plan_and_run(
             project_root: planner.project.root.clone(),
         }),
         repeat: super::repeat::recorded(args, planner, cwd),
+        resolved_models: resolved_models["routes"]
+            .as_array()
+            .filter(|entries| !entries.is_empty())
+            .map(|_| resolved_models.clone()),
     };
     let mut viewer = None;
     let project = planner.project.clone();
@@ -555,7 +591,7 @@ fn summary(
     }
     lines.push(labelled(
         "result",
-        &format!("{result}   spent {}", outcome.charged.dollars_2()),
+        &format!("{result}   booked {}", outcome.charged.dollars_2()),
     ));
     for (id, error) in &outcome.failed {
         let error = error.as_deref().unwrap_or("no reason recorded");
@@ -1133,7 +1169,7 @@ mod tests {
             summary("runs/one", None, &outcome(), &no_scrub()),
             [
                 "run       runs/one",
-                "result    failed   spent $0.12",
+                "result    failed   booked $0.12",
                 "failed    nope#1: refused on purpose",
                 "failed    bang#1: no reason recorded",
             ]
@@ -1149,7 +1185,7 @@ mod tests {
             ..outcome()
         };
         let lines = summary("runs/one", None, &stopped, &no_scrub());
-        assert_eq!(lines[1], "result    incomplete   spent $0.12");
+        assert_eq!(lines[1], "result    incomplete   booked $0.12");
         assert_eq!(
             lines[2],
             "stopped   phase 2 may cost up to $0.08, which takes the run past --yes-up-to 0.01; \
@@ -1165,7 +1201,7 @@ mod tests {
             summary("runs/case/2026-10-06-1", None, &ok, &no_scrub()),
             [
                 "run       runs/case/2026-10-06-1",
-                "result    ok   spent $0.00"
+                "result    ok   booked $0.00"
             ]
         );
     }

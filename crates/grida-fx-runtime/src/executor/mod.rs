@@ -35,7 +35,7 @@
 //!      read: <what>` (`accept::unreadable_result`).
 //! 6. **Judges** (§5.3 step 4): a judge whose `verdict` fact is not `accept` or `reject` fails with
 //!    `<type name> is a judge and reported no verdict`.
-//! 7. **Facts and the record** (§5.3 step 5): the engine sets the fact `cost_usd` (the run's paid
+//! 7. **Facts and the record** (§5.3 step 5): the engine sets the legacy fact `cost_usd` (budget-booked paid
 //!    calls, `null` when none) and, when the identity is known, publishes the result record (its
 //!    output files first). A failed attempt writes no record.
 //!

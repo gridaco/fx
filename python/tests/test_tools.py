@@ -170,7 +170,7 @@ def test_contracts_are_completed_from_the_built_in_adapters() -> None:
     }
     assert complete("image.edit", "fal", {"adapter": ["fal-image"]}) == {"adapter": ["fal-image"]}
     # Every built-in route already names both, so its fingerprint does not move.
-    assert len(digest.BUILT_IN_ADAPTERS) == 30
+    assert len(digest.BUILT_IN_ADAPTERS) == 32
     assert sum(default for _, default in digest.BUILT_IN_ADAPTERS.values()) == 26
     filled = digest.route_fingerprint("image.generate", "img-a@gg", gg_image)
     assert filled == "7f6238d4aa013ab3e87587914c9ee915b141d33a2432a8ff1f3a361874901b95"
@@ -1057,7 +1057,7 @@ def _retype_echo(graph: dict[str, Any], identity: str) -> None:
         lambda g: g["instances"][0].update(type="nodes/other.py#lines@1"),
         lambda g: g["instances"][3].update(identity=BUILTIN_STEP),
         lambda g: g["instances"][3]["with"].update(prompt="known"),
-        lambda g: g.update(kind="fx-graph-v2"),
+        lambda g: g.update(kind="fx-graph-v3"),
         lambda g: g["types"]["./nodes/n.py#echo"].update(
             identity="nodes/n.py#echo@source:" + "4" * 64
         ),
@@ -1457,7 +1457,7 @@ def test_check_spec_routes_agree_with_the_built_in_adapters(
 ) -> None:
     check_spec, _ = adapters
     assert _check_routes(check_spec) == 0, capsys.readouterr().out
-    assert "30 built-in adapters, 2 family adapters and their references" in (
+    assert "32 built-in adapters, 2 family adapters and their references" in (
         capsys.readouterr().out
     )
 

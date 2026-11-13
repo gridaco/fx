@@ -54,7 +54,7 @@ universe  ·  2 phases
 phase 1   42 steps   4–19 provider calls   $0.08 – $11.40
 phase 2   entity (up to 6)   ≤ $51.00   priced exactly when its list exists
 cached    0 of 2 known steps
-estimate  $0.08 – $62.40   ceiling $25.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $0.08 – $62.40   ceiling $25.00   ⚠ the estimate exceeds the ceiling; calls require available budget
 ```
 
 ## Source layout

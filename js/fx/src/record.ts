@@ -160,7 +160,7 @@ function response(done: Exit, snapshot: boolean, options: RunEventsOptions = {})
   }
   if (snapshot) {
     if (value.kind !== "fx-run-snapshot-v1" || !object(value.plan)
-      || value.plan.kind !== "fx-graph-v1") throw failure("observe", done);
+      || (value.plan.kind !== "fx-graph-v1" && value.plan.kind !== "fx-graph-v2")) throw failure("observe", done);
     return value as unknown as RunSnapshot;
   }
   if (value.kind !== "fx-run-event-batch-v1" || typeof value.has_more !== "boolean"

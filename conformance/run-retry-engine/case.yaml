@@ -14,7 +14,7 @@ steps:
   - --run
   - runs/one
   mentions:
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: count.txt
   save: count.txt
 - read: runs/one/outputs/text.txt

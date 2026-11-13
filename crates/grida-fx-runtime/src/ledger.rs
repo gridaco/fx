@@ -16,7 +16,11 @@
 //!   places> is left`, or for a scope `step budget of <owner> reached: …`. Otherwise records the
 //!   hold and emits `budget_reserved {node_id, amount_usd}`. The run ceiling is checked first,
 //!   then each scope, innermost first; the first that refuses is reported.
-//! - [`Ledger::settle`]: charges the reported cost, or the whole hold when none was reported, and
+//! - Unpriced attempts reserve all remaining run/step authorization atomically. They wait for
+//!   overlapping holds to settle first; competing priced calls wait while an unpriced hold
+//!   occupies their budget. Waiting releases the provider slot and is cancellable. An exhausted
+//!   budget refuses before dispatch. These amounts are accounting allocations, not predictions.
+//! - [`Ledger::settle`]: books the reported cost, or the whole hold when none was reported, and
 //!   emits `budget_settled {node_id, charged_usd, reported}`; the hold's scopes are charged the
 //!   same amount. A hold that is no longer open (settled twice) charges only a reported cost
 //!   above $0, and writes nothing otherwise.
@@ -76,6 +80,8 @@ pub enum NotReserved {
     Refused(Refusal),
     /// The log could not record it, or an earlier event (module doc): an engine fault.
     Unrecorded(String),
+    /// Budget is temporarily held by another attempt; wait for settlement.
+    Waiting,
 }
 
 /// A settlement the log could not record (module doc): the run was charged `charged` all the
@@ -93,6 +99,7 @@ struct State {
     scope_spent: indexmap::IndexMap<String, Usd>,
     /// The first event the log could not write (module doc).
     fault: Option<String>,
+    unknown_holds: std::collections::BTreeSet<String>,
 }
 
 impl State {
@@ -131,6 +138,7 @@ pub struct Ledger {
     only: Option<std::collections::BTreeSet<String>>,
     events: Option<Arc<EventLog>>,
     state: Mutex<State>,
+    changed: tokio::sync::watch::Sender<u64>,
 }
 
 impl Ledger {
@@ -140,6 +148,7 @@ impl Ledger {
             only: None,
             events,
             state: Mutex::new(State::default()),
+            changed: tokio::sync::watch::channel(0).0,
         }
     }
 
@@ -196,6 +205,11 @@ impl Ledger {
         self.reserve_recorded(node_id, amount, scopes)
             .map_err(|not| match not {
                 NotReserved::Refused(refusal) => refusal,
+                NotReserved::Waiting => Refusal {
+                    needed,
+                    remaining: Usd::ZERO,
+                    message: "budget is temporarily reserved by another call".into(),
+                },
                 NotReserved::Unrecorded(message) => Refusal {
                     needed,
                     remaining: Usd::ZERO,
@@ -224,20 +238,92 @@ impl Ledger {
         scopes: &Scopes,
         call: Option<String>,
     ) -> Result<Hold, NotReserved> {
-        let amount = non_negative(amount);
+        self.reserve_policy(node_id, Some(amount), scopes, call)
+    }
+
+    /// Atomically reserves all remaining applicable authorization for an unpriced attempt.
+    pub fn reserve_unknown_recorded_for(
+        &self,
+        node_id: String,
+        scopes: &Scopes,
+        call: Option<String>,
+    ) -> Result<Hold, NotReserved> {
+        self.reserve_policy(node_id, None, scopes, call)
+    }
+
+    /// Subscribe before attempting a reservation, preventing missed settlements while waiting.
+    pub fn changes(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.changed.subscribe()
+    }
+
+    fn reserve_policy(
+        &self,
+        node_id: String,
+        amount: Option<Usd>,
+        scopes: &Scopes,
+        call: Option<String>,
+    ) -> Result<Hold, NotReserved> {
+        let unknown = amount.is_none();
         let mut state = self.lock();
         if let Some(fault) = &state.fault {
             return Err(NotReserved::Unrecorded(fault.clone()));
         }
         if state.open.contains_key(&node_id) {
-            // Hold ids are unique by construction; a second hold under one id would lose the
-            // first one's amount, so it is refused before anything is sent.
             return Err(NotReserved::Refused(Refusal {
-                needed: amount,
+                needed: amount.unwrap_or(Usd(1)),
                 remaining: Usd::ZERO,
                 message: format!("{node_id} already holds a reservation"),
             }));
         }
+        // An unknown attempt takes the remaining budget only after overlapping work settles.
+        // A known attempt also waits when an unknown hold temporarily occupies its budget.
+        let overlaps = |hold: &Hold| {
+            self.ceiling.is_some() || scopes.iter().any(|(owner, _)| hold.scopes.contains(owner))
+        };
+        if amount != Some(Usd::ZERO)
+            && state.open.iter().any(|(id, hold)| {
+                hold.amount > Usd::ZERO
+                    && overlaps(hold)
+                    && (unknown || state.unknown_holds.contains(id))
+            })
+        {
+            return Err(NotReserved::Waiting);
+        }
+        let amount = match amount {
+            Some(amount) => non_negative(amount),
+            None => {
+                let remaining = self
+                    .ceiling
+                    .map(|ceiling| minus(ceiling, state.charged + state.held()))
+                    .into_iter()
+                    .chain(
+                        scopes
+                            .iter()
+                            .map(|(owner, max)| minus(*max, state.scope_used(owner))),
+                    )
+                    .min();
+                match remaining {
+                    Some(amount) if amount > Usd::ZERO => amount,
+                    _ => {
+                        self.emit(
+                            &mut state,
+                            &Event::BudgetRefused {
+                                node_id: node_id.clone(),
+                                needed_usd: Usd(1),
+                                remaining_usd: Usd::ZERO,
+                                ceiling_usd: self.ceiling,
+                            },
+                        )
+                        .map_err(NotReserved::Unrecorded)?;
+                        return Err(NotReserved::Refused(Refusal {
+                            needed: Usd(1),
+                            remaining: Usd::ZERO,
+                            message: "no budget remains to authorize an unpriced call".into(),
+                        }));
+                    }
+                }
+            }
+        };
         let mut refusal = None;
         if let Some(ceiling) = self.ceiling {
             let remaining = minus(ceiling, state.charged + state.held());
@@ -302,6 +388,9 @@ impl Ledger {
             amount,
             scopes: scopes.iter().map(|(owner, _)| owner.clone()).collect(),
         };
+        if unknown {
+            state.unknown_holds.insert(node_id.clone());
+        }
         state.open.insert(node_id, hold.clone());
         Ok(hold)
     }
@@ -321,6 +410,7 @@ impl Ledger {
         let reported = reported.map(non_negative);
         let mut state = self.lock();
         let open = state.open.shift_remove(&hold.node_id);
+        state.unknown_holds.remove(&hold.node_id);
         let charged = match (&open, reported) {
             (Some(_), Some(cost)) => cost,
             (Some(open), None) => open.amount,
@@ -334,7 +424,10 @@ impl Ledger {
             charged_usd: charged,
             reported: reported.is_some(),
         };
-        match self.emit(&mut state, &event) {
+        let recorded = self.emit(&mut state, &event);
+        self.changed
+            .send_modify(|version| *version = version.wrapping_add(1));
+        match recorded {
             Ok(()) => Ok(charged),
             Err(reason) => Err(Unrecorded { charged, reason }),
         }
@@ -352,6 +445,11 @@ impl Ledger {
     /// Charged so far in this folder, every invocation included.
     pub fn charged(&self) -> Usd {
         self.lock().charged
+    }
+
+    /// Remaining authorization within a step's scope, including open holds.
+    pub fn scope_remaining(&self, owner: &str, max: Usd) -> Usd {
+        minus(max, self.lock().scope_used(owner))
     }
 
     /// Held by open reservations.

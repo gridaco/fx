@@ -1,8 +1,11 @@
 {
  "estimate": {
   "ceiling_usd": null,
-  "high_usd": 0.15,
-  "low_usd": 0
+  "high_usd": null,
+  "known_high_usd": 0,
+  "known_low_usd": 0,
+  "low_usd": null,
+  "unpriced_calls": 3
  },
  "instances": [
   {
@@ -18,8 +21,11 @@
    "phase": 1,
    "price": {
     "capped": true,
-    "high_usd": 0.05,
-    "low_usd": 0
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
    },
    "reads": [],
    "routes": {
@@ -59,8 +65,11 @@
    "phase": 1,
    "price": {
     "capped": true,
-    "high_usd": 0.05,
-    "low_usd": 0
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
    },
    "reads": [],
    "routes": {
@@ -100,8 +109,11 @@
    "phase": 1,
    "price": {
     "capped": true,
-    "high_usd": 0.05,
-    "low_usd": 0
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 1
    },
    "reads": [],
    "routes": {
@@ -129,7 +141,7 @@
    }
   }
  ],
- "kind": "fx-graph-v1",
+ "kind": "fx-graph-v2",
  "pending": [],
  "problems": [],
  "scopes": [],

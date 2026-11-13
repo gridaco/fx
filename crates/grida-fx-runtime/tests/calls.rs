@@ -60,6 +60,7 @@ fn route(capability: &str, model: &str, provider: &str, high_micros: i64) -> Rou
             by: None,
             tiers: IndexMap::new(),
             capped: false,
+            unknown: false,
         },
         features: Default::default(),
         concurrency: None,

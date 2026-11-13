@@ -216,6 +216,7 @@ struct Invocation<'a> {
     folder: &'a str,
     yes_up_to: Option<&'a str>,
     live: bool,
+    require_estimates: bool,
     /// `--max-usd`.
     max_usd: Option<&'a str>,
     /// The adapter serving `image.generate` on `acme`.
@@ -232,6 +233,7 @@ impl Default for Invocation<'_> {
             folder: "runs/one",
             yes_up_to: None,
             live: false,
+            require_estimates: false,
             max_usd: None,
             adapter: None,
             stand_in: None,
@@ -378,6 +380,7 @@ fn run_in(
         label: invocation.folder.to_string(),
         name: None,
         yes_up_to: invocation.yes_up_to.map(|text| Usd::parse(text).unwrap()),
+        require_estimates: invocation.require_estimates,
         takes_file: format!("workflows/{}.takes.yaml", invocation.target),
         ..RunOptions::default()
     };
@@ -1927,4 +1930,49 @@ fn a_stand_in_run_keeps_to_its_own_store_and_its_own_folders() {
         ))
     );
     assert_eq!(store_files(&store), before);
+}
+
+#[test]
+fn strict_estimates_do_not_require_pricing_for_free_stand_in_work_or_its_expansion() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Free stand-in work
+steps:
+  list:
+    uses: ./nodes/cases.py#count
+    with: {n: 2}
+  draw:
+    for_each: ${{ steps.list.outputs.items.lines }}
+    max: 2
+    uses: fx/image.generate@1
+    with: {prompt: "${{ item }}"}
+"#,
+    )]);
+    std::fs::write(
+        project.root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - {capability: image.generate, route: img-a@acme}\n",
+    )
+    .unwrap();
+    let pictures = Arc::new(Pictures::default());
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            require_estimates: true,
+            stand_in: Some(pictures.clone() as Arc<dyn Answerer>),
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(outcome.ok, "{outcome:?}");
+    assert_eq!(outcome.charged, Usd::ZERO);
+    assert_eq!(pictures.asked.lock().unwrap().len(), 2);
+    let events = project.events("runs/one");
+    assert!(named(&events, "budget_reserved").is_empty());
+    assert!(named(&events, "problem").is_empty());
 }

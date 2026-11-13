@@ -206,7 +206,10 @@ impl Record {
             false,
         )?)
         .map_err(|_| ("invalid_target", "the selected run has no readable plan"))?;
-        if plan.get("kind").and_then(Value::as_str) != Some("fx-graph-v1") {
+        if !matches!(
+            plan.get("kind").and_then(Value::as_str),
+            Some("fx-graph-v1" | "fx-graph-v2")
+        ) {
             return Err((
                 "unsupported_version",
                 "the selected folder does not hold a supported FX run plan",
@@ -1215,6 +1218,7 @@ mod tests {
                 charged_usd: Usd::ZERO,
                 estimate_low: Usd::ZERO,
                 estimate_high: Usd::ZERO,
+                estimate_unpriced_calls: 0,
                 stand_in: false,
                 repeat: None,
             })

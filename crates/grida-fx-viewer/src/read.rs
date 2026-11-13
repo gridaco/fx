@@ -541,7 +541,7 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
     let path = confined_file(root, "plan.json")?;
     let plan = parse_json(&std::fs::read_to_string(path)?)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "plan.json is not valid JSON"))?;
-    if text(&plan, "kind") != Some("fx-graph-v1")
+    if !matches!(text(&plan, "kind"), Some("fx-graph-v1" | "fx-graph-v2"))
         || plan.get("workflow").and_then(|w| text(w, "id")).is_none()
     {
         return Err(io::Error::new(

@@ -56,8 +56,11 @@
    "ceiling_usd": 1,
    "charged_usd": 0,
    "estimate": {
-    "high_usd": 0.15,
-    "low_usd": 0
+    "high_usd": null,
+    "known_high_usd": 0,
+    "known_low_usd": 0,
+    "low_usd": null,
+    "unpriced_calls": 3
    },
    "event": "run_started",
    "plan": "6579807a5020a0ec7e626520b0d91e77ac535bc95db6245d28c89e9a3b62f868",

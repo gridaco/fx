@@ -2,6 +2,7 @@ import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from ".
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { validateViewerApiBase } from "./route";
 import { isSkipReason, type SkipReason } from "./skip";
+import { isPrice, type Price } from "./graph";
 export { VisualPreviewController } from "./visual-preview";
 
 export interface Artifact {
@@ -62,7 +63,7 @@ export interface ViewerRun {
   elapsed_ms?: number;
   /** When its last record was written; an unfinished run has run `elapsed_ms` plus the time since. */
   recorded_at?: string;
-  estimate: { low_usd: number; high_usd: number } | null;
+  estimate: Price | null;
   inputs: Record<string, unknown>;
   outputs: Record<string, unknown>;
   nodes: RunNode[];
@@ -167,9 +168,7 @@ export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
     && nullableNumber(value.charged_usd)
     && (value.elapsed_ms === undefined || (typeof value.elapsed_ms === "number" && value.elapsed_ms >= 0))
     && (value.recorded_at === undefined || utcTimestamp(value.recorded_at))
-    && (value.estimate === null || (record(value.estimate)
-      && typeof value.estimate.low_usd === "number"
-      && typeof value.estimate.high_usd === "number"))
+    && (value.estimate === null || isPrice(value.estimate))
     && record(value.inputs) && record(value.outputs)
     && Array.isArray(value.nodes) && value.nodes.every(node)
     && Array.isArray(value.artifacts) && value.artifacts.every((item) => artifact(item, apiBase))
@@ -189,7 +188,7 @@ export type ViewerView = GraphDocument | ViewerRun;
 
 export function parseViewerView(value: unknown, apiBase = "/api"): ViewerView {
   validateViewerApiBase(apiBase);
-  if (record(value) && value.kind === "fx-graph-v1") return parseGraph(value);
+  if (record(value) && (value.kind === "fx-graph-v1" || value.kind === "fx-graph-v2")) return parseGraph(value);
   return parseViewerRun(value, apiBase);
 }
 

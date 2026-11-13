@@ -1,20 +1,27 @@
 {
  "ceiling_usd": null,
  "estimate": {
-  "high_usd": 6.04,
-  "low_usd": 0.01
+  "high_usd": null,
+  "known_high_usd": 0.04,
+  "known_low_usd": 0.01,
+  "low_usd": null,
+  "unpriced_calls": 4
  },
+ "kind": "fx-price-v2",
  "phases": [
   {
    "calls": [
     5,
     5
    ],
-   "high_usd": 6.04,
-   "low_usd": 0.01,
+   "high_usd": null,
+   "known_high_usd": 0.04,
+   "known_low_usd": 0.01,
+   "low_usd": null,
    "phase": 1,
    "steps": 5,
-   "then": []
+   "then": [],
+   "unpriced_calls": 4
   }
  ]
 }

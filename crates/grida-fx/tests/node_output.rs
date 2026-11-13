@@ -183,7 +183,7 @@ fn assert_kept_apart(output: &Output, captured: &str) {
     );
     assert_eq!(
         lines.last(),
-        Some(&"result    ok   spent $0.00"),
+        Some(&"result    ok   booked $0.00"),
         "{stdout}"
     );
     assert!(!stdout.contains("marker"), "{stdout}");
@@ -355,7 +355,7 @@ fn a_typescript_bodys_output_and_the_engines_share_a_file_whole() {
     for line in MARKERS
         .iter()
         .copied()
-        .chain(["w  \u{b7}  1 phase", "result    ok   spent $0.00"])
+        .chain(["w  \u{b7}  1 phase", "result    ok   booked $0.00"])
     {
         assert_eq!(count(&captured, line), 1, "{line}:\n{captured}");
     }
@@ -489,7 +489,7 @@ fn assert_every_line_whole(
     );
     assert_eq!(
         captured.lines().last(),
-        Some("result    ok   spent $0.00"),
+        Some("result    ok   booked $0.00"),
         "{}",
         &captured[captured.len().saturating_sub(2000)..]
     );
@@ -693,7 +693,7 @@ fn a_non_blocking_stderr_that_falls_behind_while_a_body_reports_progress() {
     );
     assert_eq!(
         stdout.lines().last(),
-        Some("result    ok   spent $0.00"),
+        Some("result    ok   booked $0.00"),
         "{stdout}"
     );
     let mut rounds = std::collections::HashMap::<&str, usize>::new();

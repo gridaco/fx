@@ -237,7 +237,7 @@ fn run_opens_only_when_requested_and_launcher_failure_does_not_fail_execution() 
             std::thread::sleep(Duration::from_millis(10));
         }
         let output = running.output.iter().collect::<Vec<_>>().join("\n");
-        assert!(output.contains("result    ok   spent $0.00"), "{output}");
+        assert!(output.contains("result    ok   booked $0.00"), "{output}");
         if !open {
             assert!(!root.join("opened.json").exists());
         }

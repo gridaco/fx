@@ -14,7 +14,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.ts#answer"]
   mentions:
   - "stand-in  stand_in.ts#answer"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: count.txt
   save: count.txt
 - read: asked.json
@@ -28,7 +28,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/two, --stand-in, "stand_in.ts#answer"]
   mentions:
   - "cached    1 of 1 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
   absent:
   - .fx/cache/files
   - .fx/cache/results

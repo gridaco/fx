@@ -470,6 +470,8 @@ BUILT_IN_ADAPTERS: dict[tuple[str, str, str], tuple[Any, bool]] = {
     ("image.edit", "grok", "fx-grok-image-v1"): ("1", True),
     ("image.generate", "openrouter", "fx-openrouter-image-v1"): ("3", False),
     ("image.edit", "openrouter", "fx-openrouter-image-v1"): ("3", False),
+    ("image.generate", "openrouter", "openrouter-image-discovered-v1"): ("1", False),
+    ("image.edit", "openrouter", "openrouter-image-discovered-v1"): ("1", False),
     ("image.generate", "fal", "fx-fal-image-v1"): ("1", False),
     ("image.edit", "fal", "fx-fal-image-v1"): ("1", False),
 }
@@ -1366,8 +1368,8 @@ class GraphCheck:
         if not isinstance(graph, dict):
             self.fail("the graph is not a JSON object")
             return
-        if graph.get("kind") != "fx-graph-v1":
-            self.fail(f"kind is {graph.get('kind')!r}, expected 'fx-graph-v1'")
+        if graph.get("kind") not in ("fx-graph-v1", "fx-graph-v2"):
+            self.fail(f"kind is {graph.get('kind')!r}, expected 'fx-graph-v1' or 'fx-graph-v2'")
         has_problems = bool(graph.get("problems"))
         instances = graph.get("instances")
         if not isinstance(instances, list):

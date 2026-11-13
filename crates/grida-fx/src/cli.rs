@@ -176,6 +176,15 @@ pub struct LogsArgs {
 /// The common options of the planning verbs, plus the verb-specific flags.
 #[derive(Debug, Args, Clone, Default)]
 pub struct PlanArgs {
+    /// require an applicable cost forecast for uncached paid work
+    #[arg(long)]
+    pub require_estimates: bool,
+    /// Internal SDK envelope: graph, price and resolved model facts from one decision.
+    #[arg(long, hide = true, requires = "json")]
+    pub prepared: bool,
+    /// Internal immutable model facts supplied by a prepared SDK plan.
+    #[arg(long, hide = true, value_name = "FILE")]
+    pub resolved_models: Option<String>,
     /// a workflow file, a workflow id, or a builder file.py:function or file.ts:function
     pub target: String,
     /// inputs YAML; repeatable; later files win
@@ -246,6 +255,12 @@ pub struct LockArgs {
 /// `run`: the planning options, plus the run's own.
 #[derive(Debug, Args, Clone, Default)]
 pub struct RunArgs {
+    /// require an applicable cost forecast for uncached paid work
+    #[arg(long)]
+    pub require_estimates: bool,
+    /// Internal immutable model facts supplied by a prepared SDK plan.
+    #[arg(long, hide = true, value_name = "FILE")]
+    pub resolved_models: Option<String>,
     /// a workflow file, a workflow id, or a builder file.py:function or file.ts:function
     pub target: String,
     /// inputs YAML; repeatable; later files win

@@ -10,7 +10,7 @@
 steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one]
   mentions:
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - argv: [project, runs/one]
   save: project.json
   json: true

@@ -79,8 +79,9 @@ anything is read or sent, naming the templates.
 from the FX release the engine belongs to:
 `https://codeload.github.com/gridaco/fx/tar.gz/v<ENGINE_VERSION>`, the tag's
 gzip-compressed tar archive, whose entries lie under one top-level folder. The
-download is the engine's only network exchange outside a live run's provider
-calls. It goes through the providers' default transport on its download lane
+download and the bounded read-only model lookups in
+[model-selection.md](model-selection.md) §3 are the engine's network exchanges outside a
+live run's provider calls. The template download goes through the providers' default transport on its download lane
 ([adapters.md](adapters.md) §2): no credential, no cookie, the environment's
 proxies, no redirect followed and no retry. Anything but HTTP 200 is refused,
 naming the status, as is a body over 64 MiB. With `GRIDA_FX_NETWORK=off` it is

@@ -1,7 +1,7 @@
 # The Grida FX guide
 
 Grida FX builds generated assets the way a build system builds code: you describe the steps in a
-workflow file, FX plans the run offline with its price, runs only what changed, and keeps every
+workflow file, FX resolves the models and plans the price, runs only what changed, and keeps every
 result with a record of how it was made.
 
 This guide describes FX for the people who use it. The contracts are in [`spec/`](../../spec/),

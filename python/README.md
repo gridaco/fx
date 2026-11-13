@@ -64,20 +64,35 @@ for key, image in result.outputs["images"].items():  # a keyed collection
 missing = result.deliver({"images": "out/{key}.png"})
 ```
 
+Cost forecasts can be unknown: `planned.estimate()` returns `(None, None)` when unpriced
+calls prevent a complete total. `planned.forecast` exposes the known subtotal as
+`known_low_usd` / `known_high_usd` and its missing coverage as `unpriced_calls`.
+`require_estimates=True` asks the engine to refuse uncached paid work without an applicable
+forecast. A route's `cap_usd` is a budget allowance and does not satisfy this option.
+
+An unpriced live call reserves the remaining applicable run/step budget. A provider-reported
+charge releases the unused reservation; an unreported charge consumes it for budget bookkeeping,
+while the actual cost stays unknown. Competing calls wait for temporary reservations to settle.
+An FX reservation controls admission and bookkeeping; the provider may charge more.
+
 - **Targets.** A workflow file, a workflow id, a builder `file.py:function` or `file.ts:function`
   (its arguments as `arguments={"level": "docks"}`, the command line's `--arg`), or a `Plan`. A
   `Workflow` object is refused with `TypeError`: name the builder that returns it.
 - **Options.** `inputs` (a mapping, written to a temporary inputs file in `cwd`, so relative
   paths in it mean what they mean on the command line), `input_files` (`--inputs`), `routes`
-  (`--routes`), `max_usd` (`--max-usd`); `run` adds `live`, `yes_up_to` and one of
+  (`--routes`), `max_usd` (`--max-usd`), `require_estimates` (`--require-estimates`); `run` adds `live`, `yes_up_to` and one of
   `name` (create-only), `resume` (require-existing) or `run_dir` (explicit-folder create/resume). `cwd` is
   the engine's working directory (default: the current one); every relative path is relative to
   it. A `Plan` takes no planning options when it runs: plan again to change them.
-- **`plan`** asks the engine for the plan (`grida-fx plan --json`) and its price (`grida-fx
-  price`). `Plan.document` is the fx-graph-v1 document; `ok`, `problems` (`where`, `message`),
-  `estimate()` and `phases()` read it. Planning never spends.
-- **`run`** plans first, and raises `PlanRefused` (`the plan is refused:` and one line per
-  problem) before any run folder exists. A failed step does not raise: check `result.ok` and
+- **`plan`** gets the graph and price from one engine invocation. `Plan.document` is the
+  fx-graph-v1 or fx-graph-v2 document; `ok`, `problems` (`where`, `message`), `estimate()` and `phases()` read it.
+  A new `run(plan)` reuses the resolved model facts from that plan; authored project
+  configuration is still checked again. Planning never spends.
+- **`run`** plans new runs first, and raises `PlanRefused` (`the plan is refused:` and one line
+  per problem) before any run folder exists. Named resumes and existing `run_dir` folders are
+  planned directly by the engine using their recorded model facts, including when passed a
+  `Plan`; an engine refusal raises
+  `FxError` with its explanation. A failed step does not raise: check `result.ok` and
   `result.failed`. The result is read from the run folder's `events.jsonl`: `ok`, `incomplete`,
   `cost` (the folder's charge over every invocation, in US dollars), `run_dir`, `failed`,
   `failures`, `stopped`, `stand_in`, `outputs` and `steps`.

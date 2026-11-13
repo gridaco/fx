@@ -1359,3 +1359,19 @@ async fn the_layout_route_serves_automatic_cells_for_a_plan_and_a_run() {
     assert_eq!(captured["layout"], report);
     assert_eq!(captured["layout"]["cursor"], captured["cursor"]);
 }
+
+#[test]
+fn static_unknown_forecast_uses_version_two_and_preserves_partial_totals() {
+    let mut graph = static_plan();
+    graph["kind"] = json!("fx-graph-v2");
+    let price = json!({"low_usd":null,"high_usd":null,"known_low_usd":0.12,"known_high_usd":0.12,"unpriced_calls":1});
+    graph["instances"][0]["price"] = price.clone();
+    graph["estimate"] = price;
+    graph["estimate"]["ceiling_usd"] = json!(3);
+    assert!(plan_source(graph.clone()).is_ok());
+    graph["kind"] = json!("fx-graph-v1");
+    assert!(
+        plan_source(graph).is_err(),
+        "old format cannot silently misread a subtotal as total"
+    );
+}

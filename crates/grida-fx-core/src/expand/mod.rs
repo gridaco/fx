@@ -117,6 +117,8 @@ pub struct CallPrice {
     pub high: Usd,
     /// The route is capped: `low` counts nothing for these calls, and `high` their caps.
     pub capped: bool,
+    /// No per-call allowance or forecast was supplied.
+    pub unknown: bool,
 }
 
 /// One node type run once, at one take, in one repeat position.
@@ -193,6 +195,39 @@ impl Instance {
         self.prices.iter().map(|p| p.high).sum()
     }
 
+    /// Forecastable calls only; allowances do not predict a bill.
+    pub fn forecast_low(&self) -> Usd {
+        self.prices
+            .iter()
+            .filter(|p| !p.capped && !p.unknown)
+            .map(|p| p.low)
+            .sum()
+    }
+
+    pub fn forecast_high(&self) -> Usd {
+        self.prices
+            .iter()
+            .filter(|p| !p.capped && !p.unknown)
+            .map(|p| p.high)
+            .sum()
+    }
+
+    pub fn unknown_calls(&self) -> u64 {
+        self.prices
+            .iter()
+            .filter(|p| p.unknown)
+            .map(|p| u64::from(p.calls))
+            .sum()
+    }
+
+    pub fn unpriced_calls(&self) -> u64 {
+        self.prices
+            .iter()
+            .filter(|p| p.capped || p.unknown)
+            .map(|p| u64::from(p.calls))
+            .sum()
+    }
+
     /// Whether any of its calls is on a capped route.
     pub fn capped(&self) -> bool {
         self.prices.iter().any(|p| p.capped)
@@ -217,10 +252,25 @@ pub struct PendingRepeat {
     pub waiting_on: BTreeSet<String>,
     pub per_instance_low: Usd,
     pub per_instance_high: Usd,
+    pub per_instance_known_high: Usd,
+    pub per_instance_unpriced_calls: u64,
+    pub per_instance_unknown_calls: u64,
     pub phase: u32,
 }
 
 impl PendingRepeat {
+    pub fn unknown_calls(&self) -> u64 {
+        self.per_instance_unknown_calls
+            .saturating_mul(u64::from(self.max))
+    }
+    pub fn forecast_high(&self) -> Usd {
+        self.per_instance_known_high.times(u64::from(self.max))
+    }
+    pub fn unpriced_calls(&self) -> u64 {
+        self.per_instance_unpriced_calls
+            .saturating_mul(u64::from(self.max))
+    }
+
     /// `max × per-instance high`.
     pub fn high(&self) -> Usd {
         self.per_instance_high.times(self.max as u64)

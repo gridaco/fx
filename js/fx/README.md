@@ -116,11 +116,27 @@ console.log(result.ok, result.chargedUsd, result.failed);
 const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 ```
 
-- `plan(target, options)`: the expanded graph (`plan.graph`, fx-graph-v1) and its price
-  (`plan.price`), with `ok`, `problems`, `estimate` and `phases`.
+Cost forecasts can be unknown. `planned.estimate.lowUsd` and `highUsd` are `null` when
+unpriced calls prevent a complete total. `planned.forecast` also exposes `knownLowUsd`,
+`knownHighUsd` and `unpricedCalls`; these describe the priced subtotal and its missing coverage.
+`requireEstimates: true` asks the engine to refuse uncached paid work without an applicable
+forecast. A route's `cap_usd` is a budget allowance and does not satisfy this option.
+
+An unpriced live call reserves the remaining applicable run/step budget. A provider-reported
+charge releases the unused reservation; an unreported charge consumes it for budget bookkeeping,
+while the actual cost stays unknown. Competing calls wait for temporary reservations to settle.
+An FX reservation controls admission and bookkeeping; the provider may charge more.
+
+- `plan(target, options)`: the expanded graph (`plan.graph`, fx-graph-v1 or fx-graph-v2) and its price
+  (`plan.price`), with `ok`, `problems`, `estimate` and `phases`, from one engine invocation.
+  A new `run(plan)` reuses its resolved model facts; authored project configuration
+  is still checked again.
 - `expand`, `identity`, `price`: the documents of `grida-fx expand`, `identity` and `price`.
-- `run(target | plan, options)`: plans first (a plan with problems rejects with `PlanRefused`),
+- `run(target | plan, options)`: plans new runs first (problems reject with `PlanRefused`),
   runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`.
+  Named resumes and existing `runDir` folders are planned directly by the engine using their
+  recorded model facts, including when passed a `Plan`; an engine refusal rejects with
+  `FxError` and its explanation.
   A failed step does not reject.
 - `project(runDir)` and `inspect(runOrWorkflowId, { verify })`: a run's record and summary.
 - `loadRun(target, { verify })`: a `RunRecord` with a pinned absolute `runDir` and
@@ -145,7 +161,7 @@ const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 
 A target is a workflow file, a workflow id, or a builder: `file.ts:function`
 ([Builders](#builders)) or `file.py:function`. Options: `inputs` (values), `inputFiles`,
-`routes`, `args` (a builder's arguments), `maxUsd`, `cwd`, `env` (for example `GRIDA_FX_PYTHON`
+`routes`, `args` (a builder's arguments), `maxUsd`, `requireEstimates`, `cwd`, `env` (for example `GRIDA_FX_PYTHON`
 or `GRIDA_FX_NODE`) and `signal` (an `AbortSignal`); `run` also takes `live`, `yesUpTo`,
 `deliver`, `standIn` (a function that answers the run's paid calls, [Stand-ins](#stand-ins)), and
 one of `name` (create-only), `resume` (require-existing), or `runDir` (explicit-folder

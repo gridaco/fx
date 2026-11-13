@@ -30,6 +30,7 @@ tempfile.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 # `testing::write_program` for tests that start a program they wrote.
 grida-fx-providers = { workspace = true, features = ["testing"] }
 jsonschema.workspace = true

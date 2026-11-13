@@ -14,8 +14,9 @@
  *   {@link PlanRefused}. A failed step does not reject: read `result.ok` and `result.failed`.
  */
 
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type {
   Encoded,
   FileRef,
@@ -48,13 +49,15 @@ import type { JsonValue } from "./workflow.js";
 const RUN_LINE = "run       ";
 /** How the engine says it would not start a run (on stdout, exit status 1). */
 const REFUSED = "refused: ";
+/** Serialized privately so changing the public graph cannot change prepared model facts. */
+const resolvedModels = new WeakMap<Plan, string>();
 
 // ------------------------------------------------------------------------------------------------
 // Plans
 
 /** A plan the engine made: the expanded graph and its price. */
 export class Plan {
-  /** The expanded graph (fx-graph-v1), as `grida-fx plan --json` prints it. */
+  /** The expanded graph (fx-graph-v1 or fx-graph-v2), as `grida-fx plan --json` prints it. */
   readonly graph: Graph;
   /** The price by phase, as `grida-fx price` prints it. */
   readonly price: Price;
@@ -80,13 +83,25 @@ export class Plan {
     }));
   }
 
-  /** What the run may spend on what is not cached, and its ceiling, in US dollars. */
-  get estimate(): { lowUsd: number; highUsd: number; ceilingUsd: number | null } {
-    const estimate = this.graph.estimate;
+  /** The total forecast; null amounts mean it includes unpriced calls. */
+  get estimate(): { lowUsd: number | null; highUsd: number | null; ceilingUsd: number | null } {
+    const estimate = this.price.estimate ?? this.graph.estimate;
     return {
-      lowUsd: Number(this.price.estimate?.low_usd ?? estimate?.low_usd ?? 0),
-      highUsd: Number(this.price.estimate?.high_usd ?? estimate?.high_usd ?? 0),
-      ceilingUsd: this.price.ceiling_usd ?? estimate?.ceiling_usd ?? null,
+      lowUsd: estimate.low_usd,
+      highUsd: estimate.high_usd,
+      ceilingUsd: this.price.ceiling_usd ?? this.graph.estimate.ceiling_usd,
+    };
+  }
+
+  /** Forecast coverage and the known subtotal; allowances never stand in for a bill. */
+  get forecast(): { lowUsd: number | null; highUsd: number | null; knownLowUsd: number | null; knownHighUsd: number | null; unpricedCalls: number } {
+    const estimate = this.price.estimate ?? this.graph.estimate;
+    return {
+      lowUsd: estimate.low_usd,
+      highUsd: estimate.high_usd,
+      knownLowUsd: estimate.known_low_usd ?? estimate.low_usd,
+      knownHighUsd: estimate.known_high_usd ?? estimate.high_usd,
+      unpricedCalls: estimate.unpriced_calls ?? 0,
     };
   }
 
@@ -114,7 +129,7 @@ export class PlanRefused extends FxError {
   }
 }
 
-/** `grida-fx expand`: the expanded graph (fx-graph-v1), with `problems`. Never spends. */
+/** `grida-fx expand`: the expanded graph (fx-graph-v1 or fx-graph-v2), with `problems`. Never spends. */
 export async function expand(target: string, options: PlanOptions = {}): Promise<Graph> {
   return planningDocument<Graph>("expand", makeRequest(target, options), options.signal);
 }
@@ -129,16 +144,88 @@ export async function price(target: string, options: PlanOptions = {}): Promise<
   return planningDocument<Price>("price", makeRequest(target, options), options.signal);
 }
 
-/** Expands, checks and prices `target` (`grida-fx plan --json` and `price`). Never spends;
+/** Expands, checks and prices `target` in one engine invocation. Never spends;
  * `plan.problems` says what is wrong. */
 export async function plan(target: string, options: PlanOptions = {}): Promise<Plan> {
   return planRequest(makeRequest(target, options), options.signal);
 }
 
-async function planRequest(request: PlanRequest, signal: AbortSignal | undefined): Promise<Plan> {
-  const graph = await planningDocument<Graph>("plan", request, signal, ["--json"]);
-  const priced = await planningDocument<Price>("price", request, signal);
-  return new Plan(graph, priced, request);
+async function planRequest(
+  request: PlanRequest,
+  signal: AbortSignal | undefined,
+  models: string | undefined = undefined,
+): Promise<Plan> {
+  const prepared = await withResolvedModels(models, (modelsFile) =>
+    planningDocument<Record<string, unknown>>("plan", request, signal, [
+      "--json",
+      "--prepared",
+      ...(modelsFile === null ? [] : [`--resolved-models=${modelsFile}`]),
+    ]),
+  );
+  const object = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  const amount = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const range = (value: unknown): boolean => object(value) && (
+    amount(value.low_usd) && amount(value.high_usd) && value.low_usd <= value.high_usd
+      && value.unpriced_calls === undefined && value.known_low_usd === undefined && value.known_high_usd === undefined
+    || value.low_usd === null && value.high_usd === null
+      && amount(value.known_low_usd) && amount(value.known_high_usd) && value.known_low_usd <= value.known_high_usd
+      && typeof value.unpriced_calls === "number" && Number.isSafeInteger(value.unpriced_calls) && value.unpriced_calls > 0
+  );
+  const ceiling = (value: unknown): boolean => value === null || amount(value);
+  if (
+    prepared.kind !== "fx-prepared-plan-v1" ||
+    !object(prepared.graph) || (prepared.graph.kind !== "fx-graph-v1" && prepared.graph.kind !== "fx-graph-v2") ||
+    !object(prepared.graph.workflow) || typeof prepared.graph.workflow.id !== "string" ||
+    typeof prepared.graph.workflow.title !== "string" ||
+    !Array.isArray(prepared.graph.instances) || !Array.isArray(prepared.graph.pending) ||
+    !Array.isArray(prepared.graph.problems) || !prepared.graph.problems.every((problem) =>
+      object(problem) && typeof problem.where === "string" && typeof problem.message === "string") ||
+    !object(prepared.graph.estimate) || !range(prepared.graph.estimate) ||
+    prepared.graph.kind === "fx-graph-v1" && prepared.graph.estimate.low_usd === null ||
+    !ceiling(prepared.graph.estimate.ceiling_usd) ||
+    !object(prepared.price) || !range(prepared.price.estimate) ||
+    object(prepared.price.estimate) && prepared.price.estimate.low_usd === null && prepared.price.kind !== "fx-price-v2" ||
+    !ceiling(prepared.price.ceiling_usd) || !Array.isArray(prepared.price.phases) ||
+    !prepared.price.phases.every(range) || !object(prepared.resolved_models) ||
+    prepared.resolved_models.fx !== "routes/v1" || !Array.isArray(prepared.resolved_models.routes)
+  ) {
+    throw new FxError("grida-fx plan returned an invalid prepared plan");
+  }
+  const planned = new Plan(
+    prepared.graph as unknown as Graph,
+    prepared.price as unknown as Price,
+    request,
+  );
+  resolvedModels.set(planned, JSON.stringify(prepared.resolved_models));
+  return planned;
+}
+
+async function mayExist(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    // The engine owns diagnostics for an inaccessible or otherwise invalid existing path.
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+}
+
+async function withResolvedModels<T>(
+  models: string | undefined,
+  work: (modelsFile: string | null) => Promise<T>,
+): Promise<T> {
+  if (models === undefined) return work(null);
+  // Model facts contain no relative file references; keep them off the source tree.
+  const directory = await mkdtemp(join(tmpdir(), "grida-fx-models-"));
+  const path = join(directory, "models.json");
+  try {
+    await writeFile(path, models, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    return await work(path);
+  } finally {
+    await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 async function planningDocument<T>(
@@ -250,7 +337,7 @@ export class RunResult {
     return finished === undefined ? true : finished.incomplete === true;
   }
 
-  /** What the run folder has been charged, in US dollars, over every invocation. */
+  /** Budget booked in US dollars over every invocation; unreported charges consume their reservations. */
   get chargedUsd(): number {
     return Number(this.inspection.run?.charged_usd ?? this.finished?.charged_usd ?? 0);
   }
@@ -335,9 +422,11 @@ const RUN_ONLY: readonly string[] = [
 ];
 
 /**
- * Runs `target`, or a plan, after planning it: a plan with problems rejects with
+ * Starts a new run of `target`, or a plan, after planning it: a plan with problems rejects with
  * {@link PlanRefused} before any folder exists. `live: true` admits paid calls, within a
  * ceiling. Then reads the folder back through `grida-fx project` and `inspect --json`.
+ * A named resume or existing explicit folder is planned directly by the engine using its
+ * recorded model facts; an engine refusal rejects with {@link FxError}.
  *
  * With `standIn`, the function answers the run's paid calls (`spec/protocol.md` §5.7): it is
  * served in this process, over a socket that is the engine's standard input, and the run is not
@@ -365,17 +454,26 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   const own = runArgs(options);
   const signal = options.signal;
   const answerer = options.standIn === undefined ? null : new Answerer(options.standIn);
-  // A stand-in run plans nothing first: the run plans, and refuses problems.
-  const planned =
-    target instanceof Plan ? target : answerer === null ? await planRequest(request, signal) : null;
+  const resuming = options.resume !== undefined ||
+    (options.runDir !== undefined && await mayExist(resolve(request.cwd, options.runDir)));
+  // The CLI loads recorded model facts before planning an existing run.
+  const planned = resuming ? null
+    : target instanceof Plan ? target : answerer === null ? await planRequest(request, signal) : null;
   if (planned !== null && !planned.ok) {
     throw new PlanRefused(planned);
   }
-  const done = await withInputsFile(request, (inputsFile) => {
-    const args = ["run", ...planningArgs(request, inputsFile), ...own, "--no-view"];
-    const given = callOptions(request, signal);
-    return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
-  });
+  const models = planned === null ? undefined
+    : resolvedModels.get(planned) ?? '{"fx":"routes/v1","routes":[]}';
+  const done = await withResolvedModels(models, (modelsFile) =>
+    withInputsFile(request, (inputsFile) => {
+      const args = [
+        "run", ...planningArgs(request, inputsFile), ...own, "--no-view",
+        ...(modelsFile === null ? [] : [`--resolved-models=${modelsFile}`]),
+      ];
+      const given = callOptions(request, signal);
+      return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
+    }),
+  );
   const fault = answerer?.fault;
   if (fault !== null && fault !== undefined) {
     throw fault.error;
@@ -406,7 +504,8 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
         args: done.args,
       });
     }
-    const replanned = await planRequest(request, signal);
+    if (resuming) throw failure("run", done);
+    const replanned = await planRequest(request, signal, models);
     if (!replanned.ok) {
       throw new PlanRefused(replanned);
     }

@@ -171,7 +171,7 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &env,
     ));
     let adapters = adapter_lines(&mut project, &mut host);
-    let providers = Providers::of(&project, &env, adapters)?;
+    let mut providers = Providers::of(&project, &env, adapters)?;
     let mut registry = Registry::new(
         home.root.clone(),
         home.document.sources.clone(),
@@ -190,6 +190,8 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &mut Vec::new(),
         &mut used,
     );
+    let preparation =
+        crate::models::prepare_used(&project, &mut providers.catalog, &used, None, false, &env);
     let (uses, unservable) = uses_lines(
         &used,
         &providers.catalog,
@@ -211,6 +213,10 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     }
     providers.print();
     let mut missing = usize::from(providers.refused);
+    if let Err(error) = preparation {
+        print_line(&labelled("models", &error.message));
+        missing += 1;
+    }
     let mut lines = Vec::new();
     let mut seen = HashSet::new();
     for step in all_steps(&workflow.workflow.steps) {
@@ -246,12 +252,12 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
 
 /// The capability a paid step calls and the route id chosen for it (`None`: no route), with the
 /// number of steps (module doc, "The target's routes").
-type UsedRoutes = BTreeMap<(String, Option<RouteSelection>), usize>;
+pub(crate) type UsedRoutes = BTreeMap<(String, Option<RouteSelection>), usize>;
 
 /// Counts into `used` the routes the paid steps of `steps` use, entering used workflows
 /// (`within` holds the ones being visited). A node type that does not resolve, for whatever
 /// reason, is skipped: the node-type lines after the keys report it.
-fn used_routes(
+pub(crate) fn used_routes(
     steps: &Steps,
     registry: &mut Registry,
     host: &mut dyn NodeHost,
@@ -346,7 +352,9 @@ fn uses_lines(
                         }
                         (text, served)
                     }
-                    Err(_) if selection.is_qualified() => {
+                    Err(message)
+                        if selection.is_qualified() && message.starts_with("no route ") =>
+                    {
                         (format!("{} not in the catalog", selection.selector), false)
                     }
                     Err(message) => (message, false),

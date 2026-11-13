@@ -519,6 +519,56 @@ fn integrated_doctor_names_the_planning_projects_interpreter_after_the_homes() {
 }
 
 #[test]
+fn integrated_doctor_keeps_diagnostics_when_model_preparation_refuses_configuration() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroutes:\n  image.generate: acme/image-next\nprovider_preferences:\n  image.generate: openrouter\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Diagnostic fixture\nsteps:\n  draw:\n    uses: fx/image.generate@1\n    with: {prompt: a copper lantern}\n",
+    )
+    .unwrap();
+    for bad_dotenv in [true, false] {
+        let mut cmd = command(root, &["doctor", "case"]);
+        if bad_dotenv {
+            std::fs::write(
+                root.join(".env"),
+                "OPENROUTER_API_KEY=fx-private-first\nOPENROUTER_API_KEY=fx-private-second\n",
+            )
+            .unwrap();
+            cmd.env_remove("GRIDA_FX_DISABLE_DOTENV");
+        } else {
+            cmd.env("OPENROUTER_BASE_URL", "not-a-valid-url");
+        }
+        let output = cmd.output().unwrap();
+        assert_eq!(status(&output), 1, "{}", stderr(&output));
+        let text = stdout(&output);
+        for prefix in [
+            "engine    ",
+            "uses      image.generate ",
+            "routing   ",
+            "keys      ",
+            "key       OPENROUTER_API_KEY ",
+            "program   ",
+            "route     ",
+            "models    ",
+        ] {
+            assert!(
+                text.lines().any(|line| line.starts_with(prefix)),
+                "missing {prefix:?}: {text}"
+            );
+        }
+        assert!(!text.contains("fx-private-first"));
+        assert!(!text.contains("fx-private-second"));
+        assert!(stderr(&output).is_empty(), "{}", stderr(&output));
+    }
+}
+
+#[test]
 fn integrated_a_model_fx_does_not_list_plans_and_doctor_serves_it() {
     // Made-up models on providers FX speaks, each with a cap: the providers' default adapters
     // serve them (spec/providers.md §2), and a contract naming an adapter FX does not have is
@@ -1729,7 +1779,7 @@ fn integrated_plan_text_of_tiered_price() {
     );
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert!(stdout(&output).ends_with(
-        "estimate  $2.61 – $8.36   ceiling $1.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it\n"
+        "estimate  $2.61 – $8.36   ceiling $1.00   ⚠ the estimate exceeds the ceiling; calls require available budget\n"
     ));
 }
 
@@ -2484,7 +2534,7 @@ fn integrated_inspect_of_a_hand_written_run() {
     let (folder, digest) = hand_made_run(project.path(), "runs/case/one");
     let expected = "case  ·  one\n\
                     state     failed   2 steps: 1 failed, 1 succeeded\n\
-                    spent     $0.04\n\
+                    booked    $0.04\n\
                     failed    other#1: refused on purpose\n";
     for given in ["runs/case/one", "case"] {
         let output = grida_fx(project.path(), &["inspect", given]);
@@ -2840,7 +2890,7 @@ fn integrated_a_live_call_without_its_key_is_refused_for_nothing() {
     assert_eq!(status(&output), 1, "{}{}", stdout(&output), stderr(&output));
     let text = stdout(&output);
     assert!(
-        text.contains("\nresult    failed   spent $0.00\n"),
+        text.contains("\nresult    failed   booked $0.00\n"),
         "{text}"
     );
     // Refused before sending (capability_refused), so settled at $0.
@@ -2885,7 +2935,7 @@ fn integrated_a_live_call_with_the_network_off_sends_nothing() {
     assert_no_key(&output);
     let text = stdout(&output);
     assert!(
-        text.contains("\nresult    failed   spent $0.00\n"),
+        text.contains("\nresult    failed   booked $0.00\n"),
         "{text}"
     );
     let failed = text
@@ -2985,7 +3035,7 @@ fn integrated_run_replays_a_recorded_call_and_delivers_it() {
     let text = stdout(&output);
     assert!(
         text.ends_with(
-            "run       runs/one\nresult    ok   spent $0.00\ndelivered out/lantern.png\n"
+            "run       runs/one\nresult    ok   booked $0.00\ndelivered out/lantern.png\n"
         ),
         "{text}"
     );
@@ -3121,7 +3171,7 @@ fn integrated_run_project_end_to_end() {
     ];
     let output = grida_fx_with_python(project.path(), &python, &run);
     assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
-    assert!(stdout(&output).ends_with("run       runs/one\nresult    ok   spent $0.00\n"));
+    assert!(stdout(&output).ends_with("run       runs/one\nresult    ok   booked $0.00\n"));
     assert_eq!(
         std::fs::read_to_string(project.path().join("runs/one/outputs/all.txt")).unwrap(),
         "ada=ADA|bo=BO"
@@ -3460,7 +3510,7 @@ fn integrated_a_stand_in_on_standard_input_answers_the_run() {
     );
     let text = stdout(&output);
     assert!(text.contains("run       runs/one\nstand-in  -\n"), "{text}");
-    assert!(text.contains("result    ok   spent $0.00"), "{text}");
+    assert!(text.contains("result    ok   booked $0.00"), "{text}");
     // Kept apart: the stand-in store has the answer, the store has nothing.
     let store = project.path().join(".fx/cache");
     assert!(store.join("stand-in/calls").is_dir());

@@ -102,7 +102,7 @@ use dispatch::Done;
 use grida_fx_core::Error;
 use grida_fx_core::error::{ErrorKind, Problem, io_reason, unique};
 use grida_fx_core::expand::{ExpandEnv, Expansion, Instance, ResultStatus, State};
-use grida_fx_core::host::NodeHost;
+use grida_fx_core::host::{NodeHost, ResultCache};
 use grida_fx_core::money::Usd;
 use grida_fx_core::plan::Plan;
 use grida_fx_core::plan::output::pending_document;
@@ -128,6 +128,8 @@ pub struct RunOptions {
     pub name: Option<String>,
     /// `--yes-up-to`.
     pub yes_up_to: Option<Usd>,
+    /// Require applicable forecasts for uncached chargeable work, including new expansions.
+    pub require_estimates: bool,
     /// The workflow's takes file, project-relative (recorded in `plan.json`).
     pub takes_file: String,
     /// The folder holds a run already (`--resume`): one removed in the meantime is refused, never
@@ -139,6 +141,8 @@ pub struct RunOptions {
     /// `run_started`'s `repeat` (spec/store.md §8, "Repeating a run"): the arguments that repeat
     /// this invocation's run, when it has them.
     pub repeat: Option<serde_json::Value>,
+    /// Sanitized discovered route facts, independently retained for offline recovery.
+    pub resolved_models: Option<serde_json::Value>,
 }
 
 /// How an invocation ended.
@@ -231,7 +235,8 @@ fn ceiling(plan: &Plan, live: bool) -> Option<Usd> {
 /// instance on a provider whose adapters bill a plan (`plan_providers`, from the registry). Prices
 /// alone do not say it: a project's route table can price any route at $0.
 fn on_the_users_plan(plan: &Plan, plan_providers: &BTreeSet<String>) -> bool {
-    plan.estimate().high == Usd::ZERO
+    plan.unpriced_calls() == 0
+        && plan.estimate().high == Usd::ZERO
         && plan.live().all(|instance| {
             instance
                 .routes
@@ -420,12 +425,27 @@ fn invoke(
     engine: &Arc<Engine>,
     planner: &mut Planner,
     host: &mut dyn NodeHost,
-    plan: Plan,
+    mut plan: Plan,
     options: &RunOptions,
     ready: impl FnOnce(&ReadyRun, &Arc<RunControl>),
 ) -> Result<RunOutcome, RunError> {
     let env = |name: &str| std::env::var(name).ok();
     let plan_providers = engine.adapters.plan_providers();
+    let normalize_plan_routes = planner
+        .routes
+        .entries
+        .values()
+        .any(|route| route.price.unknown && plan_providers.contains(&route.provider));
+    planner.routes.apply_plan_billing(&plan_providers);
+    // Refresh aggregate pending-repeat forecasts when a direct runtime caller planned before
+    // trusted adapter billing was injected. Route/call identities do not include prices.
+    if normalize_plan_routes {
+        plan.expansion = expand(planner, host).map_err(RunError::Fatal)?;
+    }
+    plan.apply_plan_billing(&plan_providers);
+    if options.require_estimates && !engine.stand_in_run() {
+        plan.require_estimates();
+    }
     if let Some(refused) = refusal(&plan, engine.live, &plan_providers, &env) {
         return Err(RunError::Refused(refused));
     }
@@ -563,6 +583,7 @@ fn invoke(
         charged_usd: scheduler.ledger.charged(),
         estimate_low: estimate.low,
         estimate_high: estimate.high,
+        estimate_unpriced_calls: estimate.unpriced_calls,
         stand_in: engine.stand_in_run(),
         repeat: options.repeat.clone(),
     };
@@ -711,6 +732,23 @@ fn prepare(
     folder.write_plan_once(&document).map_err(|error| {
         RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
     })?;
+    if let Some(models) = &options.resolved_models {
+        let path = folder.path.join("resolved-models.json");
+        // Keep the original facts. Current configuration is still replanned and checked above.
+        if !path.exists() {
+            crate::store::atomic_write(
+                &path,
+                &serde_json::to_vec(models).expect("model facts are JSON"),
+                true,
+            )
+            .map_err(|error| {
+                RunError::Fatal(Error::io(
+                    &in_folder(&options.label, "resolved-models.json"),
+                    &error,
+                ))
+            })?;
+        }
+    }
     Ok((folder, prior))
 }
 
@@ -972,6 +1010,27 @@ impl Scheduler<'_> {
                 Some(expansion) => expansion,
                 None => expand(self.planner, self.host)?,
             };
+            if self.options.require_estimates && !self.engine.stand_in_run() {
+                let strict = Plan {
+                    expansion: expansion.clone(),
+                    problems: Vec::new(),
+                    ceiling: self.ledger.ceiling(),
+                    cached: expansion
+                        .ordered()
+                        .filter(|instance| self.engine.store.has_result(instance))
+                        .map(|instance| instance.id.clone())
+                        .collect(),
+                };
+                let mut strict = strict;
+                strict.require_estimates();
+                if let Some(problem) = strict.problems.first() {
+                    self.emit(&Event::Problem {
+                        where_: problem.where_.clone(),
+                        message: problem.message.clone(),
+                    })?;
+                    return Ok(Some(problem.to_string()));
+                }
+            }
             self.emit_scopes(&expansion)?;
             if !expansion.problems.is_empty() {
                 let problems = unique(expansion.problems);
@@ -1004,11 +1063,10 @@ impl Scheduler<'_> {
                 // What reads them settles once they are known.
                 continue;
             }
-            let check = self.gate.check(
+            let check = self.gate.check_with_ledger(
                 &expansion,
                 &self.planner.results,
-                self.ledger.charged(),
-                self.ledger.held(),
+                &self.ledger,
                 self.options.yes_up_to,
             );
             for planned in &check.planned {
@@ -1648,6 +1706,7 @@ while (message := read()) is not None:
                     label: "runs/one".into(),
                     name: None,
                     yes_up_to: None,
+                    require_estimates: false,
                     takes_file: String::new(),
                     ..RunOptions::default()
                 },
@@ -1761,6 +1820,7 @@ while (message := read()) is not None:
                 label: "runs/one".into(),
                 name: None,
                 yes_up_to: None,
+                require_estimates: false,
                 takes_file: String::new(),
                 ..RunOptions::default()
             },
@@ -1797,6 +1857,7 @@ while (message := read()) is not None:
                 label: "runs/refused".into(),
                 name: None,
                 yes_up_to: None,
+                require_estimates: false,
                 takes_file: String::new(),
                 ..RunOptions::default()
             },
@@ -1896,6 +1957,7 @@ while (message := read()) is not None:
             low: Usd::ZERO,
             high: Usd::parse("0.5").unwrap(),
             capped: false,
+            unknown: false,
         }];
         let tooled = vec![priced];
         assert_eq!(
@@ -1982,6 +2044,32 @@ while (message := read()) is not None:
             super::ceiling(&plan(Vec::new(), Vec::new(), ceiling_1()), true),
             ceiling_1()
         );
+    }
+
+    #[test]
+    fn an_omitted_price_on_a_trusted_plan_provider_needs_neither_estimate_nor_usd_ceiling() {
+        let document = grida_fx_core::yaml::load(
+            b"fx: routes/v1\nroutes:\n  - capability: image.generate\n    route: m@codex\n",
+            "routes.yaml",
+        )
+        .unwrap();
+        let routes =
+            grida_fx_core::routes::RouteTable::from_document(&document, "routes.yaml").unwrap();
+        let route = routes.entries.values().next().unwrap().clone();
+        let mut drawn = instance("draw#1", "draw", &[], State::Planned);
+        drawn.prices = vec![grida_fx_core::expand::bind::call_price(
+            &route,
+            &IndexMap::new(),
+            1,
+        )];
+        drawn.routes.insert("image.generate".into(), route);
+        let mut planned = plan(vec![drawn], Vec::new(), None);
+        planned.apply_plan_billing(&plan_billed());
+        planned.require_estimates();
+        assert!(planned.ok());
+        assert_eq!(planned.unpriced_calls(), 0);
+        assert_eq!(refusal(&planned, true, &plan_billed(), &|_| None), None);
+        assert_eq!(super::ceiling(&planned, true), Some(Usd::ZERO));
     }
 
     /// The providers a live run's adapters say bill a plan: Codex.

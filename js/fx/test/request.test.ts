@@ -30,6 +30,8 @@ describe("arguments", () => {
     expect(planningArgs(makeRequest("icon", {}), null)).toEqual(["icon"]);
     expect(makeRequest("icon", { cwd: "/work/./x/.." }).cwd).toBe("/work");
     expect(makeRequest("icon", { inputs: {} }).inputs).toBeNull();
+    expect(planningArgs(makeRequest("icon", { requireEstimates: true }), null)).toEqual(["icon", "--require-estimates"]);
+    expect(() => makeRequest("icon", { requireEstimates: 1 as unknown as boolean })).toThrow("requireEstimates is true or false");
   });
 
   test("targets and options of the wrong shape are refused before the engine runs", () => {
@@ -167,6 +169,13 @@ describe("plans", () => {
     expect(planned.estimate).toEqual({ lowUsd: 0.04, highUsd: 0.9, ceilingUsd: 10 });
     expect(planned.phases[0]?.calls).toEqual([1, 3]);
     expect(planned.workflowId).toBe("icon");
+  });
+
+  test("unknown forecast totals remain null and retain their known subtotal", () => {
+    const forecast = { low_usd: null, high_usd: null, known_low_usd: 0.12, known_high_usd: 0.3, unpriced_calls: 2 };
+    const planned = new Plan({ ...graph([]), kind: "fx-graph-v2", estimate: { ...forecast, ceiling_usd: 3 } }, { ...priced, estimate: forecast, ceiling_usd: 3 }, makeRequest("icon", { requireEstimates: true }));
+    expect(planned.estimate).toEqual({ lowUsd: null, highUsd: null, ceilingUsd: 3 });
+    expect(planned.forecast).toEqual({ lowUsd: null, highUsd: null, knownLowUsd: 0.12, knownHighUsd: 0.3, unpricedCalls: 2 });
   });
 
   test("a plan runs with what it was planned with", async () => {

@@ -13,7 +13,7 @@ steps:
 - argv: [run, case, --routes, routes.yaml, --run, runs/one, --stand-in, "stand_in.py#answer"]
   mentions:
   - "stand-in  stand_in.py#answer"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
   absent:
   - .fx/cache/jobs
   - .fx/cache/stand-in/jobs

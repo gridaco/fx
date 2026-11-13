@@ -47,7 +47,8 @@
 //!    same message and the adapter's redacted reason as `reason` in `data`.
 //! 8. the hold: the route's high price for this request (`Route::cost` over the request's members
 //!    as values), reserved per attempt by the retry owner under the run's ceiling and the
-//!    instance's step budgets.
+//!    instance's step budgets. An unpriced route instead holds the remaining applicable
+//!    authorization; temporary occupancy by another attempt is waited for without a route slot.
 //! 9. the retry owner ([`retry`]), with the engine's own check of the capability's answers
 //!    ([`engine_check`]: an `agent.turn` reply must be `{"text", "tool_calls"}`, spec/protocol.md
 //!    §6.2), after the adapter's check and the every-route check ([`checked`]); then the answer's
@@ -183,8 +184,9 @@ impl CallCounter {
         CallCounter::default()
     }
 
-    /// The run's paid calls' cost, for the `cost_usd` fact and the result record: `None` when no
-    /// uncached call was made.
+    /// Budget-booked cost for the legacy `cost_usd` fact/result record; `None` until an
+    /// uncached call was made. This includes conservative reservations when a provider reports
+    /// no charge, so it MUST NOT be presented as a provider-reported invoice total.
     pub fn cost(&self) -> Option<Usd> {
         *self.cost.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -430,6 +432,23 @@ impl HoldBook for Tally<'_> {
             scopes,
             Some(call.to_string()),
         ))
+    }
+
+    fn reserve_unknown_call(
+        &self,
+        node_id: String,
+        scopes: &Scopes,
+        call: &str,
+    ) -> Result<Hold, NotReserved> {
+        self.reserved(self.ledger.reserve_unknown_recorded_for(
+            node_id,
+            scopes,
+            Some(call.to_string()),
+        ))
+    }
+
+    fn changes(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        Some(self.ledger.changes())
     }
 
     fn settle(&self, hold: Hold, reported: Option<Usd>) -> Usd {
@@ -862,6 +881,8 @@ impl Lead<'_> {
                 attempt: 1,
             },
             hold,
+            unknown: route.price.unknown
+                && adapter.billing() == grida_fx_providers::adapter::Billing::Dollars,
             scopes: &site.scopes,
             hold_name: &hold_name,
             // The site's limit (the project's override, else the route's); the route's when the

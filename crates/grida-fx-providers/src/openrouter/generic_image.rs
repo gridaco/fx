@@ -43,6 +43,13 @@ pub const IDENTITY: Identity = Identity {
     behavior: r#""1""#,
 };
 
+/// Metadata-backed standard controls and a fixed single output. The original generic wire is
+/// retained under [`IDENTITY`]; this explicit contract has a separate route fingerprint.
+pub const DISCOVERED_IDENTITY: Identity = Identity {
+    adapter: "openrouter-image-discovered-v1",
+    behavior: r#""1""#,
+};
+
 /// The members provider options may not set (spec/adapters.md §8; src/openrouter/README.md):
 /// every member the body has, and those that would change what the answer holds.
 pub const OWNED: &[&str] = &[
@@ -67,25 +74,110 @@ const CAPABILITIES: [&str; 2] = ["image.generate", "image.edit"];
 #[derive(Debug, Clone)]
 pub struct OpenRouterGenericImages {
     client: Client,
+    discovered: bool,
 }
 
 impl OpenRouterGenericImages {
     pub fn new(client: Client) -> OpenRouterGenericImages {
-        OpenRouterGenericImages { client }
+        OpenRouterGenericImages {
+            client,
+            discovered: false,
+        }
+    }
+
+    /// The separately versioned wire used by routes resolved from provider metadata.
+    pub fn discovered(client: Client) -> OpenRouterGenericImages {
+        OpenRouterGenericImages {
+            client,
+            discovered: true,
+        }
+    }
+
+    fn route_identity(&self) -> Identity {
+        if self.discovered {
+            DISCOVERED_IDENTITY
+        } else {
+            IDENTITY
+        }
+    }
+
+    fn controls<'a>(
+        &self,
+        call: &'a CallRequest,
+    ) -> Result<Option<&'a Map<String, Value>>, String> {
+        if !self.discovered {
+            return Ok(None);
+        }
+        let Some(contract) = call.route.contract.as_object() else {
+            return Err(not_served(call));
+        };
+        if contract.keys().any(|key| {
+            !matches!(
+                key.as_str(),
+                "adapter" | "adapter_behavior" | "provider_options" | "image_controls"
+            )
+        }) {
+            return Err(not_served(call));
+        }
+        let Some(controls) = contract.get("image_controls").and_then(Value::as_object) else {
+            return Err(not_served(call));
+        };
+        if controls.iter().any(|(name, values)| {
+            !matches!(name.as_str(), "size" | "background")
+                || !values
+                    .as_array()
+                    .is_some_and(|values| !values.is_empty() && values.iter().all(Value::is_string))
+        }) {
+            return Err(not_served(call));
+        }
+        Ok(Some(controls))
     }
 
     /// Every refusal of spec/adapters.md §4, in order, then the request to send.
     fn prepare(&self, call: &CallRequest) -> Result<HttpRequest, String> {
         let route = &call.route;
+        let identity = self.route_identity();
         if !CAPABILITIES.contains(&route.capability.as_str())
-            || !serves(&route.contract, CONTRACT_ADAPTER, |v| IDENTITY.behaves(v))
+            || !serves(&route.contract, identity.adapter, |v| identity.behaves(v))
         {
             return Err(not_served(call));
         }
+        let controls = self.controls(call)?;
         crate::capabilities::check_request(&route.capability, &call.request)?;
         let credential = self.client.credential()?;
-        let options = wire::provider_options(call, OWNED)?;
-        let image = wire::generic_image(call, WHO, LABEL, true)?;
+        let mut owned = OWNED.to_vec();
+        if self.discovered {
+            owned.extend(["size", "background"]);
+        }
+        let options = wire::provider_options(call, &owned)?;
+        let image = if self.discovered {
+            wire::generic_image_controls(call, WHO, LABEL, true, true, true)?
+        } else {
+            wire::generic_image(call, WHO, LABEL, true)?
+        };
+
+        let mut sent_controls = Map::new();
+        if let Some(controls) = controls {
+            for name in ["size", "background"] {
+                let Some(value) = call.request.get(name).filter(|value| !value.is_null()) else {
+                    continue;
+                };
+                // `auto` is the standard absence of an exact-size or background request.
+                if value == "auto" {
+                    continue;
+                }
+                if !controls
+                    .get(name)
+                    .and_then(Value::as_array)
+                    .is_some_and(|values| values.contains(value))
+                {
+                    return Err(format!(
+                        "OpenRouter model metadata does not support the requested {name}"
+                    ));
+                }
+                sent_controls.insert(name.into(), value.clone());
+            }
+        }
 
         let mut pictures = Vec::new();
         for (member, value) in &image.pictures {
@@ -103,6 +195,10 @@ impl OpenRouterGenericImages {
         let mut body = Map::new();
         body.insert("model".into(), json!(route.model.trim()));
         body.insert("prompt".into(), json!(image.prompt));
+        if self.discovered {
+            body.insert("n".into(), json!(1));
+            body.extend(sent_controls);
+        }
         if !pictures.is_empty() {
             body.insert("input_references".into(), Value::Array(pictures));
         }
@@ -186,6 +282,10 @@ impl RequestAdapter for OpenRouterGenericImages {
     }
 
     fn identity(&self) -> Option<Identity> {
-        Some(IDENTITY)
+        Some(self.route_identity())
+    }
+
+    fn check_contract(&self, call: &CallRequest) -> Result<(), String> {
+        self.controls(call).map(|_| ())
     }
 }

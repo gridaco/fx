@@ -38,6 +38,7 @@ fn every_event() -> Vec<Event> {
             charged_usd: Usd::ZERO,
             estimate_low: Usd(10_000),
             estimate_high: Usd(40_000),
+            estimate_unpriced_calls: 0,
             stand_in: false,
             repeat: None,
         },
@@ -50,6 +51,7 @@ fn every_event() -> Vec<Event> {
             charged_usd: Usd(40_000),
             estimate_low: Usd::ZERO,
             estimate_high: Usd::ZERO,
+            estimate_unpriced_calls: 0,
             stand_in: true,
             repeat: Some(
                 json!({"file": "workflows/case.yaml", "inputs": ["inputs/a.yaml"],
@@ -934,4 +936,33 @@ fn creation_times_normalize_to_utc_milliseconds() {
             expected
         );
     }
+}
+
+#[test]
+fn an_unknown_run_forecast_records_partial_totals_without_fabricating_a_total() {
+    let mut event = every_event().remove(0);
+    if let Event::RunStarted {
+        estimate_unpriced_calls,
+        ..
+    } = &mut event
+    {
+        *estimate_unpriced_calls = 2;
+    }
+    let fields = Value::Object(event.to_fields());
+    assert_eq!(
+        fields["estimate"],
+        json!({
+            "low_usd":null,"high_usd":null,"known_low_usd":0.01,"known_high_usd":0.04,"unpriced_calls":2,
+        })
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("events.jsonl");
+    let log = EventLog::open(&path, "inv", PLAN).unwrap();
+    log.emit(&event).unwrap();
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../spec/schemas/fx-run-events-v1.schema.json"
+    ))
+    .unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    assert!(validator.is_valid(&lines(&path)[0]));
 }

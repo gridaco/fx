@@ -37,7 +37,7 @@ grida fx plan   rigged-character --brief inputs/wren.md --partition head_body
 rigged-character  ·  1 phase
 phase 1   116 steps   53–367 provider calls   $3.06 – $85.23
 cached    0 of 3 known steps
-estimate  $3.06 – $85.23   ceiling $30.00   ⚠ the worst case exceeds the ceiling; the run stops before crossing it
+estimate  $3.06 – $85.23   ceiling $30.00   ⚠ the estimate exceeds the ceiling; calls require available budget
 ```
 
 Where the worst case comes from, with each route's allowance (an agent turn $0.10, an image

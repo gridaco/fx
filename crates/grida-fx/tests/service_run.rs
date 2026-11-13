@@ -233,7 +233,7 @@ impl Running {
             std::thread::sleep(Duration::from_millis(10));
         }
         let output = self.output.iter().collect::<Vec<_>>().join("\n");
-        assert!(output.contains("result    ok   spent $0.00"), "{output}");
+        assert!(output.contains("result    ok   booked $0.00"), "{output}");
         output
     }
 }

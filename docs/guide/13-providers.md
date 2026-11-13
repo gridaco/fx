@@ -64,8 +64,9 @@ steps when two image calls need different models.
 
 The workflow source project's defaults are overlaid by the project you plan from, independently
 for model choices and provider preferences. This is project configuration, not an operating-system
-home setting. Planning and `doctor` share selection; doctor reports configured readiness,
-not remote model availability. Plan with the actual inputs to check required features and prices.
+home setting. Planning and `doctor <target>` share selection and prepare missing supported image
+bindings; doctor without a target stays local. Metadata is not a provider health check.
+Plan with the actual inputs to check required features and prices.
 Resolving to the same concrete route preserves its call cache. A different model or provider
 changes the plan and cannot silently replace the routing of an existing resumed run.
 
@@ -167,9 +168,32 @@ named another `adapter_behavior`.
 
 ## A model FX does not list
 
-New models arrive faster than FX's built-in table. On a provider FX speaks, a route of your own
-is enough when an existing adapter supports its interface. Name the provider's native model,
-and give a cap when you do not know its price:
+If a selected GG or OpenRouter `image.generate` or `image.edit` binding is missing locally,
+FX reads that provider's metadata before the offline planner runs. It admits the model only
+when the installed adapter supports its image interface and the metadata supports its requested
+features. There is no import or manual synchronization step, and discovery never generates
+an asset or authorizes spending.
+
+Model execution facts and cost forecasts are independent. Compatible metadata resolves with
+unknown cost when no applicable estimate exists. Shipped or authored prices and supported
+flat per-output-image OpenRouter tariffs remain useful forecasts; scenario examples apply
+only when their assumptions fit the request. Use `--require-estimates` to require coverage.
+An explicit `price.cap_usd` remains an optional reservation allowance. Generation still needs
+approval and a ceiling; unpriced calls reserve remaining applicable budget and unreported
+charges book that reservation in full while actual cost stays unknown.
+
+The optional metadata cache under `.fx/models/` is fresh for one hour. With
+`GRIDA_FX_NETWORK=off`, FX sends no lookup and may use older cached metadata. It can also use
+older metadata after a transient lookup failure, but not after an explicit missing-model
+response. Without cached facts or an authored route, a new model cannot resolve offline.
+The cache contains sanitized routes, no keys or raw provider responses. SDK plans retain
+their resolved model data, so running a plan does not depend on this cache or rediscover models.
+
+Your route tables remain authoritative and independent: automatic discovery does not replace
+a binding or run with explicit `--routes`. Other providers and capabilities still use route
+tables. On a provider FX speaks, a route of your own is enough when an existing adapter
+supports its interface. Name the provider's native model, and give a cap when you do not know
+its price:
 
 ```yaml
 # routes/models.yaml, listed under route_tables: in fx.yaml

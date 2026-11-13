@@ -573,12 +573,14 @@ fn plan_kind(folder: &Path) -> PlanFile {
     match fs::read(&path) {
         Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
             Ok(plan)
-                if plan.get("kind").and_then(Value::as_str) == Some("fx-graph-v1")
-                    && plan
-                        .get("workflow")
-                        .and_then(|w| w.get("id"))
-                        .and_then(Value::as_str)
-                        .is_some() =>
+                if matches!(
+                    plan.get("kind").and_then(Value::as_str),
+                    Some("fx-graph-v1" | "fx-graph-v2")
+                ) && plan
+                    .get("workflow")
+                    .and_then(|w| w.get("id"))
+                    .and_then(Value::as_str)
+                    .is_some() =>
             {
                 PlanFile::Graph
             }

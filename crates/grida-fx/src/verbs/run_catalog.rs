@@ -241,7 +241,7 @@ fn read_recorded(folder: &Path) -> Option<RecordedRun> {
         return None;
     }
     let graph: Value = serde_json::from_slice(&bytes).ok()?;
-    if graph.get("kind")?.as_str()? != "fx-graph-v1" {
+    if !["fx-graph-v1", "fx-graph-v2"].contains(&graph.get("kind")?.as_str()?) {
         return None;
     }
     let workflow = graph.get("workflow")?;

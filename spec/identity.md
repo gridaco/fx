@@ -158,6 +158,14 @@ Price, features, input-picture limits, concurrency and pacing are not part of it
 
 A later table's entry for the same capability and route replaces an earlier one, contract included; this is how a project overrides a built-in price. Two entries for the same capability and route within one table are refused.
 
+When a selected image model on a supported provider has no admitted binding, preparation may
+supply a normalized discovered route under [model-selection.md](model-selection.md) §3.
+It does not replace a table entry and is disabled by any explicit `--routes` file. The
+discovered route has the same fingerprint rule and contract completion as an authored route.
+Metadata-source revisions and metadata-cache timestamps are not hashed;
+changes to the resolved native model, provider or completed contract are. An SDK prepared
+plan carries its discovered routes so execution need not rediscover them.
+
 **The contract.** A route's contract is the object its entry declares, `{}` when none, completed when the table is read, in this order:
 
 1. **`extends`.** An entry may name, in `extends`, another route of the same capability and provider, its base. The entry starts from the base's price, features, `max_input_pictures`, `concurrency`, `requests_per_minute` and contract. A member the entry states replaces the base's whole, except `contract`, whose members merge one level deep: a member the entry's contract states replaces the base's member of that name, and the base's other members stay. With a base, `price` may be left out.
@@ -275,7 +283,10 @@ A repeated step's path carries its key in brackets, quoted: `entity['ada'].draw#
 - Engines compute money in whole micro-dollars (integers). Division rounds half to even.
 - Money is written as JSON numbers. `0` and `0.0` are the same value (§1).
 - A tiered price ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `by` and `tiers`) prices a call at the tier its `by` setting names, when that setting is text. A setting that is absent, is not text, is not known to the plan yet, or names no tier prices the call at the route's whole range. A tier outside that range is refused when the route table is read.
-- A capped route ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `cap_usd`) has no known price: it prices each call at $0 to its cap, and each attempt holds the cap ([protocol.md](protocol.md) §6.1 step 6). A price that states no amount, neither `usd`, `low_usd`, `high_usd` nor `cap_usd`, is refused when the route table is read; it is not $0.
+- A capped route ([fx-routes-v1](schemas/fx-routes-v1.schema.json) `cap_usd`) has no known forecast: each attempt reserves its cap ([protocol.md](protocol.md) §6.1). Its cap is an allowance, not an estimated bill.
+- A route without `price` has an unknown forecast. With `extends`, omission inherits the base price; explicit `price: null` clears it. An empty price object is invalid. Unknown forecasts are never zero or infinity.
+- Graphs containing unpriced forecast components use [fx-graph-v2](schemas/fx-graph-v2.schema.json). Affected amount objects expose null totals, numeric known subtotals and an unpriced call count. Price documents use the same affected amount objects. Known-only outputs retain their prior shape.
+
 
 ## 13. Content addressing, not a chain
 

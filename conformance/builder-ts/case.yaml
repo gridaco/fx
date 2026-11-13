@@ -16,7 +16,7 @@ steps:
 - argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/one]
   mentions:
   - "cached    0 of 3 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: runs/one/outputs/line_1.txt
   save: line-1.txt
 - read: runs/one/outputs/line_2.txt
@@ -26,7 +26,7 @@ steps:
 - argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/two]
   mentions:
   - "cached    3 of 3 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - argv: [project, runs/two]
   save: project-two.json
   json: true
@@ -41,7 +41,7 @@ steps:
 - argv: [run, "workflows/build.ts:build", --routes, routes.yaml, --arg, count=3, --run, runs/three]
   mentions:
   - "cached    2 of 3 known steps"
-  - "result    ok   spent $0.00"
+  - "result    ok   booked $0.00"
 - read: runs/three/outputs/line_1.txt
   save: line-1.txt
 - read: runs/three/outputs/line_2.txt

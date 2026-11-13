@@ -28,7 +28,7 @@ steps:
 - argv: [run, late, --routes, routes.yaml, --run, runs/one]
   status: 1
   mentions:
-  - "result    failed   spent $0.00"
+  - "result    failed   booked $0.00"
   - "failed    lazy#1: the body loaded lib/late.ts at run time, outside its source closure: import it statically"
   never_mentions: ["{project}"]
 - argv: [project, runs/one]

@@ -230,21 +230,55 @@
       "type": "boolean"
     },
     "estimate": {
-      "type": "object",
-      "required": [
-        "low_usd",
-        "high_usd"
-      ],
-      "properties": {
-        "low_usd": {
-          "type": "number",
-          "minimum": 0
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "low_usd",
+            "high_usd"
+          ],
+          "properties": {
+            "low_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "high_usd": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
         },
-        "high_usd": {
-          "type": "number",
-          "minimum": 0
+        {
+          "type": "object",
+          "required": [
+            "low_usd",
+            "high_usd",
+            "known_low_usd",
+            "known_high_usd",
+            "unpriced_calls"
+          ],
+          "properties": {
+            "low_usd": {
+              "type": "null"
+            },
+            "high_usd": {
+              "type": "null"
+            },
+            "known_low_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "known_high_usd": {
+              "type": "number",
+              "minimum": 0
+            },
+            "unpriced_calls": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         }
-      }
+      ]
     },
     "ok": {
       "type": "boolean"

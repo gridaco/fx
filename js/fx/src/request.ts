@@ -29,6 +29,8 @@ export interface PlanOptions extends CallOptions {
    * fx.yaml) unless every call is on the user's own Codex or Grok Build (`imagegen@codex`,
    * `imagine@grok`). */
   readonly maxUsd?: number | string;
+  /** Require an applicable forecast for uncached paid work (`--require-estimates`). */
+  readonly requireEstimates?: boolean;
 }
 
 /** Options of `run`: the planning options, plus the run's own. */
@@ -60,6 +62,7 @@ export interface PlanRequest {
   readonly routes: readonly string[];
   readonly args: readonly (readonly [string, string])[];
   readonly maxUsd: string | null;
+  readonly requireEstimates?: boolean;
   /** Absolute. */
   readonly cwd: string;
   readonly env: Environment | undefined;
@@ -85,6 +88,9 @@ export function makeRequest(target: string, options: PlanOptions): PlanRequest {
     }
     return [name, String(value)];
   });
+  if (options.requireEstimates !== undefined && typeof options.requireEstimates !== "boolean") {
+    throw new TypeError("requireEstimates is true or false");
+  }
   return {
     target,
     inputs: inputs !== null && Object.keys(inputs).length > 0 ? inputs : null,
@@ -94,6 +100,7 @@ export function makeRequest(target: string, options: PlanOptions): PlanRequest {
     maxUsd: options.maxUsd === undefined ? null : amountText("maxUsd", options.maxUsd),
     cwd: resolve(options.cwd ?? process.cwd()),
     env: options.env,
+    ...(options.requireEstimates === true ? { requireEstimates: true } : {}),
   };
 }
 
@@ -115,6 +122,7 @@ export function planningArgs(request: PlanRequest, inputsFile: string | null): s
   if (request.maxUsd !== null) {
     args.push(`--max-usd=${request.maxUsd}`);
   }
+  if (request.requireEstimates === true) args.push("--require-estimates");
   return args;
 }
 
