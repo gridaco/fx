@@ -450,6 +450,115 @@ fn packaged_source_labels_are_not_guessed_from_lookalike_project_paths() {
 }
 
 #[test]
+fn source_label_collisions_preserve_closure_and_direct_provenance() {
+    let (fixture, project) = source_fixture();
+    fs::create_dir(project.path().join("acme_tools")).unwrap();
+    let local = b"// Current project resource, unrelated to the declared source package.\n";
+    let packaged = b"export const helper = 'declared package source';\n";
+    fs::write(project.path().join("acme_tools/helper.js"), local).unwrap();
+    let path = fixture.root().join("plan.json");
+    let mut graph: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    // Declared TypeScript/JavaScript packages use logical package labels even
+    // when their bytes live in node_modules or a linked workspace package.
+    graph["types"]["./nodes/render.py#render"]["source"]["files"]["acme_tools/helper.js"] =
+        json!(file_digest(packaged));
+    graph["types"]["./nodes/render.py#render"]["source"]["resources"]["acme_tools/helper.js"] =
+        json!(file_digest(local));
+    fs::write(&path, graph.to_string()).unwrap();
+    let targets = list(&fixture.root(), None).unwrap();
+    let files = targets["files"].as_array().unwrap();
+    let target_for = |role| {
+        files
+            .iter()
+            .find(|file| file["role"] == role && file["target"]["source"] == "acme_tools/helper.js")
+            .unwrap()["target"]
+            .clone()
+    };
+    let closure = target_for("source");
+    let unbound = resolve(
+        &fixture.root(),
+        &reference(closure.clone()),
+        Some(project.path()),
+        None,
+    )
+    .unwrap();
+    assert_eq!(unbound["local_path"], Value::Null);
+    assert_eq!(unbound["source_match"], "unknown");
+    let resource = target_for("resource");
+    let found = resolve(
+        &fixture.root(),
+        &reference(resource),
+        Some(project.path()),
+        None,
+    )
+    .unwrap();
+    assert!(found["local_path"].is_string());
+    assert_eq!(found["source_match"], "match");
+    let explicitly_bound = resolve(
+        &fixture.root(),
+        &reference(closure.clone()),
+        Some(project.path()),
+        Some(project.path()),
+    )
+    .unwrap();
+    assert!(explicitly_bound["local_path"].is_string());
+    assert_eq!(explicitly_bound["source_match"], "changed");
+    let mut unspecified = closure;
+    unspecified
+        .as_object_mut()
+        .unwrap()
+        .remove("recorded_digest");
+    assert_eq!(
+        resolve(
+            &fixture.root(),
+            &reference(unspecified),
+            Some(project.path()),
+            Some(project.path()),
+        )
+        .unwrap_err()
+        .code,
+        "invalid_request"
+    );
+
+    // Equal contents do not establish which namespace an identical reference
+    // selects. An explicit source-root binding is still required for that case.
+    graph["types"]["./nodes/render.py#render"]["source"]["files"]["acme_tools/helper.js"] =
+        json!(file_digest(local));
+    fs::write(&path, graph.to_string()).unwrap();
+    let target = json!({"kind":"source","source":"acme_tools/helper.js","recorded_digest":file_digest(local)});
+    assert_eq!(
+        resolve(
+            &fixture.root(),
+            &reference(target.clone()),
+            Some(project.path()),
+            None,
+        )
+        .unwrap()["local_path"],
+        Value::Null
+    );
+    assert_eq!(
+        resolve(
+            &fixture.root(),
+            &reference(target),
+            Some(project.path()),
+            Some(project.path()),
+        )
+        .unwrap()["source_match"],
+        "match"
+    );
+    assert_eq!(
+        resolve(
+            &fixture.root(),
+            &reference(node_target(&fixture)),
+            Some(project.path()),
+            None,
+        )
+        .unwrap()["source_match"],
+        "match"
+    );
+}
+
+#[test]
 fn direct_source_remains_openable_when_project_configuration_needs_repair() {
     let (fixture, project) = source_fixture();
     let request = reference(node_target(&fixture));

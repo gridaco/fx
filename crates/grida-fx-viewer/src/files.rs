@@ -425,14 +425,28 @@ pub fn resolve(
     validate_subject(&source, &reference["subject"], project)?;
     let requested = &reference["target"];
     let inventory = source.list(None, None)?;
-    let target = inventory["files"]
+    let matching: Vec<_> = inventory["files"]
         .as_array()
         .into_iter()
         .flatten()
         .map(|descriptor| &descriptor["target"])
-        .find(|target| same_target(target, requested))
-        .cloned()
-        .ok_or_else(not_found)?;
+        .filter(|target| same_target(target, requested))
+        .collect();
+    let target = if let Some(target) = matching.iter().copied().find(|target| *target == requested)
+    {
+        target.clone()
+    } else {
+        let Some(target) = matching.first() else {
+            return Err(not_found());
+        };
+        if matching.iter().any(|other| other != target) {
+            return Err(FileError::new(
+                "invalid_request",
+                "The file reference matches more than one recorded source target.",
+            ));
+        }
+        (*target).clone()
+    };
     let (local_path, source_match, reason) = match target["kind"].as_str() {
         Some("artifact") => {
             let digest = target["artifact"]["digest"]
@@ -451,16 +465,23 @@ pub fn resolve(
             }
         }
         Some("source") => {
-            let direct = inventory["files"]
+            // A logical package label can collide with a project resource path.
+            // Only complete recorded targets establish direct provenance; an
+            // identical closure target keeps the namespace ambiguous.
+            let provenance: Vec<_> = inventory["files"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .any(|descriptor| {
-                    matches!(
-                        descriptor["role"].as_str(),
-                        Some("workflow" | "node" | "resource")
-                    ) && descriptor["target"]["source"] == target["source"]
-                });
+                .filter(|descriptor| descriptor["target"] == target)
+                .collect();
+            let direct = provenance.iter().any(|descriptor| {
+                matches!(
+                    descriptor["role"].as_str(),
+                    Some("workflow" | "node" | "resource")
+                )
+            }) && !provenance
+                .iter()
+                .any(|descriptor| descriptor["role"] == "source");
             resolve_source(&target, project, source_root, direct)
         }
         _ => return Err(invalid_request()),

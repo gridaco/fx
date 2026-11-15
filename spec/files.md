@@ -83,7 +83,12 @@ The default applies to directly recorded workflow, node-module and resource
 paths. A closure-only helper label may instead be relative to a source package;
 existing records do not retain that namespace. Such labels require an explicit
 `--source-root` for the complete portable label, even if it is the same directory
-as `--project`. This is a caller-owned mapping, not package discovery. Current
+as `--project`. This is a caller-owned mapping, not package discovery. A
+direct-source label does not establish a closure label's namespace merely by
+sharing its path. When the same complete target is recorded as both a closure
+file and a direct source, it also requires an explicit `--source-root`. A
+reference that omits a digest and matches distinct recorded targets is refused
+as `invalid_request` rather than selecting an arbitrary target. Current
 `fx.yaml` is never read or imported to infer that historical mapping: direct
 source remains openable when the configuration needs repair.
 It opens the current editable file, not a historical snapshot. A digest mismatch

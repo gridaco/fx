@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FileAccessError, FxError, listFiles, loadRun, resolveFile, run, type FileReference, type FileTarget } from "../src/index.js";
-import { repoRoot, SLOW, temporaryFolder, testEngine } from "./support.js";
+import { HOST_SKIP, makeProject } from "./host-support.js";
+import { SLOW, temporaryFolder, testEngine } from "./support.js";
 
 const artifact: FileTarget = { kind: "artifact", artifact: { digest: "a".repeat(64), kind: "image/png", name: "picture.png", size: 12, url: null } };
 const source: FileTarget = { kind: "source", source: "nodes/draw.py", symbol: "draw", recorded_digest: "b".repeat(64) };
@@ -99,17 +100,16 @@ describe.skipIf(spawnSync("node", ["--version"]).status !== 0 || process.platfor
 });
 
 const binary = testEngine();
-describe.skipIf(binary === null)("file access against the real engine", () => {
+describe.skipIf(binary === null || HOST_SKIP !== null)("file access against the real engine", () => {
   test("resolves recorded bytes and changed current source without importing author code", async () => {
-    const folder = temporaryFolder("native-files");
+    const project = makeProject({
+      "fx.yaml": "fx: project/v1\n",
+      "nodes/source.ts": 'import { node } from "@grida/fx";\nexport const make = node({ name: "make", outputs: { text: "text" }, version: 1 }, ctx => ({ text: ctx.out.text("original bytes") }));\n',
+      "workflow.yaml": "fx: workflow/v1\nid: file-access\ntitle: File access\nsteps:\n  make:\n    uses: ./nodes/source.ts#make\noutputs:\n  result: ${{ steps.make.outputs.text }}\n",
+    });
     try {
-      mkdirSync(join(folder.path, "nodes"));
-      writeFileSync(join(folder.path, "fx.yaml"), "fx: project/v1\n");
-      writeFileSync(join(folder.path, "nodes/source.py"), 'from grida.fx import node\n@node("make", outputs={"text":"text"}, version=1)\ndef make(ctx):\n    return {"text":ctx.out.text("original bytes")}\n');
-      writeFileSync(join(folder.path, "workflow.yaml"), "fx: workflow/v1\nid: file-access\ntitle: File access\nsteps:\n  make:\n    uses: ./nodes/source.py#make\noutputs:\n  result: ${{ steps.make.outputs.text }}\n");
-      const options = { cwd: folder.path, env: {
+      const options = { cwd: project, env: {
         GRIDA_FX_BIN: binary!, GRIDA_FX_NETWORK: "off", GRIDA_FX_DISABLE_DOTENV: "1",
-        GRIDA_FX_PYTHON: join(repoRoot, "python/.venv/bin/python"),
         GG_API_KEY: undefined, OPENAI_API_KEY: undefined, OPENROUTER_API_KEY: undefined,
         FAL_KEY: undefined, TRIPO_API_KEY: undefined, ELEVENLABS_API_KEY: undefined,
       } };
@@ -121,11 +121,11 @@ describe.skipIf(binary === null)("file access against the real engine", () => {
       const saved = await record.resolveFile({ subject: { kind: "run", workflow: { id: "file-access" } }, target: output.target });
       expect(saved.localPath).not.toBeNull();
       expect(readFileSync(saved.localPath!, "utf8")).toBe("original bytes");
-      const node = files.find((file) => file.target.kind === "source" && file.target.source === "nodes/source.py")!;
-      writeFileSync(join(folder.path, "nodes/source.py"), 'raise RuntimeError("source lookup must not import this")\n');
-      const changed = await record.resolveFile({ subject: { kind: "run", workflow: { id: "file-access" } }, target: node.target }, { project: folder.path });
-      expect(changed.localPath).toBe(realpathSync(join(folder.path, "nodes/source.py")));
+      const node = files.find((file) => file.target.kind === "source" && file.target.source === "nodes/source.ts")!;
+      writeFileSync(join(project, "nodes/source.ts"), 'throw new Error("source lookup must not import this");\n');
+      const changed = await record.resolveFile({ subject: { kind: "run", workflow: { id: "file-access" } }, target: node.target }, { project });
+      expect(changed.localPath).toBe(realpathSync(join(project, "nodes/source.ts")));
       expect(changed.sourceMatch).toBe("changed");
-    } finally { folder.cleanup(); }
+    } finally { rmSync(project, { recursive: true, force: true }); }
   }, SLOW);
 });

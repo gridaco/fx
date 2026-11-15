@@ -772,8 +772,9 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   has `list_files`/`resolve_file`, record methods and async counterparts. Bind the
   exact saved subject and supply `project` for source resolution/catalog checks,
   plus `sourceRoot` (`source_root`) when the owning workflow home differs.
-  Closure-only helper files require that explicit source-root binding; FX never
-  infers their package base from mutable project configuration.
+  Closure-only or namespace-ambiguous files require that explicit source-root
+  binding; matching a project file's label does not establish package ownership.
+  FX never infers their package base from mutable project configuration.
   `localPath` (`local_path`) is private native output, not viewer-message data.
   Artifacts resolve only to available verified recorded bytes. Source resolves
   the current editable file and reports match/changed/unknown where meaningful;
