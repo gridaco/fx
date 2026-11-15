@@ -77,14 +77,14 @@ export class ViewerController {
     this.listeners.forEach((listener) => listener());
   }
   select = (id: string | null) => {
-    if (id !== null && !this.state.graph.nodes.some((node) => node.id === id)) return;
+    if (id !== null && !this.state.graph.nodes.some((node) => node.id === id) && !this.state.graph.notes?.some((note) => note.id === id)) return;
     this.navigation.select(id);
     this.update({ selected: id });
   };
   private project(view: ViewerView) {
     const navigation = this.navigation.getSnapshot();
     const graph = canvasGraph(view, navigation.scope, this.apiBase);
-    const selected = graph.nodes.some((node) => node.id === navigation.selected) ? navigation.selected : null;
+    const selected = (graph.nodes.some((node) => node.id === navigation.selected) || graph.notes?.some((note) => note.id === navigation.selected)) ? navigation.selected : null;
     this.navigation.select(selected);
     const parentScope = navigation.breadcrumbs.at(-2)?.id ?? null;
     const scopeNode = navigation.scope === null ? null : canvasGraph(view, parentScope, this.apiBase).nodes.find((node) => node.scope_id === navigation.scope) ?? null;
@@ -106,7 +106,7 @@ export class ViewerController {
     const view = this.state.view;
     if (!view || (scope !== null && !navigationScopes(view.scopes).some((item) => item.id === scope))) return false;
     const graph = canvasGraph(view, scope, this.apiBase);
-    if (selected !== null && !graph.nodes.some((node) => node.id === selected)) return false;
+    if (selected !== null && !graph.nodes.some((node) => node.id === selected) && !graph.notes?.some((note) => note.id === selected)) return false;
     if (!this.navigation.restore(scope, selected)) return false;
     this.update(this.project(view));
     return true;

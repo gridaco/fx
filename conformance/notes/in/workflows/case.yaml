@@ -1,0 +1,20 @@
+fx: workflow/v1
+id: case
+title: Static notes
+notes:
+  setup:
+    file: ./docs/setup.md
+    about: section
+  unavailable:
+    file: ./docs/absent.md
+steps:
+  section:
+    notes:
+      example:
+        format: text
+        text: "${{ inputs.example }}"
+    steps:
+      choose:
+        uses: fx/select@1
+        with:
+          first_of: [ready]

@@ -582,6 +582,21 @@ def node_source_digest(files: dict[str, str], resources: dict[str, str]) -> str:
     return digest(node_source_object(files, resources))
 
 
+def execution_document(document: Any) -> Any:
+    """Drop static notes at workflow/group declaration positions only (identity.md section 10)."""
+    if not isinstance(document, dict):
+        return document
+    value = {key: item for key, item in document.items() if key != "notes"}
+    if isinstance(value.get("steps"), dict):
+        value["steps"] = {
+            name: execution_document(step)
+            if isinstance(step, dict) and isinstance(step.get("steps"), dict)
+            else step
+            for name, step in value["steps"].items()
+        }
+    return value
+
+
 def plan_object(
     workflows: dict[str, Any],
     inputs: Any,
@@ -592,7 +607,9 @@ def plan_object(
     """routes: the fingerprint of every capability and route the plan binds, in any order."""
     return {
         "kind": "fx-plan-v1",
-        "workflows": workflows,
+        "workflows": {
+            source: execution_document(document) for source, document in workflows.items()
+        },
         "inputs": inputs,
         "takes": takes,
         "types": types,
@@ -923,7 +940,11 @@ def _example_failures(example: dict[str, Any]) -> Iterator[str]:
         rebuilt = node_source_digest(value["files"], value["resources"])
     elif kind == "fx-plan-v1":
         rebuilt = plan_digest(
-            value["workflows"], value["inputs"], value["takes"], value["types"], value["routes"]
+            example.get("authored_workflows", value["workflows"]),
+            value["inputs"],
+            value["takes"],
+            value["types"],
+            value["routes"],
         )
     if rebuilt is not None and rebuilt != want_digest:
         yield f"{name}: the {kind} formula gives {rebuilt}, expected {want_digest}"

@@ -5,6 +5,10 @@ Pending work and open design questions only. Supported behavior belongs in the
 
 ## Workflow and run viewer
 
+- Current capability priority: [#80](https://github.com/gridaco/fx/issues/80) notes
+  ([implemented in source](spec/notes.md)), then [#81](https://github.com/gridaco/fx/issues/81)
+  for actual input, constant and output cards. Notes remain static documentation.
+
 - Improve layout for larger graphs, scalar and keyed-collection inspection, and
   judge/take history using the [canonical viewer harness](fixtures/viewer/README.md).
 - Render workflow `view` metadata and custom workflow views. Specify any missing

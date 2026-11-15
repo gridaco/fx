@@ -694,3 +694,37 @@ fn portable_target_validation_rejects_private_or_unsafe_metadata() {
         );
     }
 }
+
+#[test]
+fn captured_note_sources_reuse_private_native_resolution_without_changing_snapshot() {
+    let (fixture, project) = source_fixture();
+    fs::create_dir(project.path().join("notes")).unwrap();
+    let original = b"## The original note\n";
+    fs::write(project.path().join("notes/help.md"), original).unwrap();
+    let path = fixture.root().join("plan.json");
+    let mut graph: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    graph["notes"] = json!([{"id":"note:root:help","name":"help","scope_id":null,"about":null,"format":"markdown","text":"## The original note\n","source":{"path":"notes/help.md","digest":file_digest(original)}}]);
+    fs::write(&path, graph.to_string()).unwrap();
+    let inventory = list(&fixture.root(), None).unwrap();
+    let target = inventory["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["target"]["source"] == "notes/help.md")
+        .unwrap()["target"]
+        .clone();
+    let request = reference(target);
+    assert_eq!(
+        resolve(&fixture.root(), &request, Some(project.path()), None).unwrap()["source_match"],
+        "match"
+    );
+    fs::write(project.path().join("notes/help.md"), "Current edited note").unwrap();
+    let changed = resolve(&fixture.root(), &request, Some(project.path()), None).unwrap();
+    assert_eq!(changed["source_match"], "changed");
+    assert!(changed["local_path"].is_string());
+    let snapshot = read::read_inventory(&fixture.root()).unwrap();
+    assert_eq!(
+        snapshot.document.notes.unwrap()[0]["text"],
+        "## The original note\n"
+    );
+}

@@ -40,6 +40,17 @@ impl Expander<'_> {
         loaded: Option<&LoadedWorkflow>,
         input_bindings: Vec<Binding>,
     ) {
+        let note_owner = loaded
+            .map(|loaded| {
+                (
+                    loaded.source.clone(),
+                    self.frames[frame.0].decl_prefix.clone(),
+                )
+            })
+            .or_else(|| self.note_workflow(frame));
+        if let Some(loaded) = loaded {
+            self.env.registry.capture_notes(loaded);
+        }
         let context = &mut self.frames[frame.0];
         let path = context.prefix.trim_end_matches('.').to_string();
         let id = format!("scope:{}", instance_id(&path, &context.takes));
@@ -68,6 +79,8 @@ impl Expander<'_> {
             .clone()
             .or_else(|| loaded.map(|loaded| loaded.workflow.title.clone()))
             .unwrap_or_else(|| step.rsplit('.').next().unwrap_or(step).to_string());
+        let note_scope = id.clone();
+        let note_prefix = context.decl_prefix.clone();
         self.display_scopes.insert(
             id.clone(),
             Scope {
@@ -86,6 +99,13 @@ impl Expander<'_> {
                 pending: Vec::new(),
             },
         );
+        if let Some((workflow, root_prefix)) = note_owner {
+            let container = note_prefix
+                .strip_prefix(&root_prefix)
+                .unwrap_or("")
+                .trim_end_matches('.');
+            self.add_notes(&workflow, container, Some(&note_scope), &note_prefix);
+        }
     }
 
     /// Only real, retained instances enter membership; trials and shadow pricing restore

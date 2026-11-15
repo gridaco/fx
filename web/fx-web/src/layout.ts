@@ -1,12 +1,15 @@
+import type { CanvasNote } from "./notes";
 import type { CanvasConnection, CanvasFrame, CanvasGraph, CanvasStep, LayoutReport } from "./graph";
 import { DECK_BACK } from "./deck";
 
 export interface PositionedNode extends CanvasStep { x: number; y: number; width: number; height: number }
+export interface PositionedNote extends CanvasNote { x: number; y: number; width: number; height: number }
+export const NOTE_WIDTH = 360, NOTE_HEIGHT = 240;
 export interface PositionedEdge extends CanvasConnection { points: { x: number; y: number }[] }
 export interface PositionedFrame extends CanvasFrame { x: number; y: number; width: number; height: number }
 /** Two or more members of one slot in one frame: node ids, or frame ids for repeated groups. */
 export interface PlacedDeck { id: string; address: string; frame: string | null; kind: "node" | "frame"; members: string[]; x: number; y: number; width: number; height: number }
-export interface CanvasLayout { nodes: PositionedNode[]; edges: PositionedEdge[]; frames: PositionedFrame[]; decks: PlacedDeck[]; width: number; height: number }
+export interface CanvasLayout { nodes: PositionedNode[]; edges: PositionedEdge[]; frames: PositionedFrame[]; decks: PlacedDeck[]; notes?: PositionedNote[]; width: number; height: number }
 
 export const DECK_OFFSET = 28, BADGE_BAND = 30;
 const COLUMN_GAP = 100, ROW_GAP = 42, FRAME_PAD = 20, FRAME_TOP = 36, MARGIN = 20;
@@ -55,7 +58,7 @@ function deckFootprint(member: { width: number; height: number }, count: number)
 }
 
 /** A card in its container: a node, or a frame with its own contents. */
-interface Item { id: string; address: string; rank: number; node?: CanvasStep; frame?: CanvasFrame }
+interface Item { id: string; address: string; rank: number; node?: CanvasStep; frame?: CanvasFrame; note?: CanvasNote }
 interface Slot { address: string; items: Item[]; column: number; row: number }
 
 /**
@@ -70,7 +73,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
   const parentOf = new Map<string, string>();
   for (const frame of frames) for (const id of frame.nodes) parentOf.set(id, frame.id);
   const rank = new Map((report?.order ?? []).map((id, index) => [id, index]));
-  const item = (id: string, source: string, address: string | undefined, card: Pick<Item, "node" | "frame">): Item =>
+  const item = (id: string, source: string, address: string | undefined, card: Pick<Item, "node" | "frame" | "note">): Item =>
     ({ id, address: address ?? id, rank: rank.get(source) ?? rank.size + 1, ...card });
   const containerAddress = (frame: string | null) => frame === null ? "" : frameById.get(frame)?.address ?? frame;
 
@@ -79,6 +82,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
   for (const frame of frames) contents.set(frame.id, []);
   for (const node of graph.nodes) contents.get(parentOf.get(node.id) ?? null)!.push(item(node.id, node.source_id, node.address, { node }));
   for (const frame of frames) contents.get(frame.parent && frameById.has(frame.parent) ? frame.parent : null)!.push(item(frame.id, frame.id, frame.address, { frame }));
+  for (const note of graph.notes ?? []) contents.get(note.frame_id && contents.has(note.frame_id) ? note.frame_id : null)!.push(item(note.id, note.id, note.id, { note }));
   const slots = new Map<string | null, Slot[]>();
   for (const [container, items] of contents) {
     const byAddress = new Map<string, Item[]>();
@@ -94,7 +98,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
       const members = present.length ? present : all.slice(0, 1);
       members.sort((left, right) => left.rank - right.rank || (left.id < right.id ? -1 : 1));
       const side = members[0].node?.side;
-      const cell = report?.cells[address];
+      const cell = members[0].note ? report?.notes?.[address] : report?.cells[address];
       const column = side === "input" ? -1 : side === "output" ? Number.MAX_SAFE_INTEGER : cell?.column ?? fallback++;
       placed.push({ address, items: members, column, row: side ? 0 : cell?.row ?? 0 });
     }
@@ -104,7 +108,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
   // Rule 11: tracks span every frame of a container, so a group's frames are the same size.
   const tracks = new Map<string, { columns: Map<number, number>; rows: Map<number, number> }>();
   const frameSize = new Map<string, { width: number; height: number }>();
-  const itemSize = (each: Item) => each.node ? canvasNodeSize(each.node) : sizeOfFrame(each.frame!);
+  const itemSize = (each: Item) => each.note ? { width: NOTE_WIDTH, height: NOTE_HEIGHT } : each.node ? canvasNodeSize(each.node) : sizeOfFrame(each.frame!);
   const footprint = (slot: Slot) => {
     const sizes = slot.items.map(itemSize);
     return deckFootprint({ width: Math.max(...sizes.map((size) => size.width)), height: Math.max(...sizes.map((size) => size.height)) }, slot.items.length);
@@ -140,6 +144,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
     return start;
   };
 
+  const notes: PositionedNote[] = [];
   const nodes: PositionedNode[] = [];
   const positionedFrames: PositionedFrame[] = [];
   const decks: PlacedDeck[] = [];
@@ -157,7 +162,8 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
       slot.items.forEach((each, index) => {
         const offset = DECK_OFFSET * Math.min(index, DECK_BACK);
         const at = { x: x + offset, y: y + offset + (deck ? BADGE_BAND : 0) };
-        if (each.node) nodes.push({ ...each.node, ...at, ...canvasNodeSize(each.node) });
+        if (each.note) notes.push({ ...each.note, ...at, width: NOTE_WIDTH, height: NOTE_HEIGHT });
+        else if (each.node) nodes.push({ ...each.node, ...at, ...canvasNodeSize(each.node) });
         else {
           positionedFrames.push({ ...each.frame!, ...at, ...sizeOfFrame(each.frame!) });
           place(each.id, at.x + FRAME_PAD, at.y + FRAME_TOP);
@@ -181,9 +187,9 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
     if (!from || !to) throw new Error(`Connection ${edge.id} refers to a missing named port.`);
     return [{ ...edge, points: route(from, to, source, target) }];
   });
-  const right = Math.max(0, ...nodes.map((node) => node.x + node.width), ...positionedFrames.map((frame) => frame.x + frame.width));
-  const bottom = Math.max(0, ...nodes.map((node) => node.y + node.height), ...positionedFrames.map((frame) => frame.y + frame.height));
-  return { nodes, edges, frames: positionedFrames, decks, width: right + MARGIN, height: bottom + MARGIN };
+  const right = Math.max(0, ...notes.map((note) => note.x + note.width), ...nodes.map((node) => node.x + node.width), ...positionedFrames.map((frame) => frame.x + frame.width));
+  const bottom = Math.max(0, ...notes.map((note) => note.y + note.height), ...nodes.map((node) => node.y + node.height), ...positionedFrames.map((frame) => frame.y + frame.height));
+  return { nodes, notes, edges, frames: positionedFrames, decks, width: right + MARGIN, height: bottom + MARGIN };
 }
 
 /** §9: a forward edge is a curve between sockets; a backward one runs through the gap below both cards. */

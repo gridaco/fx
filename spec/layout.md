@@ -739,3 +739,15 @@ nested levels, reduced motion and live updates that move no cell.
 Evidence: the conformance identity case; reader tests for every diagnostic; repeats, nested scopes
 and stale references in provider-free fixtures; recorded `axes` in the matrix case; a browser
 check of grid spreads and an uneven matrix table.
+
+## Workflow note placement
+
+[Workflow notes](notes.md) have optional presentation cells in the report's `notes` map,
+keyed by recorded note ID. They do not enter executable `cells` or member `order`.
+Within an owner, notes occupy a separate band starting one row below that container's
+last executable slot. In authored order, an associated note takes the first free band row
+in its target declaration's column; a free note or unresolved association takes the first
+free cell in row-major order across columns 0, 1 and 2. This packs ordinary documentation
+without a tall single-column stack while keeping associations beside their target column.
+Every frame of one declared container shares each named note's cell. Bounded note footprints
+contribute presentation tracks without changing executable dependency depth or member order.

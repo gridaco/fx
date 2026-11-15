@@ -388,6 +388,7 @@ impl Expander<'_> {
     pub(crate) fn shadow_price(&mut self, at: &Position, phase: u32) -> (Usd, Usd, Usd, u64, u64) {
         let saved_instances = self.instances.clone();
         let saved_display_scopes = self.display_scopes.clone();
+        let saved_notes = self.notes.clone();
         let saved_skip_reasons = self.skip_reasons.clone();
         let skipped_positions_before = self.skipped_positions.len();
         let saved_pending = self.pending.clone();
@@ -482,6 +483,7 @@ impl Expander<'_> {
         // included: they expand again, for real, when the plan reaches them.
         self.instances = saved_instances;
         self.display_scopes = saved_display_scopes;
+        self.notes = saved_notes;
         self.skip_reasons = saved_skip_reasons;
         self.skipped_positions.truncate(skipped_positions_before);
         self.pending = saved_pending;

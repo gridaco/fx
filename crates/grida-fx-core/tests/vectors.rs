@@ -85,6 +85,18 @@ fn identity_examples() {
             (None, Some(source)) => parse_json(source.as_str().unwrap()).unwrap(),
             _ => continue,
         };
+        if let Some(authored) = example.get("authored_workflows").and_then(Value::as_object) {
+            let projected: serde_json::Map<String, Value> = authored
+                .iter()
+                .map(|(source, document)| {
+                    (
+                        source.clone(),
+                        grida_fx_core::notes::execution_document(document),
+                    )
+                })
+                .collect();
+            assert_eq!(Value::Object(projected), object["workflows"], "{name}");
+        }
         if let Some(want) = example.get("canonical") {
             assert_eq!(canon(&object), want.as_str().unwrap(), "{name}");
         }

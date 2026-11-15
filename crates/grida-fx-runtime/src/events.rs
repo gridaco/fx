@@ -79,6 +79,8 @@ pub enum Event {
         pending: Value,
         /// A complete display snapshot for known omitted instances; never replayed.
         skip_reasons: Option<Value>,
+        /// Captured presentation notes in the current expansion, never executable instances.
+        notes: Option<Value>,
     },
     RunStarted {
         workflow: String,
@@ -290,6 +292,7 @@ impl Event {
                 instances,
                 pending,
                 skip_reasons,
+                notes,
             } => {
                 fields.put("scopes", scopes.clone());
                 fields.put("node_interface_bindings", node_interface_bindings.clone());
@@ -297,6 +300,9 @@ impl Event {
                 fields.put("pending", pending.clone());
                 if let Some(reasons) = skip_reasons {
                     fields.put("skip_reasons", reasons.clone());
+                }
+                if let Some(notes) = notes {
+                    fields.put("notes", notes.clone());
                 }
             }
             Event::RunStarted {

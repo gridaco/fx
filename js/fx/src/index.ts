@@ -192,6 +192,7 @@ export {
   type Expression,
   expr,
   type GroupStep,
+  type Note,
   type InputDeclaration,
   type InputField,
   type InputRef,

@@ -22,6 +22,8 @@ export interface ViewerClientOptions {
   origin: string;
   sourceWindow?: ViewerSourceWindow;
   timeoutMs?: number;
+  /** Opt in to note selection references; older pages explicitly refuse this capability. */
+  includeNotes?: boolean;
 }
 
 export class ViewerClientError extends Error {
@@ -55,6 +57,7 @@ export class ViewerClient {
   private readonly source: ViewerSourceWindow;
   private readonly origin: string;
   private readonly timeoutMs: number;
+  private readonly includeNotes: boolean;
   private readonly prefix = `fx-viewer-client-${++nextClient}-`;
   private nextRequest = 0;
   private readonly pending = new Map<string, Pending>();
@@ -84,6 +87,8 @@ export class ViewerClient {
       || !options.targetWindow || typeof options.targetWindow.postMessage !== "function") {
       throw new ViewerClientError("invalid_options", "Supply a viewer window and an available browser message source.");
     }
+    if (options.includeNotes !== undefined && typeof options.includeNotes !== "boolean") throw new ViewerClientError("invalid_options", "includeNotes must be a boolean.");
+    this.includeNotes = options.includeNotes === true;
     this.target = options.targetWindow;
     this.source = source;
     this.origin = options.origin;
@@ -97,6 +102,7 @@ export class ViewerClient {
 
   async present(action: ViewerAction): Promise<ViewerContext> {
     if (!ViewerProtocol.isAction(action)) throw new ViewerClientError("invalid_request", "Unknown or malformed presentation action.");
+    if (action.action === "reveal_note" && !this.includeNotes) throw new ViewerClientError("unsupported_method", "Note presentation requires includeNotes.");
     return (await this.request("present", action))!;
   }
 
@@ -175,6 +181,7 @@ export class ViewerClient {
   }
   private request(method: ViewerProtocol.Method, params: Record<string, unknown>): Promise<ViewerContext | null> {
     this.assertOpen();
+    if (this.includeNotes && ["get_context", "subscribe", "present"].includes(method)) params = { ...params, include_notes: true };
     const request_id = this.prefix + ++this.nextRequest;
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => {

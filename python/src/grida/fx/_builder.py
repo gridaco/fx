@@ -148,6 +148,17 @@ class Group:
     def __init__(self, path: str) -> None:
         self._path = path
         self._steps: dict[str, dict[str, Any]] = {}
+        self._note_owner: dict[str, Any] = {}
+
+    def note(self, name: str, **fields: Any) -> None:
+        """Adds static documentation: ``text`` or ``file``, optional ``format`` and ``about``.
+
+        File content is resolved by the engine, not by the builder. Notes never execute.
+        """
+        notes = self._note_owner.setdefault("notes", {})
+        if name in notes:
+            raise ValueError(f"{self._path}notes.{name} is declared twice")
+        notes[name] = _fields(fields)
 
     def step(self, name: str, **fields: Any) -> StepRef:
         """Adds a step; ``ValueError`` when the name is taken."""
@@ -160,6 +171,7 @@ class Group:
         self._claim(name)
         inner = Group(f"{self._path}{name}.")
         self._steps[name] = {**_fields(fields), "steps": inner._steps}
+        inner._note_owner = self._steps[name]
         return inner
 
     def _claim(self, name: str) -> None:
@@ -182,11 +194,13 @@ class Workflow(Group):
         budget: Mapping[str, Any] | None = None,
         assert_: list[Mapping[str, Any]] | None = None,
         view: str | None = None,
+        notes: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         super().__init__("")
         #: The module that built this workflow: its takes file lives next to it.
         self.source: Path | None = _caller_file()
         self._head: dict[str, Any] = {"fx": "workflow/v1", "id": id, "title": title}
+        self._note_owner = self._head
         optional = {
             "description": description,
             "inputs": inputs,
@@ -195,6 +209,7 @@ class Workflow(Group):
             "budget": budget,
             "assert": assert_,
             "view": view,
+            "notes": notes,
         }
         for name, value in optional.items():
             if value:

@@ -141,6 +141,7 @@ pub(crate) struct Trial {
     reads: Option<BTreeSet<String>>,
     wiring: super::wiring::Trace,
     display_scopes: IndexMap<String, super::display::Scope>,
+    notes: IndexMap<String, crate::notes::Note>,
     skip_reasons: std::collections::BTreeMap<String, super::skip::SkipReason>,
     skipped_positions: usize,
     /// How long the lists it only appends to were.
@@ -531,6 +532,7 @@ impl Expander<'_> {
             reads: self.read_sets.last().cloned(),
             wiring: self.wiring.clone(),
             display_scopes: self.display_scopes.clone(),
+            notes: self.notes.clone(),
             skip_reasons: self.skip_reasons.clone(),
             skipped_positions: self.skipped_positions.len(),
             pending: self.pending.len(),
@@ -563,6 +565,7 @@ impl Expander<'_> {
         self.held = trial.held;
         self.wiring = trial.wiring;
         self.display_scopes = trial.display_scopes;
+        self.notes = trial.notes;
         self.skip_reasons = trial.skip_reasons;
         self.skipped_positions.truncate(trial.skipped_positions);
         if let (Some(reads), Some(innermost)) = (trial.reads, self.read_sets.last_mut()) {

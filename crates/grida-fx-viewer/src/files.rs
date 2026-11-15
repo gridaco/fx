@@ -183,6 +183,23 @@ fn inventory(
             }
         }
     }
+    if instance.is_none() {
+        let notes = snapshot
+            .and_then(|snapshot| snapshot.document.notes.as_ref())
+            .or_else(|| graph.get("notes"))
+            .and_then(Value::as_array);
+        for note in notes.into_iter().flatten() {
+            if let Some(target) = source_target(
+                note["source"]["path"].as_str(),
+                None,
+                note["source"]["digest"].as_str(),
+            ) {
+                // Note file labels are authored in the selected workflow home's registry,
+                // just as declared project resources are; no source package is guessed.
+                push(target, "resource", None, note["scope_id"].as_str());
+            }
+        }
+    }
     let artifacts: BTreeMap<String, Value> = snapshot.map_or_else(BTreeMap::new, |snapshot| {
         snapshot
             .export_inventory()

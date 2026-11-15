@@ -807,6 +807,7 @@ pub(crate) mod tests {
             timeout: None,
             title: None,
             description: None,
+            notes: Default::default(),
         }
     }
 
@@ -993,6 +994,7 @@ pub(crate) mod tests {
                 id: "case".into(),
                 title: "Case".into(),
                 description: None,
+                notes: Default::default(),
                 inputs: IndexMap::new(),
                 tables: IndexMap::new(),
                 let_: IndexMap::new(),

@@ -2,6 +2,9 @@
 
 Every cache in FX is keyed by a content identity. This document defines each one exactly, so that any implementation (the Rust engine, the independent checker in `tools/digest.py`, a future one) computes the same bytes and the same digests. A change here is a change to every cache: it needs a new `kind` version and a migration note. The one exception is the route contract's completion (§7), which kept `fx-route-v1` because it moved no built-in fingerprint.
 
+The notes projection in §10 accepts previously invalid authored syntax and changes no
+previously valid digest. It therefore extends `fx-plan-v1` without a migration or rekey.
+
 The words MUST, MUST NOT and SHOULD are used as in RFC 2119.
 
 ## 1. Values
@@ -252,10 +255,10 @@ plan_digest = digest({
 })
 ```
 
-- `document` is the workflow document as authored: the JSON value the strict YAML loader produced (or the document a builder returned), with no defaults filled in. Adding an optional field to the format therefore does not change existing plan digests.
+- `document` is the workflow document as authored: the JSON value the strict YAML loader produced (or the document a builder returned), with no defaults filled in, except for declared workflow/group `notes` members, which are removed under [notes.md](notes.md). Strip only those positions, never a `notes` key in task inputs or arbitrary data. Existing documents without notes retain their digests. Note-only edits do not refuse resume; captured documentation remains part of the exact saved plan evidence. Files also used as executable inputs/resources and Python/JavaScript source edits retain their ordinary identity effects.
 - Adding or editing a step's `preview` declaration changes that authored document and therefore
   the plan digest. It requires a new run folder; identical work can still reuse the result and
-  call caches. Presentation metadata is not an exception to this authored-document rule.
+  call caches. Other presentation metadata is not exempt from this authored-document rule.
 - `source` is the document's project-relative POSIX path, or `<path>:<function>` for a builder.
 - `routes` is a list because one route can serve several capabilities, each with its own fingerprint (§7).
 - `inputs` are the values as given, after merging every inputs file and flag, before defaults are filled in. An optional input that was not given is left out.

@@ -37,6 +37,9 @@ pub struct RunDocument {
     pub inputs: Value,
     pub outputs: Value,
     pub nodes: Vec<Node>,
+    /// Captured authored documentation, independent of executable instances.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scopes: Option<Value>,
     /// The repeats not yet expanded: the latest `scopes_updated` `pending`, else the plan's
@@ -679,6 +682,7 @@ fn project_inventory(
         .filter_map(|instance| node(instance, &steps, &types))
         .collect();
     let mut scopes = plan.get("scopes").cloned();
+    let mut notes = crate::notes::Captured::from_plan(plan, &mut warnings);
     let mut node_interfaces = None;
     let mut recorded = Recorded::default();
     // The latest scopes_updated `instances` and `pending`, and every listing recorded; borrowed
@@ -724,6 +728,7 @@ fn project_inventory(
         }
         match text(event, "event") {
             Some("scopes_updated") => {
+                notes.capture(event.get("notes"), &mut warnings);
                 // A current display snapshot replaces earlier absent-instance causes. Older
                 // snapshots lacking the optional map cannot preserve a newer stale cause.
                 skip_reasons = event
@@ -1069,6 +1074,7 @@ fn project_inventory(
         inputs: object(plan.get("inputs")),
         outputs,
         nodes,
+        notes: notes.project(scopes.as_ref()),
         scopes,
         pending,
         artifacts: Vec::new(),

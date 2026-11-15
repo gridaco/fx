@@ -1,0 +1,53 @@
+fx: workflow/v1
+id: viewer-notes
+title: A self-explanatory local workflow
+description: Static Markdown and text notes next to provider-free image steps.
+inputs:
+  prompt: {type: string, default: A geometric reference}
+tables:
+  style: {shape: rounded, seed: 42}
+notes:
+  overview:
+    about: seed
+    file: ./notes/overview.md
+  literal:
+    format: text
+    text: |
+      **This is plain text.**
+      ${{ inputs.prompt }} stays literal.
+      seed: 42
+  unavailable:
+    file: ./notes/not-created.md
+  renamed_target:
+    about: old_step_name
+    text: "This note remains visible when its association cannot be resolved."
+steps:
+  seed:
+    title: Reference image
+    uses: ./nodes/media.py#seed
+  variations:
+    title: Two local variations
+    for_each: [warm, cool]
+    notes:
+      guidance:
+        about: tint
+        text: |
+          ## Local color variation
+          This group consumes the reference and changes its channels.
+          The note belongs to the group, with no execution state.
+    steps:
+      tint:
+        title: Color variation
+        uses: ./nodes/media.py#tint
+        with:
+          image: ${{ steps.seed.outputs.image }}
+          tone: ${{ item }}
+  child:
+    title: Read the imported workflow
+    uses: ./workflows/notes-child.yaml
+    with:
+      image: ${{ steps.seed.outputs.image }}
+outputs:
+  reference: ${{ steps.seed.outputs.image }}
+  variations: ${{ steps.variations.*.tint.outputs.image }}
+  imported: ${{ steps.child.outputs.image }}

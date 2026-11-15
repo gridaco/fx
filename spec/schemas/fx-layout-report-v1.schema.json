@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-layout-report-v1",
   "title": "FX canvas layout report (fx-layout-report-v1)",
-  "description": "Where the viewer places a run's or a saved plan's steps (layout.md §6.11): every slot's cell and every member's order, served at the scoped `api/layout` route. The browser places its own cards in these cells and never computes one. While the viewer reads no layout file (layout.md §6), a report carries automatic cells only, with `file` and `revision` null and no diagnostics.",
+  "description": "Where the viewer places a run's or a saved plan's steps (layout.md \u00a76.11): every slot's cell and every member's order, served at the scoped `api/layout` route. The browser places its own cards in these cells and never computes one. While the viewer reads no layout file (layout.md \u00a76), a report carries automatic cells only, with `file` and `revision` null and no diagnostics.",
   "type": "object",
   "required": [
     "kind",
@@ -27,7 +27,7 @@
       ]
     },
     "revision": {
-      "description": "The file digest (identity.md §2) of the layout file bytes read, or null when nothing was read.",
+      "description": "The file digest (identity.md \u00a72) of the layout file bytes read, or null when nothing was read.",
       "type": [
         "string",
         "null"
@@ -81,7 +81,7 @@
       }
     },
     "cells": {
-      "description": "Every slot's address mapped to its cell in its container (layout.md §4), container by container from the root. A container's frames share its cells, so an address is an unambiguous key.",
+      "description": "Every slot's address mapped to its cell in its container (layout.md \u00a74), container by container from the root. A container's frames share its cells, so an address is an unambiguous key.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -110,11 +110,40 @@
       }
     },
     "order": {
-      "description": "Every member, instance ids and scope ids, in order key (layout.md §4 rule 4). Only the relative order of one slot's members is meaningful.",
+      "description": "Every member, instance ids and scope ids, in order key (layout.md \u00a74 rule 4). Only the relative order of one slot's members is meaningful.",
       "type": "array",
       "uniqueItems": true,
       "items": {
         "type": "string"
+      }
+    },
+    "notes": {
+      "description": "Presentation-only note cells keyed by recorded note id, separate from executable slot cells and member order.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "column",
+          "row",
+          "source"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "enum": [
+              "automatic",
+              "authored"
+            ]
+          }
+        }
       }
     }
   }

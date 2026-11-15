@@ -786,6 +786,7 @@ mod tests {
 
     fn step(uses: Option<&str>, members: Option<Vec<(&str, Rc<Step>)>>) -> Rc<Step> {
         Rc::new(Step {
+            notes: Default::default(),
             uses: uses.map(str::to_string),
             steps: members.map(|m| {
                 Rc::new(

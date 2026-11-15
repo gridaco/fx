@@ -460,3 +460,12 @@ Optional fields include `operation`, `http_status`, `code`, `field`, `message`,
 these before recording them. A body sees them in `EngineError.data["diagnostic"]`;
 `RunResult.failures[id].diagnostic` and saved inspection/observation preserve them.
 Legacy records may have no diagnostic. Evidence never changes retry or billing.
+
+## Workflow notes
+
+`Workflow(..., notes={...})` and `workflow.note("help", text="## Reference", about="draw")`
+author static documentation. A returned group supports `.note(...)` too. Choose exactly
+one of `text` or `file`, plus optional `format="markdown"` (default) or `format="text"`.
+The SDK preserves declarations; the engine reads local files and records snapshots.
+Notes never evaluate expressions or execute as steps. See the
+[note contract](https://github.com/gridaco/fx/blob/main/spec/notes.md).

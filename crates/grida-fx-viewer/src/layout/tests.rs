@@ -294,3 +294,97 @@ fn an_expanded_repeat_keeps_its_plan_cell_in_the_run_view() {
         .expect("serializable");
     assert_eq!(cell(&run, "draw"), planned);
 }
+
+#[test]
+fn notes_have_separate_cells_without_changing_execution_placement_or_order() {
+    let mut graph = plan(
+        &["seed", "draw"],
+        &[
+            ("seed#1", "seed", None, 1, &[]),
+            ("draw#1", "draw", None, 1, &["seed#1"]),
+        ],
+    );
+    let baseline = report(&graph);
+    graph["notes"] = json!([
+        {"id":"note:root:overview","name":"overview","scope_id":null,"about":null,"format":"markdown","text":"## Overview"},
+        {"id":"note:root:help","name":"help","scope_id":null,"about":"draw","format":"text","text":"Literal"}
+    ]);
+    let with_notes = report(&graph);
+    assert_eq!(with_notes["cells"], baseline["cells"]);
+    assert_eq!(with_notes["order"], baseline["order"]);
+    assert!(baseline.get("notes").is_none());
+    assert_eq!(
+        with_notes["notes"]["note:root:overview"],
+        json!({"column":0,"row":1,"source":"automatic"})
+    );
+    assert_eq!(
+        with_notes["notes"]["note:root:help"],
+        json!({"column":1,"row":1,"source":"automatic"})
+    );
+}
+
+#[test]
+fn note_placement_is_shared_across_group_frames_and_text_sizes() {
+    let mut graph = plan(
+        &["batch", "batch.draw"],
+        &[
+            ("batch[a].draw#1", "batch.draw", Some("a"), 1, &[]),
+            ("batch[b].draw#1", "batch.draw", Some("b"), 1, &[]),
+        ],
+    );
+    graph["scopes"] = json!([
+        {"id":"scope:batch[a]#1","parent":null,"kind":"group","path":"batch[a]","step":"batch","take":[1],"nodes":["batch[a].draw#1"],"pending":[],"input_bindings":[]},
+        {"id":"scope:batch[b]#1","parent":null,"kind":"group","path":"batch[b]","step":"batch","take":[1],"nodes":["batch[b].draw#1"],"pending":[],"input_bindings":[]}
+    ]);
+    graph["notes"] = json!([
+        {"id":"note:scope:batch[a]#1:help","name":"help","scope_id":"scope:batch[a]#1","about":"batch.draw","format":"text","text":"short"},
+        {"id":"note:scope:batch[b]#1:help","name":"help","scope_id":"scope:batch[b]#1","about":"batch.draw","format":"markdown","text":"long ".repeat(2000)}
+    ]);
+    let value = report(&graph);
+    assert_eq!(
+        value["notes"]["note:scope:batch[a]#1:help"],
+        value["notes"]["note:scope:batch[b]#1:help"]
+    );
+    assert_eq!(value["notes"]["note:scope:batch[a]#1:help"]["row"], 1);
+}
+
+#[test]
+fn free_notes_pack_three_columns_without_displacing_associated_notes_or_steps() {
+    let mut graph = plan(
+        &["seed", "draw"],
+        &[
+            ("seed#1", "seed", None, 1, &[]),
+            ("draw#1", "draw", None, 1, &["seed#1"]),
+        ],
+    );
+    let baseline = report(&graph);
+    graph["notes"] = json!([
+        {"id":"note:root:overview","name":"overview","scope_id":null,"about":"seed","format":"markdown","text":"Overview"},
+        {"id":"note:root:literal","name":"literal","scope_id":null,"about":null,"format":"text","text":"Literal"},
+        {"id":"note:root:unavailable","name":"unavailable","scope_id":null,"about":null,"format":"markdown","text":null},
+        {"id":"note:root:renamed","name":"renamed","scope_id":null,"about":"old_step","format":"text","text":"Retained"},
+        {"id":"note:root:more","name":"more","scope_id":null,"about":"seed","format":"text","text":"Another explanation"}
+    ]);
+    let value = report(&graph);
+    assert_eq!(value["cells"], baseline["cells"]);
+    assert_eq!(value["order"], baseline["order"]);
+    let at = |id: &str| {
+        let cell = &value["notes"][id];
+        (
+            cell["column"].as_u64().unwrap(),
+            cell["row"].as_u64().unwrap(),
+        )
+    };
+    assert_eq!(at("note:root:overview"), (0, 1));
+    assert_eq!(at("note:root:literal"), (1, 1));
+    assert_eq!(at("note:root:unavailable"), (2, 1));
+    assert_eq!(at("note:root:renamed"), (0, 2));
+    assert_eq!(at("note:root:more"), (0, 3));
+    let cells: std::collections::BTreeSet<_> = value["notes"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|id| at(id))
+        .collect();
+    assert_eq!(cells.len(), 5, "each note has its own cell");
+}

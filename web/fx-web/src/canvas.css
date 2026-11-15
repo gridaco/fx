@@ -220,3 +220,28 @@
 .fx-media-preview:fullscreen .fx-model-preview { display: flex; height: 100%; flex-direction: column; }
 .fx-media-preview:fullscreen .fx-model-viewport { flex: 1; min-height: 0; aspect-ratio: auto; border-radius: 0; }
 .fx-media-preview:fullscreen .fx-model-footer { flex: none; margin: 0; padding: 4px 36px 4px 4px; }
+
+/* Authored documentation is independent of executable card chrome and measured text. */
+.fx-canvas-note { cursor: pointer; outline: none; }
+.fx-canvas-note-box { fill: #fffdf5; stroke: #ddd6b9; stroke-width: 1.2px; }
+.fx-canvas-note:hover .fx-canvas-note-box { stroke: #a69a70; }
+.fx-canvas-note.is-selected .fx-canvas-note-box, .fx-canvas-note:focus-visible .fx-canvas-note-box { stroke: #2563eb; stroke-width: 2px; }
+.fx-canvas-note-title, .fx-canvas-note-more { fill: #82775b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
+.fx-canvas-note-title { font-weight: 600; }
+.fx-note-content { color: #3f3f46; font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.fx-note-content > :first-child { margin-top: 0; }
+.fx-note-content > :last-child { margin-bottom: 0; }
+.fx-note-content h1, .fx-note-content h2, .fx-note-content h3, .fx-note-content h4, .fx-note-content h5, .fx-note-content h6 { font-weight: 600; line-height: 1.3; margin: 1.2em 0 .5em; }
+.fx-note-content h1 { font-size: 1.5em; } .fx-note-content h2 { font-size: 1.25em; } .fx-note-content h3 { font-size: 1.1em; }
+.fx-note-content p, .fx-note-content ul, .fx-note-content ol, .fx-note-content pre, .fx-note-content blockquote { margin: .7em 0; }
+.fx-note-content ul { list-style: disc; padding-left: 1.5em; } .fx-note-content ol { list-style: decimal; padding-left: 1.5em; }
+.fx-note-content a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+.fx-note-content code { font: .9em/1.5 "SFMono-Regular", Consolas, monospace; background: #71717a10; border-radius: 3px; padding: .1em .25em; }
+.fx-note-content pre { white-space: pre-wrap; background: #71717a0a; padding: 12px; border-radius: 6px; }
+.fx-note-content pre code { padding: 0; background: none; }
+.fx-note-content blockquote { border-left: 3px solid #d4d4d8; padding-left: 1em; color: #71717a; }
+.fx-note-content hr { border: 0; border-top: 1px solid #d4d4d8; margin: 1em 0; }
+.fx-note-plain { white-space: pre-wrap; }
+.fx-note-excerpt { height: 100%; overflow: hidden; user-select: none; pointer-events: none; mask-image: linear-gradient(#000 80%, transparent); }
+.fx-note-diagnostic, .fx-note-unavailable { color: #82775b; }
+.fx-note-diagnostic { font-size: 12px; white-space: normal; }

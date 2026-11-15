@@ -2,8 +2,8 @@ import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore,
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { ExternalFileLink, StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote } from "@grida/fx-web";
+import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -209,6 +209,17 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
   </>;
 }
 
+function NoteDetails({ note }: { note: WorkflowNote }) {
+  const { available } = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
+  const { files } = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
+  const source = available && note.source ? files.find((file) => file.target.kind === "source" && file.target.source === note.source!.path && file.target.recorded_digest === note.source!.digest) : null;
+  return <section className="fx-note-details">
+    <Heading title={note.name} meta={["Note"]} />
+    {note.source && <p className="fx-detail-meta">{source ? <ExternalFileLink controller={externalFiles} target={source.target} className="fx-source-link" title="Open note source outside the viewer">{note.source.path}</ExternalFileLink> : note.source.path}</p>}
+    <NoteContent note={note} />
+  </section>;
+}
+
 function ScopeDetails({ node }: { node: CanvasStep }) {
   return <>
     <Heading title={node.title} id={node.path ?? node.source_id} kind="path" state={node.kind === "boundary" ? undefined : node.state} meta={[node.kind === "workflow" && `${node.child_count ?? 0} steps`, !!node.failure_count && `${node.failure_count} failed`]} />
@@ -241,12 +252,13 @@ function WorkflowView() {
   const select = (id: string | null) => { setAbout(false); controller.select(id); };
   const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
+  const selectedNote = graph.notes?.find((note) => note.id === selected);
   const selectedNode = graph.nodes.find((node) => node.id === selected);
   const instance = plan?.instances.find((node) => !selectedNode?.pending && node.id === selectedNode?.source_id);
   const pending = plan?.pending.find((node) => selectedNode?.pending && node.path === selectedNode.source_id);
   const runNode = run?.nodes.find((node) => node.id === selectedNode?.source_id);
   const notices = [...(plan?.problems?.map((problem) => `${problem.where}: ${problem.message}`) ?? []), ...(run?.warnings ?? [])];
-  const open = selectedNode !== undefined || about;
+  const open = selectedNode !== undefined || selectedNote !== undefined || about;
   // The step list is a popover: hidden until asked for, closed by a press anywhere else.
   const [steps, setSteps] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -325,13 +337,13 @@ function WorkflowView() {
         </nav>}
         {open && <aside aria-label="Details" className="fx-details">
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
-          {selectedNode?.kind ? <ScopeDetails node={selectedNode} />
+          {selectedNote ? <NoteDetails note={selectedNote} /> : selectedNode?.kind ? <ScopeDetails node={selectedNode} />
             : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />
               : selectedNode.pending ? <Heading title={selectedNode.title} id={selectedNode.source_id} kind="step path" state={selectedNode.state} meta={[selectedNode.subtitle]} />
               : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} onInspectSource={inspectSource} />
             : scopeNode ? <ScopeDetails node={scopeNode} />
             : plan ? <PlanDetails plan={plan} /> : <RunDetails run={run!} />}
-          {!selectedNode && <>
+          {!selectedNode && !selectedNote && <>
             {plan?.problems?.map((problem, index) => <Problem key={index}><span className="block font-mono">{problem.where}</span>{problem.message}</Problem>)}
             {run?.warnings.map((warning, index) => <p key={index} className="fx-detail-notice">{warning}</p>)}
           </>}

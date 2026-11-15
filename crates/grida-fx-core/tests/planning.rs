@@ -2222,6 +2222,7 @@ fn hand_planner(takes: &[&str]) -> (Fixture, Planner) {
         id: "case".into(),
         title: "Case".into(),
         description: None,
+        notes: Default::default(),
         inputs: IndexMap::new(),
         tables: IndexMap::new(),
         let_: IndexMap::new(),
@@ -2649,4 +2650,49 @@ fn injected_plan_billing_removes_only_matching_unknown_forecasts() {
     plan.require_estimates();
     assert_eq!(plan.problems.len(), 1);
     assert_eq!(plan.problems[0].where_, "paid");
+}
+
+#[test]
+fn integrated_notes_preserve_plan_identity_without_exempting_prompt_sources() {
+    use grida_fx_core::plan::output::{graph_document, plan_digest};
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\nroute_tables: [routes.yaml]\n");
+    fixture.write("notes.md", "Draw a lantern.");
+    let mut document = json!({"fx":"workflow/v1","id":"case","title":"Notes and prompts","steps":{"draw":{"uses":"fx/image.generate@1","route":"img-a@acme","with":{"prompt":"./notes.md"}}}});
+    let route = "fx: routes/v1\nroutes:\n  - {capability: image.generate, route: img-a@acme, price: {usd: 0.01}}\n";
+    fixture.write("routes.yaml", route);
+    fixture.write("workflows/case.yaml", &document.to_string());
+    let mut host = FakeHost::new();
+    let mut before = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    let baseline = make_plan(&mut before, &mut host, None, &NoCache).unwrap();
+    assert!(baseline.ok(), "{:?}", baseline.problems);
+    document["notes"] =
+        json!({"intro":{"file":"./notes.md"},"literal":{"text":"${{ inputs.example }}"}});
+    fixture.write("workflows/case.yaml", &document.to_string());
+    let mut with_notes = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    let noted = make_plan(&mut with_notes, &mut host, None, &NoCache).unwrap();
+    assert!(noted.ok());
+    assert_eq!(
+        plan_digest(&baseline, &before),
+        plan_digest(&noted, &with_notes)
+    );
+    assert_eq!(baseline.expansion.instances, noted.expansion.instances);
+    assert_eq!(baseline.phases(), noted.phases());
+    assert!(graph_document(&baseline, &before).get("notes").is_none());
+    assert_eq!(
+        graph_document(&noted, &with_notes)["notes"][0]["text"],
+        "Draw a lantern."
+    );
+    fixture.write("notes.md", "Draw a kite.");
+    let mut after = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    let changed = make_plan(&mut after, &mut host, None, &NoCache).unwrap();
+    assert_eq!(
+        plan_digest(&noted, &with_notes),
+        plan_digest(&changed, &after)
+    );
+    assert_ne!(
+        noted.expansion.instances["draw#1"].identity,
+        changed.expansion.instances["draw#1"].identity,
+        "the same file still affects executable prompt identity"
+    );
 }

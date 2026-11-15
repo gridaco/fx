@@ -660,7 +660,7 @@ async fn interruption() -> bool {
 /// refusals 4 to 6, and what comes before the event log).
 fn prepare(
     engine: &Arc<Engine>,
-    planner: &Planner,
+    planner: &mut Planner,
     plan: &Plan,
     options: &RunOptions,
     digest: &str,
@@ -732,6 +732,19 @@ fn prepare(
     folder.write_plan_once(&document).map_err(|error| {
         RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
     })?;
+    let saved = std::fs::read(folder.plan_path()).map_err(|error| {
+        RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
+    })?;
+    let saved: serde_json::Value = serde_json::from_slice(&saved)
+        .map_err(|_| RunError::Fatal(Error::document("saved plan has invalid note evidence")))?;
+    let templates = serde_json::from_value(
+        saved
+            .get("note_templates")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([])),
+    )
+    .map_err(|_| RunError::Fatal(Error::document("saved plan has invalid note evidence")))?;
+    planner.registry.restore_note_templates(templates);
     if let Some(models) = &options.resolved_models {
         let path = folder.path.join("resolved-models.json");
         // Keep the original facts. Current configuration is still replanned and checked above.
@@ -909,11 +922,14 @@ impl Scheduler<'_> {
             })
             .collect();
         let pending: Vec<_> = expansion.pending.iter().map(pending_document).collect();
-        let snapshot = serde_json::json!({
+        let mut snapshot = serde_json::json!({
             "scopes": expansion.scopes, "node_interface_bindings": node_interface_bindings,
             "instances": instances, "pending": pending,
             "skip_reasons": skip_reasons,
         });
+        if !self.planner.registry.note_templates().is_empty() {
+            snapshot["notes"] = serde_json::to_value(&expansion.notes).expect("serializable notes");
+        }
         if self.display_snapshot.as_ref() != Some(&snapshot) {
             self.emit(&Event::ScopesUpdated {
                 scopes: snapshot["scopes"].clone(),
@@ -921,6 +937,7 @@ impl Scheduler<'_> {
                 instances: snapshot["instances"].clone(),
                 pending: snapshot["pending"].clone(),
                 skip_reasons: Some(snapshot["skip_reasons"].clone()),
+                notes: snapshot.get("notes").cloned(),
             })?;
             self.display_snapshot = Some(snapshot);
         }

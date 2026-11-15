@@ -50,13 +50,13 @@ export class ExportViewerController {
   private project(recording: LoadedRunExport) {
     const state = this.navigation.getSnapshot();
     const graph = exportCanvasGraph(recording, state.scope);
-    const selected = graph.nodes.some((node) => node.id === state.selected) ? state.selected : null;
+    const selected = (graph.nodes.some((node) => node.id === state.selected) || graph.notes?.some((note) => note.id === state.selected)) ? state.selected : null;
     this.navigation.select(selected);
     return { graph, selected, scope: state.scope, breadcrumbs: state.breadcrumbs };
   }
 
   select = (id: string | null) => {
-    if (id !== null && !this.state.graph.nodes.some((node) => node.id === id)) return false;
+    if (id !== null && !this.state.graph.nodes.some((node) => node.id === id) && !this.state.graph.notes?.some((note) => note.id === id)) return false;
     this.navigation.select(id);
     this.update({ selected: id });
     return true;
@@ -82,7 +82,7 @@ export class ExportViewerController {
     const scopes = new Map(navigationScopes(this.state.recording.manifest.view.scopes).map((item) => [item.id, item]));
     if (scope !== null && !scopes.has(scope)) return false;
     const graph = exportCanvasGraph(this.state.recording, scope);
-    if (selected !== null && !graph.nodes.some((node) => node.id === selected)) return false;
+    if (selected !== null && !graph.nodes.some((node) => node.id === selected) && !graph.notes?.some((note) => note.id === selected)) return false;
     if (!this.navigation.restore(scope, selected)) return false;
     this.update(this.project(this.state.recording));
     return true;

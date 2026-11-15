@@ -742,6 +742,12 @@
           "items": {
             "$ref": "#/$defs/pending_repeat"
           }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/note"
+          }
         }
       }
     },
@@ -845,6 +851,35 @@
           "uniqueItems": true,
           "items": {
             "type": "string"
+          }
+        },
+        "notes": {
+          "description": "Presentation-only note cells keyed by recorded note id, separate from executable slot cells and member order.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "column",
+              "row",
+              "source"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "column": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "row": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source": {
+                "enum": [
+                  "automatic",
+                  "authored"
+                ]
+              }
+            }
           }
         }
       }
@@ -955,6 +990,82 @@
         "phase"
       ],
       "additionalProperties": false
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "scope_id",
+        "about",
+        "format",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 64
+        },
+        "scope_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "about": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "enum": [
+            "markdown",
+            "text"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 262144
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "withheld": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "withheld"
+            ]
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "type": "null"
+              }
+            },
+            "not": {
+              "required": [
+                "source"
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

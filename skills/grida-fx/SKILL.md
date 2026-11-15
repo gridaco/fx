@@ -382,3 +382,12 @@ the same `--run FOLDER`. Existing plan/mode checks and recorded spend remain.
 An explicit resume can repeat an uncertain plain synchronous paid call; resumable
 jobs retain their separate reconciliation protection. Cancellation is not pause;
 `pause` and `terminate` remain deferred.
+
+## Explain a workflow with notes
+
+Use workflow/group `notes:` for static canvas documentation. Each named note has exactly
+one `text` or local `file`, optional `about` naming a direct step, and optional
+`format: markdown | text`. The engine captures file contents; expressions remain literal.
+Keep prompts, constants and inputs as workflow data rather than duplicating them into notes.
+Note-only edits preserve plan identity; old runs retain their captured notes. Include note
+files when copying templates, and choose value disclosure deliberately when exporting.

@@ -2205,3 +2205,51 @@ steps:
         );
     }
 }
+
+#[test]
+fn notes_have_recorded_owner_occurrences_without_execution_members() {
+    let project = Project::new();
+    project.file("notes/setup.md", b"# Setup\n${{ inputs.prompt }}\n");
+    project.file("workflows/inner.yaml", b"fx: workflow/v1\nid: inner\ntitle: Inner\nnotes:\n  help: {text: Imported note}\nsteps:\n  leaf:\n    uses: ./nodes/cases.py#shout\n    with: {text: inner}\n");
+    let expanded = project.expand("fx: workflow/v1\nid: case\ntitle: Notes\nnotes:\n  intro: {file: ./notes/setup.md, about: each}\n  missing: {file: ./notes/absent.txt}\nsteps:\n  each:\n    for_each: [a, b]\n    notes:\n      help: {text: Group note, about: draw}\n    steps:\n      draw:\n        uses: ./nodes/cases.py#shout\n        with: {text: '${{ item }}'}\n  imported:\n    uses: ./workflows/inner.yaml\n");
+    assert!(expanded.problems.is_empty(), "{:?}", expanded.problems);
+    assert_eq!(expanded.instances.len(), 3);
+    assert_eq!(expanded.notes.len(), 5);
+    assert_eq!(expanded.notes[0].id, "note:root:intro");
+    assert_eq!(expanded.notes[0].about.as_deref(), Some("each"));
+    assert_eq!(
+        expanded.notes[0].text.as_deref(),
+        Some("# Setup\n${{ inputs.prompt }}\n")
+    );
+    assert!(expanded.notes[1].text.is_none());
+    let group: Vec<_> = expanded
+        .notes
+        .iter()
+        .filter(|n| n.text.as_deref() == Some("Group note"))
+        .collect();
+    assert_eq!(group.len(), 2);
+    assert_ne!(group[0].id, group[1].id);
+    for note in group {
+        let scope = expanded
+            .scopes
+            .iter()
+            .find(|s| Some(&s.id) == note.scope_id.as_ref())
+            .unwrap();
+        assert_eq!(scope.kind, "group");
+        assert_eq!(note.about.as_deref(), Some("each.draw"));
+    }
+    let imported = expanded
+        .notes
+        .iter()
+        .find(|n| n.text.as_deref() == Some("Imported note"))
+        .unwrap();
+    assert_eq!(
+        expanded
+            .scopes
+            .iter()
+            .find(|s| Some(&s.id) == imported.scope_id.as_ref())
+            .unwrap()
+            .kind,
+        "workflow"
+    );
+}

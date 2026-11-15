@@ -1,5 +1,12 @@
 // Workflow authoring types: compiled by the SDK's typecheck, never executed.
-import type { GroupStep, NodeStep, VideoPreview } from "../../src/index.js";
+import type { GroupStep, NodeStep, Note, VideoPreview } from "../../src/index.js";
+
+export const fileNote: Note = { file: "./notes/setup.md", format: "text" };
+export const inlineNote: Note = { text: "## Overview", about: "draw" };
+// @ts-expect-error A note has exactly one content source.
+export const conflictingNote: Note = { text: "inline", file: "./notes/setup.md" };
+// @ts-expect-error A note needs a content source.
+export const missingNote: Note = { format: "markdown" };
 
 export const withPoster: VideoPreview = { video: "native", poster: "cover" };
 export const withoutPoster: VideoPreview = { video: "native" };

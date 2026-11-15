@@ -219,6 +219,9 @@ pub struct Registry {
     /// Project files read by content, by resolved path. `name` is the project-relative path;
     /// [`Registry::input_file`] names its files afresh.
     pub(crate) files: HashMap<PathBuf, FileValue>,
+    pub(crate) note_templates: Vec<crate::notes::Template>,
+    pub(crate) note_workflows: std::collections::HashSet<String>,
+    pub(crate) notes_frozen: bool,
 }
 
 impl Registry {
@@ -240,6 +243,9 @@ impl Registry {
             types: HashMap::new(),
             workflows: HashMap::new(),
             files: HashMap::new(),
+            note_templates: Vec::new(),
+            note_workflows: Default::default(),
+            notes_frozen: false,
         }
     }
 

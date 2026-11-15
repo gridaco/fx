@@ -1,0 +1,37 @@
+# Static notes are documentation, not execution: both sources render literally; a missing file
+# is nonfatal. Note-only edits preserve step identity and allow resume, while the original run
+# keeps its captured Markdown. No node host, provider credentials or network is needed.
+steps:
+- argv: [identity, case]
+  save: identity.json
+  json: true
+- argv: [run, case, --run, runs/one, --no-view]
+  mentions: ["result    ok   booked $0.00"]
+- read: runs/one/plan.json
+  save: plan.json
+  json: true
+- files:
+    docs/setup.md: "## Changed setup\n"
+    workflows/case.yaml: |
+      fx: workflow/v1
+      id: case
+      title: Static notes
+      notes:
+        setup: {text: Changed inline note}
+      steps:
+        section:
+          notes:
+            example: {text: Changed group note}
+          steps:
+            choose:
+              uses: fx/select@1
+              with:
+                first_of: [ready]
+  argv: [identity, case]
+  save: identity.json
+  json: true
+- argv: [run, case, --run, runs/one, --no-view]
+  mentions: ["result    ok   booked $0.00"]
+- read: runs/one/plan.json
+  save: plan.json
+  json: true

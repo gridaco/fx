@@ -151,6 +151,11 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
   const nodes = allNodes.filter((node) => representative(node.id) === node.id).map((node) => ({ ...node,
     ...(node.ports ? { ports: { inputs: [...node.ports.inputs], outputs: [...node.ports.outputs], settings: [...node.ports.settings] } } : {}),
   }));
+  const notes = (flat.notes ?? []).filter((note) => {
+    if (note.scope_id !== null && !byId.has(note.scope_id)) return false;
+    const chain = ancestors(note.scope_id);
+    return inActive(chain) && !afterActive(chain).some((scope) => scope.kind === "workflow");
+  }).map((note) => ({ ...note, frame_id: note.scope_id !== active && byId.get(note.scope_id ?? "")?.kind === "group" ? note.scope_id : null }));
   const sourceNodes = new Map((plan ? view.instances : view.nodes).map((node) => [node.id, node]));
   const descendants = (scope: WorkflowScope) => allNodes.filter((node) => ancestors(parents.get(node.id) ?? null).some((ancestor) => ancestor.id === scope.id));
   for (const scope of workflowScopes) {
@@ -255,12 +260,12 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     nodes: nodes.filter((node) => (node.kind === "workflow" ? byId.get(node.scope_id!)?.parent : parents.get(node.id)) === scope.id).map((node) => node.id),
     parent: scope.parent !== active && byId.get(scope.parent ?? "")?.kind === "group" ? scope.parent : null,
   }));
-  const nonemptyFrames = new Set(frames.filter((frame) => frame.nodes.length).map((frame) => frame.id));
+  const nonemptyFrames = new Set(frames.filter((frame) => frame.nodes.length || notes.some((note) => note.frame_id === frame.id)).map((frame) => frame.id));
   const framesById = new Map(frames.map((frame) => [frame.id, frame]));
   for (const id of nonemptyFrames) {
     const parent = framesById.get(id)?.parent;
     if (parent) nonemptyFrames.add(parent);
   }
   const precisePairs = new Set([...edges.values()].filter((edge) => edge.kind === "data").map((edge) => JSON.stringify([edge.source, edge.target])));
-  return { nodes, edges: [...edges.values()].filter((edge) => edge.kind !== "dependency" || !precisePairs.has(JSON.stringify([edge.source, edge.target]))), frames: frames.filter((frame) => nonemptyFrames.has(frame.id)) };
+  return { nodes, edges: [...edges.values()].filter((edge) => edge.kind !== "dependency" || !precisePairs.has(JSON.stringify([edge.source, edge.target]))), frames: frames.filter((frame) => nonemptyFrames.has(frame.id)), ...(notes.length ? { notes } : {}) };
 }

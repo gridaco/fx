@@ -850,6 +850,12 @@
         "properties": {
           "event": {
             "const": "scopes_updated"
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/note"
+            }
           }
         }
       },
@@ -1368,6 +1374,77 @@
             "type": "string",
             "minLength": 1
           }
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "scope_id",
+        "about",
+        "format",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "maxLength": 64
+        },
+        "scope_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "about": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "enum": [
+            "markdown",
+            "text"
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 262144
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "digest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\:\\x00-\\x1f\\x7f]+$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 512
         }
       }
     }

@@ -1,3 +1,4 @@
+import { renderNoteContent } from "./notes";
 import { createElement, X } from "lucide";
 import type { CanvasGraph, LayoutReport } from "./graph";
 import { CanvasViewport, type CanvasInset, type ViewportState } from "./controller";
@@ -80,6 +81,7 @@ export class CanvasController {
   private readonly svg = element("svg", { role: "group", "aria-label": "Workflow dependency canvas" });
   private readonly content = element("g");
   private readonly viewport = new CanvasViewport();
+  private readonly noteCards = new Map<string, SVGGElement>();
   private readonly nodes = new Map<string, SVGGElement>();
   private readonly frameCards = new Map<string, SVGGElement>();
   private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string; points: CanvasLayout["edges"][number]["points"] }>();
@@ -204,7 +206,7 @@ export class CanvasController {
     container.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && this.scope !== null && !event.defaultPrevented) { event.preventDefault(); this.onBack(); }
     }, { signal: this.abort.signal });
-    this.resize = new ResizeObserver(() => { if (!this.didFit && this.layout.nodes.length) this.fit(); });
+    this.resize = new ResizeObserver(() => { if (!this.didFit && (this.layout.nodes.length || this.layout.notes?.length)) this.fit(); });
     this.resize.observe(container);
     this.applyViewport();
   }
@@ -228,6 +230,7 @@ export class CanvasController {
     this.graphAbort = new AbortController();
     this.layout = layoutGraph(graph, report);
     this.nodes.clear();
+    this.noteCards.clear();
     this.frameCards.clear();
     this.edges.clear();
     this.shifts.clear();
@@ -235,7 +238,7 @@ export class CanvasController {
     this.highlightedEdges.clear();
     this.hovered = null;
     this.render();
-    this.empty.hidden = this.layout.nodes.length > 0;
+    this.empty.hidden = this.layout.nodes.length > 0 || (this.layout.notes?.length ?? 0) > 0;
     const selected = this.selected;
     this.selected = null;
     this.setSelection(selected);
@@ -309,6 +312,26 @@ export class CanvasController {
       }, { signal });
       layer(frameOf.get(node.id) ?? null).cards.append(group);
       this.nodes.set(node.id, group);
+    }
+    for (const note of this.layout.notes ?? []) {
+      const group = element("g", { class: "fx-canvas-note", "data-note-id": note.id, role: "button", tabindex: 0, "aria-label": `Read note ${note.name}`, transform: `translate(${note.x},${note.y})` });
+      group.append(element("rect", { width: note.width, height: note.height, rx: 8, class: "fx-canvas-note-box" }));
+      group.append(element("text", { x: 16, y: 25, class: "fx-canvas-note-title" }, `Note · ${note.name}`));
+      const content = element("foreignObject", { x: 16, y: 40, width: note.width - 32, height: note.height - 76 });
+      const excerpt = renderNoteContent(note, document, true);
+      excerpt.classList.add("fx-note-excerpt");
+      excerpt.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      // Canvas links belong to full-text inspection; a card remains one clear activation target.
+      for (const link of excerpt.querySelectorAll("a")) link.removeAttribute("href");
+      content.append(excerpt);
+      group.append(content, element("text", { x: 16, y: note.height - 15, class: "fx-canvas-note-more" }, "Read full note"));
+      group.addEventListener("click", () => this.onSelect(note.id), { signal });
+      group.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault(); this.onSelect(note.id);
+      }, { signal });
+      layer(note.frame_id && layers.has(note.frame_id) ? note.frame_id : null).cards.append(group);
+      this.noteCards.set(note.id, group);
     }
     this.videos.redrawn(this.nodes);
     const items = new Map<string, PositionedNode | PositionedFrame>([...this.layout.nodes, ...frames].map((item) => [item.id, item]));
@@ -484,7 +507,7 @@ export class CanvasController {
   }
   /** The deck card that is or holds this node's card, or -1. */
   private holding(deck: Deck, id: string) {
-    const node = this.nodes.get(id);
+    const node = this.nodes.get(id) ?? this.noteCards.get(id);
     return node ? deck.cards.findIndex((card) => card.contains(node)) : -1;
   }
 
@@ -548,7 +571,8 @@ export class CanvasController {
   }
   /** The member that rests in front of a closed deck (§5.4). */
   private frontOf(index: number) {
-    return this.deckSelection!.front(index, this.selected);
+    const noteMember = this.selected && this.noteCards.has(this.selected) ? this.holding(this.decks[index], this.selected) : -1;
+    return noteMember >= 0 ? noteMember : this.deckSelection!.front(index, this.selected);
   }
 
   private cardAt(target: EventTarget | null): DeckHit | null {
@@ -686,7 +710,7 @@ export class CanvasController {
     this.selected = id;
     for (const key of [previous, id]) {
       if (key === null) continue;
-      const group = this.nodes.get(key);
+      const group = this.nodes.get(key) ?? this.noteCards.get(key);
       if (!group) continue;
       group.classList.toggle("is-selected", key === id);
       group.setAttribute(group.getAttribute("role") === "button" ? "aria-pressed" : "aria-current", String(key === id));
@@ -697,6 +721,7 @@ export class CanvasController {
     // In the open deck the bookmark marks the selected member.
     if (this.open && held >= 0) this.markFront(this.open.deck, held);
     const affected = new Set([previous, id].flatMap((key) => key === null ? [] : this.deckSelection?.affected(key) ?? []));
+    if (id && this.noteCards.has(id)) for (const [index, deck] of this.decks.entries()) if (this.holding(deck, id) >= 0) affected.add(index);
     for (const index of affected) this.restDeck(index);
   }
   /**
@@ -704,7 +729,7 @@ export class CanvasController {
    * caller's panels leave free. Use its displayed position, including open grids and stack shifts.
    */
   reveal(id: string, inset: CanvasInset = { left: 0, right: 0, top: 0, bottom: 0 }) {
-    const node = this.layout.nodes.find((item) => item.id === id);
+    const node = this.layout.nodes.find((item) => item.id === id) ?? this.layout.notes?.find((item) => item.id === id);
     if (!node) return;
     if (this.open && this.holding(this.open.deck, id) < 0) this.collapse(true);
     const box = { x: node.x, y: node.y, width: node.width, height: node.height };
@@ -744,7 +769,7 @@ export class CanvasController {
   fit() {
     const bounds = this.container.getBoundingClientRect();
     this.viewport.fit(this.layout, bounds);
-    this.didFit = bounds.width > 0 && bounds.height > 0 && this.layout.nodes.length > 0;
+    this.didFit = bounds.width > 0 && bounds.height > 0 && (this.layout.nodes.length > 0 || (this.layout.notes?.length ?? 0) > 0);
     this.applyViewport();
   }
   private zoom(factor: number) {
@@ -798,7 +823,7 @@ export class CanvasController {
     const target = event.target as Element;
     if (event.button !== 0 || target.closest(CARD_CONTROLS)) return;
     this.drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false,
-      background: !target.closest("[data-node-id], [data-connection-id], [data-deck], .fx-deck-bookmark"), veil: Boolean(target.closest(".fx-deck-veil")) };
+      background: !target.closest("[data-node-id], [data-note-id], [data-connection-id], [data-deck], .fx-deck-bookmark"), veil: Boolean(target.closest(".fx-deck-veil")) };
   };
   private onPointerMove = (event: PointerEvent) => {
     // A drag lasts only while its button is held: a release the canvas never saw (outside the

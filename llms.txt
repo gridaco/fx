@@ -141,6 +141,7 @@ tables:  { … }           # constant lookup tables
 let:     { … }           # named expressions
 budget:  { max_usd: 12 } # this workflow's default ceiling
 assert:  [ … ]           # plan-time checks
+notes:   { … }           # static documentation cards (root or group)
 steps:   { … }           # required: the work
 outputs: { … }           # what the workflow promises
 ```
@@ -151,6 +152,42 @@ Three ideas govern everything:
   input bytes, upstream results, route or take changed. Renaming or reordering steps reruns
   nothing. Paid calls are also cached by their exact request.
 - **Order comes from wiring.** Steps run as soon as their inputs exist, in parallel.
+
+### Canvas notes
+
+A workflow or group may declare an ordered `notes` map. Each note has exactly one of
+`text` (inline string) or `file` (local home-project path), optional `about` (a direct step
+name in the same container), and `format: markdown | text` (default `markdown`).
+
+```yaml
+notes:
+  overview:
+    file: ./notes/overview.md
+  help:
+    about: draw
+    text: |
+      ## Reference image
+      Use a **clear silhouette**.
+  literal:
+    format: text
+    text: "${{ inputs.prompt }} is documentation here."
+```
+
+Notes never execute or evaluate expressions. The engine captures bounded UTF-8 file
+content into the plan; a missing/unreadable file or unresolved association leaves a visible
+note diagnostic and does not fail work. The viewer renders Markdown or literal text and
+opens full notes in its existing details panel. Note-only document/file edits preserve plan
+identity, and resumed runs retain their original note snapshots. A fresh plan sees current
+notes. A file also used as a prompt/input/resource and edits to node source modules keep
+normal identity effects. Shared exports disclose note text only with `--include-values`.
+Python: `wf.note("help", text="## Reference", about="draw")`; groups have `.note` too,
+and `Workflow(..., notes={...})` accepts declarations. JavaScript: `workflow({..., notes:
+{help: {text: "## Reference", about: "draw"}}, steps: {...}})`; `Note` is an exported type.
+
+Viewer hosts opt into note references with `new ViewerClient({..., includeNotes: true})`.
+The context then identifies `{kind: "note", note_id, scope_id}` without note text, and
+`present({action: "reveal_note", note_id})` reveals a recorded note. Default clients keep
+legacy selection shapes; see the viewer API guide for same-realm options.
 
 ### Strict YAML
 

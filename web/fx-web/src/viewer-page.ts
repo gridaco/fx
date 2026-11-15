@@ -2,6 +2,7 @@ import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol";
 import { ViewerPresentationError } from "./presentation";
 import { ExternalFileController, ExternalFileError } from "./external-file";
 
+export interface ViewerPageOptions { includeNotes?: boolean }
 export interface ViewerPageSource {
   getContext(): ViewerProtocol.Context;
   present(action: ViewerProtocol.Action): ViewerProtocol.Context;
@@ -19,8 +20,8 @@ interface FileOwner {
 /** The page-level postMessage endpoint. Window references are the browser's identities. */
 export class ViewerPage {
   private readonly grants = new Map<Window, Set<string>>();
-  private readonly peers = new Map<Window, Set<string>>();
-  private readonly listeners = new Set<(context: ViewerProtocol.Context) => void>();
+  private readonly peers = new Map<Window, Map<string, boolean>>();
+  private readonly listeners = new Map<(context: ViewerProtocol.Context) => void, boolean>();
   private readonly detach: () => void;
   private queued = false;
   private disposed = false;
@@ -47,11 +48,17 @@ export class ViewerPage {
     };
   };
 
-  getContext = (): ViewerProtocol.Context => this.source.getContext();
-  present = (action: ViewerProtocol.Action): ViewerProtocol.Context => this.source.present(action);
-  subscribe = (listener: (context: ViewerProtocol.Context) => void): (() => void) => {
-    const context = this.getContext();
-    this.listeners.add(listener);
+  private contextFor(context: ViewerProtocol.Context, includeNotes = false): ViewerProtocol.Context {
+    return !includeNotes && context.selection?.kind === "note" ? { ...context, selection: null } : context;
+  }
+  getContext = (options: ViewerPageOptions = {}): ViewerProtocol.Context => this.contextFor(this.source.getContext(), options.includeNotes === true);
+  present = (action: ViewerProtocol.Action, options: ViewerPageOptions = {}): ViewerProtocol.Context => {
+    if (action.action === "reveal_note" && options.includeNotes !== true) throw new ViewerPresentationError("unsupported_method", "Note presentation requires includeNotes.");
+    return this.contextFor(this.source.present(action), options.includeNotes === true);
+  };
+  subscribe = (listener: (context: ViewerProtocol.Context) => void, options: ViewerPageOptions = {}): (() => void) => {
+    const context = this.getContext(options);
+    this.listeners.set(listener, options.includeNotes === true);
     try { listener(context); } catch { /* A consumer cannot interrupt the page. */ }
     return () => { this.listeners.delete(listener); };
   };
@@ -116,6 +123,7 @@ export class ViewerPage {
       if (!ViewerProtocol.isMethod(request.method)) throw new ViewerPresentationError("unsupported_method", "This viewer does not support that page method.");
       if (!ViewerProtocol.isParams(request.method, request.params)) throw new ViewerPresentationError("invalid_request", "The page method parameters are malformed.");
       let result: ViewerProtocol.Context | null;
+      const includeNotes = request.params.include_notes === true;
       switch (request.method) {
         case "unsubscribe": {
           const origins = this.peers.get(event.source);
@@ -125,14 +133,18 @@ export class ViewerPage {
           break;
         }
         case "subscribe": {
-          result = this.getContext();
-          const origins = this.peers.get(event.source) ?? new Set<string>();
-          origins.add(event.origin);
+          result = this.getContext({ includeNotes });
+          const origins = this.peers.get(event.source) ?? new Map<string, boolean>();
+          origins.set(event.origin, includeNotes);
           this.peers.set(event.source, origins);
           break;
         }
-        case "get_context": result = this.getContext(); break;
-        case "present": result = this.present(request.params as ViewerProtocol.Action); break;
+        case "get_context": result = this.getContext({ includeNotes }); break;
+        case "present": {
+          const { include_notes: _capability, ...action } = request.params;
+          result = this.present(action as ViewerProtocol.Action, { includeNotes });
+          break;
+        }
         case "register_external_file_handler":
           this.registerFileOwner(event.source, event.origin, request.params.handler_id as string);
           result = null;
@@ -168,16 +180,16 @@ export class ViewerPage {
       this.queued = false;
       if (this.disposed) return;
       let context: ViewerProtocol.Context;
-      try { context = this.getContext(); } catch { return; }
+      try { context = this.source.getContext(); } catch { return; }
       const signature = JSON.stringify({ ...context, sampled_at: 0 });
       if (signature === this.previous) return;
       this.previous = signature;
-      for (const listener of [...this.listeners]) {
-        try { listener(structuredClone(context)); } catch { /* Isolate local consumers. */ }
+      for (const [listener, includeNotes] of [...this.listeners]) {
+        try { listener(structuredClone(this.contextFor(context, includeNotes))); } catch { /* Isolate local consumers. */ }
       }
       for (const [peer, origins] of this.peers) {
-        for (const origin of origins) if (!this.send(peer, origin, {
-          channel: ViewerProtocol.CHANNEL, version: ViewerProtocol.VERSION, type: "context_changed", context,
+        for (const [origin, includeNotes] of origins) if (!this.send(peer, origin, {
+          channel: ViewerProtocol.CHANNEL, version: ViewerProtocol.VERSION, type: "context_changed", context: this.contextFor(context, includeNotes),
         })) origins.delete(origin);
         if (origins.size === 0) this.peers.delete(peer);
       }
