@@ -15,7 +15,7 @@
 .inspector { position: absolute; top: 12px; right: 12px; bottom: 64px; width: min(340px, calc(100% - 24px)); overflow: auto; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-background); box-shadow: 0 4px 18px #00000008; }
 .inspectorBody { padding: 18px; font-size: 12px; }
 .close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 5px; background: var(--color-background); cursor: pointer; }
-.inspectorBody h2 { padding-right: 24px; font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
+.inspectorBody h2 { padding-right: 24px; font-size: 14px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .inspectorBody h3 { margin: 20px 0 10px; font-weight: 500; }
 .inspectorBody p { margin-top: 7px; color: var(--color-muted-foreground); line-height: 1.6; }
 .inspectorBody dl { margin-top: 8px; }

@@ -88,6 +88,16 @@ try {
   }));
   assert.equal(groupSizes.length, 2);
   assert.deepEqual(groupSizes[0], groupSizes[1], "Repeated group frames share the same measured tracks");
+  const groupNotes = await page.locator(".fx-canvas-frame.fx-deck-card").evaluateAll(frames => frames.map(frame => ({
+    id: frame.getAttribute("data-frame-id"), note: frame.querySelector("[data-note-id]").getAttribute("data-note-id"),
+  })));
+  const frontFrame = () => page.locator(".fx-canvas-frame.fx-deck-card").last().getAttribute("data-frame-id");
+  const restingFrame = await frontFrame();
+  const backNote = groupNotes.find(frame => frame.id !== restingFrame);
+  await page.evaluate(note_id => window.fx_viewer.present({ action: "reveal_note", note_id }, { includeNotes: true }), backNote.note);
+  assert.equal(await frontFrame(), backNote.id, "Inspecting a group note raises its containing member");
+  await page.getByRole("button", { name: "Close details", exact: true }).click();
+  assert.equal(await frontFrame(), restingFrame, "Clearing a group note restores the resting deck representative");
   const originalGeometry = await geometry();
   // Use the real camera controls, then pan to compare ordinary, short and long cards at once.
   const currentWidth = (await literal.boundingBox()).width;
@@ -154,6 +164,24 @@ try {
   await page.waitForSelector('.fx-canvas-note[data-note-id="note:root:overview"]');
   await nextPaint();
   assert.deepEqual(await geometry(), originalGeometry, "Reload measures the same captured note sizes before layout");
+  // Exercise the maximum allowed identifier without changing the source fixture or saved run.
+  const longName = "w".repeat(64);
+  await page.route(`${origin}/api/snapshot`, async route => {
+    const response = await route.fetch(), snapshot = await response.json();
+    const note = snapshot.view.notes.find(note => note.name === "renamed_target"), previous = note.id;
+    note.name = longName; note.id = `note:root:${longName}`;
+    snapshot.layout.notes[note.id] = snapshot.layout.notes[previous];
+    delete snapshot.layout.notes[previous];
+    await route.fulfill({ response, json: snapshot });
+  });
+  await page.reload();
+  const namedCard = page.locator(`.fx-canvas-note[data-note-id="note:root:${longName}"]`);
+  await namedCard.waitFor();
+  const headerFits = await namedCard.evaluate(card => card.querySelector(".fx-canvas-note-title").getBBox().width <= card.querySelector(":scope > rect").width.baseVal.value - 32);
+  assert.equal(headerFits, true, "A maximum-length name must stay inside its note card");
+  assert.equal(await namedCard.getAttribute("aria-label"), `Read note ${longName}`);
+  await namedCard.click();
+  assert.match(await details.innerText(), new RegExp(longName), "Full identifiers remain available in details");
   assert.deepEqual(external, [], "Notes must not fetch external resources");
   assert.deepEqual(errors, []);
   console.log(`ok   real notes: content-sized cards (short ${literalSize.height}, ordinary ${overviewSize.height}, long ${longSize.height}), bounded long documents, shared group tracks, stable reload/selection, Markdown/literal rendering, immutable snapshots, SDK opt-in, source opening, no external requests; $0`);

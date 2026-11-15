@@ -325,7 +325,7 @@ export class CanvasController {
       const presentation = this.noteContent.content(note.id)!;
       const group = element("g", { class: `fx-canvas-note${presentation.collapsed ? " is-collapsed" : ""}`, "data-note-id": note.id, "data-collapsed": String(presentation.collapsed), role: "button", tabindex: 0, "aria-label": `Read note ${note.name}`, transform: `translate(${note.x},${note.y})` });
       group.append(element("rect", { width: note.width, height: note.height, rx: 2, fill: `url(#${this.id}-note-paper)`, class: "fx-canvas-note-box" }));
-      group.append(element("text", { x: 16, y: 25, class: "fx-canvas-note-title" }, `Note · ${note.name}`));
+      group.append(element("text", { x: 16, y: 25, class: "fx-canvas-note-title" }, `Note · ${short(note.name, 32)}`));
       const content = element("foreignObject", { x: 16, y: 40, width: note.width - 32, height: presentation.contentHeight });
       const excerpt = presentation.body;
       excerpt.classList.add("fx-note-excerpt");
@@ -731,7 +731,9 @@ export class CanvasController {
     // In the open deck the bookmark marks the selected member.
     if (this.open && held >= 0) this.markFront(this.open.deck, held);
     const affected = new Set([previous, id].flatMap((key) => key === null ? [] : this.deckSelection?.affected(key) ?? []));
-    if (id && this.noteCards.has(id)) for (const [index, deck] of this.decks.entries()) if (this.holding(deck, id) >= 0) affected.add(index);
+    for (const key of [previous, id]) {
+      if (key && this.noteCards.has(key)) for (const [index, deck] of this.decks.entries()) if (this.holding(deck, key) >= 0) affected.add(index);
+    }
     for (const index of affected) this.restDeck(index);
   }
   /**
