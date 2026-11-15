@@ -88,6 +88,52 @@ A verification failure returns its documented unsuccessful verification result;
 input/engine errors raise the SDK's `FxError`. Inspection does not load author
 code, run a workflow, or contact providers. Stored/placed files remain immutable.
 
+## Discover and resolve files privately
+
+Python `list_files(target, project=None, instance_id=None, cwd=None)` and JavaScript
+`listFiles(target, {project, instanceId, cwd, env, signal})` enumerate recorded file
+targets through the engine's [file access contract](files.md). `target` is an
+explicit run folder or saved plan JSON file. `RunRecord.list_files` / `listFiles`
+use the record's pinned folder; all Python jobs also have `_async` counterparts.
+
+Return a list of `FileDescriptor` values: `target` retains the portable viewer
+target shape, `role` describes its recorded association, and optional
+`instance_id` / `instanceId` and `scope_id` / `scopeId` identify its context.
+Discovery loads neither workflow builders nor node modules.
+
+Python `resolve_file(target, reference, project=None, source_root=None, cwd=None)`
+and JavaScript `resolveFile(target, reference, {project, sourceRoot, cwd, env, signal})`
+resolve a complete captured viewer file reference (`subject` and `target`). The
+record methods `resolve_file` / `resolveFile` again use the pinned run folder.
+The engine owns subject checks, recorded-target admission, source binding,
+confinement and artifact verification. SDKs do not infer identities or derive a
+filesystem location from an artifact URL or portable source label.
+
+The native `FileResolution` result contains `target`, `local_path` / `localPath`,
+`source_match` / `sourceMatch`, and `reason`. Python's available `local_path` is a
+`Path`; JavaScript's `localPath` is an absolute path string. Unavailable local
+copies return `None` / `null` and a reason. These paths belong only to the trusted
+native caller: never copy them into browser documents, viewer messages or portable
+exports.
+
+Artifacts resolve to verified recorded copies. Source resolution opens today's
+editable file; `source_match` is `match`, `changed` or `unknown` when applicable,
+and changed source remains openable. Source resolution needs an explicit local
+binding: `project` selects the planning project and defaults the source root;
+`source_root` / `sourceRoot` supplies the owning source root when it differs.
+Closure-only helper labels require explicit `source_root` / `sourceRoot`, even
+when `project` is supplied, because their base may be a declared source package.
+The binding resolves the complete recorded label; FX does not infer package
+ownership from today's project configuration or discover installed packages.
+Neither the current directory nor the run folder silently supplies that binding.
+Native resolution does not execute author code, contact providers or open the
+file itself. The host owns its file-tab, OS-opening and other presentation choices.
+
+Structured refusals raise `FileAccessError` with `code` and the complete error
+`document`, including unknown future codes. Unsupported engines, malformed
+responses and transport failures raise ordinary `FxError`. JavaScript's signal
+and Python task cancellation stop only the reader command, never the workflow.
+
 ## Observe independently
 
 Record methods `snapshot` and `events` call the existing engine `observe` reader;

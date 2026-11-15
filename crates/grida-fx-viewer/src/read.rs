@@ -144,6 +144,8 @@ struct Candidate {
 /// The browser document and its private, confined artifact inventory.
 pub(crate) struct Snapshot {
     pub document: RunDocument,
+    /// Original recorded graph, kept private for source-reference discovery.
+    pub plan: Value,
     candidates: BTreeMap<String, Candidate>,
     pub recorded: Recorded,
 }
@@ -189,13 +191,23 @@ impl Snapshot {
 
     /// Opens exactly recorded bytes. Validation and serving use the same file handle.
     pub fn open_artifact(&self, root: &Path, digest: &str) -> io::Result<(File, Artifact)> {
+        self.open_artifact_with_path(root, digest)
+            .map(|(file, artifact, _)| (file, artifact))
+    }
+
+    /// The same verified lookup as HTTP serving, additionally returning its private path.
+    pub(crate) fn open_artifact_with_path(
+        &self,
+        root: &Path,
+        digest: &str,
+    ) -> io::Result<(File, Artifact, PathBuf)> {
         let candidate = self
             .candidates
             .get(digest)
             .ok_or_else(|| missing("artifact is not recorded in this run"))?;
         for relative in &candidate.paths {
-            if let Ok(file) = verified_file(root, relative, &candidate.artifact) {
-                return Ok((file, candidate.artifact.clone()));
+            if let Ok((file, path)) = verified_file_with_path(root, relative, &candidate.artifact) {
+                return Ok((file, candidate.artifact.clone(), path));
             }
         }
         Err(missing("recorded artifact bytes are unavailable"))
@@ -226,10 +238,18 @@ pub(crate) fn confined_file(root: &Path, relative: &str) -> io::Result<PathBuf> 
 }
 
 fn verified_file(root: &Path, relative: &str, artifact: &Artifact) -> io::Result<File> {
+    verified_file_with_path(root, relative, artifact).map(|(file, _)| file)
+}
+
+fn verified_file_with_path(
+    root: &Path,
+    relative: &str,
+    artifact: &Artifact,
+) -> io::Result<(File, PathBuf)> {
     #[cfg(test)]
     VERIFIED_PATHS.with(|paths| paths.borrow_mut().push(relative.to_string()));
     let path = confined_file(root, relative)?;
-    let mut file = File::open(path)?;
+    let mut file = File::open(&path)?;
     if file.metadata()?.len() != artifact.size {
         return Err(missing("artifact size differs from its record"));
     }
@@ -246,7 +266,7 @@ fn verified_file(root: &Path, relative: &str, artifact: &Artifact) -> io::Result
         return Err(missing("artifact digest differs from its record"));
     }
     file.rewind()?;
-    Ok(file)
+    Ok((file, path))
 }
 
 pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -999,6 +1019,7 @@ fn project_inventory(
     };
     Ok(Snapshot {
         document,
+        plan: plan.clone(),
         candidates,
         recorded,
     })

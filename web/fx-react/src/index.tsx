@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { ArtifactController, artifactDownloadName, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview } from "@grida/fx-web";
+import { ArtifactController, artifactDownloadName, artifactFileTarget, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview, type ExternalFileController } from "@grida/fx-web";
 import { ModelPreview } from "./model-preview";
 import { VisualPreview } from "./visual-preview";
+import { ExternalFileLink } from "./external-file";
 export { WorkflowCanvas, type WorkflowCanvasHandle } from "./canvas";
+export { ExternalFileLink } from "./external-file";
 
 export function money(value: number | null): string {
   if (value === null) return "Not recorded";
@@ -49,34 +51,35 @@ const imageKinds = ["image/png", "image/jpeg", "image/webp", "image/gif", "image
 const jsonKinds = ["json", "application/json", "annotations"];
 
 /** Visual media uses VisualPreview; native players explicitly own their fullscreen control. */
-export function ArtifactPreview({ artifact, poster }: { artifact: Artifact; poster?: Artifact }) {
+export function ArtifactPreview({ artifact, poster, externalFiles }: { artifact: Artifact; poster?: Artifact; externalFiles?: ExternalFileController }) {
   const controller = useMemo(() => new ArtifactController(), []);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.load(artifact); return () => controller.dispose(); }, [controller, artifact]);
   const name = artifact.name || artifact.digest.slice(0, 12);
   const posterImage = artifact.kind.startsWith("video/") && poster?.available && poster.url !== null && imageKinds.includes(poster.kind) ? poster : undefined;
   if (!artifact.available || artifact.url === null) return <div className="fx-value-stack">
-    {posterImage && <ArtifactPreview artifact={posterImage} />}
-    <p className="fx-value-note">{name} · file unavailable</p>
+    {posterImage && <ArtifactPreview artifact={posterImage} externalFiles={externalFiles} />}
+    <ExternalFileLink target={artifactFileTarget(artifact)} controller={externalFiles} className="fx-value-note">{name} · file unavailable</ExternalFileLink>
   </div>;
   const url = artifact.url;
-  const open = <a className="fx-value-note hover:text-zinc-800" href={url} target="_blank" rel="noopener noreferrer">{name} ↗</a>;
-  if (artifact.kind === "model/gltf-binary") return <VisualPreview key={artifact.digest}><ModelPreview artifact={artifact} /></VisualPreview>;
+  const target = artifactFileTarget(artifact);
+  const open = <ExternalFileLink target={target} controller={externalFiles} className="fx-value-note hover:text-zinc-800">{name} ↗</ExternalFileLink>;
+  if (artifact.kind === "model/gltf-binary") return <VisualPreview key={artifact.digest}><ModelPreview artifact={artifact} externalFiles={externalFiles} /></VisualPreview>;
   if (artifact.kind.startsWith("model/")) return <div className="fx-value-stack">
     <p className="fx-value-note">3D preview unavailable. This viewer supports self-contained GLB 2 models; {artifact.kind} is not supported.</p>
-    <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original model</a>
+    <ExternalFileLink target={target} controller={externalFiles} className="fx-value-note hover:text-zinc-800" download={artifactDownloadName(artifact)}>Download original model</ExternalFileLink>
   </div>;
   if (artifact.kind.startsWith("video/")) return <VisualPreview key={artifact.digest} fullscreen="native"><div className="fx-value-stack">
     {state.error
-      ? <>{posterImage && <ArtifactPreview artifact={posterImage} />}<p className="fx-value-note">{posterImage ? "Browser playback unavailable." : "Browser preview unavailable."} Download the original to try it in another video player.</p></>
+      ? <>{posterImage && <ArtifactPreview artifact={posterImage} externalFiles={externalFiles} />}<p className="fx-value-note">{posterImage ? "Browser playback unavailable." : "Browser preview unavailable."} Download the original to try it in another video player.</p></>
       : <video className="max-h-64 w-full rounded" controls preload="metadata" src={url} poster={posterImage?.url ?? undefined} onError={controller.fail} />}
     <p className="fx-value-note">{name} · {artifact.kind}</p>
-    <a className="fx-value-note hover:text-zinc-800" href={url} download={artifactDownloadName(artifact)}>Download original video</a>
+    <ExternalFileLink target={target} controller={externalFiles} className="fx-value-note hover:text-zinc-800" download={artifactDownloadName(artifact)}>Download original video</ExternalFileLink>
   </div></VisualPreview>;
   if (state.error) return open;
-  if (imageKinds.includes(artifact.kind)) return <VisualPreview key={artifact.digest}><a href={url} target="_blank" rel="noopener noreferrer" title={`${name} · open in a new tab`} className="preview-grid block rounded border border-zinc-200 p-2">
+  if (imageKinds.includes(artifact.kind)) return <VisualPreview key={artifact.digest}><ExternalFileLink target={target} controller={externalFiles} title={`${name} · open outside the viewer`} className="preview-grid block rounded border border-zinc-200 p-2">
     <img className="mx-auto max-h-64 max-w-full object-contain" src={url} alt={name} loading="lazy" onError={controller.fail} />
-  </a></VisualPreview>;
+  </ExternalFileLink></VisualPreview>;
   if (artifact.kind.startsWith("audio/")) return <audio className="w-full" controls preload="metadata" src={url} onError={controller.fail} />;
   if (canPreviewText(artifact)) {
     // A JSON file reads as its value does: rows, one line, or folded.
@@ -94,33 +97,33 @@ function image(value: unknown, artifacts: Map<string, Artifact>) {
 }
 
 /** A recorded value in its plain form: text, a file, or a list or collection of them. */
-export function Value({ value, artifacts, videoPreview }: { value: unknown; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview }) {
+export function Value({ value, artifacts, videoPreview, externalFiles }: { value: unknown; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview; externalFiles?: ExternalFileController }) {
   if (!record(value)) return <Json value={plainJson(value) ?? value} />;
   if ("value" in value && Object.keys(value).length === 1) return <Json value={value.value} />;
   if (record(value.file) && typeof value.file.digest === "string") {
     const artifact = artifacts.get(value.file.digest);
     const poster = videoPreview?.kind === "video" && videoPreview.digest === artifact?.digest && videoPreview.poster
       ? artifacts.get(videoPreview.poster.digest) : undefined;
-    return artifact ? <ArtifactPreview artifact={artifact} poster={poster} /> : <p className="fx-value-note">File not in this run folder</p>;
+    return artifact ? <ArtifactPreview artifact={artifact} poster={poster} externalFiles={externalFiles} /> : <p className="fx-value-note">File not in this run folder</p>;
   }
   if (typeof value.file === "string" && /^[a-f0-9]{64}$/.test(value.file)) return <p className="fx-value-note" title={value.file}>file {value.file.slice(0, 12)}</p>;
   const json = plainJson(value);
   if (json !== undefined) return <Json value={json} />;
   // Pictures read best as a grid; anything else, one under another.
-  if (Array.isArray(value.list)) return <div className={value.list.every((item) => image(item, artifacts)) ? "fx-value-list" : "fx-value-stack"}>{value.list.map((item, index) => <Value key={index} value={item} artifacts={artifacts} />)}</div>;
+  if (Array.isArray(value.list)) return <div className={value.list.every((item) => image(item, artifacts)) ? "fx-value-list" : "fx-value-stack"}>{value.list.map((item, index) => <Value key={index} value={item} artifacts={artifacts} externalFiles={externalFiles} />)}</div>;
   if (Array.isArray(value.collection)) {
     const entries = value.collection.filter((item): item is [string, unknown] => Array.isArray(item) && item.length === 2);
     // A collection of pictures reads best as a captioned grid; anything else as rows.
     return entries.every(([, item]) => image(item, artifacts))
-      ? <div className="fx-value-list">{entries.map(([key, item]) => <figure key={key}><Value value={item} artifacts={artifacts} /><figcaption>{key}</figcaption></figure>)}</div>
-      : <Values values={Object.fromEntries(entries)} artifacts={artifacts} />;
+      ? <div className="fx-value-list">{entries.map(([key, item]) => <figure key={key}><Value value={item} artifacts={artifacts} externalFiles={externalFiles} /><figcaption>{key}</figcaption></figure>)}</div>
+      : <Values values={Object.fromEntries(entries)} artifacts={artifacts} externalFiles={externalFiles} />;
   }
   if (value.none === true) return <p className="fx-value-note">none</p>;
   if (value.missing === true) return <p className="fx-value-note">missing</p>;
   if ("pending" in value) return <p className="fx-value-note">waiting for an upstream result</p>;
   if (typeof value.failed === "string") return <p className="fx-value-note">upstream {value.failed} failed</p>;
   // An object that holds files: its members as named rows, each shown as what it is.
-  return <Values values={value} artifacts={artifacts} />;
+  return <Values values={value} artifacts={artifacts} externalFiles={externalFiles} />;
 }
 
 /** An ordinary JSON value: text as written, anything else on one line. */
@@ -141,6 +144,6 @@ export function Json({ value }: { value: unknown }) {
 }
 
 /** Named values as label/value rows. */
-export function Values({ values, artifacts, videoPreview }: { values: Record<string, unknown>; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview }) {
-  return <dl className="fx-values">{Object.entries(values).map(([name, value]) => <div key={name}><dt>{name}</dt><dd><Value value={value} artifacts={artifacts} videoPreview={videoPreview} /></dd></div>)}</dl>;
+export function Values({ values, artifacts, videoPreview, externalFiles }: { values: Record<string, unknown>; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview; externalFiles?: ExternalFileController }) {
+  return <dl className="fx-values">{Object.entries(values).map(([name, value]) => <div key={name}><dt>{name}</dt><dd><Value value={value} artifacts={artifacts} videoPreview={videoPreview} externalFiles={externalFiles} /></dd></div>)}</dl>;
 }

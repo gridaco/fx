@@ -18,6 +18,7 @@
     "preview:www": "bun --no-env-file run --cwd www preview",
     "test:viewer:model-browser": "bun --no-env-file tools/check_model_browser.mjs",
     "test:viewer:media-browser": "bun --no-env-file tools/check_media_preview_browser.mjs",
+    "test:viewer:files-browser": "bun --no-env-file tools/check_external_files_browser.mjs",
     "demo:viewer:media": "uv run --project python python tools/demo_media_previews.py"
   },
   "devDependencies": {

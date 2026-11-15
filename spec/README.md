@@ -12,7 +12,8 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [observation.md](observation.md) | Run-observation v1: consistent snapshots, bounded events, cursors and errors |
 | [exports.md](exports.md) | Portable terminal run inspection: disclosure, verified media, immutable manifests and offline export |
 | [service.md](service.md) | Project initialization, local service lifecycle, stable run/plan URLs and standalone inspection |
-| [viewer.md](viewer.md) | Viewer page context, subscriptions and presentation over window messages, and the browser client SDK |
+| [viewer.md](viewer.md) | Viewer page context, subscriptions, presentation and external file activation over window messages, and the browser client SDK |
+| [files.md](files.md) | Portable file discovery and private native resolution of recorded artifacts and current workspace source |
 | [layout.md](layout.md) | Canvas layout: the automatic grid and decks, and the optional `<workflow id>.layout.json` file (not implemented) |
 | [previews.md](previews.md) | Workflow-authored video selection and image posters, recorded per node instance without execution dependencies |
 | [model-previews.md](model-previews.md) | Read-only self-contained GLB inspection, camera and animation controls, local resources and format fallbacks |

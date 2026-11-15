@@ -451,6 +451,32 @@ pub fn registered_runs(project_root: &Path) -> io::Result<(Vec<RegisteredRun>, V
     Ok((runs, unreadable))
 }
 
+/// Checks an existing private catalog binding without discovering or registering anything.
+pub(crate) fn matches_run_entry(project: &Path, id: &str, root: &Path) -> io::Result<bool> {
+    let Some(entries) = entries_dir(project)? else {
+        return Ok(false);
+    };
+    match read_entry(&entries, id)? {
+        Record::Run {
+            root: bound,
+            identity,
+            ..
+        } if bound == root => {
+            checked_run(&bound, &identity)?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+/// Checks an immutable materialized plan's existing private registration.
+pub(crate) fn matches_plan_entry(project: &Path, id: &str, graph: &Value) -> io::Result<bool> {
+    let Some(entries) = entries_dir(project)? else {
+        return Ok(false);
+    };
+    Ok(matches!(read_entry(&entries, id)?, Record::Plan { graph: bound, .. } if bound == *graph))
+}
+
 /// The identity a catalog entry binds for the run in `root` (spec/service.md §4): its plan and
 /// first `run_started`, without creation time or name.
 pub fn run_identity(root: &Path) -> io::Result<String> {

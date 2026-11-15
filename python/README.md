@@ -172,6 +172,35 @@ responses raise `FxError`. Snapshot and inspection are separate samples. See
 attachment, named execution/resume and reader lifetime. This describes current
 source, not a guarantee that an older published package has these APIs.
 
+## Discovering and resolving files
+
+`list_files(run_dir_or_saved_plan, project=None, instance_id=None, cwd=None)` and
+`record.list_files(project=None, instance_id=None)` return `FileDescriptor` values
+with a portable `target`, recorded `role`, and optional `instance_id`/`scope_id`.
+
+`resolve_file(run_dir_or_saved_plan, reference, project=None, source_root=None,
+cwd=None)` and `record.resolve_file(reference, project=None, source_root=None)`
+return a `FileResolution` for a captured viewer reference containing its
+`subject` and `target`. Available `local_path` values are `Path` objects; an
+unavailable copy has `local_path is None` and a reason. All four operations have
+`_async` counterparts.
+
+The engine verifies recorded artifact bytes and resolves current source files
+without importing modules or running builders. Sources need an explicit local
+binding: `project` supplies the default root; provide `source_root` when their
+owning root differs from the planning project.
+Closure-only helper labels always require explicit `source_root`,
+which resolves the complete recorded label. FX does not infer package ownership
+from current configuration or discover installed packages.
+Changed source remains openable, with `source_match` reporting
+`"match"`, `"changed"` or `"unknown"` where applicable. The host chooses how to
+present the file. Keep native paths out of browser messages, documents and
+portable exports.
+
+Structured refusals raise `FileAccessError` with `code` and `document`, including
+future codes; malformed or unsupported responses raise ordinary `FxError`. See
+the [file access contract](../spec/files.md).
+
 ## Run control
 
 `inspect_control(run)` and `cancel(run, invocation=None, wait=False, timeout=None)`

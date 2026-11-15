@@ -74,6 +74,15 @@ from grida.fx._errors import (
     EngineError,
     NodeFailure,
 )
+from grida.fx._file_access import (
+    FileAccessError,
+    FileDescriptor,
+    FileResolution,
+    list_files,
+    list_files_async,
+    resolve_file,
+    resolve_file_async,
+)
 from grida.fx._record import (
     RunExportError,
     RunObservationError,
@@ -115,6 +124,9 @@ __all__ = [
     "EngineError",
     "Failed",
     "Failure",
+    "FileAccessError",
+    "FileDescriptor",
+    "FileResolution",
     "FetchError",
     "FetchResponse",
     "FxError",
@@ -155,6 +167,8 @@ __all__ = [
     "inspect_control_async",
     "list_runs",
     "list_runs_async",
+    "list_files",
+    "list_files_async",
     "load_run",
     "load_run_async",
     "node",
@@ -163,6 +177,8 @@ __all__ = [
     "plan_async",
     "remove_runs",
     "remove_runs_async",
+    "resolve_file",
+    "resolve_file_async",
     "run",
     "run_async",
     "spec_of",

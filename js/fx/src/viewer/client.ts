@@ -6,6 +6,9 @@ export type ViewerSelection = ViewerProtocol.Selection;
 export type ViewerSubject = ViewerProtocol.Subject;
 export type ViewerReference = ViewerProtocol.Reference;
 export type ViewerProtocolError = ViewerProtocol.Error;
+export type ViewerFileTarget = ViewerProtocol.FileTarget;
+export type ViewerFileReference = ViewerProtocol.FileReference;
+export type ViewerExternalFileHandler = ViewerProtocol.ExternalFileHandler;
 
 /** Structural browser interfaces keep this subpath's declarations free of ambient DOM/Node types. */
 export interface ViewerMessageEvent { readonly data: unknown; readonly origin: string; readonly source: unknown }
@@ -39,6 +42,7 @@ interface Pending {
   timer: unknown;
 }
 interface Listener { callback: (context: ViewerContext) => void; initialized: boolean }
+interface FileRegistration { id: string; handler: ViewerExternalFileHandler; lastActivation: number }
 let nextClient = 0;
 
 /**
@@ -62,6 +66,7 @@ export class ViewerClient {
   private remoteSubscriptionPossible = false;
   private context: ViewerContext | null = null;
   private contextEvents = 0;
+  private fileRegistration: FileRegistration | null = null;
 
   constructor(options: ViewerClientOptions) {
     try {
@@ -95,6 +100,32 @@ export class ViewerClient {
     return (await this.request("present", action))!;
   }
 
+  /** Replace ordinary external file navigation with one explicit host-owned handler. */
+  async handleExternalFile(handler: ViewerExternalFileHandler): Promise<() => void> {
+    this.assertOpen();
+    if (typeof handler !== "function") throw new ViewerClientError("invalid_request", "Supply an external-file handler.");
+    if (this.fileRegistration) throw new ViewerClientError("unavailable", "This client already has an external-file handler.");
+    const registration: FileRegistration = {
+      id: `${this.prefix}file-${++this.nextRequest}-${Math.random().toString(36).slice(2)}`,
+      handler,
+      lastActivation: 0,
+    };
+    this.fileRegistration = registration;
+    try {
+      await this.request("register_external_file_handler", { handler_id: registration.id });
+      this.assertOpen();
+    } catch (error) {
+      if (this.fileRegistration === registration) this.fileRegistration = null;
+      this.unregisterFileBestEffort(registration.id);
+      throw error;
+    }
+    return () => {
+      if (this.fileRegistration !== registration) return;
+      this.fileRegistration = null;
+      this.unregisterFileBestEffort(registration.id);
+    };
+  }
+
   async subscribe(callback: (context: ViewerContext) => void): Promise<() => void> {
     this.assertOpen();
     if (typeof callback !== "function") throw new ViewerClientError("invalid_request", "A context listener is required.");
@@ -124,6 +155,10 @@ export class ViewerClient {
     this.disposed = true;
     this.source.removeEventListener("message", this.onMessage);
     this.listeners.clear();
+    if (this.fileRegistration) {
+      this.unregisterFileBestEffort(this.fileRegistration.id);
+      this.fileRegistration = null;
+    }
     for (const [id, pending] of this.pending) {
       this.timers.clearTimeout(pending.timer);
       this.pending.delete(id);
@@ -161,6 +196,18 @@ export class ViewerClient {
     if (this.disposed || event.source !== this.target || event.origin !== this.origin) return;
     const message = event.data;
     if (!ViewerProtocol.record(message) || message.channel !== ViewerProtocol.CHANNEL) return;
+    if (message.type === "external_file") {
+      const registration = this.fileRegistration;
+      if (!registration || !ViewerProtocol.isExternalFileEvent(message) || message.handler_id !== registration.id
+        || message.activation_id <= registration.lastActivation) return;
+      registration.lastActivation = message.activation_id;
+      const reference = JSON.parse(JSON.stringify(message.reference)) as ViewerFileReference;
+      void Promise.resolve().then(() => {
+        if (this.disposed || this.fileRegistration !== registration) return;
+        return registration.handler(reference);
+      }).then(() => this.fileResult(registration, message.activation_id, true), () => this.fileResult(registration, message.activation_id, false));
+      return;
+    }
     if (message.type === "context_changed") {
       if (!ViewerProtocol.isContextEvent(message) || !this.remoteSubscriptionPossible) return;
       this.context = message.context;
@@ -176,7 +223,7 @@ export class ViewerClient {
     if (message.version !== ViewerProtocol.VERSION) {
       pending.reject(new ViewerClientError("unsupported_version", "The viewer replied with an unsupported protocol version."));
     } else if (!ViewerProtocol.isResponse(message)
-      || message.ok && ((pending.method === "unsubscribe") !== (message.result === null))) {
+      || message.ok && (["get_context", "subscribe", "present"].includes(pending.method) === (message.result === null))) {
       pending.reject(new ViewerClientError("invalid_response", "The viewer returned a malformed response."));
     } else if (!message.ok) {
       pending.reject(new ViewerClientError(message.error.code, message.error.message));
@@ -218,6 +265,19 @@ export class ViewerClient {
       this.target.postMessage({ channel: ViewerProtocol.CHANNEL, version: ViewerProtocol.VERSION,
         type: "request", request_id: this.prefix + ++this.nextRequest, method: "unsubscribe", params: {} } satisfies ViewerProtocol.Request, this.origin);
     } catch { /* Closing a page must not prevent local cleanup. */ }
+  }
+  private unregisterFileBestEffort(handler_id: string): void {
+    try {
+      this.target.postMessage({ channel: ViewerProtocol.CHANNEL, version: ViewerProtocol.VERSION,
+        type: "request", request_id: this.prefix + ++this.nextRequest,
+        method: "unregister_external_file_handler", params: { handler_id } } satisfies ViewerProtocol.Request, this.origin);
+    } catch { /* Cleanup never repeats file activation or prevents local disposal. */ }
+  }
+  private fileResult(registration: FileRegistration, activation_id: number, ok: boolean): void {
+    if (this.disposed || this.fileRegistration !== registration) return;
+    void this.request("external_file_result", { handler_id: registration.id, activation_id, ok }).catch(() => {
+      // An acknowledgement failure leaves the outcome unconfirmed; never repeat the handler.
+    });
   }
   private notify(listener: Listener, context: ViewerContext): void {
     if (this.disposed || !this.listeners.has(listener)) return;

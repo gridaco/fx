@@ -689,6 +689,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx runs list [--workflow ID] [--json]` / `grida fx runs remove <run>… [--yes]` | list runs / remove runs (preview without `--yes`) |
 | `grida fx cache prune [--yes]` | remove what no remaining run names |
 | `grida fx export <run> --out DIR [--include-values] [--include-diagnostics] [--json]` | a portable copy of a finished run |
+| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON, never author code |
 | `grida fx jobs [--forget KEY]` | long provider jobs in the cache |
 | `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
@@ -754,6 +755,32 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   An opener/parent is not automatically trusted. HTTP/framing policies remain unchanged.
   The client does not launch FX, manage tabs or retry presentation on timeout.
   See https://github.com/gridaco/fx/blob/main/spec/viewer.md for wire protocol v1.
+- **External viewer files.** A matching source build exposes
+  `await client.handleExternalFile(handler)` (returns detach), or synchronous
+  `window.fx_viewer.handleExternalFile(handler)` in the viewer realm. The handler
+  receives `{subject, target}` captured at activation: `target.kind` is `artifact`
+  with recorded `artifact: {digest, url, name, kind, size}`, or `source` with a
+  portable `source` and optional `symbol`/`recorded_digest`. URLs may be null.
+  One handler owns ordinary primary/keyboard file activation; existing modified
+  and middle-click asset links retain browser behavior. With no handler, asset
+  links keep normal navigation and source labels stay plain. Inline previews
+  remain viewer-owned. Failure/timeouts never retry or automatically open another
+  tab; use the explicit browser link when available. Dispose/recreate the client
+  after navigation. Older viewers return `unsupported_method`.
+  A native host can use `listFiles(saved)` / `resolveFile(saved, reference)` or
+  `RunRecord.listFiles()` / `.resolveFile(reference)` from the Node SDK; Python
+  has `list_files`/`resolve_file`, record methods and async counterparts. Bind the
+  exact saved subject and supply `project` for source resolution/catalog checks,
+  plus `sourceRoot` (`source_root`) when the owning workflow home differs.
+  Closure-only helper files require that explicit source-root binding; FX never
+  infers their package base from mutable project configuration.
+  `localPath` (`local_path`) is private native output, not viewer-message data.
+  Artifacts resolve only to available verified recorded bytes. Source resolves
+  the current editable file and reports match/changed/unknown where meaningful;
+  opening it never imports user code. Missing copies are ordinary unavailable
+  results; unrecorded targets and verifiable subject mismatches are errors.
+  No OS-specific Open/Reveal meaning is defined by FX. See
+  https://github.com/gridaco/fx/blob/main/spec/files.md and the embedding guide.
 - **Canvas previews.** A run card shows its first available image output, otherwise offers its
   first available `video/*` output to the browser's native player. Container and codec support
   depend on the browser. A skipped card with reserved preview space but no preview candidate

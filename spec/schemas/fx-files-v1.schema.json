@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-files-v1",
+  "title": "fx-files-v1",
+  "type": "object",
+  "required": [
+    "kind",
+    "files"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-files-v1"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "role"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/$defs/file_target"
+          },
+          "role": {
+            "enum": [
+              "artifact",
+              "workflow",
+              "node",
+              "source",
+              "resource"
+            ]
+          },
+          "instance_id": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+            }
+          },
+          "scope_id": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "file_target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "artifact"
+          ],
+          "properties": {
+            "kind": {
+              "const": "artifact"
+            },
+            "artifact": {
+              "type": "object",
+              "required": [
+                "digest",
+                "url",
+                "name",
+                "kind",
+                "size"
+              ],
+              "properties": {
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "not": {
+                        "anyOf": [
+                          {
+                            "pattern": "[\\\\?#\\u0000-\\u001f\\u007f-\\u009f]"
+                          },
+                          {
+                            "pattern": "^//"
+                          }
+                        ]
+                      },
+                      "anyOf": [
+                        {
+                          "pattern": "^/"
+                        },
+                        {
+                          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^/@]+(?:/.*)?$",
+                          "not": {
+                            "pattern": "[^\\u0021-\\u007e]"
+                          },
+                          "format": "uri"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "not": {
+                    "anyOf": [
+                      {
+                        "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+                      },
+                      {
+                        "pattern": "^[\\\\/]"
+                      },
+                      {
+                        "pattern": "^[A-Za-z]:"
+                      },
+                      {
+                        "pattern": "^[Ff][Ii][Ll][Ee]:"
+                      }
+                    ]
+                  }
+                },
+                "kind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+                  }
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "source"
+          ],
+          "properties": {
+            "kind": {
+              "const": "source"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\\\:\\u0000-\\u001f\\u007f-\\u009f]+$",
+              "not": {
+                "anyOf": [
+                  {
+                    "pattern": "^/"
+                  },
+                  {
+                    "pattern": "/$"
+                  },
+                  {
+                    "pattern": "//"
+                  },
+                  {
+                    "pattern": "(^|/)\\.{1,2}(/|$)"
+                  }
+                ]
+              }
+            },
+            "symbol": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "recorded_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

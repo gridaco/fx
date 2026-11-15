@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol";
 import { ViewerClient } from "../../../js/fx/src/viewer/client";
+import { ExternalFileController } from "../src/external-file";
 import { ExportViewerController, ViewerController, ViewerPage, ViewerPresentation, parseRunExport, type ViewerRun } from "../src/index";
 import { nestedPlan } from "./scopes.test";
 import { graph } from "./graph.test";
@@ -127,10 +128,11 @@ async function endpoint() {
   const data = await harness();
   const window = new PageWindow();
   const peer = new PageWindow();
+  const files = new ExternalFileController(data.presentation.getContext);
   const page = new ViewerPage(window as unknown as Window, {
     getContext: data.presentation.getContext, present: data.presentation.present, subscribe: data.controller.subscribe,
-  });
-  return { ...data, window, peer, page };
+  }, files);
+  return { ...data, window, peer, page, files };
 }
 
 test("page endpoint rejects untrusted windows, pins grants, and returns safe protocol errors", async () => {
@@ -203,4 +205,109 @@ test("real client and page endpoint agree on calls and subscriptions", async () 
   off();
   client.dispose();
   page.dispose();
+});
+
+const fileTarget: ViewerProtocol.FileTarget = { kind: "artifact", artifact: {
+  digest: "a".repeat(64), url: "/api/artifacts/" + "a".repeat(64), name: "asset.png", kind: "image/png", size: 10,
+} };
+async function fileTasks() { for (let n = 0; n < 20; n++) await Promise.resolve(); }
+
+test("real client delegates one external activation through the shared hook", async () => {
+  const { window, peer, page, files } = await endpoint();
+  const target = { postMessage: (data: unknown) => window.receive(peer, data) };
+  const listeners = new Set<(event: any) => void>();
+  peer.postMessage = (data, origin) => { for (const listener of listeners) listener({ data, origin, source: target }); };
+  const client = new ViewerClient({ targetWindow: target, origin: window.location.origin,
+    sourceWindow: { addEventListener: (_, listener) => { listeners.add(listener); }, removeEventListener: (_, listener) => { listeners.delete(listener); } } });
+  const seen: ViewerProtocol.FileReference[] = [];
+  const detach = await client.handleExternalFile((reference) => { seen.push(reference); });
+  expect(files.getSnapshot().available).toBeTrue();
+  let prevented = 0;
+  expect(files.activate(fileTarget, { preventDefault: () => { prevented++; } })).toBeTrue();
+  expect(prevented).toBe(1);
+  await fileTasks();
+  expect(seen).toEqual([{ subject: page.getContext().subject, target: fileTarget }]);
+  expect(files.getSnapshot()).toMatchObject({ pending: 0, error: null });
+  detach();
+  expect(files.getSnapshot().available).toBeFalse();
+  client.dispose();
+  page.dispose();
+  files.dispose();
+});
+
+test("external file ownership is exclusive and context subscribers cannot receive or complete activations", async () => {
+  const { window, peer, page, files } = await endpoint();
+  const observer = new PageWindow();
+  window.receive(observer, request("subscribe"));
+  window.receive(peer, request("register_external_file_handler", { handler_id: "owner" }));
+  window.receive(observer, request("register_external_file_handler", { handler_id: "other" }));
+  expect(observer.sent.at(-1)?.data).toMatchObject({ ok: false, error: { code: "unavailable" } });
+  files.activate(fileTarget);
+  await fileTasks();
+  const activation = peer.sent.find((entry) => ViewerProtocol.isExternalFileEvent(entry.data))!.data as ViewerProtocol.ExternalFileEvent;
+  expect(activation).toMatchObject({ type: "external_file", handler_id: "owner", activation_id: 1 });
+  expect(observer.sent.some((entry) => ViewerProtocol.isExternalFileEvent(entry.data))).toBeFalse();
+  window.receive(observer, request("external_file_result", { handler_id: "owner", activation_id: 1, ok: true }));
+  window.receive(observer, request("unregister_external_file_handler", { handler_id: "owner" }));
+  await fileTasks();
+  expect(files.getSnapshot()).toMatchObject({ available: true, pending: 1 });
+  window.receive(peer, request("external_file_result", { handler_id: "owner", activation_id: 1, ok: true }));
+  await fileTasks();
+  expect(files.getSnapshot()).toMatchObject({ pending: 0, error: null });
+  window.receive(peer, request("unregister_external_file_handler", { handler_id: "owner" }));
+  window.receive(observer, request("register_external_file_handler", { handler_id: "new-owner" }));
+  window.receive(peer, request("unregister_external_file_handler", { handler_id: "owner" }));
+  expect(files.getSnapshot().available).toBeTrue();
+  page.dispose();
+  files.dispose();
+});
+
+test("cross-origin revocation releases ownership and unconfirmed work without fallback or leakage", async () => {
+  const { window, page, files } = await endpoint();
+  const host = new PageWindow("https://host.example");
+  window.receive(host, request("register_external_file_handler", { handler_id: "host" }));
+  expect(host.sent).toHaveLength(0);
+  const revoke = page.allowHost(host as unknown as Window, host.location.origin);
+  window.receive(host, request("register_external_file_handler", { handler_id: "host" }));
+  files.activate(fileTarget);
+  await fileTasks();
+  expect(host.sent.filter((entry) => ViewerProtocol.isExternalFileEvent(entry.data))).toHaveLength(1);
+  revoke();
+  expect(files.getSnapshot()).toMatchObject({ available: false, pending: 0, error: "File handling was not confirmed." });
+  const count = host.sent.length;
+  window.receive(host, request("external_file_result", { handler_id: "host", activation_id: 1, ok: true }));
+  expect(host.sent).toHaveLength(count);
+  expect(files.activate(fileTarget)).toBeFalse();
+  page.dispose();
+  files.dispose();
+});
+
+test("page registration cannot replace an injected same-realm owner", async () => {
+  const { window, peer, page, files } = await endpoint();
+  const detach = files.handleExternalFile(() => {});
+  window.receive(peer, request("register_external_file_handler", { handler_id: "peer" }));
+  expect(peer.sent.at(-1)?.data).toMatchObject({ ok: false, error: { code: "unavailable" } });
+  detach();
+  page.dispose();
+  files.dispose();
+});
+
+test("the same authorized peer can reconnect without stale cleanup releasing its new owner", async () => {
+  const { window, peer, page, files } = await endpoint();
+  window.receive(peer, request("register_external_file_handler", { handler_id: "old" }));
+  files.activate(fileTarget);
+  await fileTasks();
+  expect(files.getSnapshot().pending).toBe(1);
+  window.receive(peer, request("register_external_file_handler", { handler_id: "new" }));
+  expect(peer.sent.at(-1)?.data).toMatchObject({ ok: true, result: null });
+  expect(files.getSnapshot()).toMatchObject({ available: true, pending: 0 });
+  window.receive(peer, request("unregister_external_file_handler", { handler_id: "old" }));
+  window.receive(peer, request("external_file_result", { handler_id: "old", activation_id: 1, ok: true }));
+  files.activate(fileTarget);
+  await fileTasks();
+  const events = peer.sent.filter((entry) => ViewerProtocol.isExternalFileEvent(entry.data));
+  expect(events.map((entry) => (entry.data as ViewerProtocol.ExternalFileEvent).handler_id)).toEqual(["old", "new"]);
+  expect(files.getSnapshot().pending).toBe(1);
+  page.dispose();
+  files.dispose();
 });

@@ -6,6 +6,7 @@
 //! confined to the explicitly configured run directory.
 
 pub mod export;
+pub mod files;
 mod layout;
 mod read;
 mod scopes;
@@ -133,6 +134,7 @@ fn router(state: AppState) -> Router {
         .route("/api/snapshot", get(observation_snapshot))
         .route("/api/layout", get(layout_report))
         .route("/api/events", get(observation_events))
+        .route("/api/files", get(file_inventory))
         .route("/api/artifacts/{digest}", get(artifact))
         .route("/api/{*path}", get(api_missing))
         .fallback(get(asset))
@@ -192,6 +194,29 @@ async fn view_document(State(state): State<Arc<AppState>>) -> Response {
                 .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
             response
         }
+    }
+}
+
+async fn file_inventory(State(state): State<Arc<AppState>>) -> Response {
+    let source = state.source.clone();
+    let prefix = state.artifact_prefix.clone();
+    match tokio::task::spawn_blocking(move || match source {
+        Source::Run(root) => files::list_run(&root, None, Some(&prefix)),
+        Source::Plan(graph) => files::list_plan(&graph, None),
+    })
+    .await
+    {
+        Ok(Ok(value)) => {
+            let mut response = Json(value).into_response();
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        }
+        _ => failure(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The selected file inventory cannot be read.",
+        ),
     }
 }
 

@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-file-resolution-v1",
+  "title": "fx-file-resolution-v1",
+  "type": "object",
+  "required": [
+    "kind",
+    "target",
+    "local_path",
+    "source_match",
+    "reason"
+  ],
+  "properties": {
+    "kind": {
+      "const": "fx-file-resolution-v1"
+    },
+    "target": {
+      "$ref": "#/$defs/file_target"
+    },
+    "local_path": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
+        }
+      ]
+    },
+    "source_match": {
+      "enum": [
+        null,
+        "match",
+        "changed",
+        "unknown"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "file_target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "artifact"
+          ],
+          "properties": {
+            "kind": {
+              "const": "artifact"
+            },
+            "artifact": {
+              "type": "object",
+              "required": [
+                "digest",
+                "url",
+                "name",
+                "kind",
+                "size"
+              ],
+              "properties": {
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "url": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "not": {
+                        "anyOf": [
+                          {
+                            "pattern": "[\\\\?#\\u0000-\\u001f\\u007f-\\u009f]"
+                          },
+                          {
+                            "pattern": "^//"
+                          }
+                        ]
+                      },
+                      "anyOf": [
+                        {
+                          "pattern": "^/"
+                        },
+                        {
+                          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^/@]+(?:/.*)?$",
+                          "not": {
+                            "pattern": "[^\\u0021-\\u007e]"
+                          },
+                          "format": "uri"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "not": {
+                    "anyOf": [
+                      {
+                        "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+                      },
+                      {
+                        "pattern": "^[\\\\/]"
+                      },
+                      {
+                        "pattern": "^[A-Za-z]:"
+                      },
+                      {
+                        "pattern": "^[Ff][Ii][Ll][Ee]:"
+                      }
+                    ]
+                  }
+                },
+                "kind": {
+                  "type": "string",
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "[\\u0000-\\u001f\\u007f-\\u009f]"
+                  }
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "source"
+          ],
+          "properties": {
+            "kind": {
+              "const": "source"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\\\:\\u0000-\\u001f\\u007f-\\u009f]+$",
+              "not": {
+                "anyOf": [
+                  {
+                    "pattern": "^/"
+                  },
+                  {
+                    "pattern": "/$"
+                  },
+                  {
+                    "pattern": "//"
+                  },
+                  {
+                    "pattern": "(^|/)\\.{1,2}(/|$)"
+                  }
+                ]
+              }
+            },
+            "symbol": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "recorded_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "properties": {
+              "kind": {
+                "const": "source"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_match": {
+            "enum": [
+              "match",
+              "changed",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "source_match": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "local_path": {
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

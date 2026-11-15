@@ -3,6 +3,8 @@ import type { Artifact } from "./index";
 import { artifactDownloadName } from "./outputs";
 import { ModelSourceController } from "./model";
 import { loadModelRenderer, type ModelElement } from "./model-renderer";
+import { artifactFileTarget } from "./files";
+import type { ExternalFileController } from "./external-file";
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag); node.className = className;
@@ -26,7 +28,7 @@ export class ModelPreviewController {
   private observer?: IntersectionObserver;
   private clipRevision = 0;
 
-  constructor(private readonly root: HTMLElement, private readonly artifact: Artifact, private readonly options: { download?: boolean; defer?: boolean; onReady?: () => void; onError?: () => void } = {}) {
+  constructor(private readonly root: HTMLElement, private readonly artifact: Artifact, private readonly options: { download?: boolean; defer?: boolean; onReady?: () => void; onError?: () => void; externalFiles?: ExternalFileController } = {}) {
     root.classList.add("fx-model-preview"); root.dataset.phase = "loading";
     root.setAttribute("role", "group");
     root.setAttribute("aria-label", artifact.name || "3D preview");
@@ -41,6 +43,7 @@ export class ModelPreviewController {
       const download = element("a", "fx-model-download", artifact.name || "Download model");
       download.href = artifact.url!; download.download = artifactDownloadName(artifact);
       download.title = "Download original model";
+      download.addEventListener("click", (event) => { options.externalFiles?.activate(artifactFileTarget(artifact), event); }, { signal: this.abort.signal });
       this.footer.append(download);
     } else this.footer.hidden = true;
     root.append(this.viewport, this.footer);

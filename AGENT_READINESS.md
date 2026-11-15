@@ -429,6 +429,7 @@ promise through documentation alone.
 | AR-21 | "Explain the step I selected, then show the relevant take here." | Implemented in source: [viewer page API](spec/viewer.md), same-realm JavaScript and browser-safe `@grida/fx/viewer/client`. | Capture a fresh recorded selection at message time; inspect evidence separately; reveal an exact instance through recorded nested membership. Empty/pending/boundary selections stay distinct; inspection never changes execution picks. Host owns tabs and process lifetime. Wrong peers receive no data; unknown targets refuse before navigation. |
 | AR-22 | "Let me inspect the actual mesh and animation before choosing a take." | Implemented in source: [GLB inspection contract](spec/model-previews.md), for issue [#128](https://github.com/gridaco/fx/issues/128); pending release. | Inspect the exact recorded artifact with camera controls, original materials and discovered clips, offline and without regeneration; preserve run/step/take context, execution picks and original-file access; explain unsupported formats and motion-only files. |
 | AR-23 | "Use this new image model without waiting for an FX release." | Partial in source for #112, pending release: [selected-provider discovery](spec/model-selection.md#3-selected-provider-image-discovery) and prepared SDK plans. Automatic pricing covers supported flat per-image OpenRouter rates; other compatible models plan with unknown forecasts. Provider replay, local-HTTP CLI integration and SDK evidence are recorded below; automated checks use no real provider generation. | Resolve only a selected missing GG/OpenRouter image binding, never choose a provider from credentials, never generate during lookup, honor authored routes and explicit `--routes` isolation, and refuse unsupported execution facts. Missing forecasts remain informational unless strict coverage is requested. Estimates and explicit unknown-cost caps are valid; no exact quote or provider estimation API is required. Network-off sends nothing; stale metadata is usable offline or after a transient lookup failure, and an explicit missing-model response does not reuse it. Running an SDK plan retains its resolved models independently of the metadata cache. Existing BYO providers and routes remain independent. Deferred: public custom-resolver API and runtime Grida Models release consumption. |
+| AR-24 | "Open this viewer file in my application's own tab." | Implemented in source for [#134](https://github.com/gridaco/fx/issues/134), pending release: [external file activation](spec/viewer.md) and [native file discovery/resolution](spec/files.md). | Capture the exact subject/file at activation, resolve its local copy privately, and let the host choose its presentation. Standalone asset links retain browser behavior. Source opening uses an explicit workspace binding and never imports user code; changed source remains editable. One handler owns each activation; wrong peers, stale subjects, missing files and unconfirmed outcomes cannot silently open a different file or trigger another opening. |
 
 For AR-23, [provider replay tests](crates/grida-fx-providers/tests/discovery.rs) hold discovery
 to published metadata shapes, supported image controls and supported flat-rate conversion. The
@@ -651,6 +652,17 @@ after panning, camera preservation, user selection callbacks, reload with a fres
 client, service-entry context, and cross-origin refusal/grant/revocation.
 The interface is browser-specific: Python and the CLI
 continue to inspect execution evidence, without a new browser-control command.
+
+AR-24 extends that interface with a single optional external-file handler, shared
+with transport-independent TypeScript rendering. The browser client receives
+portable artifact/source references, never local filesystem paths. Native CLI and
+Python/JavaScript SDK access resolve those references privately through the engine.
+The provider-free [file inventory tests](web/fx-web/tests/files.test.ts), activation
+controller/page/client tests, native resolver/SDK tests and
+[embedding harness](tools/check_external_files_browser.mjs) cover default browser
+navigation, host-owned file tabs, source access, failure, cleanup and peer
+authorization. Host menus, OS-specific opening, historical source recovery and
+publishing a component SDK remain outside this delivery.
 
 ## Gaps that should guide design
 

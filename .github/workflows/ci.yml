@@ -60,6 +60,8 @@ jobs:
           cargo doc --workspace --no-deps
           cargo doc --workspace --no-deps --all-features
       - run: cargo test --workspace
+      - run: cargo build --locked --bin grida-fx
+      - run: bun --no-env-file run test:viewer:files-browser
 
   # docs/guide and docs/wg are published on grida.co/docs (a docs source, see
   # gridaco/docs); this runs that site's rules on them: links, assets, markdown.

@@ -258,6 +258,12 @@ entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
 
+`GET /api/files` under the selected entry returns the portable recorded file
+inventory defined by [files.md](files.md), with `Cache-Control: no-store`.
+Standalone inspection serves the same inventory. It contains scoped artifact
+URLs and safe source references, never source-code bytes or absolute local paths;
+filesystem resolution is a separate native-caller operation.
+
 A scoped `GET /api/layout` returns
 the selected run's or plan's canvas layout report ([layout.md](layout.md) §6.11) with
 `Cache-Control: no-store` and no `ETag`, since the report changes as a run records more

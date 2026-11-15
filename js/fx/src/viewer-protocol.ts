@@ -23,12 +23,19 @@ export namespace ViewerProtocol {
     sampled_at: number;
     retained?: true;
   }
+  /** A portable file target; local filesystem locations never cross this boundary. */
+  export type FileTarget =
+    | { kind: "artifact"; artifact: { digest: string; url: string | null; name: string; kind: string; size: number } }
+    | { kind: "source"; source: string; symbol?: string; recorded_digest?: string };
+  export interface FileReference { subject: Subject; target: FileTarget }
+  export type ExternalFileHandler = (reference: FileReference) => void | Promise<void>;
   export type Action =
     | { action: "reveal_instance"; instance_id: string }
     | { action: "open_scope"; scope_id: string | null }
     | { action: "clear_selection" }
     | { action: "fit" };
-  export type Method = "get_context" | "subscribe" | "unsubscribe" | "present";
+  export type Method = "get_context" | "subscribe" | "unsubscribe" | "present"
+    | "register_external_file_handler" | "unregister_external_file_handler" | "external_file_result";
   /** Unknown methods/versions remain recognizable so a page can refuse them explicitly. */
   export interface Request {
     channel: typeof CHANNEL;
@@ -58,6 +65,14 @@ export namespace ViewerProtocol {
     type: "context_changed";
     context: Context;
   }
+  export interface ExternalFileEvent {
+    channel: typeof CHANNEL;
+    version: typeof VERSION;
+    type: "external_file";
+    handler_id: string;
+    activation_id: number;
+    reference: FileReference;
+  }
 
   export function record(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -75,6 +90,42 @@ export namespace ViewerProtocol {
   }
   function digest(value: unknown): value is string {
     return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  }
+  /** A normalized source label, interpreted only through an explicit native source binding. */
+  export function isFileSource(value: unknown): value is string {
+    return isPortableSource(value) && !/[\u007f-\u009f]/.test(value) && !value.includes(":")
+      && value.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+  }
+  function isFileUrl(value: unknown): value is string | null {
+    if (value === null) return true;
+    if (!isIdentifier(value) || /[\\?#\u007f-\u009f]/.test(value)) return false;
+    if (value.startsWith("/") && !value.startsWith("//")) {
+      return true;
+    }
+    if (!/^https?:\/\//i.test(value) || /^https?:\/\/[^/]*@/i.test(value) || /[^\u0021-\u007e]/.test(value)) return false;
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash;
+    } catch { return false; }
+  }
+  export function isFileTarget(value: unknown): value is FileTarget {
+    if (!record(value)) return false;
+    if (value.kind === "artifact") {
+      if (!fields(value, ["kind", "artifact"]) || !record(value.artifact)) return false;
+      const file = value.artifact;
+      return fields(file, ["digest", "url", "name", "kind", "size"]) && digest(file.digest) && isFileUrl(file.url)
+        && typeof file.name === "string" && !/[\u0000-\u001f\u007f-\u009f]/.test(file.name)
+        && !/^[\\/]|^[A-Za-z]:|^file:/i.test(file.name) && isIdentifier(file.kind) && !/[\u007f-\u009f]/.test(file.kind)
+        && Number.isSafeInteger(file.size) && (file.size as number) >= 0;
+    }
+    return value.kind === "source" && fields(value, ["kind", "source"], ["symbol", "recorded_digest"])
+      && isFileSource(value.source)
+      && (!Object.hasOwn(value, "symbol") || typeof value.symbol === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value.symbol))
+      && (!Object.hasOwn(value, "recorded_digest") || digest(value.recorded_digest));
+  }
+  export function isFileReference(value: unknown): value is FileReference {
+    return record(value) && fields(value, ["subject", "target"]) && isSubject(value.subject)
+      && value.subject.kind !== "catalog" && isFileTarget(value.target);
   }
   export function isReference(value: unknown): value is Reference {
     if (!record(value)) return false;
@@ -135,11 +186,18 @@ export namespace ViewerProtocol {
     }
   }
   export function isMethod(value: unknown): value is Method {
-    return typeof value === "string" && ["get_context", "subscribe", "unsubscribe", "present"].includes(value);
+    return typeof value === "string" && ["get_context", "subscribe", "unsubscribe", "present",
+      "register_external_file_handler", "unregister_external_file_handler", "external_file_result"].includes(value);
   }
   export function isParams(method: string, value: unknown): boolean {
     if (!isMethod(method) || !record(value)) return false;
-    return method === "present" ? isAction(value) : Object.keys(value).length === 0;
+    if (method === "present") return isAction(value);
+    if (method === "register_external_file_handler" || method === "unregister_external_file_handler") {
+      return fields(value, ["handler_id"]) && isIdentifier(value.handler_id);
+    }
+    if (method === "external_file_result") return fields(value, ["handler_id", "activation_id", "ok"])
+      && isIdentifier(value.handler_id) && Number.isSafeInteger(value.activation_id) && (value.activation_id as number) > 0 && typeof value.ok === "boolean";
+    return Object.keys(value).length === 0;
   }
   export function isRequest(value: unknown): value is Request {
     return record(value) && value.channel === CHANNEL && Number.isSafeInteger(value.version)
@@ -156,5 +214,11 @@ export namespace ViewerProtocol {
   export function isContextEvent(value: unknown): value is ContextEvent {
     return record(value) && value.channel === CHANNEL && value.version === VERSION
       && value.type === "context_changed" && isContext(value.context);
+  }
+  export function isExternalFileEvent(value: unknown): value is ExternalFileEvent {
+    return record(value) && fields(value, ["channel", "version", "type", "handler_id", "activation_id", "reference"])
+      && value.channel === CHANNEL && value.version === VERSION && value.type === "external_file"
+      && isIdentifier(value.handler_id) && Number.isSafeInteger(value.activation_id) && (value.activation_id as number) > 0
+      && isFileReference(value.reference);
   }
 }
