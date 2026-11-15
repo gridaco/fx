@@ -2,8 +2,8 @@ import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore,
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
-import { StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun } from "@grida/fx-web";
+import { ExternalFileLink, StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -17,6 +17,23 @@ const presentation = new ViewerPresentation({
     if (!route?.project_id || !route.entry_id || route.kind === "root") return undefined;
     return { kind: "service_entry", project_id: route.project_id, entry_kind: route.kind, entry_id: route.entry_id };
   },
+});
+const externalFiles = new ExternalFileController(presentation.getContext);
+const fileInventory = new FileInventoryController((signal) => readFileInventory(signal, apiBase));
+let filesAvailable = false;
+const stopFiles = externalFiles.subscribe(() => {
+  const available = externalFiles.getSnapshot().available;
+  if (available === filesAvailable) return;
+  filesAvailable = available;
+  if (available && controller.getSnapshot().view) void fileInventory.refresh();
+  else if (!available) fileInventory.clear();
+});
+let previousView = controller.getSnapshot().view;
+const stopInventory = controller.subscribe(() => {
+  const view = controller.getSnapshot().view;
+  if (view === previousView) return;
+  previousView = view;
+  if (filesAvailable && view) void fileInventory.refresh();
 });
 const page = new ViewerPage(window, {
   getContext: () => {
@@ -37,17 +54,34 @@ const page = new ViewerPage(window, {
     const workflow = controller.subscribe(changed);
     return () => { entry(); workflow(); };
   },
-});
+}, externalFiles);
 // Same-realm browser automation and trusted host preload code use this page facade.
 Object.defineProperty(window, "fx_viewer", { configurable: true, value: Object.freeze({
   getContext: page.getContext, present: page.present, subscribe: page.subscribe, allowHost: page.allowHost,
+  handleExternalFile: externalFiles.handleExternalFile,
 }) });
-if (import.meta.hot) import.meta.hot.dispose(() => page.dispose());
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  stopFiles(); stopInventory(); fileInventory.dispose(); page.dispose(); externalFiles.dispose();
+});
 const iconProps = { size: 14, strokeWidth: 1.5, "aria-hidden": true } as const;
 
 /** A titled set of named values, after `children`; nothing when the set is empty. */
 function Section({ title, values, artifacts, children, videoPreview }: { title: string; values: Record<string, unknown>; artifacts: Map<string, Artifact>; children?: ReactNode; videoPreview?: CanvasPreview }) {
-  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3>{children}<Values values={values} artifacts={artifacts} videoPreview={videoPreview} /></section>;
+  return Object.keys(values).length > 0 && <section className="fx-detail-section"><h3>{title}</h3>{children}<Values values={values} artifacts={artifacts} videoPreview={videoPreview} externalFiles={externalFiles} /></section>;
+}
+
+/** Source access is a host capability; standalone labels need no source-serving endpoint. */
+function SourceFile({ instanceId, scopeId }: { instanceId?: string; scopeId?: string }) {
+  const { available } = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
+  const { files } = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
+  if (!available) return null;
+  const file = files.find((item) => item.target.kind === "source" && (instanceId
+    ? item.role === "node" && item.instance_id === instanceId
+    : scopeId ? item.role === "workflow" && item.scope_id === scopeId
+      : item.role === "workflow" && item.scope_id === undefined && item.instance_id === undefined));
+  if (!file || file.target.kind !== "source") return null;
+  const { source, symbol } = file.target;
+  return <p className="fx-detail-meta"><ExternalFileLink controller={externalFiles} target={file.target} className="fx-source-link" title="Open source outside the viewer">{source}{symbol && `#${symbol}`}</ExternalFileLink></p>;
 }
 
 /** Copies `text`, and says so for a moment. */
@@ -132,6 +166,7 @@ function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocum
   if (pending) return <Heading title={pending.path} id={pending.path} kind="step path" state="unexpanded" meta={[`up to ${pending.max} items`, pending.high_usd === null ? "cost unknown" : pending.high_usd > 0 && `at most ${money(pending.high_usd)}`]} />;
   if (!instance) return <>
     <Heading title={plan.workflow.title} id={plan.workflow.id} kind="workflow id" meta={[plan.estimate.ceiling_usd !== null && `ceiling ${money(plan.estimate.ceiling_usd)}`]} />
+    <SourceFile />
     {plan.workflow.description && <p className="fx-detail-copy">{plan.workflow.description}</p>}
     <Section title="Inputs" values={plan.inputs ?? {}} artifacts={none} />
   </>;
@@ -139,6 +174,7 @@ function PlanDetails({ plan, instance, pending, canvasNode }: { plan: GraphDocum
   const [inputs, settings] = split(instance.with, canvasNode);
   return <>
     <Heading title={meta?.title || instance.path} id={instance.id} kind="step id" state={instance.state} meta={[priceLabel(instance.price, money)]} />
+    <SourceFile instanceId={instance.id} />
     {meta?.description && <p className="fx-detail-copy">{meta.description}</p>}
     {instance.reason && <Problem>{instance.reason}</Problem>}
     <Section title="Routes" values={Object.fromEntries(Object.entries(instance.routes).map(([capability, route]) => [capability, route.route]))} artifacts={none} />
@@ -151,6 +187,7 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
   const artifacts = new Map(run.artifacts.map((artifact) => [artifact.digest, artifact]));
   if (!node) return <>
     <Heading title={run.workflow.title} id={run.run_name} kind="run name" meta={[run.workflow.id]} />
+    <SourceFile />
     {run.workflow.description && <p className="fx-detail-copy">{run.workflow.description}</p>}
     <Section title="Outputs" values={run.outputs} artifacts={artifacts}><OutputsDownload run={run} artifacts={artifacts} /></Section>
     <Section title="Inputs" values={run.inputs} artifacts={artifacts} />
@@ -160,6 +197,7 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
   return <>
     <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
       node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
+    <SourceFile instanceId={node.id} />
     {skipped ? <section className="fx-detail-skip" aria-label="Why skipped">
       <h3>Why skipped</h3><p>{skipped.message}</p>
       {skipped.related.map((source) => <button key={source.id} type="button" className="fx-detail-skip-source" title={source.id} onClick={() => onInspectSource?.(source.id)}>View {source.label} <ArrowUpRight {...iconProps} /></button>)}
@@ -174,6 +212,7 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
 function ScopeDetails({ node }: { node: CanvasStep }) {
   return <>
     <Heading title={node.title} id={node.path ?? node.source_id} kind="path" state={node.kind === "boundary" ? undefined : node.state} meta={[node.kind === "workflow" && `${node.child_count ?? 0} steps`, !!node.failure_count && `${node.failure_count} failed`]} />
+    {node.kind === "workflow" && node.scope_id && <SourceFile scopeId={node.scope_id} />}
     {node.errors?.map((error) => <Problem key={error.id}><span className="block font-medium">{error.title}</span>{error.message}</Problem>)}
   </>;
 }
@@ -192,6 +231,8 @@ function canvasInset(pane: HTMLElement) {
 
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
+  const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
+  const inventory = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
   const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
@@ -260,6 +301,8 @@ function WorkflowView() {
   }, [open, steps]);
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
+    {external.error && <p role="alert" className="fx-error">{external.error}{external.failedReference?.target.kind === "artifact" && external.failedReference.target.artifact.url && <>{" "}<a href={external.failedReference.target.artifact.url} target="_blank" rel="noopener noreferrer" className="underline">Open in browser</a></>}{" "}<button type="button" className="underline" onClick={externalFiles.clearError}>Dismiss</button></p>}
+    {external.available && inventory.error && <p role="alert" className="fx-error">{inventory.error}{" "}<button type="button" className="underline" onClick={() => void fileInventory.refresh()}>Retry source files</button></p>}
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
       : <main ref={pane} aria-label="Workflow canvas" className="fx-canvas-pane">
         <WorkflowCanvas ref={canvas} graph={graph} layout={layout} selected={selected} scope={scope} onSelect={select} onOpenScope={controller.openScope} onBack={controller.back} />

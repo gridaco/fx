@@ -66,6 +66,16 @@ SDK should reuse that viewer's rendering and presentation behavior, not introduc
 a separate implementation. The client entry has no dependency on that future
 viewer SDK or its UI dependencies.
 
+The [external-file extension](../../spec/viewer.md) for
+[#134](https://github.com/gridaco/fx/issues/134) follows this boundary: portable
+file references and native resolution are independent of presentation. Shared
+TypeScript rendering accepts an optional external-file handler; the supplied
+application defaults to browser links, and the page client is an adapter to the
+same injected behavior. A composed viewer can use it directly. The host owns any
+Open, Reveal or editor semantics; FX introduces no generalized action registry
+or mandatory native operation. Selection is state, and file activation is a
+separate event. This extension does not publish the component SDK.
+
 The SDK accepts the target window and expected origin. It handles message
 listeners, request/reply correlation, validation, typed results/errors, context
 subscriptions, and ordinary listener cleanup. Request waits are bounded and

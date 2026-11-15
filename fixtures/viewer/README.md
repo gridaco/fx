@@ -269,6 +269,38 @@ resources come from the built viewer, and outbound requests are refused. The
 resource handling and the distinction between a failed preview and available
 original bytes.
 
+## External file host harness
+
+After building the viewer and native engine, run:
+
+```sh
+bun --no-env-file run build:viewer
+cargo build --bin grida-fx
+bun --no-env-file run test:viewer:files-browser
+```
+
+The [fixture generator](external-files.mjs) synthesizes a saved run, an original
+three-panel PNG, root/imported workflow source and a builder. Its Python modules
+deliberately throw at import time: discovering and opening a recorded source must
+never import it. These are synthetic recorded inspection fixtures, not a runnable
+workflow template. Generated records and media stay outside Git.
+
+The [browser harness](../../tools/check_external_files_browser.mjs) starts the
+actual native viewer and connects a separate host through the public browser
+client. It first verifies normal image-link browser navigation. With the external
+handler registered, the same link supplies a portable reference; a trusted native
+bridge invokes the public resolver, reads the local file and presents it in a
+host-owned tab surface. No browser download supplies the intercepted image, and
+no absolute path returns to the FX viewer.
+
+It also verifies current node/YAML/imported/builder source opening, changed-source
+status, source labels remaining inert without a handler, safe failures, explicit
+browser fallback and registration cleanup. The host file tabs are a generic
+browser surface backed by native filesystem reads; no desktop framework or
+OS-specific opening behavior is assumed. A screenshot is saved under ignored
+`output/playwright/` for visual review. The Rust resolver and SDK tests cover
+native confinement, missing copies and stale subjects separately.
+
 ## Storage and current limits
 
 Generated projects, caches, plans, runs, viewer responses and reports live under the

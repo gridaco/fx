@@ -101,6 +101,8 @@ pub enum Verb {
     Observe(ObserveArgs),
     /// export a terminal saved run for portable inspection; never executes or uploads
     Export(ExportArgs),
+    /// discover recorded files or resolve a portable reference to a private local path
+    Files(FilesArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
     /// request cancellation of one exact run invocation, without starting a service
@@ -485,6 +487,53 @@ pub struct ExportArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct FilesArgs {
+    #[command(subcommand)]
+    pub verb: FilesVerb,
+}
+
+#[derive(Debug, Subcommand, Clone)]
+pub enum FilesVerb {
+    /// list known artifact and source targets without executing user code
+    List(FilesListArgs),
+    /// resolve one captured file reference without opening the file
+    Resolve(FilesResolveArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct FilesListArgs {
+    /// an existing run folder or saved plan JSON file
+    pub target: String,
+    /// limit targets to this recorded instance and its workflow sources
+    #[arg(long, value_name = "ID")]
+    pub instance: Option<String>,
+    /// explicit local project binding (never inferred from the current directory)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// print the structured result or refusal as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct FilesResolveArgs {
+    /// an existing run folder or saved plan JSON file
+    pub target: String,
+    /// captured {subject,target} JSON reference
+    #[arg(long, value_name = "JSON")]
+    pub reference: String,
+    /// explicit local project/catalog binding; also the default source root
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// owning workflow source root when different from the project binding
+    #[arg(long, value_name = "DIRECTORY")]
+    pub source_root: Option<String>,
+    /// print the structured result or refusal as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct ProjectArgs {
     /// a run folder
     pub run: String,
@@ -693,6 +742,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Project(args) => verbs::project::run(&args),
         Verb::Observe(args) => verbs::observe::run(&args),
         Verb::Export(args) => verbs::export::run(&args),
+        Verb::Files(args) => verbs::files::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
         Verb::Runs(args) => verbs::runs::run(&args),

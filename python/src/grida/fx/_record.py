@@ -12,12 +12,20 @@ import json
 import math
 import os
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from grida.fx._api import FxError, _call, _failure, _no_running_loop
+from grida.fx._file_access import (
+    FileDescriptor,
+    FileResolution,
+    list_files,
+    list_files_async,
+    resolve_file,
+    resolve_file_async,
+)
 
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 
@@ -156,6 +164,38 @@ class RunRecord:
 
     async def snapshot_async(self) -> dict[str, Any]:
         return await _observe(self.run_dir, snapshot=True, options=["--snapshot"])
+
+    def list_files(
+        self, *, project: str | Path | None = None, instance_id: str | None = None
+    ) -> list[FileDescriptor]:
+        """List portable file references from this pinned record without author-code execution."""
+        return list_files(self.run_dir, project=project, instance_id=instance_id)
+
+    async def list_files_async(
+        self, *, project: str | Path | None = None, instance_id: str | None = None
+    ) -> list[FileDescriptor]:
+        return await list_files_async(self.run_dir, project=project, instance_id=instance_id)
+
+    def resolve_file(
+        self,
+        reference: Mapping[str, Any],
+        *,
+        project: str | Path | None = None,
+        source_root: str | Path | None = None,
+    ) -> FileResolution:
+        """Resolve a viewer reference privately with explicit binding for current source files."""
+        return resolve_file(self.run_dir, reference, project=project, source_root=source_root)
+
+    async def resolve_file_async(
+        self,
+        reference: Mapping[str, Any],
+        *,
+        project: str | Path | None = None,
+        source_root: str | Path | None = None,
+    ) -> FileResolution:
+        return await resolve_file_async(
+            self.run_dir, reference, project=project, source_root=source_root
+        )
 
     def export(
         self,

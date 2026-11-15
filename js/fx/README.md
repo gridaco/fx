@@ -148,6 +148,22 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   `node_skipped.skip_reason`: engine cause codes and related instance IDs, without
   author-written reason text. See [recorded skip reasons](../../spec/skip-reasons.md);
   older records may have no cause.
+- `listFiles(runDirOrSavedPlan, { project, instanceId })` and
+  `record.listFiles({ project, instanceId })`: portable artifact/source targets,
+  with their recorded role and optional `instanceId`/`scopeId` associations.
+- `resolveFile(runDirOrSavedPlan, reference, { project, sourceRoot })` and
+  `record.resolveFile(reference, { project, sourceRoot })`: the captured viewer
+  `subject`/`target` resolved by the engine to `{ target, localPath, sourceMatch, reason }`.
+  `localPath` is private native data, or `null` when no local copy is available.
+  Artifacts verify recorded bytes; sources are current editable files, so
+  `sourceMatch: "changed"` does not prevent opening. Bind source access explicitly
+  with `project`, and `sourceRoot` when its owning root differs from the planning
+  project. Closure-only helper labels always need explicit `sourceRoot`, which
+  resolves their complete recorded label; FX does not infer package ownership
+  from current configuration or discover installed packages.
+  Neither job loads author code or opens files itself. Structured
+  refusals raise `FileAccessError` with `code` and `document`. See the
+  [file access contract](../../spec/files.md).
 - `inspectControl(run)` and `cancel(run, { invocation, wait, timeout })`: exact-target local
   control, independent of viewer/service lifetime. Results keep their `lower_snake_case` wire
   fields; structured failures raise `RunControlError` with `code` and `result`.

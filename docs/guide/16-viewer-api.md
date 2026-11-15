@@ -183,6 +183,80 @@ context and discard outdated intent when the user navigates. Context updates do
 not distinguish user actions from programmatic ones; avoid echoing every update
 back into `present`.
 
+## Handle files in your application
+
+An embedding application can replace the viewer's ordinary external-file link
+behavior. The same image link opens its served URL in a browser tab by default,
+or passes the recorded file reference to your application's handler. Inline
+image, video and 3D preview interactions stay within the viewer.
+
+This extension requires an engine/client build that exposes `handleExternalFile`;
+older viewers return `unsupported_method`. It is implemented in source for
+[#134](https://github.com/gridaco/fx/issues/134), pending release.
+
+```js
+// `client` is the ViewerClient connected to the existing viewer window.
+// `desktop` is your application's trusted native bridge, not an FX API.
+const detach = await client.handleExternalFile(async (reference) => {
+  const file = await desktop.resolveFxFile(reference);
+  if (!file.localPath) throw new Error("No local copy is available.");
+  await desktop.openFileTab(file.localPath);
+});
+
+// Remove your handler when the integration ends.
+detach();
+```
+
+Your native implementation can use the ordinary SDK's record access. Bind the
+viewer subject to the exact record your application opened; never resolve a
+click by looking up whichever run happens to be newest later.
+
+```js
+import { loadRun } from "@grida/fx";
+
+const record = await loadRun("runs/demo", { cwd: projectDirectory });
+
+// Trusted native code behind desktop.resolveFxFile(reference):
+const file = await record.resolveFile(reference, { project: projectDirectory });
+// file.localPath is an absolute local path, or null when unavailable.
+```
+
+The `project` binding also allows the engine to check a service-entry reference
+against the private local catalog. If workflow source belongs to a different
+home directory, pass that explicit `sourceRoot` binding when resolving it.
+Closure-only helper files also require `sourceRoot`: it is the base for the
+complete recorded label. FX does not infer historical package ownership from
+today's project configuration or locate installed packages automatically.
+Python provides `list_files`, `resolve_file`, their async forms, and corresponding
+record methods. See [SDK run access](09-sdk-runs.md) and the
+[native file contract](../../spec/files.md) for discovery and resolution details.
+
+References contain the captured subject plus an artifact target (digest,
+metadata and optional served URL), or a source target (portable source label and
+optional symbol/digest). Source labels become clickable only while a host handler
+is registered. Source resolution opens the current editable workspace file;
+it does not promise historical contents or an exact declaration line. Changed
+source is reported rather than rejected as a corrupt artifact. Opening source
+does not import or execute it. Recorded artifact paths remain read-only; source
+paths refer to editable workspace files.
+
+Register one handler per viewer. Selection subscriptions remain observational and
+do not receive file activations. Primary/keyboard activation delegates to the
+handler; modified and middle clicks on links keep their browser behavior. The
+viewer suppresses default navigation before waiting for the handler. Failure or
+timeout does not automatically retry or open another tab; the viewer offers an
+explicit browser link when one is available. Disposing the client removes its
+registration. Recreate the integration after viewer navigation or reload.
+
+If source metadata cannot be read, the viewer offers **Retry source files**.
+This refreshes metadata only; it does not replay a file activation.
+
+Trusted same-realm code can register directly with
+`window.fx_viewer.handleExternalFile(handler)`, which returns a synchronous
+detach function. The supplied viewer and a future composed viewer use the same
+injected TypeScript behavior; neither the shared hook nor file resolution
+requires a window-message transport.
+
 ## Authorize a different-origin host
 
 Trusted preload code or browser automation executing **inside the viewer page**

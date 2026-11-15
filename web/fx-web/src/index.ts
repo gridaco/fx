@@ -221,3 +221,5 @@ export * from "./presentation";
 export * from "./viewer-page";
 export * from "./model";
 export * from "./model-view";
+export * from "./external-file";
+export * from "./files";

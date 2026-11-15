@@ -59,6 +59,25 @@ function setup(timeoutMs = 1_000) {
 async function microtasks() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
 
 describe("viewer protocol validation", () => {
+  test("file references are portable and discriminate artifacts from editable sources", () => {
+    const file = { subject: context().subject, target: { kind: "artifact", artifact: {
+      digest: "c".repeat(64), url: "/api/artifacts/" + "c".repeat(64), name: "asset.png", kind: "image/png", size: 12,
+    } } };
+    expect(Protocol.isFileReference(file)).toBeTrue();
+    expect(Protocol.isFileReference({ ...file, target: { ...file.target, artifact: { ...file.target.artifact, url: null } } })).toBeTrue();
+    expect(Protocol.isFileReference({ subject: context().subject, target: { kind: "source", source: "nodes/acme.ts", symbol: "render", recorded_digest: "d".repeat(64) } })).toBeTrue();
+    for (const source of ["/private/acme.py", "../acme.py", "nodes/../acme.py", "C:/acme.py", "file:acme.py", "nodes\\acme.py", "nodes//acme.py", "nodes/acme.py:render", "nodes/acme\u0085.py"]) {
+      expect(Protocol.isFileTarget({ kind: "source", source })).toBeFalse();
+    }
+    for (const url of ["file:///private/asset.png", "javascript:alert(1)", "https://user:secret@assets.test/file.png", "https://assets.test/file.png?token=secret", "https://assets.test/file.png?", "https://assets.test/file.png#", "https://@assets.test/file.png", "//assets.test/file.png", "http:assets.test/file.png", "https:/assets.test/file.png", "https://assets.test/file name.png"]) {
+      expect(Protocol.isFileTarget({ ...file.target, artifact: { ...file.target.artifact, url } })).toBeFalse();
+    }
+    expect(Protocol.isFileReference({ ...file, local_path: "/private/asset.png" })).toBeFalse();
+    expect(Protocol.isFileTarget({ kind: "source", source: "nodes/acme.ts", local_path: "/private/acme.ts" })).toBeFalse();
+    expect(Protocol.isFileReference({ ...file, subject: { kind: "catalog" } })).toBeFalse();
+    expect(Protocol.isFileTarget({ ...file.target, artifact: { ...file.target.artifact, name: "asset\u0085.png" } })).toBeFalse();
+    expect(Protocol.isFileTarget({ ...file.target, artifact: { ...file.target.artifact, kind: "image/\u0085png" } })).toBeFalse();
+  });
   test("unknown methods and versions remain recognizable for explicit refusal", () => {
     const request = { channel: "fx_viewer", version: 2, type: "request", request_id: "r1", method: "new_method", params: {} };
     expect(Protocol.isRequest(request)).toBe(true);
@@ -101,6 +120,101 @@ describe("viewer protocol validation", () => {
     expect(Protocol.isAction({ action: "fit", instance_id: "prepare#1" })).toBe(false);
     expect(Protocol.isAction({ action: "run", target: "acme" })).toBe(false);
     expect(Protocol.isAction({ action: "open_scope" })).toBe(false);
+  });
+});
+
+describe("external file delegation", () => {
+  const reference: Protocol.FileReference = { subject: context().subject,
+    target: { kind: "artifact", artifact: { digest: "c".repeat(64), url: "/api/artifacts/" + "c".repeat(64), name: "asset.png", kind: "image/png", size: 12 } } };
+  const activation = (handler_id: string, activation_id = 1) => ({ channel: Protocol.CHANNEL, version: 1,
+    type: "external_file", handler_id, activation_id, reference });
+
+  test("one registration receives each activation once and reports only safe completion", async () => {
+    const { client, page, source } = setup();
+    page.handle = (request) => page.reply(request, null);
+    const seen: Protocol.FileReference[] = [];
+    const off = await client.handleExternalFile((file) => { seen.push(file); });
+    const registration = page.requests.find((request) => request.method === "register_external_file_handler")!;
+    const id = registration.params.handler_id as string;
+    source.emit(activation(id), {}, ORIGIN);
+    source.emit(activation(id), page, "https://other.test");
+    source.emit(activation("someone-else"), page);
+    source.emit({ ...activation(id), reference: { ...reference, local_path: "/private/secret" } }, page);
+    source.emit(activation(id), page);
+    source.emit(activation(id), page);
+    await microtasks();
+    expect(seen).toEqual([reference]);
+    expect(page.count("external_file_result")).toBe(1);
+    expect(page.requests.find((request) => request.method === "external_file_result")?.params).toEqual({ handler_id: id, activation_id: 1, ok: true });
+    off();
+    off();
+    source.emit(activation(id, 2), page);
+    await microtasks();
+    expect(seen).toHaveLength(1);
+    expect(page.count("unregister_external_file_handler")).toBe(1);
+    client.dispose();
+  });
+
+  test("exceptions never send private host diagnostics and activations are never retried", async () => {
+    const { client, page, source } = setup();
+    page.handle = (request) => page.reply(request, null);
+    const off = await client.handleExternalFile(() => { throw new Error("secret-key /private/workspace/image.png"); });
+    const id = page.requests[0]!.params.handler_id as string;
+    source.emit(activation(id), page);
+    await microtasks();
+    expect(page.requests.find((request) => request.method === "external_file_result")?.params).toEqual({ handler_id: id, activation_id: 1, ok: false });
+    expect(JSON.stringify(page.requests)).not.toContain("secret-key");
+    source.emit(activation(id), page);
+    await microtasks();
+    expect(page.count("external_file_result")).toBe(1);
+    off();
+    client.dispose();
+  });
+
+  test("registration refusal and timeout clean up without silently taking over or retrying", async () => {
+    const { client, page } = setup(5);
+    const lost = client.handleExternalFile(() => {});
+    await expect(client.handleExternalFile(() => {})).rejects.toMatchObject({ code: "unavailable" });
+    await expect(lost).rejects.toMatchObject({ code: "timeout" });
+    expect(page.count("register_external_file_handler")).toBe(1);
+    expect(page.count("unregister_external_file_handler")).toBe(1);
+    page.handle = (request) => { if (request.method === "register_external_file_handler") page.fail(request, "unsupported_method"); };
+    await expect(client.handleExternalFile(() => {})).rejects.toMatchObject({ code: "unsupported_method" });
+    expect(page.count("register_external_file_handler")).toBe(2);
+    client.dispose();
+  });
+
+  test("old detach and replayed activations cannot affect a new registration", async () => {
+    const { client, page, source } = setup();
+    page.handle = (request) => page.reply(request, null);
+    let first = 0, next = 0;
+    const oldOff = await client.handleExternalFile(() => { first++; });
+    const oldId = page.last().params.handler_id as string;
+    oldOff();
+    const newOff = await client.handleExternalFile(() => { next++; });
+    const newId = page.last().params.handler_id as string;
+    oldOff();
+    source.emit(activation(oldId, 99), page);
+    source.emit(activation(newId), page);
+    await microtasks();
+    expect({ first, next }).toEqual({ first: 0, next: 1 });
+    newOff();
+    client.dispose();
+  });
+
+  test("disposal releases file ownership and prevents queued callbacks", async () => {
+    const { client, page, source } = setup();
+    page.handle = (request) => page.reply(request, null);
+    let calls = 0;
+    await client.handleExternalFile(() => { calls++; });
+    const id = page.last().params.handler_id as string;
+    source.emit(activation(id), page);
+    client.dispose();
+    await microtasks();
+    expect(calls).toBe(0);
+    expect(page.count("unregister_external_file_handler")).toBe(1);
+    expect(page.count("external_file_result")).toBe(0);
+    expect(source.listeners.size).toBe(0);
   });
 });
 

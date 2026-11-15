@@ -70,7 +70,13 @@ export {
   type RunFollowOptions, RunObservationError, type RunObservationFailure,
   type RunReadOptions, RunRecord, type RunSnapshot,
   RunExportError, type RunExportFailure, type RunExportOptions, type RunExportResult,
+  type RunFileAccessOptions, type RunListFilesOptions, type RunResolveFileOptions,
 } from "./record.js";
+export {
+  FileAccessError, type FileAccessFailure, type FileAccessOptions, type FileDescriptor,
+  type FileReference, type FileResolution, type FileTarget, type ListFilesOptions, type ResolveFileOptions,
+  listFiles, resolveFile,
+} from "./file-access.js";
 export {
   listRuns, type ListRunsOptions, type RemoveRunsOptions, removeRuns, type RunEntry,
   type RunPlacement, type RunRemoval, type RunRemovalEntry, RunRemovalError,

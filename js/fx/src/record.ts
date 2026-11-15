@@ -5,6 +5,7 @@ import type { InspectOptions } from "./api.js";
 import type { Graph, Inspection, RunEvent } from "./documents.js";
 import { call, type CallOptions, type Exit, failure } from "./engine.js";
 import { FxError } from "./errors.js";
+import { listFiles, resolveFile, type FileDescriptor, type FileReference, type FileResolution } from "./file-access.js";
 
 /** The complete recorded event envelope. Unknown events and fields remain readable. */
 export interface ObservedRunEvent extends RunEvent {
@@ -56,6 +57,19 @@ export class RunObservationError extends FxError {
 export interface RunReadOptions {
   /** Stops this reader only; it never cancels the separately owned workflow execution. */
   readonly signal?: AbortSignal;
+}
+
+export interface RunFileAccessOptions extends RunReadOptions {
+  /** Explicit project binding for current source files; never inferred from the run folder. */
+  readonly project?: string;
+}
+
+export interface RunListFilesOptions extends RunFileAccessOptions {
+  readonly instanceId?: string;
+}
+
+export interface RunResolveFileOptions extends RunFileAccessOptions {
+  readonly sourceRoot?: string;
 }
 
 export interface RunExportOptions extends RunReadOptions {
@@ -226,6 +240,16 @@ export class RunRecord {
       ...this.context, ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
     return response(done, true) as RunSnapshot;
+  }
+
+  /** List recorded file references from this pinned record without executing author code. */
+  async listFiles(options: RunListFilesOptions = {}): Promise<FileDescriptor[]> {
+    return listFiles(this.runDir, { ...this.context, ...options });
+  }
+
+  /** Resolve a captured viewer reference. Returned native paths stay private to the host. */
+  async resolveFile(reference: FileReference, options: RunResolveFileOptions = {}): Promise<FileResolution> {
+    return resolveFile(this.runDir, reference, { ...this.context, ...options });
   }
 
   /** Export terminal, inactive evidence to a new directory, without execution or publication.

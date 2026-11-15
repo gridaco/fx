@@ -1,10 +1,19 @@
 import { ViewerProtocol } from "../../../js/fx/src/viewer-protocol";
 import { ViewerPresentationError } from "./presentation";
+import { ExternalFileController, ExternalFileError } from "./external-file";
 
 export interface ViewerPageSource {
   getContext(): ViewerProtocol.Context;
   present(action: ViewerProtocol.Action): ViewerProtocol.Context;
   subscribe(listener: () => void): () => void;
+}
+interface FileOwner {
+  peer: Window;
+  origin: string;
+  handlerId: string;
+  sequence: number;
+  release(): void;
+  pending: Map<number, { finish(ok: boolean): void }>;
 }
 
 /** The page-level postMessage endpoint. Window references are the browser's identities. */
@@ -16,8 +25,9 @@ export class ViewerPage {
   private queued = false;
   private disposed = false;
   private previous = "";
+  private fileOwner: FileOwner | null = null;
 
-  constructor(private readonly window: Window, private readonly source: ViewerPageSource) {
+  constructor(private readonly window: Window, private readonly source: ViewerPageSource, private readonly files?: ExternalFileController) {
     window.addEventListener("message", this.onMessage);
     this.detach = source.subscribe(this.changed);
   }
@@ -33,6 +43,7 @@ export class ViewerPage {
       origins.delete(origin);
       if (origins.size === 0) this.grants.delete(host);
       this.peers.get(host)?.delete(origin);
+      if (this.fileOwner?.peer === host && this.fileOwner.origin === origin) this.releaseFileOwner(this.fileOwner);
     };
   };
 
@@ -51,12 +62,49 @@ export class ViewerPage {
   private allowed(source: Window, origin: string): boolean {
     return /^https?:\/\//.test(origin) && (origin === this.window.location.origin || this.grants.get(source)?.has(origin) === true);
   }
-  private send(target: Window, origin: string, message: ViewerProtocol.Response | ViewerProtocol.ContextEvent): boolean {
+  private send(target: Window, origin: string, message: ViewerProtocol.Response | ViewerProtocol.ContextEvent | ViewerProtocol.ExternalFileEvent): boolean {
     try {
       if (target.closed || !this.allowed(target, origin)) return false;
       target.postMessage(message, origin);
       return true;
     } catch { return false; }
+  }
+  private registerFileOwner(peer: Window, origin: string, handlerId: string): void {
+    if (!this.files) throw new ViewerPresentationError("unavailable", "This viewer cannot delegate external files.");
+    if (this.fileOwner) {
+      if (this.fileOwner.peer === peer && this.fileOwner.origin === origin && this.fileOwner.handlerId === handlerId) return;
+      if (this.fileOwner.peer !== peer || this.fileOwner.origin !== origin) {
+        throw new ViewerPresentationError("unavailable", "An external-file handler is already registered.");
+      }
+      // The same authorized peer can reconnect; stale cleanup retains its old token.
+      this.releaseFileOwner(this.fileOwner);
+    }
+    const owner: FileOwner = { peer, origin, handlerId, sequence: 0, release: () => {}, pending: new Map() };
+    owner.release = this.files.handleExternalFile((reference) => this.forwardFile(owner, reference));
+    this.fileOwner = owner;
+  }
+  private forwardFile(owner: FileOwner, reference: ViewerProtocol.FileReference): Promise<void> {
+    if (this.fileOwner !== owner || !this.allowed(owner.peer, owner.origin)) return Promise.reject(new Error("File handler unavailable."));
+    const activation_id = ++owner.sequence;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => pending.finish(false), 10_000);
+      const pending = { finish: (ok: boolean) => {
+        if (!owner.pending.delete(activation_id)) return;
+        clearTimeout(timer);
+        if (ok) resolve(); else reject(new Error("File handling was not confirmed."));
+      } };
+      owner.pending.set(activation_id, pending);
+      if (!this.send(owner.peer, owner.origin, {
+        channel: ViewerProtocol.CHANNEL, version: ViewerProtocol.VERSION, type: "external_file",
+        handler_id: owner.handlerId, activation_id, reference,
+      })) this.releaseFileOwner(owner);
+    });
+  }
+  private releaseFileOwner(owner: FileOwner): void {
+    if (this.fileOwner !== owner) return;
+    this.fileOwner = null;
+    for (const pending of [...owner.pending.values()]) pending.finish(false);
+    owner.release();
   }
   private onMessage = (event: MessageEvent): void => {
     if (this.disposed || !this.isWindow(event.source) || !this.allowed(event.source, event.origin)) return;
@@ -85,10 +133,28 @@ export class ViewerPage {
         }
         case "get_context": result = this.getContext(); break;
         case "present": result = this.present(request.params as ViewerProtocol.Action); break;
+        case "register_external_file_handler":
+          this.registerFileOwner(event.source, event.origin, request.params.handler_id as string);
+          result = null;
+          break;
+        case "unregister_external_file_handler": {
+          const owner = this.fileOwner;
+          if (owner?.peer === event.source && owner.origin === event.origin && owner.handlerId === request.params.handler_id) this.releaseFileOwner(owner);
+          result = null;
+          break;
+        }
+        case "external_file_result": {
+          const owner = this.fileOwner;
+          if (owner?.peer === event.source && owner.origin === event.origin && owner.handlerId === request.params.handler_id) {
+            owner.pending.get(request.params.activation_id as number)?.finish(request.params.ok as boolean);
+          }
+          result = null;
+          break;
+        }
       }
       this.send(event.source, event.origin, { ...base, ok: true, result });
     } catch (error) {
-      const expected = error instanceof ViewerPresentationError;
+      const expected = error instanceof ViewerPresentationError || error instanceof ExternalFileError;
       this.send(event.source, event.origin, { ...base, ok: false, error: {
         code: expected ? error.code : "unavailable",
         message: expected ? error.message : "The viewer could not apply the page request.",
@@ -121,6 +187,7 @@ export class ViewerPage {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.fileOwner) this.releaseFileOwner(this.fileOwner);
     this.window.removeEventListener("message", this.onMessage);
     this.detach();
     this.peers.clear();

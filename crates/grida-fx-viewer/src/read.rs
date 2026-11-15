@@ -144,6 +144,8 @@ struct Candidate {
 /// The browser document and its private, confined artifact inventory.
 pub(crate) struct Snapshot {
     pub document: RunDocument,
+    /// Original recorded graph, kept private for source-reference discovery.
+    pub plan: Value,
     candidates: BTreeMap<String, Candidate>,
     pub recorded: Recorded,
 }
@@ -189,13 +191,23 @@ impl Snapshot {
 
     /// Opens exactly recorded bytes. Validation and serving use the same file handle.
     pub fn open_artifact(&self, root: &Path, digest: &str) -> io::Result<(File, Artifact)> {
+        self.open_artifact_with_path(root, digest)
+            .map(|(file, artifact, _)| (file, artifact))
+    }
+
+    /// The same verified lookup as HTTP serving, additionally returning its private path.
+    pub(crate) fn open_artifact_with_path(
+        &self,
+        root: &Path,
+        digest: &str,
+    ) -> io::Result<(File, Artifact, PathBuf)> {
         let candidate = self
             .candidates
             .get(digest)
             .ok_or_else(|| missing("artifact is not recorded in this run"))?;
         for relative in &candidate.paths {
-            if let Ok(file) = verified_file(root, relative, &candidate.artifact) {
-                return Ok((file, candidate.artifact.clone()));
+            if let Ok((file, path)) = verified_file_with_path(root, relative, &candidate.artifact) {
+                return Ok((file, candidate.artifact.clone(), path));
             }
         }
         Err(missing("recorded artifact bytes are unavailable"))
@@ -225,11 +237,76 @@ pub(crate) fn confined_file(root: &Path, relative: &str) -> io::Result<PathBuf> 
     Ok(path)
 }
 
+/// Opens a regular file without following links in either the root or relative path.
+/// The returned handle owns validation and reads; the path is only a point-in-time label.
+#[cfg(unix)]
+pub(crate) fn open_confined_file(root: &Path, relative: &str) -> io::Result<(File, PathBuf)> {
+    use rustix::fs::{Mode, OFlags, open, openat};
+
+    if !root.is_absolute() {
+        return Err(missing("file root is not absolute"));
+    }
+    let path = root.join(relative);
+    let relative: Vec<_> = Path::new(relative)
+        .components()
+        .map(|component| match component {
+            Component::Normal(part) => Ok(part),
+            _ => Err(missing("file is outside the selected root")),
+        })
+        .collect::<io::Result<_>>()?;
+    let Some((name, parents)) = relative.split_last() else {
+        return Err(missing("file is outside the selected root"));
+    };
+    #[cfg(target_os = "linux")]
+    let directory_access = OFlags::PATH;
+    // Darwin's sys/fcntl.h defines O_SEARCH as O_EXEC (0x40000000) | O_DIRECTORY.
+    // Rustix exposes neither access flag; retain the bit for directory search access.
+    #[cfg(target_os = "macos")]
+    let directory_access = OFlags::from_bits_retain(0x40000000);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let directory_access = OFlags::RDONLY;
+    let directory_flags = directory_access | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let mut directory = open("/", directory_flags, Mode::empty())?;
+    for component in root.components() {
+        match component {
+            Component::RootDir => {}
+            Component::Normal(part) => {
+                directory = openat(&directory, part, directory_flags, Mode::empty())?;
+            }
+            _ => return Err(missing("file root is not canonical")),
+        }
+    }
+    for parent in parents {
+        directory = openat(&directory, *parent, directory_flags, Mode::empty())?;
+    }
+    let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+    let file = File::from(openat(&directory, *name, flags, Mode::empty())?);
+    if !file.metadata()?.is_file() {
+        return Err(missing("file is not a regular file"));
+    }
+    Ok((file, path))
+}
+
+#[cfg(not(unix))]
+pub(crate) fn open_confined_file(_root: &Path, _relative: &str) -> io::Result<(File, PathBuf)> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "confined file opening is unavailable",
+    ))
+}
+
 fn verified_file(root: &Path, relative: &str, artifact: &Artifact) -> io::Result<File> {
+    verified_file_with_path(root, relative, artifact).map(|(file, _)| file)
+}
+
+fn verified_file_with_path(
+    root: &Path,
+    relative: &str,
+    artifact: &Artifact,
+) -> io::Result<(File, PathBuf)> {
     #[cfg(test)]
     VERIFIED_PATHS.with(|paths| paths.borrow_mut().push(relative.to_string()));
-    let path = confined_file(root, relative)?;
-    let mut file = File::open(path)?;
+    let (mut file, path) = open_confined_file(root, relative)?;
     if file.metadata()?.len() != artifact.size {
         return Err(missing("artifact size differs from its record"));
     }
@@ -246,7 +323,7 @@ fn verified_file(root: &Path, relative: &str, artifact: &Artifact) -> io::Result
         return Err(missing("artifact digest differs from its record"));
     }
     file.rewind()?;
-    Ok(file)
+    Ok((file, path))
 }
 
 pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -999,6 +1076,7 @@ fn project_inventory(
     };
     Ok(Snapshot {
         document,
+        plan: plan.clone(),
         candidates,
         recorded,
     })
