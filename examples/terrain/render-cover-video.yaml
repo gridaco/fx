@@ -3,6 +3,16 @@ id: terrain-cover-video
 title: Animated 47-tile terrain cover
 description: Simulate an evolving tile grid with the 47-mask lookup and render a headless local loop at $0.
 
+notes:
+  evolving_grid:
+    about: animate
+    text: |
+      ## The edges change with the occupancy
+      Digits are removed and rebuilt on one persistent binary grid. Each frame
+      selects tiles from the current neighbors, so newly exposed edges change
+      while the ground stays occupied. FFmpeg encodes this local simulation;
+      the existing atlas is reused without another generation call.
+
 inputs:
   atlas:
     type: file

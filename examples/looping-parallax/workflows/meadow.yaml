@@ -3,6 +3,24 @@ id: meadow-parallax
 title: Meadow from concept to parallax
 description: Derive three depth layers from a supplied concept image, prepare horizontal repeats, and compose them.
 
+notes:
+  supplied_concept:
+    about: far
+    text: |
+      ## Start from one composition
+      Supply the complete concept image; this workflow does not generate it.
+      All three layer edits use that same image. The far layer stays opaque,
+      while the middle and foreground must retain transparency so the layers
+      can overlap. Inspect the separated layers before judging the scroll.
+  preview_timing:
+    about: render_preview
+    text: |
+      ## Assets and preview timing
+      The layers and manifest are the reusable output. The optional video
+      retimes their speeds to complete 1 / 1 / 3 wraps in 16 seconds, so the
+      preview itself closes. Use the manifest's original parallax factors in
+      your application; the preview report records both sets of speeds.
+
 inputs:
   concept:
     type: file

@@ -9,6 +9,24 @@ description: >-
   admitted only when its numbers and its pictures both pass. An assembly or rig still
   rejected after its own takes rebuilds the body, a bounded number of times.
 
+notes:
+  choose_entry:
+    about: setup
+    text: |
+      ## Choose the character's starting point
+      Supply either a written `brief` or a map of existing `parts`, not both.
+      The profile and partition decide the required roles and rig lane during planning.
+      Supplied parts skip reference drawing and mesh generation; Blender is still needed
+      for local normalization and assembly.
+  admission:
+    about: result
+    text: |
+      ## Read the admission result
+      A usable GLB alone is not an accepted character. Keep its `result` findings with it.
+      `review: none` delivers an explicitly unreviewed asset; `through: assembly` stops
+      before rigging. Passing this pipeline does not establish game-engine performance,
+      cloth or hair simulation, or a facial rig.
+
 inputs:
   brief:
     type: file
@@ -232,6 +250,14 @@ steps:
       rig:
         title: Rig the character
         if: ${{ inputs.through == 'rig' && steps.assembly.review.facts.verdict != 'reject' }}
+        notes:
+          preservation:
+            about: finish
+            text: |
+              ## Preserve the accepted assembly
+              The provider rig is checked against the assembled mesh before delivery.
+              Treat a preservation rejection as a correspondence problem to investigate,
+              not permission to relax the checks. Agent-rig profiles use the other lane.
         steps:
           task:
             title: Rig with Tripo

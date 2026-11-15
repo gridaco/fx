@@ -30,6 +30,27 @@ def _build(spec: Path) -> Workflow:
         ),
         budget={"max_usd": 15},
     )
+    wf.note(
+        "shared_direction",
+        text=(
+            "## One style, three layout contracts\n\n"
+            "Use `style.txt` for the shared visual direction and `ui.json` for each "
+            "sheet's instructions and reference binding. A new reference needs its "
+            "matching SHA-256 too. Preserve the template's panel insets, button-state "
+            "geometry and icon cells so the returned sheets remain usable by their consumers."
+        ),
+    )
+    wf.note(
+        "review_handoff",
+        about="package",
+        text=(
+            "## Keep the evidence with the artwork\n\n"
+            "Pixel gates enforce geometry and transparency and can request a new painting. "
+            "The later independent review is retained evidence, not another admission gate. "
+            "Inspect each role's evidence image and review JSON before accepting the package; "
+            "a geometrically valid sheet is not automatically a visually approved one."
+        ),
+    )
     files = {}
     outputs = {}
     for role in document_roles(ui):

@@ -7,6 +7,25 @@ description: >-
   draws every new state in one sheet. Each drawing is aligned to the original, every
   combination is reviewed, and the accepted patches go back on the sprite at full size.
 
+notes:
+  starting_expression:
+    about: face
+    text: |
+      ## Choose an animatable source
+      Start with open eyes and a closed resting mouth, with clear space
+      around the eyelid and lash contours. Hair crossing a replacement
+      boundary can make a feature ineligible. The optional
+      `source-workflow.yaml` prepares a different source separately; this
+      workflow never invokes that paid edit automatically.
+  read_the_result:
+    about: deliver
+    text: |
+      ## A partial result can be correct
+      Read `result` before using the delivered states: it distinguishes
+      complete, partial and refused outcomes. Only accepted features are
+      kept. Native patches preserve the source outside their masks; a
+      passing still-image review does not approve the animation's timing.
+
 inputs:
   portrait:
     type: file
@@ -80,6 +99,14 @@ steps:
       every new state in one sheet, each cell an edit of the same portrait, so they share one
       hand.
     if: ${{ !inputs.face_crop || steps.face.crop.outputs.image }}
+    notes:
+      admission:
+        about: admission
+        text: |
+          ## Finding a face is not admission
+          The earlier box only locates the workspace. This review decides
+          which eyes and mouth can safely change. Ineligible features stay
+          in their source state rather than being forced through a drawing.
     steps:
       admission:
         title: Decide what can move
