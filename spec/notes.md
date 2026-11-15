@@ -75,12 +75,18 @@ is recorded. Records without notes retain their existing meaning.
 The engine's layout report gives note cells in a separate optional `notes` map. Existing
 execution `cells` and `order` keep their meaning. Note placement is deterministic within
 its owner; associations guide placement without changing executable dependency depth or
-member order. Stable bounded footprints reserve space before rendering. The authored
-layout-file feature is not a prerequisite.
+member order. Notes have a consistent width and content-sized height. The browser measures
+the safely rendered captured text before calculating tracks, enclosing frames and the initial
+camera fit; it does not paint fixed cards and resize them afterward. These presentation sizes
+can change pixel bounds, never executable cells or member order. The authored layout-file
+feature is not a prerequisite.
 
-A note card displays a bounded excerpt; selecting it opens full content in the existing
-details panel. Notes have no execution sockets, status, timing or cost chrome. Markdown
-uses a bundled renderer, with raw HTML and image loading disabled and safe link schemes.
+A short or ordinary note displays its complete content on the canvas. A generous maximum
+card height and bounded canvas rendering keep unusually long documents from dominating
+the workflow; those cards explicitly offer full text in the existing details panel. Selecting
+any note opens that panel. Local and exported viewers use the same sizing and rendering path.
+Notes have no execution sockets, status, timing or cost chrome. Markdown uses a bundled
+renderer, with raw HTML and image loading disabled and safe link schemes.
 Relative links must not accidentally resolve against a service/run URL. Literal text
 preserves characters and whitespace. Rendering never executes workflow expressions.
 

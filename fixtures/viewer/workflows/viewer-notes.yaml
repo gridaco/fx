@@ -16,6 +16,8 @@ notes:
       **This is plain text.**
       ${{ inputs.prompt }} stays literal.
       seed: 42
+  long_document:
+    file: ./notes/long-document.md
   unavailable:
     file: ./notes/not-created.md
   renamed_target:

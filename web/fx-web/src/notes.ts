@@ -47,10 +47,10 @@ export function noteMarkup(text: string): string {
   return micromark(text, { allowDangerousHtml: false, allowDangerousProtocol: false });
 }
 /** Render captured documentation without fetching embedded resources or evaluating expressions. */
-export function renderNoteContent(note: Pick<WorkflowNote, "format" | "text" | "withheld" | "diagnostic">, doc: Document = document, excerpt = false): HTMLElement {
+export function renderNoteContent(note: Pick<WorkflowNote, "format" | "text" | "withheld" | "diagnostic">, doc: Document = document): HTMLElement {
   const body = doc.createElement("div");
   body.className = `fx-note-content${note.format === "text" ? " fx-note-plain" : ""}`;
-  const text = excerpt ? note.text?.slice(0, 4096) ?? null : note.text;
+  const text = note.text;
   if (text === null) {
     body.classList.add("fx-note-unavailable");
     body.textContent = note.withheld ? "Withheld by the author" : "Note unavailable";

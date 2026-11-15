@@ -60,8 +60,10 @@ notes:
 
 Notes never execute or evaluate expressions. The engine captures bounded UTF-8 file
 content into the plan; a missing/unreadable file or unresolved association leaves a visible
-note diagnostic and does not fail work. The viewer renders Markdown or literal text and
-opens full notes in its existing details panel. Note-only document/file edits preserve plan
+note diagnostic and does not fail work. The viewer renders Markdown or literal text in
+content-sized cards: ordinary notes are readable in full on the canvas, while unusually long
+documents have an explicit collapsed presentation. Selecting any note opens its full text in
+the existing details panel. Note-only document/file edits preserve plan
 identity, and resumed runs retain their original note snapshots. A fresh plan sees current
 notes. A file also used as a prompt/input/resource and edits to node source modules keep
 normal identity effects. Shared exports disclose note text only with `--include-values`.

@@ -1,4 +1,4 @@
-import { renderNoteContent } from "./notes";
+import { NoteCards } from "./note-cards";
 import { createElement, X } from "lucide";
 import type { CanvasGraph, LayoutReport } from "./graph";
 import { CanvasViewport, type CanvasInset, type ViewportState } from "./controller";
@@ -82,6 +82,7 @@ export class CanvasController {
   private readonly content = element("g");
   private readonly viewport = new CanvasViewport();
   private readonly noteCards = new Map<string, SVGGElement>();
+  private readonly noteContent: NoteCards;
   private readonly nodes = new Map<string, SVGGElement>();
   private readonly frameCards = new Map<string, SVGGElement>();
   private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string; points: CanvasLayout["edges"][number]["points"] }>();
@@ -185,6 +186,7 @@ export class CanvasController {
     this.videos = new CardVideos(container, () => this.canHover.matches && !this.reducedMotion.matches && !this.models.interacting, (element) => this.covered(element), () => this.models.stop());
     this.models = new CardModels(container, (element) => this.covered(element), () => { this.videos.stop(); this.cancelDrag(); });
     container.replaceChildren(this.svg, this.videos.player, this.models.player, this.toolbar, this.empty, this.deckBar, this.scrubber);
+    this.noteContent = new NoteCards(container);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
     this.svg.addEventListener("pointermove", this.onPointerMove, { signal: this.abort.signal });
@@ -228,7 +230,7 @@ export class CanvasController {
     }
     this.graphAbort.abort();
     this.graphAbort = new AbortController();
-    this.layout = layoutGraph(graph, report);
+    this.layout = layoutGraph(graph, report, this.noteContent.prepare(graph.notes ?? []));
     this.nodes.clear();
     this.noteCards.clear();
     this.frameCards.clear();
@@ -314,17 +316,19 @@ export class CanvasController {
       this.nodes.set(node.id, group);
     }
     for (const note of this.layout.notes ?? []) {
-      const group = element("g", { class: "fx-canvas-note", "data-note-id": note.id, role: "button", tabindex: 0, "aria-label": `Read note ${note.name}`, transform: `translate(${note.x},${note.y})` });
+      const presentation = this.noteContent.content(note.id)!;
+      const group = element("g", { class: `fx-canvas-note${presentation.collapsed ? " is-collapsed" : ""}`, "data-note-id": note.id, "data-collapsed": String(presentation.collapsed), role: "button", tabindex: 0, "aria-label": `Read note ${note.name}`, transform: `translate(${note.x},${note.y})` });
       group.append(element("rect", { width: note.width, height: note.height, rx: 8, class: "fx-canvas-note-box" }));
       group.append(element("text", { x: 16, y: 25, class: "fx-canvas-note-title" }, `Note · ${note.name}`));
-      const content = element("foreignObject", { x: 16, y: 40, width: note.width - 32, height: note.height - 76 });
-      const excerpt = renderNoteContent(note, document, true);
+      const content = element("foreignObject", { x: 16, y: 40, width: note.width - 32, height: presentation.contentHeight });
+      const excerpt = presentation.body;
       excerpt.classList.add("fx-note-excerpt");
       excerpt.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
       // Canvas links belong to full-text inspection; a card remains one clear activation target.
       for (const link of excerpt.querySelectorAll("a")) link.removeAttribute("href");
       content.append(excerpt);
-      group.append(content, element("text", { x: 16, y: note.height - 15, class: "fx-canvas-note-more" }, "Read full note"));
+      group.append(content);
+      if (presentation.collapsed) group.append(element("text", { x: 16, y: note.height - 15, class: "fx-canvas-note-more" }, "Read full note"));
       group.addEventListener("click", () => this.onSelect(note.id), { signal });
       group.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -864,6 +868,6 @@ export class CanvasController {
   dispose() {
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
-    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.models.dispose(); this.resize.disconnect(); this.container.replaceChildren();
+    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.models.dispose(); this.noteContent.dispose(); this.resize.disconnect(); this.container.replaceChildren();
   }
 }

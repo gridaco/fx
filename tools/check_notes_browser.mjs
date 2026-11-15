@@ -47,14 +47,67 @@ try {
   await page.route("**/note-client.js", route => route.fulfill({ body: sdkCode, contentType: "text/javascript" }));
   await page.goto(url);
   await page.waitForSelector('.fx-canvas-note[data-note-id="note:root:overview"]');
+  const nextPaint = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const geometry = () => page.locator(".fx-canvas-note, .fx-canvas-frame").evaluateAll(cards => cards.map(card => {
+    const box = card.querySelector(":scope > rect");
+    return { id: card.getAttribute("data-note-id") ?? card.getAttribute("data-frame-id"), transform: card.getAttribute("transform"), x: box.getAttribute("x"), y: box.getAttribute("y"), width: box.getAttribute("width"), height: box.getAttribute("height") };
+  }));
+  await nextPaint();
   mkdirSync(resolve(root, "output/playwright"), { recursive: true });
   await page.screenshot({ path: resolve(root, "output/playwright/workflow-notes-initial.png") });
   const overview = page.locator('.fx-canvas-note[data-note-id="note:root:overview"]');
+  const literal = page.locator('.fx-canvas-note[data-note-id="note:root:literal"]');
+  const longDocument = page.locator('.fx-canvas-note[data-note-id="note:root:long_document"]');
+  const noteSize = card => card.locator(":scope > rect").evaluate(box => ({ width: box.width.baseVal.value, height: box.height.baseVal.value }));
+  const overviewSize = await noteSize(overview), literalSize = await noteSize(literal), longSize = await noteSize(longDocument);
+  assert.equal(overviewSize.width, literalSize.width);
+  assert.equal(longSize.width, literalSize.width);
+  assert.ok(literalSize.height < overviewSize.height, "Short notes shrink to their content");
+  assert.ok(overviewSize.height > 240, "Ordinary Markdown grows beyond the old fixed excerpt");
+  assert.ok(longSize.height > overviewSize.height, "Only genuinely long documents reach the canvas bound");
+  for (const card of [overview, literal]) {
+    assert.equal(await card.getAttribute("data-collapsed"), "false");
+    assert.equal(await card.locator(".fx-canvas-note-more").count(), 0);
+    const fits = await card.locator("foreignObject").evaluate(frame => {
+      const body = frame.firstElementChild;
+      return body.scrollHeight <= frame.height.baseVal.value + 1 && getComputedStyle(body).maskImage === "none";
+    });
+    assert.equal(fits, true, "An ordinary note is fully visible without a fade");
+  }
+  assert.equal(await longDocument.getAttribute("data-collapsed"), "true");
+  assert.match(await longDocument.locator(".fx-canvas-note-more").textContent(), /Read full note/);
+  const rootRects = await page.locator('.fx-canvas-note[data-note-id^="note:root:"]').evaluateAll(cards => cards.map(card => {
+    const { x, y, width, height } = card.getBoundingClientRect(); return { x, y, width, height };
+  }));
+  for (let a = 0; a < rootRects.length; a++) for (let b = a + 1; b < rootRects.length; b++) {
+    const left = rootRects[a], right = rootRects[b];
+    assert.ok(left.x + left.width <= right.x || right.x + right.width <= left.x || left.y + left.height <= right.y || right.y + right.height <= left.y, "Measured root notes must not overlap");
+  }
+  const groupSizes = await page.locator(".fx-canvas-frame").evaluateAll(frames => frames.map(frame => {
+    const box = frame.querySelector(":scope > rect"); return { width: box.getAttribute("width"), height: box.getAttribute("height") };
+  }));
+  assert.equal(groupSizes.length, 2);
+  assert.deepEqual(groupSizes[0], groupSizes[1], "Repeated group frames share the same measured tracks");
+  const originalGeometry = await geometry();
+  // Use the real camera controls, then pan to compare ordinary, short and long cards at once.
+  const currentWidth = (await literal.boundingBox()).width;
+  const zoomDelta = -Math.log(0.9 / (currentWidth / literalSize.width)) / 0.01;
+  await page.mouse.move(720, 500);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, zoomDelta);
+  await page.keyboard.up("Control");
+  await nextPaint();
+  const noteBand = await overview.boundingBox();
+  await page.mouse.wheel(noteBand.x - 110, noteBand.y - 100);
+  await nextPaint();
+  await page.screenshot({ path: resolve(root, "output/playwright/workflow-notes-content-sized.png") });
+  await page.getByRole("button", { name: "Fit workflow", exact: true }).click();
   assert.equal(await overview.locator("h1").innerText(), "Reference to variations");
   assert.equal(await overview.locator("img").count(), 0);
   await overview.click();
   const details = page.locator(".fx-note-details");
   await details.waitFor();
+  assert.deepEqual(await geometry(), originalGeometry, "Selection does not resize notes or group tracks");
   assert.match(await details.innerText(), /The expression above is documentation/);
   assert.equal(await page.evaluate(() => window.fx_note_script_executed), undefined);
   assert.equal(await page.evaluate(() => window.fx_viewer.getContext().selection), null);
@@ -83,6 +136,9 @@ try {
   assert.equal(resolution.source_match, "changed");
   assert.match(readFileSync(resolution.local_path, "utf8"), /Updated documentation/);
   await page.evaluate(() => window.detachNoteFiles());
+  await page.evaluate(() => window.fx_viewer.present({ action: "reveal_note", note_id: "note:root:long_document" }, { includeNotes: true }));
+  assert.match(await details.innerText(), /Long-document ending retained in full/);
+  await page.screenshot({ path: resolve(root, "output/playwright/workflow-notes-long-document.png") });
   // Reveal via the public opt-in action so a card under the details panel stays accessible.
   await page.evaluate(() => window.fx_viewer.present({ action: "reveal_note", note_id: "note:root:literal" }, { includeNotes: true }));
   assert.match(await details.innerText(), /\*\*This is plain text\.\*\*/);
@@ -94,9 +150,13 @@ try {
   await page.evaluate(() => window.fx_viewer.present({ action: "reveal_note", note_id: "note:root:overview" }, { includeNotes: true }));
   await details.waitFor();
   await page.screenshot({ path: resolve(root, "output/playwright/workflow-notes.png") });
+  await page.reload();
+  await page.waitForSelector('.fx-canvas-note[data-note-id="note:root:overview"]');
+  await nextPaint();
+  assert.deepEqual(await geometry(), originalGeometry, "Reload measures the same captured note sizes before layout");
   assert.deepEqual(external, [], "Notes must not fetch external resources");
   assert.deepEqual(errors, []);
-  console.log("ok   real notes: Markdown/literal rendering, immutable snapshots, SDK opt-in, source opening, no external requests; $0");
+  console.log(`ok   real notes: content-sized cards (short ${literalSize.height}, ordinary ${overviewSize.height}, long ${longSize.height}), bounded long documents, shared group tracks, stable reload/selection, Markdown/literal rendering, immutable snapshots, SDK opt-in, source opening, no external requests; $0`);
 } finally {
   await browser?.close();
   server?.kill();

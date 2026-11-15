@@ -4,7 +4,7 @@ import { DECK_BACK } from "./deck";
 
 export interface PositionedNode extends CanvasStep { x: number; y: number; width: number; height: number }
 export interface PositionedNote extends CanvasNote { x: number; y: number; width: number; height: number }
-export const NOTE_WIDTH = 360, NOTE_HEIGHT = 240;
+export const NOTE_WIDTH = 360, NOTE_MIN_HEIGHT = 96, NOTE_MAX_HEIGHT = 720;
 export interface PositionedEdge extends CanvasConnection { points: { x: number; y: number }[] }
 export interface PositionedFrame extends CanvasFrame { x: number; y: number; width: number; height: number }
 /** Two or more members of one slot in one frame: node ids, or frame ids for repeated groups. */
@@ -67,7 +67,8 @@ interface Slot { address: string; items: Item[]; column: number; row: number }
  * one row in projection order until the next report arrives. Boundary cards of an opened imported
  * workflow sit before the first and after the last column.
  */
-export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = null): CanvasLayout {
+export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = null,
+  noteSizes: ReadonlyMap<string, { width: number; height: number }> = new Map()): CanvasLayout {
   const frames = graph.frames ?? [];
   const frameById = new Map(frames.map((frame) => [frame.id, frame]));
   const parentOf = new Map<string, string>();
@@ -108,7 +109,9 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
   // Rule 11: tracks span every frame of a container, so a group's frames are the same size.
   const tracks = new Map<string, { columns: Map<number, number>; rows: Map<number, number> }>();
   const frameSize = new Map<string, { width: number; height: number }>();
-  const itemSize = (each: Item) => each.note ? { width: NOTE_WIDTH, height: NOTE_HEIGHT } : each.node ? canvasNodeSize(each.node) : sizeOfFrame(each.frame!);
+  // Captured note text is measured before placement; the grid still owns its cells and tracks.
+  const noteSize = (id: string) => noteSizes.get(id) ?? { width: NOTE_WIDTH, height: NOTE_MIN_HEIGHT };
+  const itemSize = (each: Item) => each.note ? noteSize(each.note.id) : each.node ? canvasNodeSize(each.node) : sizeOfFrame(each.frame!);
   const footprint = (slot: Slot) => {
     const sizes = slot.items.map(itemSize);
     return deckFootprint({ width: Math.max(...sizes.map((size) => size.width)), height: Math.max(...sizes.map((size) => size.height)) }, slot.items.length);
@@ -162,7 +165,7 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
       slot.items.forEach((each, index) => {
         const offset = DECK_OFFSET * Math.min(index, DECK_BACK);
         const at = { x: x + offset, y: y + offset + (deck ? BADGE_BAND : 0) };
-        if (each.note) notes.push({ ...each.note, ...at, width: NOTE_WIDTH, height: NOTE_HEIGHT });
+        if (each.note) notes.push({ ...each.note, ...at, ...noteSize(each.note.id) });
         else if (each.node) nodes.push({ ...each.node, ...at, ...canvasNodeSize(each.node) });
         else {
           positionedFrames.push({ ...each.frame!, ...at, ...sizeOfFrame(each.frame!) });
