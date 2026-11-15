@@ -5,6 +5,23 @@ description: >-
   Replay the recorded Nami rig's measured preservation alignment, explicit lower-body
   weight correction and unchanged diagnostic clips. All inputs are exact published
   artifacts. This free asset-specific replay is separate from the paid generation.
+notes:
+  exact_asset_repair:
+    about: correct
+    text: |
+      ## A repair for this retained rig
+      These parameters target 514 measured lower-body vertices in the exact downloaded
+      Nami model. They remove arm-chain influences and renormalize existing weights;
+      they are not a general repair recipe for another character or a fresh take.
+      A digest mismatch needs investigation, not replacement of the expected hash.
+  review_boundary:
+    about: qualify
+    text: |
+      ## What this replay establishes
+      Qualification binds the corrected model to the retained independent sampled review
+      at a 120-pixel gameplay height. Geometry, textures and diagnostic amplitudes remain
+      unchanged. This is a local $0 replay, not a new generation or continuous-motion
+      qualification; inspect the findings for the retained visual limitations.
 inputs:
   rigged: {type: file, kind: model/gltf-binary}
   assembly: {type: file, kind: model/gltf-binary}

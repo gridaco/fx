@@ -1,4 +1,4 @@
-import { CanvasController, ExportViewerController, exportArtifactUrl, ownsKeys, skipExplanation, skipSourceScopes, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
+import { CanvasController, ExportViewerController, exportArtifactUrl, renderNoteContent, ownsKeys, skipExplanation, skipSourceScopes, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
 
 export interface Recording extends PinnedRunExport { id: string; label: string }
 export interface CanvasFragment { graph: boolean; recording: string | null; scope: string | null; node: string | null }
@@ -176,8 +176,15 @@ export class RecordedCanvasController {
   }
   private renderInspector(state: ExportViewerState) {
     const selected = state.graph.nodes.find((node) => node.id === state.selected);
-    this.element("[data-inspector]").hidden = !selected;
+    const note = state.graph.notes?.find((note) => note.id === state.selected);
+    this.element("[data-inspector]").hidden = !selected && !note;
     const body = this.element("[data-inspector-body]"); body.replaceChildren();
+    if (note) {
+      const section = this.node("section"); section.className = "fx-note-details";
+      section.append(this.node("h2", note.name), this.node("p", "Note"), renderNoteContent(note, this.root.ownerDocument));
+      body.append(section);
+      return;
+    }
     if (!selected || !state.recording) return;
     const loaded = state.recording;
     const source = loaded.manifest.view.nodes.find((node) => node.id === selected.source_id);

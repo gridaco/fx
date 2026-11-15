@@ -7,6 +7,22 @@ description: >-
   as one sprite sheet, with a preview of each state. With the default states, the sheet and its
   pet.json are a pet the Codex app loads.
 
+notes:
+  character_reference:
+    about: base
+    text: |
+      ## One pet across every state
+      Every strip follows this base picture. Check the silhouette, colours and markings
+      here before judging individual animations. A supplied reference is redrawn in the
+      selected style; `look` should describe the same character.
+  app_layout:
+    about: sheet
+    text: |
+      ## Sprite sheet or Codex pet
+      Custom states and cell sizes still produce a sheet and `sprite.json`.
+      `pet.json` is written only for Codex's own layout: the default nine states,
+      in their declared order and frame counts, in 192 × 208 cells.
+
 inputs:
   id:          { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,39}$", description: "The pet's folder name: ~/.codex/pets/<id>" }
   name:        { type: string, min_length: 1, max_length: 40 }
@@ -109,6 +125,14 @@ steps:
     for_each: ${{ let.states }}
     key: ${{ item.id }}
     if: ${{ (item.mirror_of ?? null) == null }}   # else `sheet` flips its source's row
+    notes:
+      pose_gate:
+        about: poses
+        text: |
+          ## Counted, then inspected
+          The judge checks the requested pose count and edge clipping, not whether the
+          motion or character looks right. Inspect this state's preview after packing.
+          Reroll its `draw` step to replace just this strip; the other states can be reused.
     steps:
       draw:                                 # one strip of poses, on Codex, from the base picture
         uses: fx/image.generate@1

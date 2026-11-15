@@ -111,8 +111,8 @@ authored cells, rule 10 removes empty tracks and rule 11 sizes them.
     size. Gaps are 100 between columns and 42 between rows, in canvas units. Content starts top
     left.
 
-Rules 1–10 read no size, so a preview arriving never changes a cell. Footprints come from
-declarations: ports, settings and kind. A step whose declared output ports include an image,
+Rules 1–10 read no size, so a preview arriving never changes a cell. Executable card footprints
+come from declarations: ports, settings and kind. A step whose declared output ports include an image,
 video or model reserves its preview area in both views, before any artifact exists: a 16:9 frame as wide as
 the card less its padding, in which the file is fitted whole. A recorded card
 previews its first image output, or without one its first available `video/*` output, then its
@@ -739,3 +739,20 @@ nested levels, reduced motion and live updates that move no cell.
 Evidence: the conformance identity case; reader tests for every diagnostic; repeats, nested scopes
 and stale references in provider-free fixtures; recorded `axes` in the matrix case; a browser
 check of grid spreads and an uneven matrix table.
+
+## Workflow note placement
+
+[Workflow notes](notes.md) have optional presentation cells in the report's `notes` map,
+keyed by recorded note ID. They do not enter executable `cells` or member `order`.
+Within an owner, notes occupy a separate band starting one row below that container's
+last executable slot. In authored order, an associated note takes the first free band row
+in its target declaration's column; a free note or unresolved association takes the first
+free cell in row-major order across columns 0, 1 and 2. This packs ordinary documentation
+without a tall single-column stack while keeping associations beside their target column.
+Every frame of one declared container shares each named note's cell. Note cards use a
+consistent width and content-sized height, with a generous maximum for unusually long
+documents. Their safely rendered captured content is measured before track sizing and the
+initial camera fit. These footprints contribute to shared row heights, enclosing frames and
+canvas bounds without changing cells, executable dependency depth or member order. Growing
+a group note can therefore enlarge its frame and move later pixel tracks; its declared cell
+and the group's executable topology remain the same.

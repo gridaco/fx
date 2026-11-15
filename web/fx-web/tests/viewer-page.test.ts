@@ -311,3 +311,36 @@ test("the same authorized peer can reconnect without stale cleanup releasing its
   page.dispose();
   files.dispose();
 });
+
+test("note context is an explicit capability and legacy peers retain valid v1 context", async () => {
+  const view = nestedPlan();
+  const note = { id: "note:root:guide", name: "guide", scope_id: null, about: null, format: "markdown" as const, text: "Private note body" };
+  view.notes = [note];
+  const data = await harness(view);
+  const window = new PageWindow(), legacy = new PageWindow(), aware = new PageWindow();
+  const page = new ViewerPage(window as unknown as Window, { getContext: data.presentation.getContext, present: data.presentation.present, subscribe: data.controller.subscribe });
+  window.receive(legacy, request("subscribe"));
+  window.receive(aware, request("subscribe", { include_notes: true }));
+  data.controller.select(note.id);
+  await Promise.resolve();
+  const legacyChanged = legacy.sent.at(-1)!.data as ViewerProtocol.ContextEvent;
+  const awareChanged = aware.sent.at(-1)!.data as ViewerProtocol.ContextEvent;
+  expect(legacyChanged.context.selection).toBeNull();
+  expect(awareChanged.context.selection).toEqual({ kind: "note", note_id: note.id, scope_id: null });
+  expect(JSON.stringify(awareChanged)).not.toContain(note.text);
+  expect(page.getContext().selection).toBeNull();
+  expect(page.getContext({ includeNotes: true }).selection).toEqual(awareChanged.context.selection);
+  window.receive(aware, request("get_context", { include_notes: false }));
+  expect(aware.sent.at(-1)!.data).toMatchObject({ ok: false, error: { code: "invalid_request" } });
+  const beforeRefused = data.controller.getSnapshot();
+  window.receive(legacy, request("present", { action: "reveal_note", note_id: note.id }));
+  expect(legacy.sent.at(-1)!.data).toMatchObject({ ok: false, error: { code: "unsupported_method" } });
+  expect(data.controller.getSnapshot()).toBe(beforeRefused);
+  expect(() => page.present({ action: "reveal_note", note_id: note.id })).toThrow("includeNotes");
+  expect(data.controller.getSnapshot()).toBe(beforeRefused);
+  window.receive(aware, request("present", { action: "reveal_note", note_id: note.id, include_notes: true }));
+  expect(aware.sent.at(-1)!.data).toMatchObject({ ok: true, result: { selection: { kind: "note", note_id: note.id } } });
+  window.receive(legacy, request("present", { action: "fit" }));
+  expect(legacy.sent.at(-1)!.data).toMatchObject({ ok: true, result: { selection: null } });
+  page.dispose(); data.controller.dispose();
+});

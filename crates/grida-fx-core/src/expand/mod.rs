@@ -310,6 +310,7 @@ pub struct Expansion {
     /// Omitted positions, matched only against instances a run already knows.
     pub skipped_positions: Vec<skip::SkippedPosition>,
     pub scopes: Vec<display::Scope>,
+    pub notes: Vec<crate::notes::Note>,
     /// In insertion order: the graph's listing order.
     pub instances: IndexMap<String, Instance>,
     pub pending: Vec<PendingRepeat>,
@@ -408,6 +409,7 @@ pub(crate) struct Expander<'a> {
     pub(crate) read_sets: Vec<BTreeSet<String>>,
     pub(crate) wiring: wiring::Trace,
     pub(crate) display_scopes: IndexMap<String, display::Scope>,
+    pub(crate) notes: IndexMap<String, crate::notes::Note>,
     /// Evaluating a select's `first_of`.
     pub(crate) selecting: bool,
     /// Views handed out to expressions; indices are [`crate::val::ViewId`]s.
@@ -458,6 +460,7 @@ impl<'a> Expander<'a> {
             read_sets: Vec::new(),
             wiring: wiring::Trace::default(),
             display_scopes: IndexMap::new(),
+            notes: IndexMap::new(),
             selecting: false,
             views: Vec::new(),
             lets_active: Vec::new(),
@@ -513,6 +516,7 @@ impl<'a> Expander<'a> {
             skip_reasons: self.skip_reasons,
             skipped_positions: self.skipped_positions,
             scopes: self.display_scopes.into_values().collect(),
+            notes: self.notes.into_values().collect(),
             instances: self.instances,
             pending: self.pending,
             problems: self.problems,
@@ -527,6 +531,8 @@ impl<'a> Expander<'a> {
     fn root_frame(&mut self) -> FrameId {
         let loaded = Rc::clone(self.env.workflow);
         let workflow = Rc::clone(&loaded.workflow);
+        self.env.registry.capture_notes(&loaded);
+        self.add_notes(&loaded.source, "", None, "");
         self.workflows
             .insert(loaded.source.clone(), loaded.document.clone());
         let root = self.new_frame(Frame {
@@ -1095,6 +1101,32 @@ impl<'a> Expander<'a> {
         false
     }
 
+    pub(crate) fn add_notes(
+        &mut self,
+        workflow: &str,
+        container: &str,
+        scope: Option<&str>,
+        prefix: &str,
+    ) {
+        for note in self
+            .env
+            .registry
+            .notes_for(workflow, container, scope, prefix)
+        {
+            self.notes.insert(note.id.clone(), note);
+        }
+    }
+
+    pub(crate) fn note_workflow(&self, mut frame: FrameId) -> Option<(String, String)> {
+        loop {
+            if let Some((source, _)) = self.workflow_roots.get(&frame) {
+                return Some((source.clone(), self.frames[frame.0].decl_prefix.clone()));
+            }
+            let context = &self.frames[frame.0];
+            frame = context.owner.or(context.parent)?;
+        }
+    }
+
     /// Records a used workflow's root frame (see `workflow_roots`).
     pub(crate) fn workflow_root(&mut self, root: FrameId, source: &str, caller: FrameId) {
         self.workflow_roots
@@ -1162,6 +1194,7 @@ pub(crate) mod testing {
             timeout: None,
             title: None,
             description: None,
+            notes: Default::default(),
         }
     }
 
@@ -1188,6 +1221,7 @@ pub(crate) mod testing {
             id: "case".to_string(),
             title: "Case".to_string(),
             description: None,
+            notes: Default::default(),
             inputs: IndexMap::new(),
             tables: IndexMap::new(),
             let_: IndexMap::new(),

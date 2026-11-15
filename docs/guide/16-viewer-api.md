@@ -309,3 +309,21 @@ affect the FX service or workflow execution.
 
 For the raw message format, context types, and compatibility rules, see the
 [viewer page contract](../../spec/viewer.md).
+
+## Inspect note selection
+
+Static workflow notes are presentation entities. Opt in when constructing a client:
+
+```ts
+const viewer = new ViewerClient({
+  targetWindow: viewerWindow,
+  origin: viewerOrigin,
+  includeNotes: true,
+});
+```
+
+Note selection is `{kind: "note", note_id, scope_id}` with no note-text payload. Reveal a
+recorded note with `viewer.present({action: "reveal_note", note_id})`. Default clients retain
+legacy context shapes: selecting a note projects to null. Same-realm `getContext`, `subscribe`
+and `present` accept an optional `{includeNotes: true}` options argument. Older viewers can
+refuse the opt-in explicitly; no presentation is automatically retried.

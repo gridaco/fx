@@ -38,6 +38,39 @@ with "quote it":
 Write `"16:9"`. Duplicate keys, anchors, aliases and tags are refused too. `1024x1024`, `y` and `n`
 are ordinary strings, and `1`, `1.0` and `1e0` are one number.
 
+## Notes for people reading the canvas
+
+A workflow or group may declare an ordered `notes` map. Each note has exactly one of
+`text` (inline string) or `file` (local home-project path), optional `about` (a direct step
+name in the same container), and `format: markdown | text` (default `markdown`).
+
+```yaml
+notes:
+  overview:
+    file: ./notes/overview.md
+  help:
+    about: draw
+    text: |
+      ## Reference image
+      Use a **clear silhouette**.
+  literal:
+    format: text
+    text: "${{ inputs.prompt }} is documentation here."
+```
+
+Notes never execute or evaluate expressions. The engine captures bounded UTF-8 file
+content into the plan; a missing/unreadable file or unresolved association leaves a visible
+note diagnostic and does not fail work. The viewer renders Markdown or literal text in
+content-sized cards: ordinary notes are readable in full on the canvas, while unusually long
+documents have an explicit collapsed presentation. Selecting any note opens its full text in
+the existing details panel. Note-only document/file edits preserve plan
+identity, and resumed runs retain their original note snapshots. A fresh plan sees current
+notes. A file also used as a prompt/input/resource and edits to node source modules keep
+normal identity effects. Shared exports disclose note text only with `--include-values`.
+Python: `wf.note("help", text="## Reference", about="draw")`; groups have `.note` too,
+and `Workflow(..., notes={...})` accepts declarations. JavaScript: `workflow({..., notes:
+{help: {text: "## Reference", about: "draw"}}, steps: {...}})`; `Note` is an exported type.
+
 ## Inputs
 
 ```yaml

@@ -44,6 +44,7 @@ function inspectionShape(value: unknown): unknown {
   if (!record(value)) return value;
   return {
     ...value,
+    ...(Array.isArray(value.notes) ? { notes: value.notes.map((item) => record(item) ? known(item, ["id", "name", "scope_id", "about", "format", "text", "source", "diagnostic", "withheld"]) : item) } : {}),
     ...(Array.isArray(value.nodes) ? { nodes: value.nodes.map((item) => !record(item) ? item : {
       ...item,
       ...(record(item.ports) ? { ports: known(item.ports, ["inputs", "outputs", "params"]) } : {}),
@@ -139,6 +140,8 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
   ]);
   // Cells preserve declared and previously seen slots, including slots without current members.
   if ([...addresses].some((address) => !(address in layout.cells))) refuse("layout cells do not cover the recorded topology.");
+  const noteIds = new Set((view.notes ?? []).map((note) => note.id));
+  if ((view.notes ?? []).some((note) => !layout.notes?.[note.id]) || Object.keys(layout.notes ?? {}).some((id) => !noteIds.has(id))) refuse("note layout does not match the recorded notes.");
   const members = new Set([...ids, ...scopes.keys()]);
   // Terminal views retain unused planned takes as skipped; those never joined the member order.
   const unused = (node: ViewerRun["nodes"][number]) => node.state === "skipped" && node.cache === null && node.duration_ms === null && node.started_at === undefined && Object.keys(node.outputs).length === 0;
@@ -158,6 +161,12 @@ export function parseRunExport(value: unknown): RunExport {
   if (!["succeeded", "failed", "cancelled"].includes(view.state)) refuse("the recording is not terminal.");
   if (view.charged_usd !== null && view.charged_usd < 0) refuse("the recorded charge is invalid.");
   if (view.estimate !== null && !isPrice(view.estimate)) refuse("the recorded estimate is invalid.");
+  for (const note of view.notes ?? []) {
+    if (note.source !== undefined) refuse("note source locations are forbidden in the inspection record.");
+    if (!value.disclosure.values && note.withheld !== true) refuse("withheld note content was unexpectedly disclosed.");
+    if (!value.disclosure.diagnostics && note.diagnostic !== undefined) refuse("withheld note diagnostics were unexpectedly disclosed.");
+    if (note.scope_id !== null && !(view.scopes ?? []).some((scope) => scope.id === note.scope_id)) refuse("a note names a missing scope.");
+  }
   if ((view.scopes ?? []).some((scope) => scope.source !== null)) refuse("workflow source locations are forbidden in the inspection record.");
   for (const node of view.nodes) {
     if (!["pending", "succeeded", "failed", "skipped"].includes(node.state)

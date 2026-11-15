@@ -401,3 +401,25 @@ describe("browser viewer client", () => {
     expect(output).not.toContain("host-entry");
   });
 });
+
+test("note-aware clients explicitly request note contexts while default clients keep v1 parameters", async () => {
+  const source = new Source(), page = new Page(source);
+  const client = new ViewerClient({ sourceWindow: source, targetWindow: page, origin: ORIGIN, includeNotes: true });
+  const noteContext: ViewerContext = { ...context(), selection: { kind: "note", note_id: "note:root:guide", scope_id: null } };
+  page.handle = (request) => page.reply(request, request.method === "unsubscribe" ? null : noteContext);
+  expect((await client.getContext()).selection).toEqual(noteContext.selection);
+  expect(page.last().params).toEqual({ include_notes: true });
+  const release = await client.subscribe(() => {});
+  expect(page.last().params).toEqual({ include_notes: true });
+  await client.present({ action: "reveal_note", note_id: "note:root:guide" });
+  expect(page.last().params).toEqual({ action: "reveal_note", note_id: "note:root:guide", include_notes: true });
+  release(); client.dispose();
+  const legacy = setup();
+  legacy.page.handle = (request) => legacy.page.reply(request);
+  await legacy.client.getContext();
+  expect(legacy.page.last().params).toEqual({});
+  const count = legacy.page.requests.length;
+  await expect(legacy.client.present({ action: "reveal_note", note_id: "note:root:guide" })).rejects.toMatchObject({ code: "unsupported_method" });
+  expect(legacy.page.requests).toHaveLength(count);
+  legacy.client.dispose();
+});

@@ -20,7 +20,8 @@ env:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    # Keep browser dependencies on an OS supported by the pinned Playwright release.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -62,6 +63,9 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --locked --bin grida-fx
       - run: bun --no-env-file run test:viewer:files-browser
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv sync --project python --locked
+      - run: bun --no-env-file run test:viewer:notes-browser
 
   # docs/guide and docs/wg are published on grida.co/docs (a docs source, see
   # gridaco/docs); this runs that site's rules on them: links, assets, markdown.
@@ -197,7 +201,7 @@ jobs:
   # the SDK. Paid calls are refused at $0; tools/check_examples.py holds the examples to that.
   # TypeScript examples get the built js/fx and run their nodes on Node 24.
   examples:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:

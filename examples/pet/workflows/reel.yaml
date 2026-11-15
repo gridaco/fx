@@ -6,6 +6,15 @@ description: >-
   from its sprite sheet and sprite.json on this machine with FFmpeg. Nothing is drawn again, and
   it costs nothing.
 
+notes:
+  matching_inputs:
+    about: reel
+    text: |
+      ## Play the existing sheet
+      Supply `spritesheet.webp` and its matching `sprite.json` from the same pet run.
+      This step uses FFmpeg locally and draws no new poses. With Codex's default states,
+      the jump is omitted because its row uses a smaller character scale.
+
 inputs:
   spritesheet: { type: file, kind: image, description: "The pet's sprite sheet: spritesheet.webp" }
   layout:      { type: file, kind: json, description: "Its sprite.json: the rows, their frame counts and timings" }

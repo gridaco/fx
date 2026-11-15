@@ -30,6 +30,8 @@ pub(crate) fn run_report(plan: &Value, snapshot: &Snapshot, cursor: String) -> L
 }
 
 fn report(input: &Input, cursor: Option<String>) -> LayoutReport {
+    let cells = cells(input);
+    let notes = note_cells(input, &cells);
     LayoutReport {
         kind: report::KIND,
         file: None,
@@ -37,9 +39,76 @@ fn report(input: &Input, cursor: Option<String>) -> LayoutReport {
         state: "none",
         cursor,
         diagnostics: Vec::new(),
-        cells: cells(input),
+        cells,
         order: order(input),
+        notes,
     }
+}
+
+/// Notes occupy a packed band below executable slots in their owner container. Associations
+/// choose a column; free notes fill three columns in row order. Neither contributes a placement
+/// edge or changes an executable cell.
+/// Every frame of one declared container shares each authored note's cell.
+fn note_cells(input: &Input, cells: &IndexMap<String, CellEntry>) -> IndexMap<String, CellEntry> {
+    let parent = |address: &str| {
+        address
+            .rsplit_once('.')
+            .map_or("", |(parent, _)| parent)
+            .to_owned()
+    };
+    let mut rows: HashMap<String, u32> = HashMap::new();
+    for (address, cell) in cells {
+        let next = rows.entry(parent(address)).or_default();
+        *next = (*next).max(cell.row.saturating_add(1));
+    }
+    let mut occupied: HashMap<String, BTreeSet<(u32, u32)>> = HashMap::new();
+    let mut shared: HashMap<(String, String), (u32, u32)> = HashMap::new();
+    let mut placed = IndexMap::new();
+    for note in &input.notes {
+        let (Some(id), Some(name)) = (note["id"].as_str(), note["name"].as_str()) else {
+            continue;
+        };
+        let owner = match note["scope_id"].as_str() {
+            None => String::new(),
+            Some(id) => {
+                let Some(scope) = input.scopes.iter().find(|scope| scope.id == id) else {
+                    continue;
+                };
+                scope.step.clone()
+            }
+        };
+        let (column, row) = *shared
+            .entry((owner.clone(), name.to_owned()))
+            .or_insert_with(|| {
+                let preferred = note["about"]
+                    .as_str()
+                    .filter(|address| parent(address) == owner)
+                    .and_then(|address| cells.get(address))
+                    .map(|cell| cell.column);
+                let mut row = rows.get(&owner).copied().unwrap_or_default();
+                let taken = occupied.entry(owner).or_default();
+                loop {
+                    let column = match preferred {
+                        Some(column) => (!taken.contains(&(column, row))).then_some(column),
+                        None => (0..3).find(|column| !taken.contains(&(*column, row))),
+                    };
+                    if let Some(column) = column {
+                        taken.insert((column, row));
+                        break (column, row);
+                    }
+                    row += 1;
+                }
+            });
+        placed.insert(
+            id.to_owned(),
+            CellEntry {
+                column,
+                row,
+                source: "automatic",
+            },
+        );
+    }
+    placed
 }
 
 /// A declaration path's step names, or `None` for an address that is not one (an older record

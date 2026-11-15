@@ -98,6 +98,9 @@
         "string",
         "null"
       ]
+    },
+    "notes": {
+      "$ref": "#/$defs/notes"
     }
   },
   "$defs": {
@@ -714,6 +717,9 @@
         },
         "preview": {
           "$ref": "#/$defs/preview"
+        },
+        "notes": {
+          "$ref": "#/$defs/notes"
         }
       },
       "oneOf": [
@@ -967,6 +973,19 @@
               ]
             }
           }
+        },
+        {
+          "description": "Notes belong to groups, not node/import steps.",
+          "if": {
+            "required": [
+              "notes"
+            ]
+          },
+          "then": {
+            "required": [
+              "steps"
+            ]
+          }
         }
       ]
     },
@@ -989,6 +1008,54 @@
           "pattern": "^[a-z][a-z0-9_]*$"
         }
       }
+    },
+    "notes": {
+      "description": "Static presentation documentation; never execution inputs (notes.md).",
+      "type": "object",
+      "maxProperties": 128,
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/note"
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 262144
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "format": {
+          "enum": [
+            "markdown",
+            "text"
+          ],
+          "default": "markdown"
+        },
+        "about": {
+          "$ref": "#/$defs/name"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "text"
+          ]
+        },
+        {
+          "required": [
+            "file"
+          ]
+        }
+      ]
     }
   }
 }

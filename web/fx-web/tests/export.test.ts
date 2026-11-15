@@ -223,3 +223,29 @@ describe("static recording controller", () => {
     controller.dispose();
   });
 });
+
+test("export notes preserve disclosure and presentation references without execution members", () => {
+  const value = fixture();
+  const note = { id: "note:root:intro", name: "intro", scope_id: null, about: null, format: "markdown" as const, text: null, withheld: true as const };
+  value.view.notes = [note];
+  value.layout.notes = { [note.id]: { column: 0, row: 1, source: "automatic" } };
+  const beforeOrder = [...value.layout.order];
+  expect(parseRunExport(value).view.notes).toEqual([note]);
+  expect(exportCanvasGraph(loaded(value)).notes).toEqual([note]);
+  expect(value.layout.order).toEqual(beforeOrder);
+  const disclosed = structuredClone(value);
+  disclosed.disclosure.values = true;
+  disclosed.view.notes = [{ ...note, text: "# Published instructions" }];
+  delete disclosed.view.notes[0].withheld;
+  expect(parseRunExport(disclosed).view.notes?.[0].text).toBe("# Published instructions");
+  const unexpected = structuredClone(value);
+  unexpected.view.notes![0] = { ...note, text: "private instructions" };
+  expect(() => parseRunExport(unexpected)).toThrow();
+  const privateSource = structuredClone(disclosed);
+  privateSource.view.notes![0].source = { path: "notes/private.md", digest: "c".repeat(64) };
+  expect(() => parseRunExport(privateSource)).toThrow("source locations");
+  const badLayout = structuredClone(value); delete badLayout.layout.notes;
+  expect(() => parseRunExport(badLayout)).toThrow("note layout");
+  const badMember = structuredClone(value); badMember.layout.order.push(note.id);
+  expect(() => parseRunExport(badMember)).toThrow("layout order");
+});

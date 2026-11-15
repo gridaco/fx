@@ -94,6 +94,27 @@ def test_head_fields_appear_only_when_given_and_in_order() -> None:
     assert list(empty.document()) == ["fx", "id", "title", "steps", "outputs"]
 
 
+def test_notes_are_static_root_and_group_declarations() -> None:
+    wf = Workflow("notes", title="Notes", notes={"overview": {"file": "./notes/setup.md"}})
+    wf.note("literal", text="${{ inputs.prompt }}", format="text")
+    group = wf.group("section", notes={"first": {"text": "## Read first"}})
+    group.step("draw", uses="fx/image.generate@1", with_={"prompt": "A geometric lantern"})
+    group.note("help", about="draw", text="Use a **clear silhouette**.")
+    doc = wf.document()
+    assert doc["notes"] == {
+        "overview": {"file": "./notes/setup.md"},
+        "literal": {"text": "${{ inputs.prompt }}", "format": "text"},
+    }
+    assert doc["steps"]["section"]["notes"]["help"]["about"] == "draw"
+    assert _schema_errors(doc) == []
+    with pytest.raises(ValueError, match="notes.literal is declared twice"):
+        wf.note("literal", text="duplicate")
+    with pytest.raises(ValueError, match="section.notes.first is declared twice"):
+        group.note("first", text="duplicate")
+    doc["notes"]["literal"]["text"] = "changed copy"
+    assert wf.document()["notes"]["literal"]["text"] == "${{ inputs.prompt }}"
+
+
 def test_every_renamed_field() -> None:
     wf = Workflow("renamed", title="Renamed fields")
     draw = wf.step(

@@ -88,6 +88,7 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
     let nodes = indexed(list(&view["nodes"]), "id")?;
     let scopes = indexed(list(&view["scopes"]), "id")?;
     let pending = indexed(list(&view["pending"]), "path")?;
+    let notes = indexed(list(&view["notes"]), "id")?;
     let inventory = indexed(list(&manifest["artifacts"]), "digest")?;
     if pending.values().any(|repeat| {
         list(&repeat["waiting_on"])
@@ -199,6 +200,24 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
         if layout["cells"].get(address).is_none() {
             return Err(invalid());
         }
+    }
+    for (id, note) in &notes {
+        let owner = match note["scope_id"].as_str() {
+            None => "root",
+            Some(id) if scopes.contains_key(id) => id,
+            Some(_) => return Err(invalid()),
+        };
+        if **id != format!("note:{owner}:{}", text(note, "name"))
+            || layout["notes"].get(*id).is_none()
+        {
+            return Err(invalid());
+        }
+    }
+    if layout["notes"]
+        .as_object()
+        .is_some_and(|placements| placements.keys().any(|id| !notes.contains_key(id.as_str())))
+    {
+        return Err(invalid());
     }
     let order: BTreeSet<_> = list(&layout["order"])
         .iter()

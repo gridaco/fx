@@ -28,6 +28,28 @@ def _build(reference: str) -> Workflow:
         description="A locked 47-mask atlas and one deterministic occupancy preview.",
         budget={"max_usd": 15},
     )
+    wf.note(
+        "locked_topology",
+        about="terrain",
+        text=(
+            "## Paint the material, keep the masks\n\n"
+            "Change `direction.txt` and the reference to choose a different material. "
+            "The 47-mask template and neighborhood lookup define which tile belongs at "
+            "each join; changing their geometry is a different atlas contract. "
+            "The pixel gate can request another painting, but does not certify the art."
+        ),
+    )
+    wf.note(
+        "map_preview",
+        about="preview",
+        text=(
+            "## Inspect the joins in a real map\n\n"
+            "`ROWS` is the occupancy map: each 1 selects a tile from its neighbors. "
+            "The preview reuses the assembled atlas without repainting it. "
+            "Check inside corners and transitions here before using the atlas in a game; "
+            "a valid sheet can still have visually distracting joins."
+        ),
+    )
     steps = add_atlas_steps(
         wf.group("terrain", title="Golden meadow material"),
         nodes="./nodes.py",

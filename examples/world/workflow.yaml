@@ -7,6 +7,29 @@ description: >-
   and independently reviewed; once the world is admitted, every entity gets one directed
   concept image, reviewed against its record.
 
+notes:
+  source_brief:
+    about: world
+    text: |
+      ## Set the brief before generation
+      In the chosen input folder, edit `synopsis.md` for story facts and
+      `expansion-direction.md` for what may be invented. The poster supplies visual
+      language; its lettering and layout do not establish facts about the world.
+  gallery_size:
+    about: entity
+    text: |
+      ## Choose the gallery size first
+      `census.min_entities` and `census.max_entities` bound the proposed world.
+      Each admitted entity gets its own direction, image and review. A larger census
+      therefore expands the paid work; check the second-phase estimate before running.
+  review_results:
+    about: close
+    text: |
+      ## Read rejected studies too
+      The gallery keeps an image even when its independent review rejects it, with
+      that verdict beside the image. It does not automatically draw another image;
+      request a new take with `grida fx reroll` when you want to revise one.
+
 inputs:
   universe_id: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
   title: { type: string, min_length: 1, max_length: 200 }

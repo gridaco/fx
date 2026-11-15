@@ -146,6 +146,8 @@ impl Pending {
 /// Everything one view's cells and member order are computed from.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Input {
+    /// Captured note occurrences; not executable slots or members.
+    pub notes: Vec<Value>,
     /// The plan's declared steps and their `order`.
     pub declared: HashMap<String, Option<u64>>,
     /// One per id, in record order; a member's own record is the one kept.
@@ -176,6 +178,11 @@ impl Input {
             }
         }
         input.expansion = input.plan_index.clone();
+        input.notes = plan
+            .get("notes")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         input.scopes = scopes(plan.get("scopes"));
         input.pending = plan_pending(plan).filter_map(Pending::parse).collect();
         input
@@ -187,8 +194,15 @@ impl Input {
     /// neither are absent.
     pub(crate) fn from_run(plan: &Value, snapshot: &Snapshot) -> Self {
         let document = &snapshot.document;
+
         let recorded = &snapshot.recorded;
         let mut input = Self::common(plan);
+        input.notes = document
+            .notes
+            .as_ref()
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         let nodes: HashMap<&str, &Node> = document
             .nodes
             .iter()

@@ -1976,3 +1976,65 @@ steps:
     assert!(named(&events, "budget_reserved").is_empty());
     assert!(named(&events, "problem").is_empty());
 }
+
+#[test]
+fn note_snapshots_cover_dynamic_imports_and_survive_source_edits_on_resume() {
+    let _serial = serial();
+    let workflow = "fx: workflow/v1\nid: case\ntitle: Notes in delayed scopes\nnotes:\n  intro: {file: ./notes.md}\nsteps:\n  list:\n    uses: ./nodes/cases.py#count\n    with: {n: 1}\n  each:\n    for_each: ${{ steps.list.outputs.items.lines }}\n    max: 2\n    notes:\n      group_help: {file: ./notes.md, about: imported}\n    steps:\n      imported:\n        uses: ./workflows/inner.yaml\n";
+    let inner = "fx: workflow/v1\nid: inner\ntitle: Inner\nnotes:\n  inner_help: {file: ./notes.md}\nsteps:\n  leaf:\n    uses: ./nodes/cases.py#shout\n    with: {text: hi}\n";
+    let project = Project::new(&[("case", workflow), ("inner", inner)]);
+    std::fs::write(project.root.join("notes.md"), "# Original documentation\n").unwrap();
+    let Some(first) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    assert!(first.unwrap().ok);
+    let plan_path = project.root.join("runs/one/plan.json");
+    let original_plan = std::fs::read(&plan_path).unwrap();
+    let plan: Value = serde_json::from_slice(&original_plan).unwrap();
+    let templates = plan["note_templates"].as_array().unwrap();
+    assert_eq!(
+        templates.len(),
+        3,
+        "pending group/import notes must be captured before their occurrences exist"
+    );
+    assert!(
+        templates
+            .iter()
+            .all(|note| note["text"] == "# Original documentation\n")
+    );
+    let first_events = project.events("runs/one");
+    assert!(
+        named(&first_events, "scopes_updated")
+            .iter()
+            .any(|e| e["notes"].as_array().is_some_and(|n| n.len() == 3))
+    );
+    std::fs::write(project.root.join("notes.md"), "# Changed documentation\n").unwrap();
+    std::fs::write(
+        project.root.join("workflows/case.yaml"),
+        workflow.replace(
+            "intro: {file: ./notes.md}",
+            "intro: {text: Completely changed note}",
+        ),
+    )
+    .unwrap();
+    let second = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert!(second.ok);
+    assert_eq!(second.charged, Usd::ZERO);
+    assert_eq!(std::fs::read(&plan_path).unwrap(), original_plan);
+    let events = project.events("runs/one");
+    let second = &events[first_events.len()..];
+    assert!(
+        named(second, "node_started").is_empty(),
+        "note-only edits cannot rerun cached local steps"
+    );
+    let snapshot = named(second, "scopes_updated");
+    assert!(!snapshot.is_empty());
+    assert!(
+        snapshot
+            .iter()
+            .flat_map(|e| e["notes"].as_array().unwrap())
+            .all(|n| n["text"] == "# Original documentation\n")
+    );
+}

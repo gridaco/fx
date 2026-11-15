@@ -724,3 +724,56 @@ fn provider_evidence_is_exported_only_with_explicit_diagnostic_disclosure() {
             .unwrap();
     }
 }
+
+#[test]
+fn captured_notes_are_disclosed_explicitly_without_exporting_local_source() {
+    let fixture = source("image/png");
+    let plan_path = fixture.root().join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&std::fs::read(&plan_path).unwrap()).unwrap();
+    plan["notes"] = json!([{"id":"note:root:help","name":"help","scope_id":null,"about":"draw","format":"markdown","text":"## Original documentation\n${{ inputs.example }}","source":{"path":"notes/help.md","digest":"c".repeat(64)},"diagnostic":"A synthetic note diagnostic."}]);
+    std::fs::write(&plan_path, plan.to_string()).unwrap();
+    for include_values in [false, true] {
+        let parent = tempfile::tempdir().unwrap();
+        export(
+            &fixture,
+            &parent,
+            ExportOptions {
+                include_values,
+                include_diagnostics: false,
+            },
+        )
+        .unwrap();
+        let value = manifest(&parent);
+        let note = &value["view"]["notes"][0];
+        assert!(note.get("source").is_none());
+        assert!(note.get("diagnostic").is_none());
+        assert!(value["view"].get("note_templates").is_none());
+        assert_eq!(
+            note["text"],
+            if include_values {
+                plan["notes"][0]["text"].clone()
+            } else {
+                Value::Null
+            }
+        );
+        assert_eq!(
+            note.get("withheld"),
+            (!include_values).then_some(&Value::Bool(true))
+        );
+        assert!(value["layout"]["notes"].get("note:root:help").is_some());
+        assert!(
+            !value["layout"]["order"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|id| id == "note:root:help")
+        );
+        let mut tampered = value.clone();
+        tampered["layout"]["notes"]["note:root:unknown"] =
+            json!({"column":0,"row":0,"source":"automatic"});
+        assert!(references::validate(&tampered).is_err());
+        tampered = value;
+        tampered["view"]["notes"][0]["scope_id"] = json!("scope:unknown#1");
+        assert!(references::validate(&tampered).is_err());
+    }
+}

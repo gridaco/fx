@@ -235,3 +235,17 @@ return `unsupported_method`; new pages without file behavior return
 `unavailable`. Package versions alone do not imply support. A future composable
 viewer can accept the same injected handler directly, without this message
 adapter or a second file behavior implementation.
+
+## Note inspection opt-in
+
+Protocol-v1 clients retain the existing closed selection shapes by default. An opt-in
+`include_notes: true` on `get_context`, `subscribe` or `present` allows
+`selection: {kind: "note", note_id, scope_id}`. It contains a recorded portable note
+reference and owning scope, never note text. Without opt-in a selected note projects to
+null; subscription updates are projected independently for each peer. Unsubscribe removes
+that peer's options. `present` additionally supports `action: reveal_note, note_id` for an
+opted-in caller and refuses unknown notes before changing navigation.
+
+The browser SDK's constructor option `includeNotes: true` opts into these contexts/actions.
+Same-realm `getContext`, `subscribe` and `present` accept optional `{includeNotes: true}`
+options. Older viewers may refuse the opt-in; no presentation is automatically retried.

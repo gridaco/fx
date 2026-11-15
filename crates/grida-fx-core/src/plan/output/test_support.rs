@@ -222,6 +222,7 @@ pub(crate) fn planner_for(source: &str, document: Value) -> Planner {
         id: id.clone(),
         title,
         description: None,
+        notes: Default::default(),
         inputs: IndexMap::new(),
         tables: IndexMap::new(),
         let_: IndexMap::new(),

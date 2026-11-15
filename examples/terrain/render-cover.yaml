@@ -3,6 +3,15 @@ id: terrain-cover
 title: 47-tile terrain cover
 description: Build 47 standing on shared ground from one terrain tilemap, locally at $0.
 
+notes:
+  reuse_the_atlas:
+    about: cover
+    text: |
+      ## Compose with the existing tiles
+      Supply the canonical 1440 × 480 atlas with 120px cells. The cover builds
+      one connected occupancy map and selects tiles from their neighbors;
+      it does not repaint the artwork. The returned atlas is the exact input.
+
 inputs:
   atlas:
     type: file

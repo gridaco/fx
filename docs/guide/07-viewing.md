@@ -46,6 +46,22 @@ workflow processes. Restarting it restores access to retained run URLs. Closing 
 browser tab has no effect on service or execution. Service commands accept
 `--project DIRECTORY` when you are outside the project.
 
+## Read workflow notes
+
+A workflow can carry Markdown or literal-text notes beside its steps. Cards grow to show
+ordinary notes in full, and short notes stay compact. Unusually long documents use an explicit
+collapsed card so one file does not overwhelm the canvas. Selecting any note opens its full
+text in the existing details panel. Notes have no sockets, execution status or price. Notes
+follow their owning workflow or group scope, including imported workflows.
+
+Notes are captured documentation. Viewing a saved run does not reread the current Markdown
+file, and resume keeps the original snapshot. A fresh plan captures edits. In an embedding
+application that handles external files, a file-backed note offers its current source
+through the existing source-file action. The editable source can differ from captured
+text. Shared recordings with values withheld identify the note content as withheld.
+
+See [note authoring](02-workflow-file.md#notes-for-people-reading-the-canvas).
+
 ## Use the canvas
 
 The canvas fills the window. A bar in its corner names the workflow and shows the

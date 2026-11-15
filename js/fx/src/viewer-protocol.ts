@@ -15,6 +15,7 @@ export namespace ViewerProtocol {
     | { kind: "instance"; instance_id: string; path?: string; step?: string; take?: number[] }
     | { kind: "scope"; scope_id: string }
     | { kind: "pending_repeat"; path: string }
+    | { kind: "note"; note_id: string; scope_id: string | null }
     | { kind: "scope_boundary"; scope_id: string; side: "input" | "output" };
   export interface Context {
     subject: Subject;
@@ -30,6 +31,7 @@ export namespace ViewerProtocol {
   export interface FileReference { subject: Subject; target: FileTarget }
   export type ExternalFileHandler = (reference: FileReference) => void | Promise<void>;
   export type Action =
+    | { action: "reveal_note"; note_id: string }
     | { action: "reveal_instance"; instance_id: string }
     | { action: "open_scope"; scope_id: string | null }
     | { action: "clear_selection" }
@@ -157,6 +159,9 @@ export namespace ViewerProtocol {
           && ["path", "step"].every((key) => !Object.hasOwn(value, key) || isIdentifier(value[key]))
           && (!Object.hasOwn(value, "take") || Array.isArray(value.take) && value.take.length > 0
             && value.take.every((take) => Number.isSafeInteger(take) && take > 0));
+      case "note":
+        return fields(value, ["kind", "note_id", "scope_id"]) && isIdentifier(value.note_id)
+          && (value.scope_id === null || isIdentifier(value.scope_id));
       case "scope":
         return fields(value, ["kind", "scope_id"]) && isIdentifier(value.scope_id);
       case "pending_repeat":
@@ -178,6 +183,7 @@ export namespace ViewerProtocol {
   export function isAction(value: unknown): value is Action {
     if (!record(value)) return false;
     switch (value.action) {
+      case "reveal_note": return fields(value, ["action", "note_id"]) && isIdentifier(value.note_id);
       case "reveal_instance": return fields(value, ["action", "instance_id"]) && isIdentifier(value.instance_id);
       case "open_scope": return fields(value, ["action", "scope_id"]) && (value.scope_id === null || isIdentifier(value.scope_id));
       case "clear_selection":
@@ -191,7 +197,11 @@ export namespace ViewerProtocol {
   }
   export function isParams(method: string, value: unknown): boolean {
     if (!isMethod(method) || !record(value)) return false;
-    if (method === "present") return isAction(value);
+    if (["get_context", "subscribe", "present"].includes(method)) {
+      const { include_notes, ...params } = value;
+      if (Object.hasOwn(value, "include_notes") && include_notes !== true) return false;
+      return method === "present" ? isAction(params) : Object.keys(params).length === 0;
+    }
     if (method === "register_external_file_handler" || method === "unregister_external_file_handler") {
       return fields(value, ["handler_id"]) && isIdentifier(value.handler_id);
     }

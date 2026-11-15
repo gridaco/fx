@@ -1,3 +1,4 @@
+import { isWorkflowNotes, type WorkflowNote } from "./notes";
 import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { validateViewerApiBase } from "./route";
@@ -70,6 +71,7 @@ export interface ViewerRun {
   artifacts: Artifact[];
   warnings: string[];
   scopes?: WorkflowScope[];
+  notes?: WorkflowNote[];
   /** The repeats not yet expanded. */
   pending?: { path: string; step?: string; max: number; phase: number; waiting_on?: string[] }[];
 }
@@ -173,7 +175,9 @@ export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
     && Array.isArray(value.nodes) && value.nodes.every(node)
     && Array.isArray(value.artifacts) && value.artifacts.every((item) => artifact(item, apiBase))
     && strings(value.warnings)
-    && (value.scopes === undefined || isWorkflowScopes(value.scopes));
+    && (value.scopes === undefined || isWorkflowScopes(value.scopes))
+    && (value.notes === undefined || isWorkflowNotes(value.notes))
+    && (!Array.isArray(value.notes) || value.notes.every((note) => note.scope_id === null || Array.isArray(value.scopes) && value.scopes.some((scope) => scope.id === note.scope_id)));
   if (!valid) throw new Error("The run response is incomplete or malformed.");
   return value as unknown as ViewerRun;
 }
@@ -223,3 +227,5 @@ export * from "./model";
 export * from "./model-view";
 export * from "./external-file";
 export * from "./files";
+
+export * from "./notes";

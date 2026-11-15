@@ -8,6 +8,24 @@ description: >-
   still, the loop closed, and every frame checked. A clip made elsewhere can be finished
   instead of drawing a take.
 
+notes:
+  reuse_a_take:
+    about: take
+    text: |
+      ## Generate once, finish locally
+      Give either a character or existing footage. Supplying `footage`
+      skips the plate, brief and paid video call; trim and finishing still
+      run locally. Keep the original take when trying different finishing
+      settings so you can compare results without drawing another video.
+  source_bound_finishing:
+    about: trim
+    text: |
+      ## Settings belong to the footage
+      A measured trim interval or held-region polygon is tied to one exact
+      take. The free showcase recipes bind those settings to downloaded,
+      hash-verified footage. A newly generated take needs its own settings
+      and visual review; do not reuse a historical face pin blindly.
+
 inputs:
   character:
     type: file

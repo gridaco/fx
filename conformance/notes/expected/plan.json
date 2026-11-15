@@ -1,0 +1,169 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "inputs": {},
+ "instances": [
+  {
+   "bindings": [],
+   "id": "section.choose#1",
+   "identity": "a4c6ef8df1587d6fd75d5868d87a23609f25da35ace1cf21779c57daf9d3b700",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "section.choose",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "section.choose",
+   "take": [
+    1
+   ],
+   "type": "fx/select@1.1",
+   "uses": "fx/select@1",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "first_of": [
+     "ready"
+    ]
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "note_templates": [
+  {
+   "about": "section",
+   "container": "",
+   "format": "markdown",
+   "name": "setup",
+   "source": {
+    "digest": "0ef7fd9586ee34ad37826d6207451d1b99788dc479f4c96c6fcf76b7011061aa",
+    "path": "docs/setup.md"
+   },
+   "text": "## Original setup\nKeep ${{ inputs.example }} literal.\n",
+   "workflow": "workflows/case.yaml"
+  },
+  {
+   "about": null,
+   "container": "",
+   "diagnostic": "note source is unavailable",
+   "format": "markdown",
+   "name": "unavailable",
+   "text": null,
+   "workflow": "workflows/case.yaml"
+  },
+  {
+   "about": null,
+   "container": "section",
+   "format": "text",
+   "name": "example",
+   "text": "${{ inputs.example }}",
+   "workflow": "workflows/case.yaml"
+  }
+ ],
+ "notes": [
+  {
+   "about": "section",
+   "format": "markdown",
+   "id": "note:root:setup",
+   "name": "setup",
+   "scope_id": null,
+   "source": {
+    "digest": "0ef7fd9586ee34ad37826d6207451d1b99788dc479f4c96c6fcf76b7011061aa",
+    "path": "docs/setup.md"
+   },
+   "text": "## Original setup\nKeep ${{ inputs.example }} literal.\n"
+  },
+  {
+   "about": null,
+   "diagnostic": "note source is unavailable",
+   "format": "markdown",
+   "id": "note:root:unavailable",
+   "name": "unavailable",
+   "scope_id": null,
+   "text": null
+  },
+  {
+   "about": null,
+   "format": "text",
+   "id": "note:scope:section#:example",
+   "name": "example",
+   "scope_id": "scope:section#",
+   "text": "${{ inputs.example }}"
+  }
+ ],
+ "pending": [],
+ "plan": "02e2810222ef61e426c9746930b308cf60fe46b3b0c27a1c9b8fa58f4ba29af3",
+ "problems": [],
+ "scopes": [
+  {
+   "id": "scope:section#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "section.choose#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "section",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "section",
+   "take": [],
+   "title": "section"
+  }
+ ],
+ "steps": {
+  "section": {
+   "description": null,
+   "order": 0,
+   "title": null,
+   "uses": null,
+   "view": false
+  },
+  "section.choose": {
+   "description": null,
+   "order": 1,
+   "title": null,
+   "uses": "fx/select@1",
+   "view": false
+  }
+ },
+ "takes_file": "workflows/case.takes.yaml",
+ "types": {
+  "fx/select@1": {
+   "identity": "fx/select@1.1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "value": "file?"
+    },
+    "params": {
+     "first_of": {
+      "type": "array"
+     }
+    }
+   }
+  }
+ },
+ "view_origins": [],
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Static notes"
+ }
+}

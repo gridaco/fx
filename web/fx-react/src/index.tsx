@@ -147,3 +147,5 @@ export function Json({ value }: { value: unknown }) {
 export function Values({ values, artifacts, videoPreview, externalFiles }: { values: Record<string, unknown>; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview; externalFiles?: ExternalFileController }) {
   return <dl className="fx-values">{Object.entries(values).map(([name, value]) => <div key={name}><dt>{name}</dt><dd><Value value={value} artifacts={artifacts} videoPreview={videoPreview} externalFiles={externalFiles} /></dd></div>)}</dl>;
 }
+
+export { NoteContent } from "./note";

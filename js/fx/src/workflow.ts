@@ -170,11 +170,20 @@ export interface NodeStep extends StepCommon {
 /** A group of steps, run together, maybe regenerated as a whole. */
 export interface GroupStep extends StepCommon {
   steps: { [name: string]: Step };
+  notes?: { [name: string]: Note };
   regenerate?: (Regeneration & { until: Expression }) | null;
 }
 
 /** One step: a node type (`uses`) or a group (`steps`). */
 export type Step = NodeStep | GroupStep;
+
+/** Static workflow documentation. File content is captured by the engine, never the SDK. */
+export type Note = {
+  /** Rendering profile; Markdown is the default for either source. */
+  format?: "markdown" | "text";
+  /** A direct step declaration in the note's owning workflow/group; never a dependency. */
+  about?: string;
+} & ({ text: string; file?: never } | { file: string; text?: never });
 
 /** A workflow file (`fx: workflow/v1`). */
 export interface WorkflowDocument {
@@ -183,6 +192,7 @@ export interface WorkflowDocument {
   id: string;
   title: string;
   description?: string | null;
+  notes?: { [name: string]: Note };
   inputs?: { [name: string]: InputDeclaration };
   /** Constant data, read as `tables.<name>`. */
   tables?: { [name: string]: JsonValue };

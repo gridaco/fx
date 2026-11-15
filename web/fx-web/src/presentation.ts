@@ -44,9 +44,11 @@ export class ViewerPresentation {
     if (view.kind !== "fx-viewer-run-v1" && ViewerProtocol.isPortableSource(view.workflow.file)) subject.workflow!.source = view.workflow.file;
     const reference = this.source.reference?.();
     if (reference && ViewerProtocol.isReference(reference)) subject.reference = reference;
+    const note = state.graph.notes?.find((note) => note.id === state.selected);
     const card = state.graph.nodes.find((node) => node.id === state.selected);
     let selection: ViewerProtocol.Selection | null = null;
-    if (card?.kind === "workflow" && card.scope_id) selection = { kind: "scope", scope_id: card.scope_id };
+    if (note) selection = { kind: "note", note_id: note.id, scope_id: note.scope_id };
+    else if (card?.kind === "workflow" && card.scope_id) selection = { kind: "scope", scope_id: card.scope_id };
     else if (card?.kind === "boundary" && card.scope_id && card.side) selection = { kind: "scope_boundary", scope_id: card.scope_id, side: card.side };
     else if (card?.pending) selection = { kind: "pending_repeat", path: card.source_id };
     else if (card) {
@@ -74,6 +76,17 @@ export class ViewerPresentation {
     let selected = state.selected;
     let focus: string | "fit" | null = null;
     switch (action.action) {
+      case "reveal_note": {
+        const note = view.notes?.find((note) => note.id === action.note_id);
+        if (!note) throw new ViewerPresentationError("not_found", "The recorded note does not exist in this view.");
+        const scopes = new Map((view.scopes ?? []).map((item) => [item.id, item]));
+        let owner = note.scope_id === null ? undefined : scopes.get(note.scope_id);
+        while (owner && owner.kind !== "workflow") owner = owner.parent === null ? undefined : scopes.get(owner.parent);
+        scope = owner?.id ?? null;
+        selected = note.id;
+        focus = selected;
+        break;
+      }
       case "reveal_instance": {
         const records = view.kind !== "fx-viewer-run-v1" ? view.instances : view.nodes;
         if (!records.some((record) => record.id === action.instance_id)) throw new ViewerPresentationError("not_found", "The recorded instance does not exist in this view.");

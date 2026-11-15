@@ -1,3 +1,4 @@
+import { isWorkflowNotes, isNoteTemplates, type WorkflowNote, type CanvasNote, type NoteTemplate } from "./notes";
 import type { ViewerRun } from "./index";
 import { validateViewerApiBase } from "./route";
 import { isNodePorts, isPortBindings, parameterType, type NodePorts, type PortBinding } from "./ports";
@@ -48,6 +49,8 @@ export interface GraphDocument {
   steps?: Record<string, { title?: string | null; description?: string | null; uses?: string | null; view?: boolean | string; order?: number; preview?: PreviewDescriptor }>;
   types?: Record<string, { identity: string; source?: { files: Record<string, string>; resources: Record<string, string> }; ports?: NodePorts }>;
   scopes?: WorkflowScope[];
+  notes?: WorkflowNote[];
+  note_templates?: NoteTemplate[];
 }
 
 const states = new Set<PlanState>(["planned", "maybe", "absent", "blocked", "failed", "done"]);
@@ -158,7 +161,7 @@ function typeEntry(value: unknown): boolean {
 export function parseGraph(value: unknown): GraphDocument {
   if (!isRecord(value) || (value.kind !== "fx-graph-v1" && value.kind !== "fx-graph-v2")) throw new Error("This viewer does not support the returned graph format.");
   const incomplete = value.kind === "fx-graph-v2";
-  const valid = fields(value, ["kind", "workflow", "instances", "pending", "estimate"], ["problems", "plan", "inputs", "stand_in", "takes_file", "view_origins", "steps", "types", "scopes"])
+  const valid = fields(value, ["kind", "workflow", "instances", "pending", "estimate"], ["problems", "plan", "inputs", "stand_in", "takes_file", "view_origins", "steps", "types", "scopes", "notes", "note_templates"])
     && isRecord(value.workflow) && fields(value.workflow, ["id", "title"], ["description", "file"])
     && isString(value.workflow.id) && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.workflow.id) && value.workflow.id.length <= 96
     && isString(value.workflow.title) && optional(value.workflow, "description", isString) && optional(value.workflow, "file", isString)
@@ -180,7 +183,9 @@ export function parseGraph(value: unknown): GraphDocument {
       && ["title", "description", "uses"].every((key) => optional(item, key, isNullableString)) && optional(item, "view", isView)
       && optional(item, "order", isCount) && optional(item, "preview", isPreviewDescriptor)))
     && optional(value, "types", (items) => isRecord(items) && Object.entries(items).every(([key, item]) => key.length > 0 && typeEntry(item)))
-    && optional(value, "scopes", isWorkflowScopes);
+    && optional(value, "scopes", isWorkflowScopes)
+    && optional(value, "notes", isWorkflowNotes) && optional(value, "note_templates", isNoteTemplates)
+    && (!Array.isArray(value.notes) || value.notes.every((note) => note.scope_id === null || Array.isArray(value.scopes) && value.scopes.some((scope) => scope.id === note.scope_id)));
   if (!valid) throw new Error("The graph response does not match its declared graph format.");
   return value as unknown as GraphDocument;
 }
@@ -195,6 +200,7 @@ export interface LayoutReport {
   diagnostics: { code: string; message: string; address?: string }[];
   cells: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
   order: string[];
+  notes?: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
 }
 
 export function parseLayoutReport(value: unknown): LayoutReport {
@@ -204,7 +210,8 @@ export function parseLayoutReport(value: unknown): LayoutReport {
     && Array.isArray(value.diagnostics) && value.diagnostics.every((item) => isRecord(item) && isString(item.code) && isString(item.message))
     && isRecord(value.cells) && Object.values(value.cells).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row)
       && (cell.source === "automatic" || cell.source === "authored"))
-    && isStrings(value.order);
+    && isStrings(value.order)
+    && (value.notes === undefined || isRecord(value.notes) && Object.values(value.notes).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row) && (cell.source === "automatic" || cell.source === "authored")));
   if (!valid) throw new Error("The layout response does not match fx-layout-report-v1.");
   return value as unknown as LayoutReport;
 }
@@ -269,7 +276,7 @@ export interface CanvasConnection {
   source_port?: string; target_port?: string; source_kind?: "output" | "fact";
 }
 export interface CanvasFrame { id: string; title: string; nodes: string[]; parent?: string | null; address?: string; take?: number[]; key?: string; state?: string; executed?: true }
-export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[] }
+export interface CanvasGraph { nodes: CanvasStep[]; edges: CanvasConnection[]; frames?: CanvasFrame[]; notes?: CanvasNote[] }
 
 /** The inert image kinds a card can draw directly; models are rendered from verified GLB bytes. */
 const previewKinds: Record<string, "image"> = {
@@ -446,7 +453,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
     item.reads.forEach((id) => add(id, "reads", "dependency"));
     if (plan) (item as GraphInstance).waiting_on.forEach((id) => add(id, "waiting", "dependency"));
   }
-  return { nodes, edges: [...connections.values()] };
+  return { nodes, edges: [...connections.values()], ...(view.notes?.length ? { notes: view.notes.map((note) => ({ ...note })) } : {}) };
 }
 
 export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api"): CanvasGraph {

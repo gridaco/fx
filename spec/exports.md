@@ -207,3 +207,12 @@ this offline operation and expose native typed results/errors.
 
 Public hosting, content catalogs, publishing adapters and compatibility locks
 belong to consumers. Publishing is explicit; exporting never uploads anything.
+
+## Workflow notes
+
+The frozen view may include the optional [notes](notes.md) presentation records and the
+layout's separate note-cell map. Note IDs never enter execution member order. Captured
+text is included only with `--include-values`; otherwise each note has null text and
+`withheld: true`. Source provenance and the private declaration snapshot ledger are omitted.
+Unavailable content remains distinct from withheld content. Readers with no note support
+may ignore these optional fields while preserving their existing execution projection.

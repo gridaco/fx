@@ -23,6 +23,15 @@ steps:
   layer:
     for_each: ${{ inputs.layers }}
     key: ${{ item.id }}
+    notes:
+      repeat_choice:
+        about: chosen
+        text: |
+          ## Which repeat is kept?
+          An already seamless layer keeps its original pixels. Otherwise,
+          `mirror` repeats it locally at twice the width. `repaint` tries a
+          paid seam edit, then falls back to mirroring if both judged takes
+          are rejected. The chosen output is the one the manifest uses.
     assert:
       - check: ${{ facts(item.file).width >= 64 }}
         message: "layer ${{ item.id }} is narrower than 64 px"

@@ -17,6 +17,7 @@ pub mod inputs;
 pub mod kinds;
 pub mod lock;
 pub mod money;
+pub mod notes;
 pub mod plan;
 pub mod project;
 pub mod providers;

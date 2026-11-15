@@ -168,6 +168,7 @@ pub struct Step {
     pub timeout: Option<f64>,
     pub title: Option<String>,
     pub description: Option<String>,
+    pub notes: crate::notes::Notes,
 }
 
 /// The typed workflow.
@@ -176,6 +177,7 @@ pub struct WorkflowDoc {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
+    pub notes: crate::notes::Notes,
     /// Input declarations in the shorthand (compiled by [`crate::inputs::compile_inputs`]).
     pub inputs: IndexMap<String, Value>,
     pub tables: IndexMap<String, Value>,
@@ -279,6 +281,8 @@ fn step_shape(step: &Map<String, Value>) -> Option<String> {
         {
             return Some("a group's regenerate: needs until:".into());
         }
+    } else if set(step, "notes") {
+        return Some("notes: belongs to a workflow or group, not a node step".into());
     } else if set(step, "regenerate") {
         return Some(
             "regenerate: on a step is written on its judge, as on_reject: { regenerate: ... }; \
@@ -365,6 +369,7 @@ impl Typed<'_> {
             id: self.string(map.get("id"), "id")?,
             title: self.string(map.get("title"), "title")?,
             description: self.optional_string(map.get("description"), "description")?,
+            notes: self.notes(map.get("notes"), "notes")?,
             inputs,
             tables,
             let_,
@@ -374,6 +379,29 @@ impl Typed<'_> {
             outputs,
             view: self.optional_string(map.get("view"), "view")?,
         })
+    }
+
+    fn notes(&self, value: Option<&Value>, where_: &str) -> Result<crate::notes::Notes> {
+        match value {
+            None => Ok(Default::default()),
+            Some(value) => {
+                let notes: crate::notes::Notes = serde_json::from_value(value.clone())
+                    .map_err(|_| self.refuse(where_, "invalid note declarations"))?;
+                for (name, note) in &notes {
+                    if note
+                        .text
+                        .as_ref()
+                        .is_some_and(|text| text.len() > crate::notes::MAX_NOTE_BYTES)
+                    {
+                        return Err(self.refuse(
+                            &format!("{where_}.{name}.text"),
+                            "note text exceeds 256 KiB",
+                        ));
+                    }
+                }
+                Ok(notes)
+            }
+        }
     }
 
     fn steps(&self, steps: &Map<String, Value>, where_: &str) -> Result<Steps> {
@@ -495,6 +523,7 @@ impl Typed<'_> {
             timeout,
             title: self.optional_string(map.get("title"), &at("title"))?,
             description: self.optional_string(map.get("description"), &at("description"))?,
+            notes: self.notes(map.get("notes"), &at("notes"))?,
         })
     }
 

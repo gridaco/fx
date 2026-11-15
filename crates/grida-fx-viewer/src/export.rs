@@ -497,6 +497,30 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
             })
             .collect::<Vec<_>>()
     );
+    if let Some(notes) = view.get("notes").and_then(Value::as_array) {
+        projected["notes"] = Value::Array(
+            notes
+                .iter()
+                .map(|note| {
+                    let mut item = fields(note, &["id", "name", "scope_id", "about", "format"]);
+                    item["text"] = if options.include_values {
+                        note["text"].clone()
+                    } else {
+                        Value::Null
+                    };
+                    if !options.include_values {
+                        item["withheld"] = json!(true);
+                    }
+                    if options.include_diagnostics
+                        && let Some(diagnostic) = note.get("diagnostic")
+                    {
+                        item["diagnostic"] = diagnostic.clone();
+                    }
+                    item
+                })
+                .collect(),
+        );
+    }
     if let Some(scopes) = view.get("scopes") {
         projected["scopes"] = json!(scopes.as_array().into_iter().flatten().map(|scope| {
             let mut item = fields(scope, &["id","parent","kind","path","step","take","title","nodes","pending"]); item["source"] = Value::Null;

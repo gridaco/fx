@@ -68,7 +68,7 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
             .any(|r| r.unpriced_calls() > 0);
     let mut forecast = forecast_document(estimate.low, estimate.high, estimate.unpriced_calls);
     forecast["ceiling_usd"] = ceiling(plan.ceiling);
-    json!({
+    let mut graph = json!({
         "kind": if v2 { "fx-graph-v2" } else { "fx-graph-v1" },
         "workflow": workflow,
         "types": types,
@@ -77,7 +77,15 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
         "pending": plan.expansion.pending.iter().map(pending_document).collect::<Vec<_>>(),
         "estimate": forecast,
         "problems": problems(&plan.problems),
-    })
+    });
+    if !plan.expansion.notes.is_empty() {
+        graph["notes"] = serde_json::to_value(&plan.expansion.notes).expect("serializable notes");
+    }
+    if !planner.registry.note_templates().is_empty() {
+        graph["note_templates"] = serde_json::to_value(planner.registry.note_templates())
+            .expect("serializable note templates");
+    }
+    graph
 }
 
 /// One instance of the graph.
@@ -187,10 +195,13 @@ pub fn plan_digest(plan: &Plan, planner: &Planner) -> Option<String> {
     let root = &planner.workflow;
     let mut workflows = Map::new();
     if !plan.expansion.workflows.contains_key(&root.source) {
-        workflows.insert(root.source.clone(), root.document.clone());
+        workflows.insert(
+            root.source.clone(),
+            crate::notes::execution_document(&root.document),
+        );
     }
     for (source, document) in &plan.expansion.workflows {
-        workflows.insert(source.clone(), document.clone());
+        workflows.insert(source.clone(), crate::notes::execution_document(document));
     }
     let mut inputs = Map::new();
     for (name, given) in &planner.inputs.given {

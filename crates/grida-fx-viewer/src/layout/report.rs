@@ -23,6 +23,9 @@ pub struct LayoutReport {
     pub cells: IndexMap<String, CellEntry>,
     /// Every member (instance and scope ids) in order key (§4 rule 4).
     pub order: Vec<String>,
+    /// Presentation-only note cells, keyed by captured note id; never execution order.
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub notes: IndexMap<String, CellEntry>,
 }
 
 /// A structured layout diagnostic (§6.10). None is reported while no layout file is read.

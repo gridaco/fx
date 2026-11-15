@@ -1,0 +1,17 @@
+fx: workflow/v1
+id: notes-child
+title: Imported note ownership
+inputs:
+  image: {type: file, kind: image}
+notes:
+  local_help:
+    about: tint
+    text: |
+      ## Inside the imported workflow
+      This documentation belongs here. The image is tinted locally.
+steps:
+  tint:
+    uses: ./nodes/media.py#tint
+    with: {image: "${{ inputs.image }}", tone: green}
+outputs:
+  image: ${{ steps.tint.outputs.image }}

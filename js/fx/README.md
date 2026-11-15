@@ -560,3 +560,14 @@ Failure outcomes accept `diagnostic: { source, phase, ... }` (the exported
 `RunResult.steps[id].diagnostic` and saved inspection/observation expose its
 recorded lower_snake_case fields. Legacy records may have no diagnostic. Evidence
 never changes retry or billing.
+
+## Workflow notes
+
+`workflow({ id, title, notes: { help: { text: "## Reference", about: "draw" } }, steps })`
+authors static documentation; group steps also accept `notes`. The exported `Note` type
+requires exactly one of `text` or `file`, with optional `format: "markdown" | "text"`
+(Markdown by default). The SDK preserves declarations; only the engine reads source files
+and captures notes. See the [note contract](https://github.com/gridaco/fx/blob/main/spec/notes.md).
+
+For note selection context, construct `ViewerClient` with `includeNotes: true`. The default
+preserves protocol-v1 selection shapes; see the [viewer API](https://github.com/gridaco/fx/blob/main/spec/viewer.md).

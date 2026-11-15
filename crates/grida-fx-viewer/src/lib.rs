@@ -8,6 +8,7 @@
 pub mod export;
 pub mod files;
 mod layout;
+mod notes;
 mod read;
 mod scopes;
 pub mod service;
@@ -108,6 +109,8 @@ fn plan_source(graph: Value) -> io::Result<Source> {
     };
     validate(schema, &graph, "plan")
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.message))?;
+    notes::validate_plan(&graph)
+        .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;
     scopes::validate_plan(&graph)
         .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;
     Ok(Source::Plan(Arc::new(graph)))

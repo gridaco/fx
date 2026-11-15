@@ -341,3 +341,26 @@ Known viewer limits exposed by the suite:
 
 Passing this checker is contract and headless layout evidence. Browser rendering,
 trackpad behavior and design acceptance require separate visual review.
+
+## Try workflow notes
+
+The focused `viewer-notes` workflow explains local image steps with inline Markdown,
+a referenced `.md` file, literal text containing FX expression examples, a deliberately
+long guide, an unavailable file and an unresolved association. Short and ordinary notes
+fit their content; the long guide keeps a bounded preview with full sidebar inspection.
+Repeated groups and an imported workflow carry their own notes. This is static
+documentation; actual value cards remain #81.
+
+After building the engine, prepare and verify a retained run and both export policies:
+
+```sh
+python/.venv/bin/python tools/check_notes.py --output .fx/notes-demo
+python/.venv/bin/python -m grida.fx view --run .fx/notes-demo/runs/notes --open
+```
+
+The checker uses no providers or live mode. It edits the copied Markdown file to verify
+that resume retains the original snapshot while a fresh run captures the edit with the
+same plan digest. All media is drawn by the committed local fixture nodes. The output
+must be new or empty. `bun --no-env-file run test:viewer:notes-browser` verifies the real
+bundled viewer, including content-sized cards, bounded long documents and stable group
+tracks. Its screenshots stay under ignored `output/playwright/`.
