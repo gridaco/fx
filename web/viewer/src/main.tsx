@@ -232,6 +232,7 @@ function canvasInset(pane: HTMLElement) {
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
+  const inventory = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
   useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
   const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
@@ -301,6 +302,7 @@ function WorkflowView() {
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
     {external.error && <p role="alert" className="fx-error">{external.error}{external.failedReference?.target.kind === "artifact" && external.failedReference.target.artifact.url && <>{" "}<a href={external.failedReference.target.artifact.url} target="_blank" rel="noopener noreferrer" className="underline">Open in browser</a></>}{" "}<button type="button" className="underline" onClick={externalFiles.clearError}>Dismiss</button></p>}
+    {external.available && inventory.error && <p role="alert" className="fx-error">{inventory.error}{" "}<button type="button" className="underline" onClick={() => void fileInventory.refresh()}>Retry source files</button></p>}
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
       : <main ref={pane} aria-label="Workflow canvas" className="fx-canvas-pane">
         <WorkflowCanvas ref={canvas} graph={graph} layout={layout} selected={selected} scope={scope} onSelect={select} onOpenScope={controller.openScope} onBack={controller.back} />

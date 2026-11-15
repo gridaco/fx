@@ -842,6 +842,113 @@ fn a_filename_collision_never_serves_wrong_bytes() {
     );
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn confined_open_traverses_search_only_directories() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let base = directory.path().canonicalize().unwrap();
+    let root = base.join("ancestor/root");
+    let parent = root.join("nested");
+    std::fs::create_dir_all(&parent).unwrap();
+    std::fs::write(parent.join("source.txt"), b"searchable source").unwrap();
+    let ancestors = [base.join("ancestor"), root.clone(), parent];
+    for ancestor in &ancestors {
+        std::fs::set_permissions(ancestor, std::fs::Permissions::from_mode(0o111)).unwrap();
+    }
+    let opened = read::open_confined_file(&root, "nested/source.txt");
+    for ancestor in &ancestors {
+        std::fs::set_permissions(ancestor, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let (mut file, _) = opened.unwrap();
+    let mut bytes = String::new();
+    std::io::Read::read_to_string(&mut file, &mut bytes).unwrap();
+    assert_eq!(bytes, "searchable source");
+}
+
+#[cfg(unix)]
+#[test]
+fn confined_open_rejects_path_replacements_after_validation() {
+    use std::os::unix::fs::symlink;
+
+    for replacement in ["file_link", "parent_link", "root_parent_link", "fifo"] {
+        let directory = tempfile::tempdir().unwrap();
+        let base = directory.path().canonicalize().unwrap();
+        let root = base.join("container/root");
+        let relative = "nested/source.txt";
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        std::fs::write(root.join(relative), b"confined source").unwrap();
+        let foreign = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(foreign.path().join("root/nested")).unwrap();
+        std::fs::write(foreign.path().join("source.txt"), b"outside source").unwrap();
+        std::fs::write(
+            foreign.path().join("root/nested/source.txt"),
+            b"outside source",
+        )
+        .unwrap();
+        let path = read::confined_file(&root, relative).unwrap();
+        match replacement {
+            "file_link" => {
+                std::fs::remove_file(&path).unwrap();
+                symlink(foreign.path().join("source.txt"), &path).unwrap();
+            }
+            "parent_link" => {
+                std::fs::rename(root.join("nested"), root.join("previous")).unwrap();
+                symlink(foreign.path(), root.join("nested")).unwrap();
+            }
+            "root_parent_link" => {
+                std::fs::rename(base.join("container"), base.join("previous")).unwrap();
+                symlink(foreign.path(), base.join("container")).unwrap();
+            }
+            "fifo" => {
+                std::fs::remove_file(&path).unwrap();
+                assert!(
+                    std::process::Command::new("mkfifo")
+                        .arg(&path)
+                        .status()
+                        .unwrap()
+                        .success()
+                );
+            }
+            _ => unreachable!(),
+        }
+        // A FIFO without a writer must be refused without waiting for one.
+        let (sent, received) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            sent.send(read::open_confined_file(&root, relative).is_err())
+                .unwrap();
+        });
+        assert!(
+            received
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("confined opening must not block"),
+            "accepted {replacement}"
+        );
+        reader.join().unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn artifact_open_rejects_replaced_parent_directory() {
+    let fixture = Fixture::new("image/png");
+    let snapshot = read::read_run(&fixture.root()).unwrap();
+    let foreign = tempfile::tempdir().unwrap();
+    std::fs::write(foreign.path().join("image.png"), &fixture.bytes).unwrap();
+    std::fs::rename(
+        fixture.root().join("files/draw"),
+        fixture.root().join("files/previous"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(foreign.path(), fixture.root().join("files/draw")).unwrap();
+    assert!(
+        snapshot
+            .open_artifact(&fixture.root(), &fixture.digest)
+            .is_err()
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn symlinks_and_traversal_are_not_read() {
@@ -860,6 +967,8 @@ fn symlinks_and_traversal_are_not_read() {
     );
     assert!(read::confined_file(&fixture.root(), "../plan.json").is_err());
     assert!(read::confined_file(&fixture.root(), "/etc/passwd").is_err());
+    assert!(read::open_confined_file(&fixture.root(), "../plan.json").is_err());
+    assert!(read::open_confined_file(&fixture.root(), "/etc/passwd").is_err());
     std::fs::remove_file(fixture.root().join("plan.json")).unwrap();
     std::os::unix::fs::symlink(&target, fixture.root().join("plan.json")).unwrap();
     assert!(read::read_run(&fixture.root()).is_err());

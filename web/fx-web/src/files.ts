@@ -15,7 +15,9 @@ export interface FileDescriptor {
 /** The recorded artifact reference is independent of its optional byte-serving URL. */
 export function artifactFileTarget(artifact: Artifact): FileTarget {
   const { digest, url, name, kind, size } = artifact;
-  return { kind: "artifact", artifact: { digest, url, name, kind, size } };
+  // Match native file discovery: unsafe recorded labels use the digest in portable references.
+  const portableName = /^[\\/]|^[A-Za-z]:|^file:|[\u0000-\u001f\u007f-\u009f]/i.test(name) ? digest : name;
+  return { kind: "artifact", artifact: { digest, url, name: portableName, kind, size } };
 }
 
 const roles = new Set(["artifact", "workflow", "node", "source", "resource"]);

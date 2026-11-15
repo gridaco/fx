@@ -59,7 +59,8 @@ export class ExternalFileController {
       if (this.owner !== owner) return;
       this.owner = null;
       for (const activation of [...this.pending]) if (activation.owner === owner) activation.finish("File handling was not confirmed.");
-      this.update({ available: false });
+      // Settling an activation can notify a listener that registers a replacement.
+      if (!this.owner) this.update({ available: false });
     };
   };
   /** Returns true only when the registered owner takes the ordinary link activation. */

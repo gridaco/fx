@@ -57,6 +57,50 @@ test("one owner and token-bound cleanup work independently of the page transport
   files.dispose();
 });
 
+test("detachment preserves a replacement registered synchronously by a listener", async () => {
+  let current = context("first"), oldCalls = 0, replace = false, registering = false;
+  let nestedRegistrationAttempted = false;
+  let nestedRegistrationError: unknown;
+  let detachReplacement!: () => void, finishReplacement!: () => void;
+  const files = new ExternalFileController(() => current);
+  const seen: ViewerProtocol.FileReference[] = [];
+  const nextTarget: ViewerProtocol.FileTarget = { kind: "source", source: "nodes/acme.py", symbol: "render" };
+  const detach = files.handleExternalFile(() => { oldCalls++; });
+  files.activate(target);
+  files.subscribe(() => {
+    if (registering && !nestedRegistrationAttempted) {
+      nestedRegistrationAttempted = true;
+      try { files.handleExternalFile(() => {}); } catch (error) { nestedRegistrationError = error; }
+    }
+    if (!replace) return;
+    replace = false;
+    registering = true;
+    detachReplacement = files.handleExternalFile((reference) => {
+      seen.push(reference);
+      return new Promise<void>((resolve) => { finishReplacement = resolve; });
+    });
+    registering = false;
+    files.activate(nextTarget);
+  });
+  current = context("second");
+  replace = true;
+  detach();
+  expect(nestedRegistrationError).toBeInstanceOf(Error);
+  expect((nestedRegistrationError as Error).message).toContain("already registered");
+  expect(files.getSnapshot()).toMatchObject({ available: true, pending: 1, error: null, failedReference: null });
+  detach();
+  await tasks();
+  expect(oldCalls).toBe(0);
+  expect(seen).toEqual([{ subject: context("second").subject, target: nextTarget }]);
+  expect(files.getSnapshot()).toMatchObject({ available: true, pending: 1, error: null });
+  detachReplacement();
+  expect(files.getSnapshot()).toMatchObject({ available: false, pending: 0, error: "File handling was not confirmed.", failedReference: seen[0] });
+  finishReplacement();
+  await tasks();
+  expect(files.getSnapshot().error).toBe("File handling was not confirmed.");
+  files.dispose();
+});
+
 test("failures expose safe text and the captured fallback reference, never raw host errors", async () => {
   const files = new ExternalFileController(context);
   files.handleExternalFile((reference) => {

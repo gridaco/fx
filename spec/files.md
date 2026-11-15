@@ -44,6 +44,11 @@ Source discovery uses recorded workflow, scope and type metadata. Older records
 may omit it. It is not a workspace-wide file browser. Runtime source imports are
 not performed to fill absent facts.
 
+Saved graphs use the [plain file projection](identity.md#3-the-plain-projection),
+`{file: digest}`, which omits the name, kind and size required for an artifact
+target. Discovery does not invent those facts or interpret file-shaped user JSON
+as recorded artifact evidence.
+
 ## Native resolution
 
 `grida-fx files resolve TARGET --reference JSON --json [--project DIRECTORY]
@@ -74,6 +79,12 @@ or the user's original input pathname. Lookup is point-in-time, not a file lease
 Returned artifact paths refer to immutable stored/placed bytes: native consumers
 must treat them as read-only, as with node-host file paths. Source paths below
 refer to editable workspace files.
+
+Artifact verification and source comparison open a confined regular file without
+following symbolic links in its parent directories or final entry. Validation and
+hashing use the same open handle, and a replacement FIFO cannot block the lookup.
+Source lookup also validates the open handle when no recorded digest is available.
+Returned source paths are point-in-time results, not file leases for a later host open.
 
 Source resolution requires an explicit local source-root binding. `--project`
 binds the local planning project/catalog and is also the default source root;

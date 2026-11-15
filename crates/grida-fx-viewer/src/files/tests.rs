@@ -209,6 +209,68 @@ fn references_cannot_select_arbitrary_project_files_or_escape_paths() {
 
 #[cfg(unix)]
 #[test]
+fn source_hashing_keeps_its_open_handle_after_path_replacement() {
+    use std::os::unix::fs::symlink;
+
+    for replace_parent in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let root = project.path().canonicalize().unwrap();
+        fs::create_dir(root.join("nodes")).unwrap();
+        let path = root.join("nodes/render.py");
+        let bytes = b"confined source bytes";
+        fs::write(&path, bytes).unwrap();
+        let foreign = tempfile::tempdir().unwrap();
+        fs::write(foreign.path().join("render.py"), b"outside source bytes").unwrap();
+        let (mut file, _) = read::open_confined_file(&root, "nodes/render.py").unwrap();
+        if replace_parent {
+            fs::rename(root.join("nodes"), root.join("previous")).unwrap();
+            symlink(foreign.path(), root.join("nodes")).unwrap();
+        } else {
+            fs::remove_file(&path).unwrap();
+            symlink(foreign.path().join("render.py"), &path).unwrap();
+        }
+        assert_eq!(source_digest(&mut file).unwrap(), file_digest(bytes));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn source_fifo_replacement_is_unavailable_with_or_without_recorded_digest() {
+    for recorded_digest in [false, true] {
+        let (fixture, project) = source_fixture();
+        let target = if recorded_digest {
+            node_target(&fixture)
+        } else {
+            json!({"kind":"source","source":"workflows/main.yaml"})
+        };
+        let request = reference(target.clone());
+        let initial = resolve(&fixture.root(), &request, Some(project.path()), None).unwrap();
+        assert!(initial["local_path"].is_string());
+        let path = project.path().join(target["source"].as_str().unwrap());
+        fs::remove_file(&path).unwrap();
+        assert!(
+            std::process::Command::new("mkfifo")
+                .arg(&path)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let (sent, received) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            let resolved = resolve(&fixture.root(), &request, Some(project.path()), None).unwrap();
+            sent.send(resolved).unwrap();
+        });
+        let resolved = received
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("source resolution must not wait for a FIFO writer");
+        reader.join().unwrap();
+        assert_eq!(resolved["local_path"], Value::Null);
+        assert_eq!(resolved["source_match"], "unknown");
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn source_links_are_unavailable_even_when_pointing_inside_the_bound_root() {
     let (fixture, project) = source_fixture();
     let request = reference(node_target(&fixture));

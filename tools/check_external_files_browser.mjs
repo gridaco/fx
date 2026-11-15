@@ -99,6 +99,10 @@ try {
   assert.equal(new URL(assetTab.url()).pathname, `/api/artifacts/${fixture.digest}`);
   await assetTab.close();
   console.log("ok   the real standalone image link opens the served browser tab");
+  let inventoryRequests = 0;
+  await viewer.route("**/api/files", route => ++inventoryRequests === 1
+    ? route.fulfill({ status: 503, body: "Deliberate metadata failure /private/not-for-viewer" })
+    : route.continue());
   await viewer.evaluate(origin => { window.revokeHost = window.fx_viewer.allowHost(window.opener, origin); }, hostServer.url.origin);
   await host.evaluate(async ({ origin }) => {
     const { ViewerClient } = await import("/client.js");
@@ -121,6 +125,19 @@ try {
     window.detach = await window.client.handleExternalFile(window.handler);
     document.getElementById("attach").textContent = "Viewer connected";
   }, { origin: new URL(viewerUrl).origin });
+  const inventoryError = viewer.getByRole("alert").filter({ hasText: "The recorded source files are unavailable." });
+  await inventoryError.waitFor();
+  assert.equal(await inventoryError.count(), 1, "One inventory error is shown for the whole viewer");
+  assert.equal(await viewer.locator(".fx-source-link").count(), 0);
+  assert.equal((await viewer.locator("body").innerText()).includes("/private/not-for-viewer"), false);
+  const readsBeforeRetry = metadataReads.length;
+  await viewer.getByRole("button", { name: "Retry source files", exact: true }).click();
+  await viewer.getByRole("button", { name: "nodes/render.py#render", exact: true }).waitFor();
+  assert.equal(metadataReads.length, readsBeforeRetry + 1, "Retry reads only file metadata");
+  assert.equal(inventoryRequests, 2);
+  assert.equal(await inventoryError.count(), 0);
+  assert.equal(nativeCalls.length, 0, "Metadata retry does not activate a file or invoke the native host");
+  console.log("ok   a transient inventory failure shows one safe error; metadata retry restores source controls without activation");
   const pages = context.pages().length;
   const requested = [];
   viewer.on("request", request => requested.push(new URL(request.url()).pathname));

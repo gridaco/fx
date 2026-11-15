@@ -248,6 +248,9 @@ timeout does not automatically retry or open another tab; the viewer offers an
 explicit browser link when one is available. Disposing the client removes its
 registration. Recreate the integration after viewer navigation or reload.
 
+If source metadata cannot be read, the viewer offers **Retry source files**.
+This refreshes metadata only; it does not replay a file activation.
+
 Trusted same-realm code can register directly with
 `window.fx_viewer.handleExternalFile(handler)`, which returns a synchronous
 detach function. The supplied viewer and a future composed viewer use the same

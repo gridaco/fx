@@ -532,14 +532,14 @@ fn resolve_source(
     let Some(source) = target["source"].as_str() else {
         return unavailable("The recorded source is unavailable.");
     };
-    let path = match read::confined_file(&root, source) {
-        Ok(path) => path,
+    let (mut file, path) = match read::open_confined_file(&root, source) {
+        Ok(opened) => opened,
         Err(_) => return unavailable("The current source file is unavailable in the bound root."),
     };
     let Some(expected) = target["recorded_digest"].as_str() else {
         return (Some(path), Some("unknown"), None);
     };
-    let Ok(current_digest) = source_digest(&path) else {
+    let Ok(current_digest) = source_digest(&mut file) else {
         return unavailable("The current source file cannot be read.");
     };
     let state = if current_digest == expected {
@@ -550,8 +550,7 @@ fn resolve_source(
     (Some(path), Some(state), None)
 }
 
-fn source_digest(path: &Path) -> io::Result<String> {
-    let mut file = fs::File::open(path)?;
+fn source_digest(file: &mut fs::File) -> io::Result<String> {
     let mut hash = Sha256::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {

@@ -767,6 +767,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   remain viewer-owned. Failure/timeouts never retry or automatically open another
   tab; use the explicit browser link when available. Dispose/recreate the client
   after navigation. Older viewers return `unsupported_method`.
+  If source metadata cannot be read, `Retry source files` refreshes only that
+  metadata; it does not activate a file or retry an earlier host action.
   A native host can use `listFiles(saved)` / `resolveFile(saved, reference)` or
   `RunRecord.listFiles()` / `.resolveFile(reference)` from the Node SDK; Python
   has `list_files`/`resolve_file`, record methods and async counterparts. Bind the

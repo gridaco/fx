@@ -661,7 +661,10 @@ The provider-free [file inventory tests](web/fx-web/tests/files.test.ts), activa
 controller/page/client tests, native resolver/SDK tests and
 [embedding harness](tools/check_external_files_browser.mjs) cover default browser
 navigation, host-owned file tabs, source access, failure, cleanup and peer
-authorization. Native regressions cover package/resource label collisions,
+authorization, including reentrant handler replacement, portable filename
+fallbacks and metadata-only retry after a failed inventory read. Native
+regressions cover symlink/FIFO replacement, same-handle validation and hashing,
+package/resource label collisions,
 complete-target matching and ambiguous digest omissions; a label alone cannot
 establish a source file's owning root. Host menus, OS-specific opening,
 historical source recovery and publishing a component SDK remain outside this
