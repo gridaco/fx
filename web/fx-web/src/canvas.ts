@@ -140,7 +140,13 @@ export class CanvasController {
       element("stop", { offset: 0.5, "stop-color": "#fff", "stop-opacity": 0.85 }),
       element("stop", { offset: 1, "stop-color": "#fff", "stop-opacity": 0 }),
     );
-    defs.append(...markers, checker, shimmer);
+    const notePaper = element("linearGradient", { id: `${this.id}-note-paper`, gradientUnits: "userSpaceOnUse", x1: 0, y1: 0, x2: 0, y2: 80 });
+    notePaper.append(
+      element("stop", { offset: 0, "stop-color": "#f6d992" }),
+      element("stop", { offset: 0.4, "stop-color": "#ffe4a3" }),
+      element("stop", { offset: 1, "stop-color": "#ffe2a0" }),
+    );
+    defs.append(...markers, checker, shimmer, notePaper);
     this.content.style.transformOrigin = "0 0";
     this.svg.append(defs, this.content);
     this.toolbar.className = "fx-canvas-toolbar";
@@ -318,7 +324,7 @@ export class CanvasController {
     for (const note of this.layout.notes ?? []) {
       const presentation = this.noteContent.content(note.id)!;
       const group = element("g", { class: `fx-canvas-note${presentation.collapsed ? " is-collapsed" : ""}`, "data-note-id": note.id, "data-collapsed": String(presentation.collapsed), role: "button", tabindex: 0, "aria-label": `Read note ${note.name}`, transform: `translate(${note.x},${note.y})` });
-      group.append(element("rect", { width: note.width, height: note.height, rx: 8, class: "fx-canvas-note-box" }));
+      group.append(element("rect", { width: note.width, height: note.height, rx: 2, fill: `url(#${this.id}-note-paper)`, class: "fx-canvas-note-box" }));
       group.append(element("text", { x: 16, y: 25, class: "fx-canvas-note-title" }, `Note · ${note.name}`));
       const content = element("foreignObject", { x: 16, y: 40, width: note.width - 32, height: presentation.contentHeight });
       const excerpt = presentation.body;

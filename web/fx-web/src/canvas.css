@@ -223,12 +223,13 @@
 
 /* Captured documentation is measured once before grid placement, independently of media. */
 .fx-canvas-note { cursor: pointer; outline: none; }
-.fx-canvas-note-box { fill: #fffdf5; stroke: #ddd6b9; stroke-width: 1.2px; }
-.fx-canvas-note:hover .fx-canvas-note-box { stroke: #a69a70; }
+.fx-canvas-note-box { stroke: #b08a3c33; stroke-width: .6px; filter: drop-shadow(0 1px 1px #40301412) drop-shadow(0 6px 5px #40301426); }
+.fx-canvas-note:hover .fx-canvas-note-box { stroke: #94702d80; }
 .fx-canvas-note.is-selected .fx-canvas-note-box, .fx-canvas-note:focus-visible .fx-canvas-note-box { stroke: #2563eb; stroke-width: 2px; }
-.fx-canvas-note-title, .fx-canvas-note-more { fill: #82775b; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
+.fx-canvas-note-title, .fx-canvas-note-more { fill: #6a542a; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
 .fx-canvas-note-title { font-weight: 600; }
 .fx-note-content { color: #3f3f46; font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+.fx-note-card-content { color: #493a21; }
 .fx-note-content > :first-child { margin-top: 0; }
 .fx-note-content > :last-child { margin-bottom: 0; }
 .fx-note-content h1, .fx-note-content h2, .fx-note-content h3, .fx-note-content h4, .fx-note-content h5, .fx-note-content h6 { font-weight: 600; line-height: 1.3; margin: 1.2em 0 .5em; }
@@ -239,6 +240,8 @@
 .fx-note-content code { font: .9em/1.5 "SFMono-Regular", Consolas, monospace; background: #71717a10; border-radius: 3px; padding: .1em .25em; }
 .fx-note-content pre { white-space: pre-wrap; background: #71717a0a; padding: 12px; border-radius: 6px; }
 .fx-note-content pre code { padding: 0; background: none; }
+.fx-note-card-content code, .fx-note-card-content pre { background: #a2731712; }
+.fx-note-card-content pre code { background: none; }
 .fx-note-content blockquote { border-left: 3px solid #d4d4d8; padding-left: 1em; color: #71717a; }
 .fx-note-content hr { border: 0; border-top: 1px solid #d4d4d8; margin: 1em 0; }
 .fx-note-plain { white-space: pre-wrap; }
@@ -246,3 +249,5 @@
 .fx-canvas-note.is-collapsed .fx-note-excerpt { height: 100%; overflow: hidden; mask-image: linear-gradient(#000 90%, transparent); }
 .fx-note-diagnostic, .fx-note-unavailable { color: #82775b; }
 .fx-note-diagnostic { font-size: 12px; white-space: normal; }
+.fx-note-card-content blockquote, .fx-note-card-content .fx-note-diagnostic, .fx-note-card-content.fx-note-unavailable { color: #6a542a; }
+.fx-note-card-content blockquote { border-color: #b08a3c66; }
