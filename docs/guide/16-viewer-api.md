@@ -190,9 +190,8 @@ behavior. The same image link opens its served URL in a browser tab by default,
 or passes the recorded file reference to your application's handler. Inline
 image, video and 3D preview interactions stay within the viewer.
 
-This extension requires an engine/client build that exposes `handleExternalFile`;
-older viewers return `unsupported_method`. It is implemented in source for
-[#134](https://github.com/gridaco/fx/issues/134), pending release.
+This extension requires FX 0.9.0 or later; older viewers return
+`unsupported_method` for `handleExternalFile`.
 
 ```js
 // `client` is the ViewerClient connected to the existing viewer window.
@@ -312,7 +311,8 @@ For the raw message format, context types, and compatibility rules, see the
 
 ## Inspect note selection
 
-Static workflow notes are presentation entities. Opt in when constructing a client:
+Static workflow notes are presentation entities, supported in FX 0.9.0 or later.
+Opt in when constructing a client:
 
 ```ts
 const viewer = new ViewerClient({

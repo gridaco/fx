@@ -17,7 +17,7 @@ Nami and traveler presets remain available separately.
 The helpers in `nodes/_movie_sprite/` belong to this example; they are not FX APIs.
 No other checkout or application package is needed.
 
-This source uses workflow video posters and requires FX 0.8.0 or later.
+This source uses workflow video posters and notes and requires FX 0.9.0 or later.
 
 ## Setup
 
