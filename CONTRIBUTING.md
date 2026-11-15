@@ -9,6 +9,50 @@ agents discover and compose FX operations. Use its scenarios when changing the
 CLI, SDKs, lifecycle or public contracts, and update supported behavior and evidence
 alongside those changes.
 
+## Pull requests
+
+Choose a template by the effect of the change. Features and fixes can use either:
+
+- **General** (default): changes without a user-facing effect, such as internal
+  refactoring, infrastructure or contributor documentation. Explain the change,
+  motivation and verification.
+- **[Product & UX](https://github.com/gridaco/fx/compare?expand=1&template=product-ux.md)**:
+  changes to workflow authoring, CLI/SDK behavior, viewer interactions, appearance
+  or visual output. Explain the user problem, resulting behavior, reproduction
+  steps and caveats, and show the implementation running.
+
+PRs affecting users need evidence appropriate to the change. For the viewer and
+website, use screenshots for static results and a short video/GIF for interactions.
+For CLI/SDK changes, include runnable commands or code with actual output; use
+before/after examples when useful. Describe what reviewers should look for. A
+simple recording is enough; narration is optional. If no meaningful demo applies,
+explain why in the PR.
+
+Prefer the [provider-free viewer fixtures](fixtures/viewer/README.md) for visual
+evidence. Keep generated screenshots and recordings outside Git and attach them
+to the PR. Use original fixture content, and omit credentials and private paths.
+Live provider calls still require explicit owner approval and a dollar cap.
+
+GitHub fills new PR descriptions with the default template. For Product & UX,
+use the link above and select your branches, or add `template=product-ux.md` to
+the PR creation URL. With GitHub CLI:
+
+```sh
+gh pr create --template product-ux.md --attach ./demo.mp4
+# Or attach evidence to an existing PR:
+gh pr edit <number> --attach ./canvas.png --attach ./demo.mp4
+```
+
+Use the CLI for uploads when available: `--attach` is supported in `gh` v2.99+
+with repository write access. Otherwise, upload through GitHub's web UI. Repeat
+`--attach` for multiple files. A local image reference such as
+`![Canvas](./canvas.png)` in the body is rewritten to its uploaded URL; other
+attachments are appended. See the [CLI attachment guide](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/).
+
+When supplying `--body` or `--body-file`, read the appropriate template in
+[`.github/`](.github/) and preserve its sections in the description. For example:
+`gh pr create --title "Improve media preview" --body-file /tmp/pr-body.md --attach ./canvas.png`.
+
 ## Ways to run FX
 
 User-facing documentation, the website and the skill show one command: `grida fx`, from the
