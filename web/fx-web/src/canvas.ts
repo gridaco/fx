@@ -9,10 +9,11 @@ import { DeckSelection } from "./deck-selection";
 import { element, nodeCard, runningLabel, short } from "./card";
 import { CardVideos } from "./video";
 import { CardModels } from "./card-models";
+import { PortPreview, type InspectedPort } from "./port-preview";
 
 const EXPANDED_GAP = 32;
 /** A card's labelled controls do what they say (§5.7): a press on one neither pans nor opens its deck. */
-const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-model-open";
+const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-model-open, .fx-canvas-port";
 
 /**
  * Whether a key event's target keeps its own keys: a text field, or a card's media player, whose
@@ -22,10 +23,11 @@ export function ownsKeys(target: EventTarget | null) {
   const element = target as Element | null;
   // Native fullscreen gets Escape before surrounding details, decks or scope navigation.
   return Boolean(element?.ownerDocument?.fullscreenElement?.contains(element)
-    || element?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player"));
+    || element?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player, .fx-port-preview"));
 }
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
 const LEGIBLE_ZOOM = 11 / 13;
+const PORT_PREVIEW_ZOOM = 0.75;
 
 /**
  * The bookmark's geometry, in canvas units: its gap to the deck, its marks' lengths, their pitch,
@@ -85,11 +87,15 @@ export class CanvasController {
   private readonly noteContent: NoteCards;
   private readonly nodes = new Map<string, SVGGElement>();
   private readonly frameCards = new Map<string, SVGGElement>();
-  private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string; points: CanvasLayout["edges"][number]["points"] }>();
+  private readonly edges = new Map<string, { group: SVGGElement; source: string; target: string; source_port?: string; target_port?: string; source_kind?: "output" | "fact"; points: CanvasLayout["edges"][number]["points"] }>();
   /** How far the stack moved each deck card from where the layout put it, down and right. */
   private readonly shifts = new Map<SVGGElement, number>();
   private readonly incidentEdges = new Map<string, Set<string>>();
   private highlightedEdges = new Set<string>();
+  private hoveredNode: string | null = null;
+  private hoveredEdge: string | null = null;
+  private focusedNode: string | null = null;
+  private inspectedPort: InspectedPort | null = null;
   private decks: Deck[] = [];
   private deckSelection: DeckSelection | null = null;
   private open: OpenDeck | null = null;
@@ -108,11 +114,13 @@ export class CanvasController {
   private readonly scrubber = document.createElement("div");
   private readonly videos: CardVideos;
   private readonly models: CardModels;
+  private readonly portPreview: PortPreview;
   private redrawing = false;
   /** The badge's text size on screen last written to `--fx-text`, within its fade. */
   private textSize = "";
   private layout: CanvasLayout = { nodes: [], edges: [], frames: [], decks: [], width: 0, height: 0 };
   private readonly canHover = window.matchMedia("(hover: hover)");
+  private readonly canPreviewPortOnHover = () => this.canHover.matches && this.viewport.getSnapshot().zoom >= PORT_PREVIEW_ZOOM;
   private readonly reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   private selected: string | null = null;
   private drag: { pointer: number; x: number; y: number; startX: number; startY: number; moved: boolean; background: boolean; veil: boolean } | null = null;
@@ -191,7 +199,11 @@ export class CanvasController {
     }, { signal: this.abort.signal });
     this.videos = new CardVideos(container, () => this.canHover.matches && !this.reducedMotion.matches && !this.models.interacting, (element) => this.covered(element), () => this.models.stop());
     this.models = new CardModels(container, (element) => this.covered(element), () => { this.videos.stop(); this.cancelDrag(); });
-    container.replaceChildren(this.svg, this.videos.player, this.models.player, this.toolbar, this.empty, this.deckBar, this.scrubber);
+    this.portPreview = new PortPreview(container, (port) => {
+      this.inspectedPort = port;
+      this.highlightConnections(this.hoveredNode, this.hoveredEdge);
+    }, (element) => this.covered(element), this.canPreviewPortOnHover);
+    container.replaceChildren(this.svg, this.videos.player, this.models.player, this.toolbar, this.empty, this.deckBar, this.scrubber, this.portPreview.element);
     this.noteContent = new NoteCards(container);
     container.addEventListener("wheel", this.onWheel, { passive: false, signal: this.abort.signal });
     this.svg.addEventListener("pointerdown", this.onPointerDown, { signal: this.abort.signal });
@@ -201,7 +213,7 @@ export class CanvasController {
     container.addEventListener("pointercancel", this.onPointerUp, { signal: this.abort.signal });
     // The pointer moving onto the player stays on its card.
     // Leaving the canvas, not onto a video's player over its card.
-    container.addEventListener("pointerleave", () => this.hover(null), { signal: this.abort.signal });
+    container.addEventListener("pointerleave", () => { this.hover(null); this.highlightConnections(null); }, { signal: this.abort.signal });
     // A deck card is the expand target: the capture phase runs before a card's own selection.
     this.svg.addEventListener("click", this.onDeckClick, { capture: true, signal: this.abort.signal });
     // Raising a card moves focus out of the canvas, so Esc listens on the document while open.
@@ -214,13 +226,14 @@ export class CanvasController {
     container.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && this.scope !== null && !event.defaultPrevented) { event.preventDefault(); this.onBack(); }
     }, { signal: this.abort.signal });
-    this.resize = new ResizeObserver(() => { if (!this.didFit && (this.layout.nodes.length || this.layout.notes?.length)) this.fit(); });
+    this.resize = new ResizeObserver(() => { if (!this.portPreview.fullscreened) this.portPreview.dismiss(); if (!this.didFit && (this.layout.nodes.length || this.layout.notes?.length)) this.fit(); });
     this.resize.observe(container);
     this.applyViewport();
   }
 
   setGraph(graph: CanvasGraph, scope: string | null = null, report: LayoutReport | null = null) {
     this.redrawing = true;
+    this.portPreview.dismiss();
     const navigating = scope !== this.scope;
     const restoringFocus = this.content.contains(document.activeElement);
     const reopen = navigating || !this.open ? null : { id: this.open.deck.placed.id, camera: this.open.camera };
@@ -244,6 +257,9 @@ export class CanvasController {
     this.shifts.clear();
     this.incidentEdges.clear();
     this.highlightedEdges.clear();
+    this.hoveredNode = null;
+    this.hoveredEdge = null;
+    this.focusedNode = null;
     this.hovered = null;
     this.render();
     this.empty.hidden = this.layout.nodes.length > 0 || (this.layout.notes?.length ?? 0) > 0;
@@ -283,6 +299,19 @@ export class CanvasController {
     const layer = (frame: string | null) => layers.get(frame)!;
     const rootEdges = element("g", { class: "fx-canvas-edges" }), rootCards = element("g", { class: "fx-canvas-cards" });
     layers.set(null, { edges: rootEdges, cards: rootCards });
+    // Boundary frames decorate the workflow interface; cards keep their own identities.
+    // Backgrounds sit below wires so the last segment and arrowhead reach each socket.
+    const boundaries = element("g", { class: "fx-canvas-value-groups", "aria-hidden": "true" });
+    const boundaryCards = new Map<string, SVGGElement>();
+    for (const boundary of this.layout.boundary_groups ?? []) {
+      boundaries.append(
+        element("rect", { x: boundary.x, y: boundary.y, width: boundary.width, height: boundary.height, rx: 10, class: "fx-canvas-value-group-box" }),
+        element("text", { x: boundary.x + 20, y: boundary.y + 26, class: "fx-canvas-value-group-title" }, boundary.title),
+      );
+      const cards = element("g", { class: "fx-canvas-value-group-cards", "data-value-group": boundary.side, role: "group", "aria-label": `Workflow ${boundary.title.toLowerCase()}` });
+      rootCards.append(cards);
+      for (const id of boundary.nodes) boundaryCards.set(id, cards);
+    }
     for (const frame of frames) {
       const card = this.frameCard(frame);
       const edges = element("g", { class: "fx-canvas-edges" }), cards = element("g", { class: "fx-canvas-cards" });
@@ -296,8 +325,9 @@ export class CanvasController {
       let common: string | null = null;
       for (const id of from) if (to.includes(id)) { common = id; break; }
       const group = this.edgeElement(edge);
+      if (boundaryCards.has(edge.source) || boundaryCards.has(edge.target)) group.classList.add("is-boundary");
       layer(common).edges.append(group);
-      this.edges.set(edge.id, { group, source: edge.source, target: edge.target, points: edge.points });
+      this.edges.set(edge.id, { group, source: edge.source, target: edge.target, source_port: edge.source_port, target_port: edge.target_port, source_kind: edge.source_kind, points: edge.points });
       for (const id of [edge.source, edge.target]) {
         let incident = this.incidentEdges.get(id);
         if (!incident) this.incidentEdges.set(id, incident = new Set());
@@ -306,10 +336,25 @@ export class CanvasController {
     }
     for (const [index, node] of this.layout.nodes.entries()) {
       const group = nodeCard(node, this.id, index, signal, (scope) => this.onOpenScope(scope));
+      for (const socket of group.querySelectorAll<SVGGElement>(".fx-canvas-port")) {
+        const direction = socket.dataset.portDirection === "input" ? "input" : "output";
+        const ports = direction === "input" ? node.ports?.inputs : node.ports?.outputs;
+        const port = ports?.find((port) => port.name === socket.dataset.portName && port.kind === socket.dataset.portKind);
+        if (port) this.portPreview.attach(socket, node, port, direction, signal);
+      }
       if (node.preview?.kind === "video") this.videos.attach(group, node.id, node.preview, signal);
       if (node.preview?.kind === "model") this.models.attach(group, node.id, node.preview, signal);
       group.addEventListener("pointerenter", () => this.highlightConnections(node.id), { signal });
       group.addEventListener("pointerleave", () => this.highlightConnections(null), { signal });
+      group.addEventListener("focusin", () => {
+        this.focusedNode = node.id;
+        this.highlightConnections(this.hoveredNode, this.hoveredEdge);
+      }, { signal });
+      group.addEventListener("focusout", (event) => {
+        if (event.relatedTarget instanceof Node && group.contains(event.relatedTarget)) return;
+        if (this.focusedNode === node.id) this.focusedNode = null;
+        this.highlightConnections(this.hoveredNode, this.hoveredEdge);
+      }, { signal });
       group.addEventListener("click", () => this.onSelect(node.id), { signal });
       group.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -318,7 +363,7 @@ export class CanvasController {
         if (hit && !this.open) this.expand(hit.deck);
         else this.onSelect(node.id);
       }, { signal });
-      layer(frameOf.get(node.id) ?? null).cards.append(group);
+      (boundaryCards.get(node.id) ?? layer(frameOf.get(node.id) ?? null).cards).append(group);
       this.nodes.set(node.id, group);
     }
     for (const note of this.layout.notes ?? []) {
@@ -348,7 +393,7 @@ export class CanvasController {
     this.deckSelection = new DeckSelection(this.layout);
     this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
     this.decks.forEach((_, index) => this.restDeck(index));
-    this.content.replaceChildren(rootEdges, rootCards);
+    this.content.replaceChildren(boundaries, rootEdges, rootCards);
     // Running and waiting cards count up together, once a second, until the next redraw.
     const clocks = [...this.content.querySelectorAll<SVGTextElement>("text[data-started]")];
     if (clocks.length) {
@@ -515,6 +560,11 @@ export class CanvasController {
     if (this.open && !this.open.deck.cards.some((card) => card.contains(element))) return true;
     return this.decks.some((deck) => deck !== this.open?.deck && deck.cards.some((card, at) => at !== deck.front && card.contains(element)));
   }
+  private syncPortFocus() {
+    for (const node of this.nodes.values()) for (const port of node.querySelectorAll<SVGGElement>(".fx-canvas-port")) {
+      port.setAttribute("tabindex", this.covered(port) ? "-1" : "0");
+    }
+  }
   /** The deck card that is or holds this node's card, or -1. */
   private holding(deck: Deck, id: string) {
     const node = this.nodes.get(id) ?? this.noteCards.get(id);
@@ -530,6 +580,7 @@ export class CanvasController {
     const deck = this.decks[index];
     if (this.open?.deck === deck) return null;
     const stack = deckStack(deck.members.length, front, keep ? deck.start : undefined);
+    if (deck.front !== front) this.portPreview.dismiss();
     deck.start = stack.start;
     // Only the shown cards' order shows; the badge and the bookmark stay above them.
     for (const at of stack.order) if (stack.shown[at]) deck.parent.insertBefore(deck.cards[at], deck.badge);
@@ -541,6 +592,7 @@ export class CanvasController {
     this.markFront(deck, front);
     // One tab stop per closed deck: its front card.
     deck.cards.forEach((card, at) => { if (card.hasAttribute("tabindex")) card.setAttribute("tabindex", at === front ? "0" : "-1"); });
+    this.syncPortFocus();
     return deck.cards[front];
   }
   /**
@@ -627,6 +679,7 @@ export class CanvasController {
   private expand(index: number, instant = false) {
     const deck = this.decks[index];
     if (!deck || this.open) return;
+    this.portPreview.dismiss();
     this.hover(null);
     const sizes = deck.boxes;
     const card = { width: Math.max(...sizes.map((size) => size.width)), height: Math.max(...sizes.map((size) => size.height)) };
@@ -649,6 +702,7 @@ export class CanvasController {
     veil.style.transition = `opacity ${duration}ms ease`;
     veil.classList.add("is-shown");
     this.open = { deck, veil, camera, grid };
+    this.syncPortFocus();
     this.videos.recheck();
     if (!this.redrawing) this.models.recheck();
     this.showScrubber(index);
@@ -684,6 +738,7 @@ export class CanvasController {
   private collapse(instant = false, keepCamera = false) {
     const open = this.open;
     if (!open) return;
+    this.portPreview.dismiss();
     this.open = null;
     this.mark(null);
     this.deckBar.hidden = true;
@@ -735,6 +790,7 @@ export class CanvasController {
       if (key && this.noteCards.has(key)) for (const [index, deck] of this.decks.entries()) if (this.holding(deck, key) >= 0) affected.add(index);
     }
     for (const index of affected) this.restDeck(index);
+    this.highlightConnections(this.hoveredNode, this.hoveredEdge);
   }
   /**
    * A card chosen outside the canvas, from a list: the camera glides to it, in the area the
@@ -762,9 +818,24 @@ export class CanvasController {
     this.animateCamera(() => this.viewport.reveal(box, bounds, inset, LEGIBLE_ZOOM));
   }
   private highlightConnections(nodeId: string | null, edgeId: string | null = null) {
-    const next = this.drag?.moved ? new Set<string>() : nodeId !== null
-      ? this.incidentEdges.get(nodeId) ?? new Set<string>()
+    this.hoveredNode = nodeId;
+    this.hoveredEdge = edgeId;
+    const port = this.inspectedPort;
+    const next = this.drag?.moved ? new Set<string>() : port !== null
+      ? new Set([...(this.incidentEdges.get(port.node) ?? [])].filter((id) => {
+        const edge = this.edges.get(id)!;
+        return port.direction === "input" ? edge.target === port.node && edge.target_port === port.name
+          : edge.source === port.node && edge.source_port === port.name && (edge.source_kind ?? "output") === (port.kind === "fact" ? "fact" : "output");
+      })) : nodeId !== null
+      ? new Set(this.incidentEdges.get(nodeId))
       : new Set(edgeId === null ? [] : [edgeId]);
+    // Keyboard focus and selection keep just that card's boundary relationships visible.
+    if (!this.drag?.moved && port === null) for (const id of [this.focusedNode, this.selected]) {
+      if (id === null) continue;
+      for (const edge of this.incidentEdges.get(id) ?? []) {
+        if (this.edges.get(edge)?.group.classList.contains("is-boundary")) next.add(edge);
+      }
+    }
     for (const id of this.highlightedEdges) if (!next.has(id)) this.edges.get(id)?.group.classList.remove("is-highlighted");
     for (const id of next) if (!this.highlightedEdges.has(id)) this.edges.get(id)?.group.classList.add("is-highlighted");
     this.highlightedEdges = next;
@@ -797,6 +868,7 @@ export class CanvasController {
     if (duration) window.setTimeout(() => { this.content.style.transition = ""; }, duration);
   }
   private applyViewport() {
+    this.portPreview.dismiss();
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
     const { x, y, zoom } = this.viewport.getSnapshot();
@@ -820,7 +892,7 @@ export class CanvasController {
     });
   }
   private onWheel = (event: WheelEvent) => {
-    if ((event.target as Element).closest(".fx-canvas-model-player")) return;
+    if ((event.target as Element).closest(".fx-canvas-model-player, .fx-port-preview")) return;
     event.preventDefault();
     this.content.style.transition = "";
     const bounds = this.svg.getBoundingClientRect();
@@ -841,11 +913,12 @@ export class CanvasController {
     // A drag lasts only while its button is held: a release the canvas never saw (outside the
     // window) ends it here rather than leaving every later move to pan.
     if (this.drag && event.pointerId === this.drag.pointer && (event.buttons & 1) === 0) this.cancelDrag();
-    if (!this.drag) { this.hover(this.hoverAt(event.target)); return; }
+    if (!this.drag) { if (!(event.target as Element).closest(".fx-canvas-port")) this.hover(this.hoverAt(event.target)); return; }
     if (event.pointerId !== this.drag.pointer) return;
     if (!this.drag.moved) {
       if (Math.hypot(event.clientX - this.drag.startX, event.clientY - this.drag.startY) <= 4) return;
       this.drag.moved = true;
+      this.portPreview.dismiss();
       this.content.style.transition = "";
       this.highlightConnections(null);
       this.svg.setPointerCapture(event.pointerId);
@@ -869,13 +942,15 @@ export class CanvasController {
     }
   };
   private cancelDrag() {
+    const moved = this.drag?.moved;
     if (this.drag && this.svg.hasPointerCapture(this.drag.pointer)) this.svg.releasePointerCapture(this.drag.pointer);
     this.drag = null;
     this.container.classList.remove("is-panning");
+    if (moved) this.highlightConnections(null);
   }
   dispose() {
     if (this.viewportFrame !== null) cancelAnimationFrame(this.viewportFrame);
     this.viewportFrame = null;
-    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.videos.dispose(); this.models.dispose(); this.noteContent.dispose(); this.resize.disconnect(); this.container.replaceChildren();
+    this.cancelDrag(); this.abort.abort(); this.graphAbort.abort(); this.portPreview.dispose(); this.videos.dispose(); this.models.dispose(); this.noteContent.dispose(); this.resize.disconnect(); this.container.replaceChildren();
   }
 }

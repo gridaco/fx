@@ -85,19 +85,44 @@ existing input mechanism and chooses routes through existing project configurati
 
 | Surface | Default presentation |
 | --- | --- |
-| Workflow inputs | Named input values on the left: readable prompt excerpt, reference thumbnail, compact scalar rows. Group short scalar fields rather than adding a large card for each. |
-| Shared tables | A compact named source such as `canvas`, showing its fields and recorded consumers. One table is not one card per row. |
-| Named expressions | A named source such as `brief`, showing the captured result and its recorded sources. Context-dependent occurrences stay distinct. |
-| Executable steps | Effective values alongside parameter names, plus the recorded selected route/model. Bounded summaries include connected parameters too. |
-| Workflow outputs | Named result values/media on the right, with existing preview, fullscreen and external file actions. |
+| Workflow inputs | Named input values packed in one Inputs frame on the left: readable prompt excerpt, reference thumbnail, compact scalar rows. Group short scalar fields rather than adding a large card for each. |
+| Shared tables | Effective fields are available at consuming ports; captured sources remain available for explicit inspection. No standalone card by default. |
+| Named expressions | Captured results are available at consuming ports. Context-dependent occurrences stay distinct in the evidence, without standalone cards by default. |
+| Executable steps | Compact inline summaries for unconnected settings and recorded route/model. Connected values and outputs are inspected from their socket dots or labels. |
+| Workflow outputs | Named result values/media packed in one Outputs frame on the right, with existing preview, fullscreen and external file actions. |
 | Notes | Authored explanation, retaining the distinct note appearance and static semantics from #80. |
 
-Named source cards are driven by actual recorded use; unused `let` declarations are not
-evaluated to decorate the canvas. Short scalars can share compact cards/rows, while long
-text and media have their own readable space. Logical value references do not depend on
+Source evidence is driven by actual recorded use; unused `let` declarations are not
+evaluated to decorate the canvas. Explicit `reveal_value` can materialize one selected
+source occurrence until selection changes. Default wiring follows recorded typed links
+through hidden sources without crossing a closed import's private boundary. Short scalars
+can share compact cards/rows, while long text and media have their own readable space.
+Logical value references do not depend on
 how rows are grouped. Grouping is renderer policy, not workflow syntax.
 Each grouped row owns its named socket and activation target; selecting/revealing it uses
 that row's recorded value ID. Grouping creates no aggregate value identity.
+The displayed workflow's boundary frames pack their cards independently of processing
+row heights, including when the displayed workflow is an opened import. They introduce
+no new execution scope or authoring setting. Empty sides have no frame. This grouping
+keeps intermediate source cards out of the overview. Boundary connections are hidden at
+rest and revealed for the individual value or connected step being hovered, keyboard-focused or selected.
+Selection keeps those connections visible. Frame headings/padding do not activate the
+whole group, and hidden wires have no hit region. Processing connections remain visible.
+
+Hovering a socket dot or label at 75% zoom or above opens a recorded-value
+popover. Below 75%, hover opens no popover and adds no port-row tint. Explicit click/tap
+and keyboard focus work at any zoom, with active preview feedback. The preview
+highlights only that port's connections.
+Click/tap pins it; Escape or an outside press closes it. Pan, zoom and navigation
+dismiss it. Recorded images show one thumbnail or a compact image collection using
+only verified recorded artifact inventory and existing viewer URLs. Pinned image previews
+use the shared fullscreen control. Other media show metadata here and retain existing
+cards/details for media inspection. Missing bytes and pending values keep explicit
+fallbacks. The popover changes no card footprint, evaluates nothing, generates no content
+and discovers no provider data; planned outputs may remain pending. This is
+presentation behavior without new workflow syntax or viewer configuration. Descriptions
+come only from captured node parameter JSON Schema: optional literal text, omitted when
+absent, with no invented annotation or current-source lookup.
 
 Values use literal text, not Markdown. Text has a bounded excerpt and an explicit full
 inspection action. Objects/lists show a few fields/items plus a count. The existing details

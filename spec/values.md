@@ -88,12 +88,51 @@ Exact materialized-plan/export hashes still reflect the captured presentation.
 
 ## Canvas and details
 
-Node cards show bounded effective parameters, including connected values and declared
-defaults, plus recorded routing when available. Do not claim all effective fields were
-explicitly authored or infer authored/default provenance by comparing values.
+Node cards show bounded inline summaries for unconnected effective settings, including
+declared defaults, plus recorded routing when available. Connected fields use their
+named sockets instead of repeating their values in an always-visible summary. Do not
+claim all effective fields were explicitly authored or infer authored/default provenance
+by comparing values.
 
-Inputs occupy the input side, shared sources sit near consumers and outputs occupy the
-output side. Keep value placement separate from execution `cells` and member `order`.
+At 75% zoom or above, hovering an input/output socket's dot or label opens an anchored
+popover of its recorded value. Below 75%, pointer hover opens no popover and adds no
+port-row tint. Explicit clicks/taps and keyboard focus work at any zoom, retaining
+active preview feedback.
+Placement anchors to the full socket hit row, including its label. Flipping sides or
+shrinking the popover keeps that column clear for vertical sweeping.
+Clicking or tapping pins it; Escape or an outside press closes it. While the preview
+is active, highlight only that port's connections. Panning, zooming or navigation
+dismisses the preview, which never changes card footprints or
+layout. Recorded images may show one thumbnail or a compact image collection, using
+only verified files from the recorded artifact inventory and their existing viewer
+URLs. A pinned image preview retains the viewer's shared fullscreen control. Other
+media show recorded metadata here and retain their existing card/details previews.
+Missing bytes, pending values and incomplete evidence keep explicit fallback states.
+Opening a preview never reevaluates expressions, rereads source, generates content or
+discovers provider data. If the recorded node parameter's JSON Schema has a description,
+show it as optional literal text. Missing descriptions stay absent; never invent
+annotations or reread current source to supply them. No new authoring setting or
+syntax is required.
+
+The displayed workflow's inputs occupy one labelled Inputs frame on the input side;
+its declared outputs occupy one Outputs frame on the output side. Each frame packs its
+value cards vertically, independently of the processing rows. An empty side has no frame.
+These frames are presentation containers, not execution scopes or aggregate values;
+cards keep their own recorded references, sockets and activation targets. Opening an
+imported workflow groups that workflow's public boundary in the same way.
+Tables and named expressions do not add standalone cards by default; their effective
+values are available at consuming ports. Captured sources and contextual occurrences
+remain available for inspection. An explicit `reveal_value` may temporarily materialize the
+selected table/expression occurrence; changing selection removes it. Equal data does not
+merge recorded occurrences. Rendered connections can pass through hidden sources by
+following recorded typed links, never by inspecting value contents or exposing a closed
+import's private interior. Keep value placement separate from execution
+`cells` and member `order`. Connections touching these boundary cards are hidden at rest,
+including their hit regions. Hovering or keyboard-focusing an individual card reveals its
+incident boundary connections; selecting a card keeps those connections visible until
+selection changes. A consuming or producing step can reveal its own boundary connections
+in the same way. Moving across a frame's heading or padding does not reveal all its wires.
+Processing connections retain their ordinary presentation.
 Imported workflows follow the same rule without leaking their private interior into a
 closed parent card. Contextual values follow existing scope/frame/deck ownership.
 

@@ -349,5 +349,7 @@ if (context.selection?.kind === "value") {
 The ID identifies captured input/table/expression/output evidence, independent of how rows
 are grouped visually. `scope_id: null` means root. Reveal enters its containing workflow
 and foregrounds a contextual group/deck when needed. Default clients see null when a value
-is selected. Same-realm methods accept `{includeValues: true}`; old viewers may explicitly
+is selected. Tables and named expressions normally appear only as effective parameters
+inside steps. Revealing one temporarily shows that exact source occurrence as a selected
+card; changing selection removes it. Same-realm methods accept `{includeValues: true}`; old viewers may explicitly
 refuse the capability. No new process, file or execution-control authority is granted.

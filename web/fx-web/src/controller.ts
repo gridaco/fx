@@ -78,12 +78,14 @@ export class ViewerController {
   }
   select = (id: string | null) => {
     if (id !== null && !this.state.graph.nodes.some((node) => node.id === id) && !this.state.graph.notes?.some((note) => note.id === id)) return;
+    const previous = this.state.graph.nodes.find((node) => node.id === this.state.selected)?.value;
+    const dismissSource = id !== this.state.selected && (previous?.kind === "table" || previous?.kind === "let");
     this.navigation.select(id);
-    this.update({ selected: id });
+    this.update(dismissSource && this.state.view ? this.project(this.state.view) : { selected: id });
   };
   private project(view: ViewerView) {
     const navigation = this.navigation.getSnapshot();
-    const graph = canvasGraph(view, navigation.scope, this.apiBase);
+    const graph = canvasGraph(view, navigation.scope, this.apiBase, navigation.selected);
     const selected = (graph.nodes.some((node) => node.id === navigation.selected) || graph.notes?.some((note) => note.id === navigation.selected)) ? navigation.selected : null;
     this.navigation.select(selected);
     const parentScope = navigation.breadcrumbs.at(-2)?.id ?? null;
@@ -105,7 +107,7 @@ export class ViewerController {
   restore(scope: string | null, selected: string | null): boolean {
     const view = this.state.view;
     if (!view || (scope !== null && !navigationScopes(view.scopes).some((item) => item.id === scope))) return false;
-    const graph = canvasGraph(view, scope, this.apiBase);
+    const graph = canvasGraph(view, scope, this.apiBase, selected);
     if (selected !== null && !graph.nodes.some((node) => node.id === selected) && !graph.notes?.some((note) => note.id === selected)) return false;
     if (!this.navigation.restore(scope, selected)) return false;
     this.update(this.project(view));

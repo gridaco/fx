@@ -149,7 +149,7 @@ export function stepValueSummary(values: Record<string, unknown>, encoded = fals
 }
 
 /** Apply value ownership after scope projection, so a closed import never leaks its private data. */
-export function projectValueViews(view: GraphDocument | ViewerRun, graph: CanvasGraph, active: string | null, resolve: (digest: string) => Artifact | null): CanvasGraph {
+export function projectValueViews(view: GraphDocument | ViewerRun, graph: CanvasGraph, active: string | null, resolve: (digest: string) => Artifact | null, selectedValueId: string | null = null): CanvasGraph {
   if (!view.value_views?.length) return graph;
   const scopes = new Map((view.scopes ?? []).map((scope) => [scope.id, scope]));
   const visibleOwner = (id: string | null) => {
@@ -164,7 +164,11 @@ export function projectValueViews(view: GraphDocument | ViewerRun, graph: Canvas
     }
     return owner === active;
   };
-  const views = view.value_views.filter((value) => visibleOwner(value.scope_id));
+  const owned = view.value_views.filter((value) => visibleOwner(value.scope_id));
+  // Ordinary canvases show the public interface. Explicit inspection may reveal one
+  // recorded expression/constant without turning its other contexts into canvas cards.
+  const views = owned.filter((value) => value.kind === "input" || value.kind === "output" || value.id === selectedValueId);
+  const hidden = new Set(owned.filter((value) => (value.kind === "table" || value.kind === "let") && value.id !== selectedValueId).map((value) => value.id));
   const nodes = graph.nodes.filter((node) => node.kind !== "boundary" || !views.some((value) => value.scope_id === active && value.kind === node.side));
   const originalIds = new Set(nodes.map((node) => node.id));
   const frames = (graph.frames ?? []).map((frame) => ({ ...frame, nodes: [...frame.nodes] }));
@@ -199,29 +203,84 @@ export function projectValueViews(view: GraphDocument | ViewerRun, graph: Canvas
     const boundary = byId.get(value.scope_id);
     return boundary?.kind === "workflow" ? boundary : undefined;
   };
-  const edges = graph.edges.filter((edge) => byId.has(edge.source) && byId.has(edge.target));
+  // A recorded consumer still owns its parameter socket when its source card is
+  // hidden, including a constant with no incoming rendered relationship.
+  const ownedIds = new Set(owned.map((value) => value.id));
   for (const link of view.value_links ?? []) {
+    if (link.target.kind !== "instance") continue;
+    const targetPort = link.target.port;
+    const target = endpointNode(link.target), source = endpointNode(link.source);
+    const sourceName = link.source.kind === "value" ? allValues.get(link.source.value_id)?.name : undefined;
+    const validSource = link.source.kind === "value" ? ownedIds.has(link.source.value_id)
+      || source?.kind === "workflow" && source.ports?.outputs.some((port) => port.name === sourceName)
+      : source !== undefined;
+    if (!target?.ports || !validSource || target.ports.inputs.some((port) => port.name === targetPort)) continue;
+    const setting = target.ports.settings.find((setting) => setting.name === targetPort);
+    if (!setting) continue;
+    target.ports.inputs = [...target.ports.inputs, { name: setting.name, type: setting.type, kind: "parameter" }];
+    target.ports.settings = target.ports.settings.filter((setting) => setting.name !== targetPort);
+  }
+  const edges = graph.edges.filter((edge) => byId.has(edge.source) && byId.has(edge.target));
+  const connectionKey = (source: string, sourcePort: string, sourceKind: string, target: string, targetPort: string) => JSON.stringify([source, sourcePort, sourceKind, target, targetPort]);
+  const recorded = new Map(edges.filter((edge) => edge.kind === "data").map((edge) => [connectionKey(edge.source, edge.source_port ?? "", edge.source_kind ?? "output", edge.target, edge.target_port ?? ""), edge]));
+  const projected = new Set<string>();
+  const preserved = new Set<string>();
+  const connect = (link: ValueLink) => {
     const source = endpointNode(link.source), target = endpointNode(link.target);
-    if (!source || !target || source.id === target.id) continue;
+    if (!source || !target || source.id === target.id) return;
     const sourcePort = link.source.kind === "value" ? allValues.get(link.source.value_id)!.name : link.source.port;
     const targetPort = link.target.kind === "value" ? allValues.get(link.target.value_id)!.name : link.target.port;
-    if (!source.ports || !target.ports) continue;
+    if (!source.ports || !target.ports) return;
     if (link.source.kind === "instance" && !source.ports.outputs.some((port) => port.name === sourcePort)) {
-      if (link.source.source_kind !== "fact") continue;
+      if (link.source.source_kind !== "fact") return;
       source.ports.outputs = [...source.ports.outputs, { name: sourcePort, type: "fact", kind: "fact" }];
     }
     if (link.target.kind === "instance" && !target.ports.inputs.some((port) => port.name === targetPort)) {
       const setting = target.ports.settings.find((setting) => setting.name === targetPort);
-      if (!setting) continue;
+      if (!setting) return;
       target.ports.inputs = [...target.ports.inputs, { name: setting.name, type: setting.type, kind: "parameter" }];
       target.ports.settings = target.ports.settings.filter((setting) => setting.name !== targetPort);
     }
-    if (!source.ports.outputs.some((port) => port.name === sourcePort) || !target.ports.inputs.some((port) => port.name === targetPort)) continue;
-    const id = `value-link:${JSON.stringify(link)}`;
-    edges.push({ id, source: source.id, target: target.id, kind: "data", kinds: ["value"], source_port: sourcePort, target_port: targetPort,
+    if (!source.ports.outputs.some((port) => port.name === sourcePort) || !target.ports.inputs.some((port) => port.name === targetPort)) return;
+    const sourceKind = link.source.kind === "instance" ? link.source.source_kind ?? "output" : "output";
+    const key = connectionKey(source.id, sourcePort, sourceKind, target.id, targetPort);
+    if (projected.has(key)) return;
+    projected.add(key);
+    const existing = recorded.get(key);
+    // A collapsed expression path can name an existing processing edge. Keep its
+    // recorded consumption evidence, rather than replacing it with a second wire.
+    if (existing) { preserved.add(existing.id); return; }
+    edges.push({ id: `value-link:${key}`, source: source.id, target: target.id, kind: "data", kinds: ["value"], source_port: sourcePort, target_port: targetPort,
       ...(link.source.kind === "instance" && link.source.source_kind ? { source_kind: link.source.source_kind } : {}) } satisfies CanvasConnection);
+  };
+  const endpointKey = (endpoint: ValueEndpoint) => endpoint.kind === "value" ? endpoint.value_id : JSON.stringify([endpoint.instance_id, endpoint.port, endpoint.source_kind ?? null]);
+  const outgoing = new Map<string, ValueLink[]>();
+  for (const link of view.value_links ?? []) {
+    const key = endpointKey(link.source), links = outgoing.get(key) ?? [];
+    links.push(link);
+    outgoing.set(key, links);
+  }
+  // Traverse only recorded contributions through omitted local values, stopping
+  // at visible cards/public interfaces. Closed workflows remain opaque. A visited
+  // set handles cycles; the recording's link bound also bounds expanded wiring.
+  const maximumLinks = 16_384;
+  for (const links of outgoing.values()) {
+    const source = links[0].source;
+    if (!endpointNode(source)) continue;
+    const pending = links.map((link) => link.target), visited = new Set<string>();
+    for (let at = 0; at < pending.length && projected.size < maximumLinks; at++) {
+      const target = pending[at];
+      if (endpointNode(target)) connect({ source, target });
+      else if (target.kind === "value" && hidden.has(target.value_id) && !visited.has(target.value_id)) {
+        visited.add(target.value_id);
+        for (const link of outgoing.get(target.value_id) ?? []) pending.push(link.target);
+      }
+    }
+    if (projected.size >= maximumLinks) break;
   }
   // Recorded value links replace a flattened leaf connection for the same consumer parameter.
   const mediated = new Set(edges.filter((edge) => edge.kinds.includes("value") && originalIds.has(edge.target)).map((edge) => `${edge.target}\0${edge.target_port}`));
-  return { ...graph, nodes, frames, edges: edges.filter((edge) => edge.kind !== "data" || edge.kinds.includes("value") || !mediated.has(`${edge.target}\0${edge.target_port}`)) };
+  // An incomplete contraction cannot replace a consumer's complete recorded wiring.
+  return { ...graph, nodes, frames, edges: projected.size >= maximumLinks ? edges
+    : edges.filter((edge) => edge.kind !== "data" || edge.kinds.includes("value") || preserved.has(edge.id) || !mediated.has(`${edge.target}\0${edge.target_port}`)) };
 }

@@ -257,6 +257,8 @@ An independent `include_values: true` on `get_context`, `subscribe` or `present`
 The ID references recorded [value evidence](values.md); `scope_id` is null for root or the
 recorded owner. Reveal enters the containing workflow and foregrounds its contextual
 frame/deck where applicable. Unknown targets are refused before changing presentation.
+Tables and named expressions have no standalone cards by default. Revealing one temporarily
+adds only that recorded occurrence while selected; changing selection removes its card.
 No value contents enter context messages. Without opt-in a selected value projects to null,
 independently of note opt-in and independently for every subscriber. Unsubscribe removes
 both options. This does not widen the existing `scope_boundary` selection shape.

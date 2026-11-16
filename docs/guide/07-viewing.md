@@ -64,12 +64,33 @@ See [note authoring](02-workflow-file.md#notes-for-people-reading-the-canvas).
 
 ## Read workflow values
 
-Current source shows effective workflow inputs, shared tables, named expression results
-and outputs on the canvas, with compact parameter values inside step cards. Values use flat
-data sheets with a lavender label header and a monospaced binding name. Authors keep
+Current source shows effective workflow inputs and outputs on the canvas, with compact
+unconnected settings inside step cards. Values use flat data sheets with a lavender
+label header and a monospaced binding name. Authors keep
 ordinary `inputs`, `tables`, `let`, `with` and `outputs`; no extra preview step is needed.
+The displayed workflow's input cards are grouped in an **Inputs** frame and its declared
+result cards in an **Outputs** frame. The same grouping applies inside an opened imported
+workflow. Boundary connections appear when you hover, keyboard-focus or select an
+individual value or connected step. Selection keeps those connections visible. Processing
+connections remain visible. Tables and named expressions do not add standalone cards to
+the overview; their effective values are available at consuming ports.
 Defaults declared in custom Python/TypeScript node schemas are available during planning,
 just like built-in defaults. A fallback hidden in the node body remains unknown.
+
+At 75% zoom or above, hover a socket dot or its label to read its recorded value in an
+anchored popover. Below 75%, hover adds neither a popover nor a port-row tint. Click/tap
+or keyboard focus works at any zoom, with active preview feedback. Click or tap to pin
+it; Escape or a press outside closes it. Only that port's
+connections are highlighted. Connected fields use this preview rather than repeating
+their values inside the card; unconnected settings keep compact summaries. The preview
+does not move or resize the graph and closes when you pan, zoom or navigate. Recorded
+images show a thumbnail or compact image collection when their verified files are
+available; pin the image preview to use fullscreen. Other media show metadata here;
+use their existing cards or details for media inspection. A plan's outputs
+may still be pending. A parameter description appears when its recorded schema includes
+one; it is shown as plain text. Missing descriptions are not reconstructed from current
+source. Images load through existing recorded artifact URLs. Opening a preview never
+evaluates expressions, generates content or discovers provider data.
 
 Prompts and structured values use bounded summaries; select a value for full details.
 Typed files reuse image/video/3D previews, fullscreen and file actions when recorded bytes
@@ -77,9 +98,9 @@ are available. File-shaped JSON stays JSON. Pending, absent, unavailable and wit
 different conditions; known null is an actual value. Older recordings may lack provenance
 or effective-input defaults and are not reconstructed from current source.
 
-Named expressions are lazy and may differ by repeated item or take. Their contextual
-occurrences follow the existing group/deck model. Source connections show engine-recorded
-relationships, not extra execution dependencies. Nothing runs or spends merely to display
+Named expressions are lazy and may differ by repeated item or take. Their recorded
+occurrences remain distinct and available for explicit source inspection. Source connections
+show engine-recorded relationships, not extra execution dependencies. Nothing runs or spends merely to display
 a value. Actual input/constant edits keep their normal identity effects.
 
 ## Use the canvas

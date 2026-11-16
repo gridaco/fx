@@ -2,6 +2,7 @@ import { projectValueViews } from "./value-views";
 import { parseViewerRun, type ViewerRun } from "./index";
 import { isPrice, cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
+import { projectPortValues } from "./port-values";
 
 export interface ExportArtifact {
   digest: string;
@@ -247,7 +248,7 @@ export async function readRunExport(pin: PinnedRunExport, signal?: AbortSignal, 
 }
 
 /** Share wiring, scope projection and geometry while resolving previews through the static boundary. */
-export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null): CanvasGraph {
+export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null, selectedValueId: string | null = null): CanvasGraph {
   const { view, artifacts } = loaded.manifest;
   const flat = flatCanvasGraph(view);
   const inventory = new Map(artifacts.map((item) => [item.digest, item]));
@@ -262,10 +263,11 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
     if (preview) node.preview = preview;
     else delete node.preview;
   }
-  return projectValueViews(view, projectScopes(view, flat, scope), scope, (digest) => {
+  const resolve = (digest: string) => {
     const artifact = inventory.get(digest);
     if (!artifact) return null;
     const url = exportArtifactUrl(loaded, digest);
     return { digest, kind: artifact.media_type, name: artifact.name, size: artifact.size, available: url !== null, url };
-  });
+  };
+  return projectPortValues(view, projectValueViews(view, projectScopes(view, flat, scope), scope, resolve, selectedValueId), resolve);
 }

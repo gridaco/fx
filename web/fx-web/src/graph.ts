@@ -5,6 +5,8 @@ import { validateViewerApiBase } from "./route";
 import { isNodePorts, isPortBindings, parameterType, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { skipExplanation, type SkipExplanation } from "./skip";
+import { projectPortValues, recordedExecution, type PortInspection } from "./port-values";
+export type { PortInspection, PortImage } from "./port-values";
 
 export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | "done";
 export interface Price {
@@ -280,7 +282,7 @@ export interface CanvasStep {
   preview?: CanvasPreview;
   ports?: { inputs: CanvasPort[]; outputs: CanvasPort[]; settings: { name: string; type: string }[] };
 }
-export interface CanvasPort { name: string; type: string; kind: "artifact" | "parameter" | "fact" | "value" }
+export interface CanvasPort { name: string; type: string; kind: "artifact" | "parameter" | "fact" | "value"; inspection?: PortInspection }
 export interface CanvasConnection {
   id: string; source: string; target: string; kinds: string[];
   /** A runtime read by an executed consumer, excluding its inspection of its judged subject. */
@@ -359,13 +361,6 @@ function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string
     const artifact = artifacts.get(digest);
     return artifact ? { media_type: artifact.kind, name: artifact.name, size: artifact.size, url: artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null } : null;
   }, node.preview);
-}
-
-/** A saved plan can seed `succeeded` without a node event; execution needs its own evidence. */
-function recordedExecution(node: ViewerRun["nodes"][number]): boolean {
-  return node.state === "running" || node.state === "waiting" || node.interrupted === true
-    || node.started_at !== undefined || typeof node.duration_ms === "number" || typeof node.cache === "string"
-    || Object.keys(node.outputs).length > 0;
 }
 
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
@@ -472,8 +467,14 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   return { nodes, edges: [...connections.values()], ...(view.notes?.length ? { notes: view.notes.map((note) => ({ ...note })) } : {}) };
 }
 
-export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api"): CanvasGraph {
+export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api", selectedValueId: string | null = null): CanvasGraph {
   const graph = projectScopes(view, flatCanvasGraph(view, apiBase), scopeId);
   const artifacts = new Map(view.kind === "fx-viewer-run-v1" ? view.artifacts.map((artifact) => [artifact.digest, artifact]) : []);
-  return projectValueViews(view, graph, scopeId, (digest) => artifacts.get(digest) ?? null);
+  const resolve = (digest: string) => {
+    const artifact = artifacts.get(digest);
+    if (!artifact) return null;
+    const url = artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null;
+    return { ...artifact, url, available: url !== null };
+  };
+  return projectPortValues(view, projectValueViews(view, graph, scopeId, resolve, selectedValueId), resolve);
 }

@@ -6,6 +6,9 @@
 .fx-canvas-frame > rect, .fx-canvas-frame > text { pointer-events: none; }
 .fx-canvas-frame > rect { fill: #f4f4f580; stroke: #d4d4d8; stroke-width: 1px; }
 .fx-canvas-frame > text { fill: #71717a; font: 600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-value-groups { pointer-events: none; }
+.fx-canvas-value-group-box { fill: #f4f3f9; stroke: #dedce8; stroke-width: 1px; }
+.fx-canvas-value-group-title { fill: #52505f; font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-workflow .fx-canvas-node-box { stroke: #a5b4c8; }
 .fx-canvas-boundary .fx-canvas-node-box { fill: #f4f4f5; }
 .fx-canvas-workflow-count { fill: #71717a; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -110,6 +113,8 @@
 .fx-canvas-toolbar span { width: 44px; text-align: center; color: #71717a; font: 11px "SFMono-Regular", Consolas, monospace; }
 .fx-canvas-empty { position: absolute; top: 45%; width: 100%; text-align: center; color: #71717a; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-connection { opacity: .3; }
+.fx-canvas-connection.is-boundary { display: none; }
+.fx-canvas-connection.is-boundary.is-highlighted { display: inline; }
 .fx-canvas-connection.is-highlighted { opacity: 1; }
 .fx-canvas-edge { fill: none; stroke-width: 1.5px; pointer-events: none; vector-effect: non-scaling-stroke; }
 .fx-canvas-connection.is-highlighted .fx-canvas-edge { stroke-width: 2px; }
@@ -122,6 +127,11 @@
 .fx-canvas-node-divider { stroke: #f0f0f2; stroke-width: 1px; }
 .fx-canvas-port-heading { fill: #a1a1aa; font: 8px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1px; }
 .fx-canvas-port circle, .fx-canvas-port rect, .fx-canvas-port path { fill: #fff; stroke-width: 1.5px; }
+.fx-canvas-port { cursor: pointer; outline: none; }
+.fx-canvas-port .fx-canvas-port-hit { fill: transparent; stroke: none; pointer-events: all; }
+/* Pointer tint belongs to the open preview, so blocked or pinned-elsewhere hovers stay quiet. */
+.fx-canvas-port:focus-visible .fx-canvas-port-hit, .fx-canvas-port[aria-expanded="true"] .fx-canvas-port-hit { fill: #9b78b812; }
+.fx-canvas-port:focus-visible .fx-canvas-port-socket, .fx-canvas-port[aria-expanded="true"] .fx-canvas-port-socket { stroke-width: 2.5px; }
 .fx-canvas-port-artifact { stroke: #6084b2; }
 .fx-canvas-port-parameter { stroke: #9b78b8; }
 .fx-canvas-port-fact { stroke: #bc9149; }
@@ -129,6 +139,42 @@
 .fx-canvas-port-name { fill: #3f3f46; stroke: none; font: 11px "SFMono-Regular", Consolas, monospace; }
 .fx-canvas-port-type { fill: #a1a1aa; stroke: none; font: 9px "SFMono-Regular", Consolas, monospace; }
 .fx-canvas-settings { fill: #71717a; font: 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+/* A socket's recorded value, in screen pixels rather than zoomed canvas units. */
+.fx-port-preview { position: absolute; z-index: 12; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; border: 1px solid #d9d1e3; border-radius: 10px; background: #fff; color: #3f3f46; box-shadow: 0 8px 28px #27272a1c, 0 2px 6px #27272a0a; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-port-preview[hidden] { display: none; }
+.fx-port-preview-header { display: flex; align-items: center; gap: 10px; flex: none; padding: 12px 12px 11px 16px; background: #f3eff8; border-bottom: 1px solid #e8e2ee; }
+.fx-port-preview-labels { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.fx-port-preview-context { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #84768e; font-size: 10px; }
+.fx-port-preview-labels code { font: 600 13px "SFMono-Regular", Consolas, monospace; color: #534060; overflow-wrap: anywhere; }
+.fx-port-preview-type { max-width: 90px; overflow-wrap: anywhere; color: #84768e; font: 10px "SFMono-Regular", Consolas, monospace; }
+.fx-port-preview-header button { display: grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #84768e; cursor: pointer; }
+.fx-port-preview-header button:hover { background: #e8e2ee; }
+.fx-port-preview-content { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.fx-port-preview-description { flex: none; max-height: 90px; overflow: auto; overscroll-behavior: contain; margin: 0; padding: 12px 16px 0; color: #79727f; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-port-preview-description[hidden] { display: none; }
+.fx-port-images { flex: none; min-height: 0; margin: 12px 16px 0; outline: none; }
+.fx-port-images[hidden] { display: none; }
+.fx-port-image-list { display: grid; grid-auto-flow: column; grid-auto-columns: 112px; gap: 8px; overflow: auto; overscroll-behavior: contain; }
+.fx-port-image-tile { min-width: 0; margin: 0; }
+.fx-port-image-frame { position: relative; display: grid; place-items: center; height: 88px; overflow: hidden; border-radius: 5px; border: 1px solid #e8e2ee; background-color: #fafafa; background-image: linear-gradient(45deg,#ededf0 25%,transparent 25%),linear-gradient(-45deg,#ededf0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ededf0 75%),linear-gradient(-45deg,transparent 75%,#ededf0 75%); background-size: 16px 16px; background-position: 0 0,0 8px,8px -8px,-8px 0; }
+.fx-port-image-frame img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.fx-port-image-frame img[hidden], .fx-port-image-fallback[hidden] { display: none; }
+.fx-port-image-fallback { padding: 8px; color: #8c8791; font-size: 10px; text-align: center; }
+.fx-port-image-tile figcaption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 4px; color: #84768e; font: 10px/1.4 "SFMono-Regular", Consolas, monospace; }
+.fx-port-images.is-single .fx-port-image-list { display: block; }
+.fx-port-images.is-single .fx-port-image-frame { height: 176px; }
+.fx-port-image-count { display: block; padding-top: 6px; color: #84768e; font-size: 10px; }
+.fx-port-image-count[hidden] { display: none; }
+.fx-port-images .fx-media-fullscreen { bottom: auto; top: 4px; }
+.fx-port-image-list:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.fx-port-preview.has-images .fx-port-preview-body { max-height: 96px; }
+.fx-port-preview-body { flex: none; min-height: 0; max-height: 240px; overflow: auto; margin: 0; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 "SFMono-Regular", Consolas, monospace; }
+.fx-port-preview.is-pinned .fx-port-preview-body { max-height: 320px; }
+.fx-port-preview-sources { flex: none; max-height: 42px; overflow: hidden; padding: 0 16px 12px; color: #84768e; font: 10px/1.5 "SFMono-Regular", Consolas, monospace; overflow-wrap: anywhere; }
+.fx-port-preview-sources[hidden] { display: none; }
+.fx-port-preview:not([data-state="known"]) .fx-port-preview-body { color: #8c8791; }
+.fx-port-preview-footer { flex: none; padding: 9px 16px; border-top: 1px solid #f1edf5; color: #a198a8; font-size: 10px; }
 
 /* Decks (spec/layout.md §5): opaque cards, a count badge, and an in-place expansion over a veil. */
 .fx-canvas-frame.fx-deck-card > .fx-canvas-frame-box { fill: #f4f4f5; pointer-events: visiblePainted; cursor: pointer; }
@@ -217,6 +263,11 @@
 .fx-media-preview:fullscreen .fx-media-content > * { width: 100%; }
 .fx-media-preview:fullscreen .fx-media-content > a { display: flex; height: 100%; align-items: center; justify-content: center; border: 0; border-radius: 0; padding: 0; }
 .fx-media-preview:fullscreen img { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
+.fx-port-images:fullscreen { margin: 0; padding: 24px; box-sizing: border-box; }
+.fx-port-images:fullscreen > .fx-media-content.fx-port-image-list { display: grid; grid-auto-flow: row; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); grid-auto-columns: auto; gap: 16px; overflow: auto; align-content: center; }
+.fx-port-images:fullscreen .fx-port-image-frame { height: min(60vh,480px); }
+.fx-port-images.is-single:fullscreen > .fx-port-image-list { display: flex; }
+.fx-port-images.is-single:fullscreen .fx-port-image-tile, .fx-port-images.is-single:fullscreen .fx-port-image-frame { height: 100%; }
 .fx-media-preview:fullscreen .fx-model-preview { display: flex; height: 100%; flex-direction: column; }
 .fx-media-preview:fullscreen .fx-model-viewport { flex: 1; min-height: 0; aspect-ratio: auto; border-radius: 0; }
 .fx-media-preview:fullscreen .fx-model-footer { flex: none; margin: 0; padding: 4px 36px 4px 4px; }

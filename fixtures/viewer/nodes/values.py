@@ -19,8 +19,17 @@ def reference_picture() -> Image.Image:
     "viewer_value_reference",
     inputs={"reference": "image?"},
     params={
-        "prompt": str,
-        "style": dict,
+        "prompt": param(
+            str,
+            description=(
+                "The effective image brief, including the shared shape. "
+                "This fixture draws locally without calling a model."
+            ),
+        ),
+        "style": param(
+            dict,
+            description="Shared shape, seed, palette and transparency settings for this image.",
+        ),
         "size": param(int, default=256, minimum=64, maximum=512),
         "background": param(str, default="warm paper"),
     },

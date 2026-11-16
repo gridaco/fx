@@ -250,6 +250,24 @@ test("export notes preserve disclosure and presentation references without execu
   expect(() => parseRunExport(badMember)).toThrow("layout order");
 });
 
+test("explicit source inspection is temporary in static recordings too", async () => {
+  const manifest = fixture(), source = `value:${"c".repeat(64)}`;
+  manifest.disclosure.values = true;
+  manifest.view.value_views = [{ id: source, scope_id: null, kind: "let", name: "brief", state: "known", context: "root#1", data: { value: "A quiet forest" } }];
+  manifest.layout.values = { [source]: { column: 0, row: 0, source: "automatic" } };
+  const recording = loaded(manifest);
+  const controller = new ExportViewerController(async () => recording);
+  await controller.load({ url: recording.manifest_url, sha256: "a".repeat(64) });
+  expect(controller.getSnapshot().graph.nodes.some((node) => node.id === source)).toBeFalse();
+  expect(controller.restore(null, source)).toBeTrue();
+  expect(controller.getSnapshot().graph.nodes.find((node) => node.id === source)?.value?.context).toBe("root#1");
+  controller.select(null);
+  expect(controller.getSnapshot().selected).toBeNull();
+  expect(controller.getSnapshot().graph.nodes.some((node) => node.id === source)).toBeFalse();
+  expect(recording.manifest.view.value_views).toHaveLength(1);
+  controller.dispose();
+});
+
 test("value cards preserve disclosure and use the existing frozen media boundary", () => {
   const manifest = withImage();
   const prompt = `value:${"c".repeat(64)}`, reference = `value:${"d".repeat(64)}`;

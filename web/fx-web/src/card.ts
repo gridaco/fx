@@ -118,9 +118,10 @@ export function nodeCard(node: PositionedNode, canvasId: string, index: number, 
       for (const [row, port] of ports.entries()) {
         const y = PORT_TOP + row * PORT_ROW;
         const socket = element("g", { class: `fx-canvas-port fx-canvas-port-${port.kind}`, "data-port-name": port.name, "data-port-direction": direction, "data-port-kind": port.kind });
-        socket.append(port.kind === "artifact" ? element("circle", { cx: x, cy: y, r: 4.5 })
-          : port.kind === "fact" ? element("path", { d: `M${x} ${y - 5}l5 5l-5 5l-5 -5z` })
-          : element("rect", { x: x - 4, y: y - 4, width: 8, height: 8, rx: 1 }));
+        socket.append(element("rect", { x: direction === "input" ? -10 : node.width - 166, y: y - 12, width: 176, height: 32, rx: 3, class: "fx-canvas-port-hit" }));
+        socket.append(port.kind === "artifact" ? element("circle", { cx: x, cy: y, r: 4.5, class: "fx-canvas-port-socket" })
+          : port.kind === "fact" ? element("path", { d: `M${x} ${y - 5}l5 5l-5 5l-5 -5z`, class: "fx-canvas-port-socket" })
+          : element("rect", { x: x - 4, y: y - 4, width: 8, height: 8, rx: 1, class: "fx-canvas-port-socket" }));
         socket.append(element("text", { x: textX, y: y + 3, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-name" }, short(displayPortName(port.name), 22)));
         socket.append(element("text", { x: textX, y: y + 16, "text-anchor": direction === "input" ? "start" : "end", class: "fx-canvas-port-type" }, short(`${port.kind === "parameter" ? "param · " : ""}${port.type}`, 25)));
         group.append(socket);
