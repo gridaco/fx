@@ -773,6 +773,21 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `Skip reason unavailable in this viewer.`. Existing records are not rewritten to add reasons.
   Causes are display evidence, separate from output availability and execution success. The
   Python and JavaScript saved-record APIs preserve them in their raw observation documents.
+- **Visible workflow data.** Current source records effective inputs (including defaults),
+  shared tables, contextual `let` results and outputs as read-only canvas values, styled as
+  labelled data sheets with monospaced binding names. Step cards
+  show bounded effective parameters, including defaults declared by built-in or custom
+  Python/TypeScript nodes; a body-only fallback is unknown before execution. Select text or
+  objects for full details. Known null, pending, absent, unavailable and withheld remain
+  distinct when captured; old recordings are not backfilled. Typed media reuses previews,
+  fullscreen and file actions when recorded bytes exist. File-shaped JSON never becomes
+  media. Viewing never calls a provider or evaluates unused `let` declarations. Display
+  evidence changes no execution identities, scheduling or caches; actual data edits retain
+  their normal identity effects. Export disclosure applies to these values too. Hosts opt
+  into `{kind: "value", value_id, scope_id}` selection with `includeValues: true` on
+  `ViewerClient`, or same-realm method options, then use `{action: "reveal_value", value_id}`.
+  Default clients see null for value selection; contexts contain references, never values.
+  Source support does not imply an older release contains it.
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.

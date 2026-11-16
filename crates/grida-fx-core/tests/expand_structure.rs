@@ -2216,3 +2216,158 @@ steps:
         }
     }
 }
+
+mod canvas_values {
+    use super::*;
+    use grida_fx_core::expand::values::{ValueEndpoint, ValueView};
+
+    fn view<'a>(expansion: &'a Expansion, kind: &str, name: &str) -> &'a ValueView {
+        expansion
+            .value_views
+            .iter()
+            .find(|v| v.kind == kind && v.name == name)
+            .unwrap()
+    }
+
+    #[test]
+    fn values_capture_input_table_lazy_alias_and_output_without_becoming_dependencies() {
+        let mut case = Case::new(&[(
+            "main",
+            r#"
+fx: workflow/v1
+id: main
+title: Values
+inputs:
+  prompt: {type: string}
+tables:
+  style: {tone: warm}
+  unused: {ignored: true}
+let:
+  brief: "${{ inputs.prompt }} in ${{ tables.style.tone }} light"
+  never_read: "${{ 1 / 0 }}"
+steps:
+  draw:
+    uses: ./nodes/cases.py#pair
+    with: {value: "${{ let.brief }}"}
+outputs:
+  result: "${{ steps.draw.outputs.left }}"
+"#,
+        )])
+        .input("prompt", Val::Str("A lantern".into()));
+        let before = case.expand("main");
+        assert_eq!(problems(&before), []);
+        assert_eq!(
+            view(&before, "input", "prompt").data,
+            Some(json!({"value":"A lantern"}))
+        );
+        assert_eq!(
+            view(&before, "let", "brief").data,
+            Some(json!({"value":"A lantern in warm light"}))
+        );
+        assert_eq!(
+            view(&before, "table", "style").data,
+            Some(json!({"value":{"tone":"warm"}}))
+        );
+        assert_eq!(view(&before, "output", "result").state, "pending");
+        assert!(
+            !before
+                .value_views
+                .iter()
+                .any(|v| v.name == "never_read" || v.name == "unused")
+        );
+        assert!(before.instances["draw#1"].reads.is_empty());
+        assert!(before.instances["draw#1"].bindings.is_empty());
+        let brief = &view(&before, "let", "brief").id;
+        assert!(
+            before
+                .value_links
+                .iter()
+                .any(|l| l.source == ValueEndpoint::value(brief)
+                    && l.target == ValueEndpoint::input("draw#1", "value"))
+        );
+        let previous = before.instances["draw#1"].identity.clone();
+        case.done(
+            "draw#1",
+            &[
+                ("left", Val::Str("Recorded result".into())),
+                ("right", Val::Str("Other".into())),
+            ],
+        );
+        let after = case.expand("main");
+        assert_eq!(
+            view(&before, "output", "result").id,
+            view(&after, "output", "result").id
+        );
+        assert_eq!(
+            view(&after, "output", "result").data,
+            Some(json!({"value":"Recorded result"}))
+        );
+        assert_eq!(previous, after.instances["draw#1"].identity);
+    }
+
+    #[test]
+    fn lazy_values_keep_repeated_contexts_and_unused_import_outputs_unexecuted() {
+        let case = Case::new(&[
+            (
+                "main",
+                r#"
+fx: workflow/v1
+id: main
+title: Context
+let:
+  caption: "A ${{ item }} lantern"
+steps:
+  each:
+    for_each: [warm, cool]
+    uses: ./nodes/cases.py#consume
+    with: {value: "${{ let.caption }}"}
+  child:
+    uses: ./workflows/child.yaml
+    with: {name: hello}
+"#,
+            ),
+            (
+                "child",
+                r#"
+fx: workflow/v1
+id: child
+title: Child
+inputs:
+  name: {type: string}
+steps:
+  make:
+    uses: ./nodes/cases.py#pair
+outputs:
+  unread: "${{ unknown_name }}"
+"#,
+            ),
+        ]);
+        let expansion = case.expand("main");
+        assert_eq!(problems(&expansion), []);
+        let captions: Vec<_> = expansion
+            .value_views
+            .iter()
+            .filter(|v| v.kind == "let" && v.name == "caption")
+            .collect();
+        assert_eq!(captions.len(), 2);
+        assert_ne!(captions[0].id, captions[1].id);
+        assert_ne!(captions[0].context, captions[1].context);
+        assert_eq!(
+            captions
+                .iter()
+                .map(|v| v.data.clone().unwrap())
+                .collect::<Vec<_>>(),
+            [
+                json!({"value":"A warm lantern"}),
+                json!({"value":"A cool lantern"})
+            ]
+        );
+        let child = expansion
+            .value_views
+            .iter()
+            .find(|v| v.kind == "input" && v.name == "name")
+            .unwrap();
+        assert_eq!(child.scope_id.as_deref(), Some("scope:child#"));
+        assert_eq!(child.data, Some(json!({"value":"hello"})));
+    }
+}

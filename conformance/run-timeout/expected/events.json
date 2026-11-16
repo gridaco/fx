@@ -120,6 +120,8 @@
   "pending": [],
   "plan": "cbf2fe924b8df922563ec6cb73c8e0cdd4cd0347ecabc1e63b3d8c5edf91f92b",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [],
+  "value_views": []
  }
 ]

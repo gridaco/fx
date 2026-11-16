@@ -63,10 +63,12 @@ cannot certify arbitrary author text or file bytes public-safe.
 - Run: `kind`, workflow `id`/`title` (and `description` only with values),
   `run_name`, `state`, `stand_in`, `charged_usd`, estimate numeric
   `low_usd`/`high_usd`/`ceiling_usd`, `inputs`, `outputs`, `nodes`, `scopes`,
-  `pending`, `artifacts`, `warnings`. Workflow `file` is always absent.
+  `pending`, `artifacts`, `warnings`, optional `value_views` and `value_links`.
+  Workflow `file` is always absent.
 - Node: `id`, `path`, `step`, `take`, `key`, `title`, `uses`, `state`, `reads`,
   `ports`, `preview`, `bindings`, `interface_bindings`, `needs`, `judges`, `with`, `outputs`,
-  `cache`, `error`, `duration_ms`, `started_at`, `interrupted` where present in
+  `cache`, `error`, `duration_ms`, `started_at`, `interrupted`, recorded `routes` and
+  `routing` where present in
   the recorded projection. Required fields stay present. Textual values in
   `with`, `inputs` and `outputs` obey disclosure below.
   Optional `preview` retains only the literal `video` and optional `poster` output selectors
@@ -216,3 +218,14 @@ text is included only with `--include-values`; otherwise each note has null text
 `withheld: true`. Source provenance and the private declaration snapshot ledger are omitted.
 Unavailable content remains distinct from withheld content. Readers with no note support
 may ignore these optional fields while preserving their existing execution projection.
+
+## Recorded values
+
+The frozen view may include [value views and source links](values.md), with a separate
+layout `values` map keyed by recorded value ID. Links retain only typed value/instance
+references. Scalar/opaque JSON content is included only with `--include-values`; otherwise
+the view has `state: withheld` and no data. Typed files and collections follow existing
+file/collection disclosure, including nested withholding markers. Pending, absent and
+unavailable states stay distinct. Diagnostics require `--include-diagnostics`. No original
+filesystem paths or current-source lookups are introduced. Artifact discovery only visits
+explicit encoded files, never arbitrary JSON that happens to contain a `file` key.

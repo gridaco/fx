@@ -1050,3 +1050,50 @@ fn integrated_a_real_run_is_indexed_outside_the_tree_removed_and_never_resumed()
         text(&output.stderr)
     );
 }
+
+#[test]
+fn recorded_input_snapshots_are_owned_run_data_for_listing_and_removal() {
+    let project = Project::new();
+    let relative = "runs/case/2026-10-01-1";
+    let folder = project.run_at(
+        relative,
+        "case",
+        &made("2026-10-01T00:00:00.000Z", Some(Ended::Ok)),
+    );
+    let bytes = b"original synthetic reference bytes";
+    let digest = sha256(bytes);
+    fs::create_dir(folder.join("values")).unwrap();
+    let snapshot = folder.join("values").join(&digest);
+    fs::write(&snapshot, bytes).unwrap();
+    let mut permissions = fs::metadata(&snapshot).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&snapshot, permissions).unwrap();
+    let path = folder.join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    plan["value_views"] = json!([{
+        "id":format!("value:{}", "a".repeat(64)),"scope_id":null,"kind":"input","name":"reference","state":"known",
+        "data":{"file":{"digest":digest,"kind":"image/png","name":"reference.png","size":bytes.len()}}
+    }]);
+    plan["value_links"] = json!([]);
+    fs::write(path, plan.to_string()).unwrap();
+    let listing = project.list();
+    assert_eq!(listing["runs"].as_array().unwrap().len(), 1);
+    assert!(listing["skipped"].as_array().unwrap().is_empty());
+    let preview = project.fx(&["runs", "remove", relative, "--json"]);
+    assert_eq!(status(&preview), 0, "{}", text(&preview.stderr));
+    assert_eq!(json_of(&preview)["runs"][0]["outcome"], "would_remove");
+    assert_eq!(fs::read(&snapshot).unwrap(), bytes);
+    let removed = project.fx(&["runs", "remove", relative, "--yes", "--json"]);
+    assert_eq!(
+        status(&removed),
+        0,
+        "{}{}",
+        text(&removed.stdout),
+        text(&removed.stderr)
+    );
+    let document = json_of(&removed);
+    conforms(&document, "fx-run-removal-v1");
+    assert_eq!(document["runs"][0]["outcome"], "removed");
+    assert!(document["freed_bytes"].as_u64().unwrap() >= bytes.len() as u64);
+    assert!(!folder.exists());
+}

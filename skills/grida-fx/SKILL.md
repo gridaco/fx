@@ -383,6 +383,20 @@ An explicit resume can repeat an uncertain plain synchronous paid call; resumabl
 jobs retain their separate reconciliation protection. Cancellation is not pause;
 `pause` and `terminate` remain deferred.
 
+## Read workflow values
+
+Current source records effective inputs, referenced tables, contextual `let` results and
+outputs for the read-only canvas. Step cards show bounded effective parameters, including
+schema defaults from custom Python/TypeScript nodes before execution. Use ordinary data
+declarations; do not add executable constant/preview nodes merely to make data visible.
+Select a value for full details. Existing media/fullscreen/file actions require typed
+recorded files and available bytes, never path inference or regeneration. Old recordings
+may lack evidence; known null differs from pending, absent, unavailable and withheld.
+Display does not evaluate unused expressions or change execution/cache identities. Real
+data edits keep their ordinary identity effect. Export disclosure also governs value cards.
+Browser hosts use `includeValues: true` and `reveal_value` with a recorded value ID;
+focus carries references only. Older installed releases may not support this feature.
+
 ## Explain a workflow with notes
 
 Use workflow/group `notes:` for static canvas documentation. Each named note has exactly

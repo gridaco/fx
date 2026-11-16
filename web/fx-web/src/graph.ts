@@ -1,3 +1,4 @@
+import { isValueViews, isValueLinks, projectValueViews, stepValueSummary, type ValueView, type ValueLink } from "./value-views";
 import { isWorkflowNotes, isNoteTemplates, type WorkflowNote, type CanvasNote, type NoteTemplate } from "./notes";
 import type { ViewerRun } from "./index";
 import { validateViewerApiBase } from "./route";
@@ -51,6 +52,8 @@ export interface GraphDocument {
   scopes?: WorkflowScope[];
   notes?: WorkflowNote[];
   note_templates?: NoteTemplate[];
+  value_views?: ValueView[];
+  value_links?: ValueLink[];
 }
 
 const states = new Set<PlanState>(["planned", "maybe", "absent", "blocked", "failed", "done"]);
@@ -161,7 +164,7 @@ function typeEntry(value: unknown): boolean {
 export function parseGraph(value: unknown): GraphDocument {
   if (!isRecord(value) || (value.kind !== "fx-graph-v1" && value.kind !== "fx-graph-v2")) throw new Error("This viewer does not support the returned graph format.");
   const incomplete = value.kind === "fx-graph-v2";
-  const valid = fields(value, ["kind", "workflow", "instances", "pending", "estimate"], ["problems", "plan", "inputs", "stand_in", "takes_file", "view_origins", "steps", "types", "scopes", "notes", "note_templates"])
+  const valid = fields(value, ["kind", "workflow", "instances", "pending", "estimate"], ["problems", "plan", "inputs", "stand_in", "takes_file", "view_origins", "steps", "types", "scopes", "notes", "note_templates", "value_views", "value_links"])
     && isRecord(value.workflow) && fields(value.workflow, ["id", "title"], ["description", "file"])
     && isString(value.workflow.id) && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.workflow.id) && value.workflow.id.length <= 96
     && isString(value.workflow.title) && optional(value.workflow, "description", isString) && optional(value.workflow, "file", isString)
@@ -185,6 +188,7 @@ export function parseGraph(value: unknown): GraphDocument {
     && optional(value, "types", (items) => isRecord(items) && Object.entries(items).every(([key, item]) => key.length > 0 && typeEntry(item)))
     && optional(value, "scopes", isWorkflowScopes)
     && optional(value, "notes", isWorkflowNotes) && optional(value, "note_templates", isNoteTemplates)
+    && optional(value, "value_views", isValueViews) && optional(value, "value_links", isValueLinks)
     && (!Array.isArray(value.notes) || value.notes.every((note) => note.scope_id === null || Array.isArray(value.scopes) && value.scopes.some((scope) => scope.id === note.scope_id)));
   if (!valid) throw new Error("The graph response does not match its declared graph format.");
   return value as unknown as GraphDocument;
@@ -201,6 +205,7 @@ export interface LayoutReport {
   cells: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
   order: string[];
   notes?: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
+  values?: Record<string, { column: number; row: number; source: "automatic" | "authored" }>;
 }
 
 export function parseLayoutReport(value: unknown): LayoutReport {
@@ -211,6 +216,7 @@ export function parseLayoutReport(value: unknown): LayoutReport {
     && isRecord(value.cells) && Object.values(value.cells).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row)
       && (cell.source === "automatic" || cell.source === "authored"))
     && isStrings(value.order)
+    && (value.values === undefined || isRecord(value.values) && Object.values(value.values).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row) && (cell.source === "automatic" || cell.source === "authored")))
     && (value.notes === undefined || isRecord(value.notes) && Object.values(value.notes).every((cell) => isRecord(cell) && isCount(cell.column) && isCount(cell.row) && (cell.source === "automatic" || cell.source === "authored")));
   if (!valid) throw new Error("The layout response does not match fx-layout-report-v1.");
   return value as unknown as LayoutReport;
@@ -254,7 +260,14 @@ export interface CanvasStep {
   /** The recorded take and item key, which order and label a deck. */
   take?: number[];
   key?: string | null;
-  kind?: "workflow" | "boundary";
+  kind?: "workflow" | "boundary" | "value";
+  /** Presentation data, never an executable node identity. */
+  value_id?: string;
+  value?: ValueView;
+  value_media?: boolean;
+  summaries?: { name: string; text: string }[];
+  summary_count?: number;
+  route_label?: string;
   /** A boundary card's side of an opened imported workflow. */
   side?: "input" | "output";
   scope_id?: string;
@@ -293,6 +306,7 @@ const compareNamed = (left: { name: string; kind?: string }, right: { name: stri
 export function recordedFileDigests(value: unknown): string[] {
   if (!isRecord(value)) return [];
   if (isRecord(value.file)) return isDigest(value.file.digest) ? [value.file.digest as string] : [];
+  if (isRecord(value.object)) return Object.values(value.object).flatMap(recordedFileDigests);
   if (Array.isArray(value.list)) return value.list.flatMap(recordedFileDigests);
   if (Array.isArray(value.collection)) return value.collection.flatMap((item) =>
     Array.isArray(item) && item.length === 2 ? recordedFileDigests(item[1]) : []);
@@ -387,6 +401,8 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
       ...(run?.waiting_for !== undefined ? { waiting_for: run.waiting_for } : {}),
       ...(run?.waiting_since !== undefined ? { waiting_since: run.waiting_since } : {}),
       ...(preview ? { preview } : {}), ...(ports ? { ports } : {}),
+      summaries: stepValueSummary(item.with, run !== undefined && recordedExecution(run)), summary_count: Object.keys(item.with).length,
+      ...(Object.keys(item.routes ?? {}).length ? { route_label: [...new Set(Object.values(item.routes ?? {}).map((route) => route.route))].join(", ") } : {}),
     };
   });
   const nodeBySource = new Map(nodes.map((node) => [node.source_id, node]));
@@ -457,5 +473,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
 }
 
 export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api"): CanvasGraph {
-  return projectScopes(view, flatCanvasGraph(view, apiBase), scopeId);
+  const graph = projectScopes(view, flatCanvasGraph(view, apiBase), scopeId);
+  const artifacts = new Map(view.kind === "fx-viewer-run-v1" ? view.artifacts.map((artifact) => [artifact.digest, artifact]) : []);
+  return projectValueViews(view, graph, scopeId, (digest) => artifacts.get(digest) ?? null);
 }

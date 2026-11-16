@@ -337,7 +337,70 @@
      "nope#1"
     ]
    }
-  }
+  },
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "after#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "hi"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "pending"
+   },
+   {
+    "id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4",
+    "kind": "output",
+    "name": "bad",
+    "scope_id": null,
+    "state": "unavailable"
+   }
+  ]
  },
  {
   "event": "scopes_updated",
@@ -396,7 +459,78 @@
   "pending": [],
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "after#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "hi"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "data": {
+     "file": {
+      "digest": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+      "kind": "text/plain",
+      "name": "text",
+      "size": 2
+     }
+    },
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4",
+    "kind": "output",
+    "name": "bad",
+    "scope_id": null,
+    "state": "unavailable"
+   }
+  ]
  },
  {
   "event": "scopes_updated",
@@ -455,6 +589,191 @@
   "pending": [],
   "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "after#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "hi"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "pending"
+   },
+   {
+    "id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4",
+    "kind": "output",
+    "name": "bad",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "ok#1",
+    "key": null,
+    "path": "ok",
+    "step": "ok",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "nope#1",
+    "key": null,
+    "path": "nope",
+    "step": "nope",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "after#1",
+    "key": null,
+    "path": "after",
+    "step": "after",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "bang#1",
+    "key": null,
+    "path": "bang",
+    "step": "bang",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "after#1": [
+    {
+     "source": "nope#1",
+     "source_kind": "output",
+     "source_port": "text",
+     "target_port": "text"
+    }
+   ],
+   "bang#1": [],
+   "nope#1": [],
+   "ok#1": []
+  },
+  "pending": [],
+  "plan": "ad4d01a93d3cbab99482d48cd9d78c88148cb27f3bc5e1935f769193f47baf1b",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "after#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "ok#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "hi"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "pending"
+   },
+   {
+    "id": "value:d74ca193e01da75f4e38f15cce77a188236a5581a58105bcac0c48ba27b4f9d4",
+    "kind": "output",
+    "name": "bad",
+    "scope_id": null,
+    "state": "unavailable"
+   }
+  ]
  }
 ]

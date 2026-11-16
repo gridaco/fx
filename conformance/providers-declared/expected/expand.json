@@ -86,6 +86,29 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8",
+   "kind": "output",
+   "name": "image",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

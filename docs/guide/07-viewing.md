@@ -62,6 +62,26 @@ text. Shared recordings with values withheld identify the note content as withhe
 
 See [note authoring](02-workflow-file.md#notes-for-people-reading-the-canvas).
 
+## Read workflow values
+
+Current source shows effective workflow inputs, shared tables, named expression results
+and outputs on the canvas, with compact parameter values inside step cards. Values use flat
+data sheets with a lavender label header and a monospaced binding name. Authors keep
+ordinary `inputs`, `tables`, `let`, `with` and `outputs`; no extra preview step is needed.
+Defaults declared in custom Python/TypeScript node schemas are available during planning,
+just like built-in defaults. A fallback hidden in the node body remains unknown.
+
+Prompts and structured values use bounded summaries; select a value for full details.
+Typed files reuse image/video/3D previews, fullscreen and file actions when recorded bytes
+are available. File-shaped JSON stays JSON. Pending, absent, unavailable and withheld are
+different conditions; known null is an actual value. Older recordings may lack provenance
+or effective-input defaults and are not reconstructed from current source.
+
+Named expressions are lazy and may differ by repeated item or take. Their contextual
+occurrences follow the existing group/deck model. Source connections show engine-recorded
+relationships, not extra execution dependencies. Nothing runs or spends merely to display
+a value. Actual input/constant edits keep their normal identity effects.
+
 ## Use the canvas
 
 The canvas fills the window. A bar in its corner names the workflow and shows the

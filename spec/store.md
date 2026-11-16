@@ -218,8 +218,18 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
   run.lock                                           locked by the invocation running the folder
   files/<step>/<port><suffix>                        each step's output files
   outputs/<name><suffix>                             the workflow's declared outputs
+  values/<digest>                                   captured original input bytes, when available
 ```
 
+- **`values/<digest>`** contains optional original typed input bytes for recorded
+  [value views](values.md), independent of transformed outputs. The first recorded input
+  occurrence copies from already-bound local inputs using a regular no-follow handle, verifies size/digest
+  and atomically places a read-only copy. It never hardlinks editable source. Missing,
+  changed or unreadable input bytes leave unavailable presentation without failing work;
+  resume never repairs historical snapshots from current inputs. Newly known input occurrences
+  from normal late expansion may capture their bytes, including during resume. Viewers/exporters use
+  confined same-handle verification, never a cache or current-source lookup. This placement
+  changes no input identity. Legacy records may lack it.
 - **`resolved-models.json`**, when present, is an `fx: routes/v1` document of sanitized
   discovered route entries used to prepare the run. It is separate from the graph, carries
   no credential or private connection configuration, and adds no new identity rule. Legacy
@@ -380,7 +390,7 @@ A `plan.json` of another kind, a folder at a run's place that holds files but no
 **Picks.** A run **holds a pick** when the takes file its `plan.json` names records a `result` for a step, and the run's log has a `node_finished` of that step's picked take whose result is that digest (the digest `pick` records: its first output port holding exactly one file). Stand-in runs hold none. The last run holding a pick is not removed: naming it is refused (`holds_pick`) and filters pass it over. Pick again, or keep the run. A run whose takes file exists but cannot be read may hold any pick, and is kept the same way.
 
 **Removing a run.**
-1. The remover takes the folder's `run.lock` without waiting, making the file when the folder has none. A lock an invocation holds refuses the run (`active`). The locked file must still be the folder's `run.lock`, and the folder must still hold what was selected (the same workflow, source and creation time, or still only a claim); otherwise the run is refused (`changed`). A run folder or claim that holds anything FX did not write at its top (anything but `plan.json`, `events.jsonl`, `run.lock`, `files/`, `outputs/`, `views/`, temporary names, `.DS_Store` and folders holding no file) is refused (`not_removable`): a run pointed at a folder of the user's keeps the user's files.
+1. The remover takes the folder's `run.lock` without waiting, making the file when the folder has none. A lock an invocation holds refuses the run (`active`). The locked file must still be the folder's `run.lock`, and the folder must still hold what was selected (the same workflow, source and creation time, or still only a claim); otherwise the run is refused (`changed`). A run folder or claim that holds anything FX did not write at its top (anything but `plan.json`, `events.jsonl`, `run.lock`, `files/`, `outputs/`, `views/`, `values/`, temporary names, `.DS_Store` and folders holding no file) is refused (`not_removable`): a run pointed at a folder of the user's keeps the user's files.
 2. It removes the folder's run index entry, so a run that starts at the folder's place from now on records itself anew.
 3. It renames the folder to a tombstone beside it, so the folder's place is free at once. A rename that fails refuses the run and changes nothing (`not_removable`; the index entry is written again). A tombstone that holds a run below its top, or a `run.lock` someone holds there (a run that started inside the folder since it was selected), is renamed back and the run refused (`changed`); when the folder's place was taken meanwhile, the tombstone stays as it is, and nothing in it is removed. A tombstone that is removed is checked the same way first.
 4. It removes everything in the tombstone but `run.lock`: `plan.json` and `events.jsonl` first, so a tombstone never reads as a run. Placed files share their bytes with the store, so their permissions are never changed; only folders are made writable where needed.

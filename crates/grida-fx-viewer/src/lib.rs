@@ -12,6 +12,7 @@ mod notes;
 mod read;
 mod scopes;
 pub mod service;
+mod values;
 
 pub use read::{Artifact, Node, RunDocument};
 
@@ -110,6 +111,8 @@ fn plan_source(graph: Value) -> io::Result<Source> {
     validate(schema, &graph, "plan")
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.message))?;
     notes::validate_plan(&graph)
+        .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;
+    values::validate_plan(&graph)
         .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;
     scopes::validate_plan(&graph)
         .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;

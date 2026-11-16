@@ -158,6 +158,55 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:8a32bedc4c8c94c4906650f0c84036d69655f9dbee579d4dbb217bfc989a5554"
+   },
+   "target": {
+    "instance_id": "count#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "file": {
+     "digest": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8",
+     "kind": "text/plain",
+     "name": "brief.txt",
+     "size": 8
+    }
+   },
+   "id": "value:8a32bedc4c8c94c4906650f0c84036d69655f9dbee579d4dbb217bfc989a5554",
+   "kind": "input",
+   "name": "brief",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8",
+   "kind": "output",
+   "name": "image",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

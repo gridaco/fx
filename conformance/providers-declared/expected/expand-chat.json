@@ -98,6 +98,29 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "instance_id": "name#1",
+    "kind": "instance",
+    "port": "json",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:9e51105abfe6004c880a399a00f0aa696377acf38279e2043b94a45559bcc91f"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "id": "value:9e51105abfe6004c880a399a00f0aa696377acf38279e2043b94a45559bcc91f",
+   "kind": "output",
+   "name": "name",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/chat.yaml",
   "id": "chat",

@@ -142,6 +142,7 @@ pub(crate) struct Trial {
     wiring: super::wiring::Trace,
     display_scopes: IndexMap<String, super::display::Scope>,
     notes: IndexMap<String, crate::notes::Note>,
+    value_ledger: super::values::Ledger,
     skip_reasons: std::collections::BTreeMap<String, super::skip::SkipReason>,
     skipped_positions: usize,
     /// How long the lists it only appends to were.
@@ -533,6 +534,7 @@ impl Expander<'_> {
             wiring: self.wiring.clone(),
             display_scopes: self.display_scopes.clone(),
             notes: self.notes.clone(),
+            value_ledger: self.value_ledger.clone(),
             skip_reasons: self.skip_reasons.clone(),
             skipped_positions: self.skipped_positions.len(),
             pending: self.pending.len(),
@@ -566,6 +568,7 @@ impl Expander<'_> {
         self.wiring = trial.wiring;
         self.display_scopes = trial.display_scopes;
         self.notes = trial.notes;
+        self.value_ledger = trial.value_ledger;
         self.skip_reasons = trial.skip_reasons;
         self.skipped_positions.truncate(trial.skipped_positions);
         if let (Some(reads), Some(innermost)) = (trial.reads, self.read_sets.last_mut()) {
@@ -592,14 +595,18 @@ impl Expander<'_> {
         if self.instances.contains_key(&id) {
             return id;
         }
-        let gathered = self.gather(at, frame, resolved);
-        self.make_instance(at, frame, path, resolved, id, gathered)
+        self.value_consumers.push(id.clone());
+        let mut gathered = self.gather(at, frame, resolved);
+        self.value_consumers.pop();
+        self.make_instance(at, frame, path, resolved, id, &mut gathered)
     }
 
     /// What an instance is made from: `with:` evaluated, routes bound, `needs:` resolved.
     #[inline(never)]
-    fn gather(&mut self, at: &Position, frame: FrameId, resolved: &ResolvedType) -> Gathered {
-        let mut gathered = Gathered::default();
+    fn gather(&mut self, at: &Position, frame: FrameId, resolved: &ResolvedType) -> Box<Gathered> {
+        // With-value evaluation can recursively expand a long dependency chain. Keep the
+        // gathered maps off each suspended instance frame, including presentation capture.
+        let mut gathered = Box::<Gathered>::default();
         for (name, raw) in &at.declared.with {
             self.with_entry(frame, &at.where_, resolved, name, raw, &mut gathered.with);
         }
@@ -635,7 +642,7 @@ impl Expander<'_> {
         path: &str,
         resolved: &Rc<ResolvedType>,
         id: String,
-        gathered: Gathered,
+        gathered: &mut Gathered,
     ) -> String {
         let Gathered {
             with:
@@ -648,7 +655,7 @@ impl Expander<'_> {
                 },
             bound: (routes, prices),
             needs,
-        } = gathered;
+        } = std::mem::take(gathered);
         let takes = self.frame(frame).takes.clone();
         let declared = Rc::clone(&at.declared);
         let where_ = at.where_.as_str();
@@ -827,7 +834,13 @@ impl Expander<'_> {
         let selecting = resolved.is_select() && name == "first_of";
         let outer = std::mem::replace(&mut self.selecting, selecting);
         self.wiring.begin_capture(name);
+        self.wiring.values.begin();
         let value = self.evaluate_into(frame, raw, &at, &mut gathering.reads);
+        let sources = self.wiring.values.end();
+        if let Some(consumer) = self.value_consumers.last() {
+            self.value_ledger
+                .sources(sources, super::values::ValueEndpoint::input(consumer, name));
+        }
         let (bindings, interfaces) = self.wiring.end_capture_full();
         gathering.bindings.extend(bindings);
         gathering.interfaces.extend(interfaces);
@@ -1209,7 +1222,9 @@ mod tests {
                 },
                 ..Default::default()
             };
-            ex.make_instance(&position, context, "paint", &ty, "paint#1".into(), gathered);
+            ex.make_instance(&position, context, "paint", &ty, "paint#1".into(), &mut {
+                gathered
+            });
             assert_eq!(ex.instances["paint#1"].state, State::Absent);
             assert_eq!(
                 ex.skip_reasons["paint#1"].code,

@@ -1,0 +1,9 @@
+# Real data has a separate presentation view: bound defaults, shared tables, lazy contextual
+# aliases, pending output and genuine null. The custom node body is never run while planning.
+steps:
+- argv: [plan, case, --check, --json]
+  save: plan.json
+  json: true
+- argv: [identity, case]
+  save: identity.json
+  json: true

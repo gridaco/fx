@@ -449,6 +449,8 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                         "key",
                         "title",
                         "uses",
+                        "routes",
+                        "routing",
                         "state",
                         "reads",
                         "needs",
@@ -497,6 +499,39 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
             })
             .collect::<Vec<_>>()
     );
+    if let Some(values) = view.get("value_views").and_then(Value::as_array) {
+        projected["value_views"] = Value::Array(
+            values
+                .iter()
+                .map(|value| {
+                    let mut item = fields(
+                        value,
+                        &["id", "scope_id", "kind", "name", "state", "context"],
+                    );
+                    if let Some(data) = value.get("data") {
+                        let data = export_value(data, options.include_values);
+                        if data.get("withheld") == Some(&Value::Bool(true)) {
+                            item["state"] = json!("withheld");
+                        } else {
+                            item["data"] = data;
+                        }
+                    }
+                    if options.include_diagnostics
+                        && let Some(diagnostic) = value.get("diagnostic")
+                    {
+                        item["diagnostic"] = diagnostic.clone();
+                    }
+                    item
+                })
+                .collect(),
+        );
+    }
+    if let Some(links) = view.get("value_links").and_then(Value::as_array) {
+        projected["value_links"] = Value::Array(links.iter().map(|link| json!({
+            "source":fields(&link["source"], &["kind", "value_id", "instance_id", "port", "source_kind"]),
+            "target":fields(&link["target"], &["kind", "value_id", "instance_id", "port"]),
+        })).collect());
+    }
     if let Some(notes) = view.get("notes").and_then(Value::as_array) {
         projected["notes"] = Value::Array(
             notes
@@ -565,6 +600,9 @@ fn export_value(value: &Value, include: bool) -> Value {
             file["digest"].as_str().unwrap_or("artifact")
         ));
         return json!({"file":file});
+    }
+    if let Some(object) = value.get("object").and_then(Value::as_object) {
+        return json!({"object":object.iter().map(|(name,value)| (name.clone(),export_value(value,include))).collect::<serde_json::Map<_,_>>()});
     }
     if let Some(list) = value.get("list").and_then(Value::as_array) {
         return json!({"list":list.iter().map(|value| export_value(value,include)).collect::<Vec<_>>()});

@@ -647,7 +647,7 @@ fn preview_one(set: &RunSet, selected: Selected) -> Outcome {
 }
 
 /// The first top-level entry of a run folder or claim that FX did not write: anything but its
-/// `plan.json`, `events.jsonl`, `run.lock`, `files/`, `outputs/`, `views/`, temporary names,
+/// `plan.json`, `events.jsonl`, `run.lock`, `files/`, `outputs/`, `views/`, `values/`, temporary names,
 /// `.DS_Store` and folders holding no file. A tombstone's leftovers are all its own.
 fn foreign_entry(found: &Found) -> Option<String> {
     if matches!(found.holds, Holds::Tombstone | Holds::Missing) {
@@ -658,7 +658,14 @@ fn foreign_entry(found: &Found) -> Option<String> {
         let name = item.file_name().to_string_lossy().into_owned();
         let ours = matches!(
             name.as_str(),
-            "plan.json" | "events.jsonl" | "run.lock" | "files" | "outputs" | "views" | ".DS_Store"
+            "plan.json"
+                | "events.jsonl"
+                | "run.lock"
+                | "files"
+                | "outputs"
+                | "views"
+                | "values"
+                | ".DS_Store"
         ) || grida_fx_runtime::folder::is_temporary_name(&name);
         let empty_folder =
             item.file_type().is_ok_and(|kind| kind.is_dir()) && !holds_a_file(&item.path());
@@ -910,7 +917,10 @@ fn runs_inside(folder: &Path) -> bool {
             .filter(|item| {
                 let name = item.file_name();
                 item.file_type().is_ok_and(|kind| kind.is_dir())
-                    && !matches!(name.to_str(), Some("files" | "outputs" | "views"))
+                    && !matches!(
+                        name.to_str(),
+                        Some("files" | "outputs" | "views" | "values")
+                    )
             })
             .map(|item| item.path())
             .collect(),

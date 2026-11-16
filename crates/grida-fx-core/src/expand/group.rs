@@ -21,6 +21,13 @@ use indexmap::IndexMap;
 use serde_json::{Value, json};
 use std::rc::Rc;
 
+type WorkflowWith = (
+    Val,
+    std::collections::BTreeMap<String, Vec<super::wiring::Binding>>,
+    Vec<super::wiring::Binding>,
+    std::collections::BTreeMap<String, Vec<super::values::ValueEndpoint>>,
+);
+
 impl Expander<'_> {
     /// A plain or regenerating group whose member scope is `child`.
     pub(crate) fn group(&mut self, child: FrameId, declared: &Rc<Step>, where_: &str, into: ExpId) {
@@ -126,8 +133,13 @@ impl Expander<'_> {
             .iter()
             .map(|(name, value)| (name.clone(), value.clone()))
             .collect();
-        let (given, input_bindings, input_interfaces) =
+        self.value_consumers.push(format!(
+            "scope:{}",
+            super::instance_id(path, &self.frames[context.0].takes)
+        ));
+        let (given, input_bindings, input_interfaces, value_sources) =
             self.workflow_with(context, &with, &format!("{where_}.with"));
+        self.value_consumers.pop();
         let given = match given {
             Val::Object(given) => given,
             _ => IndexMap::new(),
@@ -204,6 +216,13 @@ impl Expander<'_> {
                 .filter(|b| inner.inputs.contains_key(&b.target_port))
                 .collect(),
         );
+        for (name, sources) in value_sources {
+            if inner.inputs.contains_key(&name) {
+                let id = self.value_id(root, "input", &name);
+                self.value_ledger
+                    .sources(sources, super::values::ValueEndpoint::value(&id));
+            }
+        }
         self.workflow_root(root, &used.source, context);
         let exp = &mut self.exps[into.0];
         exp.kind = ExpKind::Workflow;
@@ -220,17 +239,16 @@ impl Expander<'_> {
         frame: FrameId,
         with: &serde_json::Map<String, Value>,
         where_: &str,
-    ) -> (
-        Val,
-        std::collections::BTreeMap<String, Vec<super::wiring::Binding>>,
-        Vec<super::wiring::Binding>,
-    ) {
+    ) -> WorkflowWith {
         let mut values = IndexMap::new();
         let mut bindings = std::collections::BTreeMap::new();
         let mut interfaces = Vec::new();
+        let mut value_sources = std::collections::BTreeMap::new();
         for (name, raw) in with {
             self.wiring.begin_capture(name);
+            self.wiring.values.begin();
             let value = crate::expr::resolve(raw, &mut super::scope::StepScope { ex: self, frame });
+            value_sources.insert(name.clone(), self.wiring.values.end());
             let (leaf, boundary) = self.wiring.end_capture_full();
             bindings.insert(name.clone(), leaf);
             interfaces.extend(boundary);
@@ -238,7 +256,14 @@ impl Expander<'_> {
                 Ok(value) => {
                     values.insert(name.clone(), value);
                 }
-                Err(error) => return (self.refused(where_, error), Default::default(), Vec::new()),
+                Err(error) => {
+                    return (
+                        self.refused(where_, error),
+                        Default::default(),
+                        Vec::new(),
+                        Default::default(),
+                    );
+                }
             }
         }
         let value = crate::expr::finish(
@@ -246,8 +271,13 @@ impl Expander<'_> {
             Val::Object(values),
         );
         match value {
-            Ok(value) => (value, bindings, interfaces),
-            Err(error) => (self.refused(where_, error), Default::default(), Vec::new()),
+            Ok(value) => (value, bindings, interfaces, value_sources),
+            Err(error) => (
+                self.refused(where_, error),
+                Default::default(),
+                Vec::new(),
+                Default::default(),
+            ),
         }
     }
 

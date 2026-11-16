@@ -1,3 +1,4 @@
+import { valuePreviewLines, valueStateLabel } from "./value-views";
 import type { CanvasNote } from "./notes";
 import type { CanvasConnection, CanvasFrame, CanvasGraph, CanvasStep, LayoutReport } from "./graph";
 import { DECK_BACK } from "./deck";
@@ -18,7 +19,7 @@ export const PORT_TOP = 93, PORT_ROW = 34;
 
 /** §4: declared visual media reserves its preview area before any file exists or is decoded. */
 export function canvasPreviewReserved(node: CanvasStep) {
-  return node.preview !== undefined || (node.ports?.outputs.some((port) => port.kind === "artifact" && /^(?:image|video|model)(?:[/[{?]|$)/.test(port.type)) ?? false);
+  return node.preview !== undefined || node.value_media === true || (node.ports?.outputs.some((port) => port.kind === "artifact" && /^(?:image|video|model)(?:[/[{?]|$)/.test(port.type)) ?? false);
 }
 
 /** A preview frame's height for its width: 16:9, the commonest shape of what steps make. */
@@ -30,11 +31,19 @@ const PREVIEW_ASPECT = 9 / 16;
  */
 export function canvasNodeGeometry(node: CanvasStep) {
   const width = node.ports ? 360 : 250;
+  if (node.value) {
+    const lines = valuePreviewLines(valueStateLabel(node.value)).lines.length;
+    const preview_y = 80 + Math.max(1, lines) * 18;
+    const preview_height = Math.round((width - 32) * PREVIEW_ASPECT);
+    return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 14 : 0) + 24, preview_y, preview_height, settings_y: 60 };
+  }
   const preview_height = Math.round((width - 32) * PREVIEW_ASPECT);
   if (!node.ports) return { width, height: node.preview ? 61 + preview_height + 45 : 106, preview_y: 61, preview_height, settings_y: 0 };
   const rows = Math.max(node.ports.inputs.length, node.ports.outputs.length);
   const settings_y = 83 + Math.max(1, rows) * PORT_ROW;
-  const preview_y = settings_y + (node.ports.settings.length ? 29 : 5);
+  const summaryRows = node.summaries?.length ?? 0;
+  const summaryHeight = summaryRows ? 20 + summaryRows * 34 + ((node.summary_count ?? 0) > summaryRows ? 18 : 0) : node.ports.settings.length ? 29 : 5;
+  const preview_y = settings_y + summaryHeight + (node.route_label ? 20 : 0);
   return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 16 : 0) + (node.kind === "workflow" ? 70 : 42), preview_y, preview_height, settings_y };
 }
 export function canvasNodeSize(node: CanvasStep) {
@@ -45,6 +54,7 @@ export function canvasNodeSize(node: CanvasStep) {
 /** A named socket's position; unknown names have no invented attachment point. */
 export function canvasPortAnchor(node: PositionedNode, direction: "input" | "output", name: string, kind?: "artifact" | "parameter" | "fact" | "value") {
   const ports = direction === "input" ? node.ports?.inputs : node.ports?.outputs;
+  if (node.value && ports?.some((port) => port.name === name)) return { x: node.x + (direction === "input" ? 0 : node.width), y: node.y + 28 };
   const index = ports?.findIndex((port) => port.name === name && (!kind || port.kind === kind)) ?? -1;
   if (index < 0) return undefined;
   return { x: node.x + (direction === "input" ? 0 : node.width), y: node.y + PORT_TOP + index * PORT_ROW };
@@ -99,9 +109,12 @@ export function layoutGraph(graph: CanvasGraph, report: LayoutReport | null = nu
       const members = present.length ? present : all.slice(0, 1);
       members.sort((left, right) => left.rank - right.rank || (left.id < right.id ? -1 : 1));
       const side = members[0].node?.side;
-      const cell = members[0].note ? report?.notes?.[address] : report?.cells[address];
-      const column = side === "input" ? -1 : side === "output" ? Number.MAX_SAFE_INTEGER : cell?.column ?? fallback++;
-      placed.push({ address, items: members, column, row: side ? 0 : cell?.row ?? 0 });
+      const value = members[0].node?.value;
+      const cell = members[0].note ? report?.notes?.[address] : value ? report?.values?.[members[0].id] : report?.cells[address];
+      const column = value ? value.kind === "output" ? Number.MAX_SAFE_INTEGER : value.kind === "input" ? -2 : -1
+        : side === "input" ? -1 : side === "output" ? Number.MAX_SAFE_INTEGER : cell?.column ?? fallback++;
+      const valueRow = value ? cell?.row ?? placed.filter((slot) => slot.column === column).length : undefined;
+      placed.push({ address, items: members, column, row: valueRow ?? (side ? 0 : cell?.row ?? 0) });
     }
     slots.set(container, placed);
   }

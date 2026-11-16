@@ -252,3 +252,18 @@
 .fx-note-diagnostic { font-size: 12px; white-space: normal; }
 .fx-note-card-content blockquote, .fx-note-card-content .fx-note-diagnostic, .fx-note-card-content.fx-note-unavailable { color: #6a542a; }
 .fx-note-card-content blockquote { border-color: #b08a3c66; }
+
+/* Values are labelled data sheets: a printed binding header and a flat content surface. */
+.fx-canvas-value .fx-canvas-node-box { fill: #fdfcfe; stroke: #d4ccdf; }
+.fx-canvas-value-label { fill: #f0ecf6; pointer-events: none; }
+.fx-canvas-value-mark { color: #89749e; pointer-events: none; }
+.fx-canvas-value .fx-canvas-node-title { fill: #4d3d5e; font: 600 13px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-value .fx-canvas-node-type { fill: #74617f; font: 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .6px; text-transform: uppercase; }
+.fx-canvas-value .fx-canvas-node-divider { stroke: #dfd7e8; }
+.fx-canvas-value-content { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--value-lines); overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; color: #3c3544; font: 13px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-value-content.is-unavailable { color: #8c8496; }
+.fx-canvas-value-socket { fill: #f0ecf6; stroke: #9783ad; stroke-width: 1.5px; }
+.fx-canvas-summary-name { fill: #8b8b94; font: 10px "SFMono-Regular", Consolas, monospace; }
+.fx-canvas-summary-value { fill: #3f3f46; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-value-more { fill: #8b8b94; font: 9px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-node-route { fill: #7c7990; font: 9px "SFMono-Regular", Consolas, monospace; }

@@ -249,3 +249,18 @@ opted-in caller and refuses unknown notes before changing navigation.
 The browser SDK's constructor option `includeNotes: true` opts into these contexts/actions.
 Same-realm `getContext`, `subscribe` and `present` accept optional `{includeNotes: true}`
 options. Older viewers may refuse the opt-in; no presentation is automatically retried.
+
+## Value inspection opt-in
+
+An independent `include_values: true` on `get_context`, `subscribe` or `present` allows
+`selection: {kind: "value", value_id, scope_id}` and `action: reveal_value, value_id`.
+The ID references recorded [value evidence](values.md); `scope_id` is null for root or the
+recorded owner. Reveal enters the containing workflow and foregrounds its contextual
+frame/deck where applicable. Unknown targets are refused before changing presentation.
+No value contents enter context messages. Without opt-in a selected value projects to null,
+independently of note opt-in and independently for every subscriber. Unsubscribe removes
+both options. This does not widen the existing `scope_boundary` selection shape.
+
+The browser SDK constructor uses `includeValues: true`. Same-realm methods accept
+`{includeValues: true}` options; it may be combined with `includeNotes`. Older pages may
+refuse the capability; presentation is never automatically retried.

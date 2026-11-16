@@ -1,0 +1,60 @@
+fx: workflow/v1
+id: viewer-values
+title: Inputs, shared values and results
+description: Notes, visible inputs, shared settings and results in a provider-free workflow.
+inputs:
+  prompt:
+    type: string
+    default: >-
+      A geometric lantern made from a rounded blue shape, a warm orange circle and
+      a mint triangle. Keep the silhouette simple, leave generous space around the
+      object and use a warm paper background. The reference and both variations
+      are drawn locally; this description demonstrates a readable prompt without
+      calling any image provider.
+  reference: {type: file, kind: image, optional: true}
+tables:
+  style: {shape: rounded, seed: 42, palette: [navy, amber, mint], transparent: false}
+let:
+  brief: "${{ inputs.prompt }} Shared shape: ${{ tables.style.shape }}."
+  variation_tone: ${{ item }}
+notes:
+  overview:
+    about: seed
+    text: |
+      ## Follow the data
+      The prompt and reference are inputs. Shared values feed the local image step.
+      Select any value for full inspection. No model or provider is called.
+steps:
+  seed:
+    title: Reference image
+    uses: ./nodes/values.py#reference
+    with:
+      reference: ${{ inputs.reference }}
+      prompt: ${{ let.brief }}
+      style: ${{ tables.style }}
+  variations:
+    title: Two local variations
+    for_each: [warm, cool]
+    notes:
+      guidance:
+        about: tint
+        text: |
+          ## Local color variation
+          This group consumes the reference and changes its channels.
+          The note belongs to the group, with no execution state.
+    steps:
+      tint:
+        title: Color variation
+        uses: ./nodes/media.py#tint
+        with:
+          image: ${{ steps.seed.outputs.image }}
+          tone: ${{ let.variation_tone }}
+  child:
+    title: Read the imported workflow
+    uses: ./workflows/notes-child.yaml
+    with:
+      image: ${{ steps.seed.outputs.image }}
+outputs:
+  reference: ${{ steps.seed.outputs.image }}
+  variations: ${{ steps.variations.*.tint.outputs.image }}
+  imported: ${{ steps.child.outputs.image }}

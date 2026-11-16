@@ -163,6 +163,124 @@
   "pending": [],
   "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:378e9624d53242a5d3996e110b9d42486a24aa44f8f6c32a569d130c710d6fdd"
+    },
+    "target": {
+     "instance_id": "draw#1",
+     "kind": "instance",
+     "port": "vars"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "draw#1",
+     "kind": "instance",
+     "port": "image",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "stormy"
+    },
+    "id": "value:378e9624d53242a5d3996e110b9d42486a24aa44f8f6c32a569d130c710d6fdd",
+    "kind": "input",
+    "name": "mood",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "data": {
+     "file": {
+      "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+      "kind": "image/png",
+      "name": "image",
+      "size": 12420
+     }
+    },
+    "id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8",
+    "kind": "output",
+    "name": "image",
+    "scope_id": null,
+    "state": "known"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "draw#1",
+    "key": null,
+    "path": "draw",
+    "step": "draw",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "draw#1": []
+  },
+  "pending": [],
+  "plan": "d001472a7df0f6821605772d10ff439ede139a5cee9b1a5d87c84be90ddda82c",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:378e9624d53242a5d3996e110b9d42486a24aa44f8f6c32a569d130c710d6fdd"
+    },
+    "target": {
+     "instance_id": "draw#1",
+     "kind": "instance",
+     "port": "vars"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "draw#1",
+     "kind": "instance",
+     "port": "image",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "stormy"
+    },
+    "id": "value:378e9624d53242a5d3996e110b9d42486a24aa44f8f6c32a569d130c710d6fdd",
+    "kind": "input",
+    "name": "mood",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8",
+    "kind": "output",
+    "name": "image",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
  }
 ]

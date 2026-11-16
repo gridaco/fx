@@ -26,6 +26,9 @@ pub struct LayoutReport {
     /// Presentation-only note cells, keyed by captured note id; never execution order.
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     pub notes: IndexMap<String, CellEntry>,
+    /// Value bands and rows; these never alter executable cells or order.
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub values: IndexMap<String, CellEntry>,
 }
 
 /// A structured layout diagnostic (§6.10). None is reported while no layout file is read.

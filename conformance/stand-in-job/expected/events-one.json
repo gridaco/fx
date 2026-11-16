@@ -408,6 +408,254 @@
   "pending": [],
   "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "clip#1",
+     "kind": "instance",
+     "port": "video",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "mesh#1",
+     "kind": "instance",
+     "port": "model",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "file": {
+      "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+      "kind": "video/mp4",
+      "name": "video",
+      "size": 2835
+     }
+    },
+    "id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c",
+    "kind": "output",
+    "name": "clip",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "data": {
+     "file": {
+      "digest": "d52ea15ab28b6a8dbc5a7623dd23c044eaa0f6460322c22030cc6b976e365637",
+      "kind": "model/gltf-binary",
+      "name": "model",
+      "size": 48
+     }
+    },
+    "id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d",
+    "kind": "output",
+    "name": "model",
+    "scope_id": null,
+    "state": "known"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "clip#1",
+    "key": null,
+    "path": "clip",
+    "step": "clip",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "front#1",
+    "key": null,
+    "path": "front",
+    "step": "front",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "mesh#1",
+    "key": null,
+    "path": "mesh",
+    "step": "mesh",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "clip#1": [],
+   "front#1": [],
+   "mesh#1": [
+    {
+     "source": "front#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "views"
+    }
+   ]
+  },
+  "pending": [],
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "clip#1",
+     "kind": "instance",
+     "port": "video",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "mesh#1",
+     "kind": "instance",
+     "port": "model",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "file": {
+      "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+      "kind": "video/mp4",
+      "name": "video",
+      "size": 2835
+     }
+    },
+    "id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c",
+    "kind": "output",
+    "name": "clip",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d",
+    "kind": "output",
+    "name": "model",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "clip#1",
+    "key": null,
+    "path": "clip",
+    "step": "clip",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "front#1",
+    "key": null,
+    "path": "front",
+    "step": "front",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "mesh#1",
+    "key": null,
+    "path": "mesh",
+    "step": "mesh",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "clip#1": [],
+   "front#1": [],
+   "mesh#1": [
+    {
+     "source": "front#1",
+     "source_kind": "output",
+     "source_port": "image",
+     "target_port": "views"
+    }
+   ]
+  },
+  "pending": [],
+  "plan": "5e564a8e0a7c403dd3f744f32cd75091b3fec1bd32de553b0234d39949f257ca",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "clip#1",
+     "kind": "instance",
+     "port": "video",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "mesh#1",
+     "kind": "instance",
+     "port": "model",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "id": "value:9aaf8e2f87fa5f748ca72b153cd53e3b51ffe263d419481d7f2a6989e7dc9a6c",
+    "kind": "output",
+    "name": "clip",
+    "scope_id": null,
+    "state": "pending"
+   },
+   {
+    "id": "value:b9bbaa38896ab3003743988ded01bd275871bbd3263f52bff105a15fb8f76b6d",
+    "kind": "output",
+    "name": "model",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
  }
 ]

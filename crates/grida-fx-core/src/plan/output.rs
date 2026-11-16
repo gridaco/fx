@@ -78,6 +78,12 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
         "estimate": forecast,
         "problems": problems(&plan.problems),
     });
+    if !plan.expansion.value_views.is_empty() {
+        graph["value_views"] =
+            serde_json::to_value(&plan.expansion.value_views).expect("serializable display values");
+        graph["value_links"] =
+            serde_json::to_value(&plan.expansion.value_links).expect("serializable display links");
+    }
     if !plan.expansion.notes.is_empty() {
         graph["notes"] = serde_json::to_value(&plan.expansion.notes).expect("serializable notes");
     }

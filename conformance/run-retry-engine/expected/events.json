@@ -138,6 +138,82 @@
   "pending": [],
   "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "flaky#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:4295ad466338cfb30ee89c86e957b163ac1e64e0126a847402c28da7805fc14d"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "file": {
+      "digest": "91cfcad59a5a866fe93011d39485cb1c0c99caf1cae64b7577f06c371a68e56b",
+      "kind": "text/plain",
+      "name": "text",
+      "size": 19
+     }
+    },
+    "id": "value:4295ad466338cfb30ee89c86e957b163ac1e64e0126a847402c28da7805fc14d",
+    "kind": "output",
+    "name": "text",
+    "scope_id": null,
+    "state": "known"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "flaky#1",
+    "key": null,
+    "path": "flaky",
+    "step": "flaky",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "flaky#1": []
+  },
+  "pending": [],
+  "plan": "caa43d0c93e82d42f8e875d76eb2cb6616ac28344b539744d0ba7d59e890afca",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "flaky#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:4295ad466338cfb30ee89c86e957b163ac1e64e0126a847402c28da7805fc14d"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "id": "value:4295ad466338cfb30ee89c86e957b163ac1e64e0126a847402c28da7805fc14d",
+    "kind": "output",
+    "name": "text",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
  }
 ]

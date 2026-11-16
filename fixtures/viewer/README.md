@@ -348,8 +348,11 @@ The focused `viewer-notes` workflow explains local image steps with inline Markd
 a referenced `.md` file, literal text containing FX expression examples, a deliberately
 long guide, an unavailable file and an unresolved association. Short and ordinary notes
 fit their content; the long guide keeps a bounded preview with full sidebar inspection.
-Repeated groups and an imported workflow carry their own notes. This is static
-documentation; actual value cards remain #81.
+Repeated groups and an imported workflow carry their own notes. The same fixture also
+consumes a long default prompt and a synthesized reference input, shared style-table values,
+a named expression and a contextual expression for each color variation. Node parameters
+declare defaults in the Python SDK, so their effective values are visible during planning.
+Notes remain static documentation; value cards inspect actual recorded workflow data.
 
 After building the engine, prepare and verify a retained run and both export policies:
 
@@ -364,3 +367,18 @@ same plan digest. All media is drawn by the committed local fixture nodes. The o
 must be new or empty. `bun --no-env-file run test:viewer:notes-browser` verifies the real
 bundled viewer, including content-sized cards, bounded long documents and stable group
 tracks. Its screenshots stay under ignored `output/playwright/`.
+
+The focused `viewer-values` workflow keeps ordinary guidance notes while omitting the
+long/missing-note stress cases. `tools/check_values.py` extends this acceptance with effective defaults, source relationships,
+contextual values, null/pending distinctions and export disclosure. File-shaped ordinary JSON
+stays ordinary JSON. All input/output media is synthesized by `nodes/values.py`; inspection
+never calls a provider or regenerates an unavailable artifact.
+
+Try the focused values playground after building the engine:
+
+```sh
+python/.venv/bin/python tools/check_values.py --output .fx/values-demo
+python/.venv/bin/python -m grida.fx view --run .fx/values-demo/runs/values --open
+```
+
+The generated `plan.json` also shows known defaults and pending outputs before execution.
