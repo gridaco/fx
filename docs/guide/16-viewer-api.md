@@ -330,7 +330,7 @@ refuse the opt-in explicitly; no presentation is automatically retried.
 
 ## Inspect recorded values
 
-Pass `includeValues: true` when constructing `ViewerClient` to receive
+With FX 0.9.0+, pass `includeValues: true` when constructing `ViewerClient` to receive
 `{kind: "value", value_id, scope_id}` selections. This option is independent of
 `includeNotes`; both may be enabled. Value contents never enter context messages.
 
