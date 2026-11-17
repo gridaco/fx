@@ -1,7 +1,7 @@
 # Canvas values
 
 **Status: approved design and local implementation notes for
-[#81](https://github.com/gridaco/fx/issues/81), 2026-11-16.**
+[#81](https://github.com/gridaco/fx/issues/81), updated 2026-11-18.**
 The normative contract is [recorded canvas values](../../spec/values.md).
 
 ## User outcome
@@ -44,8 +44,9 @@ also distinguishes fixed values from expressions; that node actually changes wor
 data. FX needs the distinction and readable results, while its existing language already
 owns how values are produced.
 
-The recommendation is automatic value presentation using the existing language. Do not
-introduce `const`, `show`, a custom-view framework or new editor controls for this delivery.
+The recommendation is automatic value presentation using the existing language. Project
+display defaults choose which boundary/notes content occupies the canvas. No executable
+`const`/`show` step, custom-view framework or hover-behavior setting is introduced.
 
 ## Authoring stays the same
 
@@ -103,7 +104,7 @@ Each grouped row owns its named socket and activation target; selecting/revealin
 that row's recorded value ID. Grouping creates no aggregate value identity.
 The displayed workflow's boundary frames pack their cards independently of processing
 row heights, including when the displayed workflow is an opened import. They introduce
-no new execution scope or authoring setting. Empty sides have no frame. This grouping
+no new execution scope or workflow data field. Empty sides have no frame. This grouping
 keeps intermediate source cards out of the overview. Boundary connections are hidden at
 rest and revealed for the individual value or connected step being hovered, keyboard-focused or selected.
 Selection keeps those connections visible. Frame headings/padding do not activate the
@@ -120,7 +121,7 @@ use the shared fullscreen control. Other media show metadata here and retain exi
 cards/details for media inspection. Missing bytes and pending values keep explicit
 fallbacks. The popover changes no card footprint, evaluates nothing, generates no content
 and discovers no provider data; planned outputs may remain pending. This is
-presentation behavior without new workflow syntax or viewer configuration. Descriptions
+presentation behavior without new workflow syntax or hover configuration. Descriptions
 come only from captured node parameter JSON Schema: optional literal text, omitted when
 absent, with no invented annotation or current-source lookup.
 
@@ -132,6 +133,35 @@ an arbitrary JSON object shaped like a file is not evidence of previewable media
 Measure text before layout, as for notes; reserve media bounds before loading bytes. Later
 execution may introduce new evidence, but image/model loading must not cause layout jumps.
 Keep a user's camera stable when pending values resolve.
+
+## Project display defaults
+
+The project's `fx.yaml` is the discoverable configuration location:
+
+```yaml
+fx: project/v1
+viewer:
+  display:
+    workflow_inputs: false
+    workflow_outputs: true
+    notes: false
+```
+
+Each plural content name controls ordinary visibility and defaults independently to `true`.
+`workflow_` distinguishes workflow-boundary presentation from step sockets. `notes` matches
+the authoring vocabulary and includes group-owned notes. The renderer applies visibility
+before measurement/layout, leaving no empty bands or note space. Hover inspection, inline
+settings and media previews retain their established behavior; there is no media-preview
+setting in this delivery.
+
+Opening or refreshing a native viewer uses current project configuration without rerunning
+work or modifying recorded evidence. A service uses its owning project, while standalone
+saved-data inspection uses the caller's project context. Imported homes do not add a second
+display-policy scope. A portable export freezes the publishing project's display defaults;
+the local `fx.yaml` never travels in the export. Existing exports without settings retain
+the three visible defaults. Explicit focus can temporarily reveal one selected hidden item.
+This is a presentation default rather than privacy policy, capture control or user-wide
+preference persistence. The normative contract is [viewer.md](../../spec/viewer.md#project-display-settings).
 
 ## Recording design
 

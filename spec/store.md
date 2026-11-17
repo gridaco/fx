@@ -16,6 +16,12 @@ Optional `provider_preferences` merge independently in the same workflow-home th
 project order as route defaults ([model-selection.md](model-selection.md)). They do not add
 a user-wide configuration scope or change ownership of the catalog, providers or store.
 
+Optional `viewer.display` booleans (`workflow_inputs`, `workflow_outputs`, `notes`) define
+project-wide canvas defaults, each `true` when omitted ([viewer.md](viewer.md#project-display-settings)).
+They are read for presentation, including when opening existing recordings, and do not
+enter plans, execution identities or cache keys. They do not merge from imported workflows'
+home projects or create a user-wide preference scope.
+
 The planning project alone owns the optional `.fx/models/` metadata cache
 ([model-selection.md](model-selection.md) §4). This metadata cache is separate from the result/call store below and contains no
 paid answers or credentials.

@@ -24,6 +24,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use grida_fx_core::docs::project::{Project, ViewerConfig};
 use grida_fx_core::docs::{Schema, validate};
 use grida_fx_core::value::is_digest;
 use grida_fx_runtime::observation;
@@ -52,6 +53,7 @@ struct AppState {
     source: Source,
     authority: String,
     artifact_prefix: String,
+    project_root: PathBuf,
 }
 
 /// A bound server. The caller can print its actual address before opening a browser.
@@ -85,6 +87,13 @@ impl Server {
 
 /// Validates one existing run folder and binds loopback. Port zero lets the OS choose safely.
 pub async fn bind(run: &Path, port: u16) -> io::Result<Server> {
+    let project = current_project()?;
+    bind_with_project(run, port, &project.root).await
+}
+
+/// Binds a saved run using the caller's explicit project for current viewer configuration.
+/// The project is never inferred from portable records or their historical source paths.
+pub async fn bind_with_project(run: &Path, port: u16, project_root: &Path) -> io::Result<Server> {
     let root = run.canonicalize()?;
     let checked = root.clone();
     // Initial hosting checks records only. Artifact hashing belongs to observers,
@@ -92,14 +101,28 @@ pub async fn bind(run: &Path, port: u16) -> io::Result<Server> {
     tokio::task::spawn_blocking(move || read::read_inventory(&checked))
         .await
         .map_err(io::Error::other)??;
-    bind_source(Source::Run(root), port).await
+    bind_source(Source::Run(root), port, project_root).await
 }
 
 /// Validates a materialized expanded graph and serves it unchanged from memory. Planning, if
 /// requested, belongs to the caller and ends before this read-only host is started.
 pub async fn bind_plan(graph: Value, port: u16) -> io::Result<Server> {
+    let project = current_project()?;
+    bind_plan_with_project(graph, port, &project.root).await
+}
+
+/// Binds a materialized plan using the caller's current project for viewer configuration.
+pub async fn bind_plan_with_project(
+    graph: Value,
+    port: u16,
+    project_root: &Path,
+) -> io::Result<Server> {
     let source = plan_source(graph)?;
-    bind_source(source, port).await
+    bind_source(source, port, project_root).await
+}
+
+fn current_project() -> io::Result<Project> {
+    Project::find(&std::env::current_dir()?).map_err(|error| io::Error::other(error.message))
 }
 
 fn plan_source(graph: Value) -> io::Result<Source> {
@@ -119,7 +142,9 @@ fn plan_source(graph: Value) -> io::Result<Source> {
     Ok(Source::Plan(Arc::new(graph)))
 }
 
-async fn bind_source(source: Source, port: u16) -> io::Result<Server> {
+async fn bind_source(source: Source, port: u16, project_root: &Path) -> io::Result<Server> {
+    let project_root = project_root.canonicalize()?;
+    ViewerConfig::read(&project_root).map_err(|error| io::Error::other(error.message))?;
     let listener =
         tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
     let authority = listener.local_addr()?.to_string();
@@ -128,6 +153,7 @@ async fn bind_source(source: Source, port: u16) -> io::Result<Server> {
         source,
         authority,
         artifact_prefix: String::new(),
+        project_root,
     });
     Ok(Server { listener, app, url })
 }
@@ -136,6 +162,7 @@ fn router(state: AppState) -> Router {
     let state = Arc::new(state);
     Router::new()
         .route("/api/view", get(view_document))
+        .route("/api/viewer_config", get(viewer_config))
         .route("/api/run", get(run_document))
         .route("/api/snapshot", get(observation_snapshot))
         .route("/api/layout", get(layout_report))
@@ -146,6 +173,26 @@ fn router(state: AppState) -> Router {
         .fallback(get(asset))
         .layer(middleware::from_fn_with_state(state.clone(), local_request))
         .with_state(state)
+}
+
+async fn viewer_config(State(state): State<Arc<AppState>>) -> Response {
+    project_viewer_config(state.project_root.clone()).await
+}
+
+async fn project_viewer_config(root: PathBuf) -> Response {
+    match tokio::task::spawn_blocking(move || ViewerConfig::read(&root)).await {
+        Ok(Ok(config)) => {
+            let mut response = Json(config).into_response();
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        }
+        _ => failure(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "The project's viewer configuration cannot be read. Check fx.yaml.",
+        ),
+    }
 }
 
 async fn local_request(

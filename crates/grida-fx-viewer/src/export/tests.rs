@@ -24,6 +24,48 @@ fn manifest(parent: &tempfile::TempDir) -> Value {
 }
 
 #[test]
+fn publishing_display_defaults_preserve_execution_and_disclosure_evidence() {
+    use grida_fx_core::docs::project::ViewerDisplay;
+
+    let fixture = source("image/png");
+    let visible = tempfile::tempdir().unwrap();
+    let hidden = tempfile::tempdir().unwrap();
+    let before_plan = std::fs::read(fixture.root().join("plan.json")).unwrap();
+    let before_events = std::fs::read(fixture.root().join("events.jsonl")).unwrap();
+    export(&fixture, &visible, ExportOptions::default()).unwrap();
+    let config = ViewerConfig {
+        display: ViewerDisplay {
+            workflow_inputs: false,
+            workflow_outputs: true,
+            notes: false,
+        },
+    };
+    run_export_with_viewer(
+        &fixture.root(),
+        &hidden.path().join("export"),
+        "export",
+        ExportOptions::default(),
+        config,
+    )
+    .unwrap();
+    let original = manifest(&visible);
+    let configured = manifest(&hidden);
+    assert!(original.get("viewer").is_none());
+    assert_eq!(configured["viewer"], serde_json::to_value(config).unwrap());
+    for field in ["source", "view", "layout", "disclosure", "artifacts"] {
+        assert_eq!(original[field], configured[field], "{field}");
+    }
+    assert_eq!(
+        std::fs::read(fixture.root().join("plan.json")).unwrap(),
+        before_plan
+    );
+    assert_eq!(
+        std::fs::read(fixture.root().join("events.jsonl")).unwrap(),
+        before_events
+    );
+}
+
+#[test]
 fn default_disclosure_preserves_media_and_withholds_author_values() {
     let fixture = source("image/png");
     let parent = tempfile::tempdir().unwrap();

@@ -4,6 +4,61 @@ Protocol v1 exposes inspection context and presentation in an existing viewer
 page. It does not execute workflows, mutate records or picks, launch processes,
 activate windows, or navigate to arbitrary sources.
 
+## Project display settings
+
+The optional `viewer.display` object in `fx.yaml` defines the project's canvas defaults:
+
+```yaml
+fx: project/v1
+viewer:
+  display:
+    workflow_inputs: false
+    workflow_outputs: true
+    notes: false
+```
+
+Each member is a boolean and independently defaults to `true` when omitted. Unknown
+members and non-boolean values are configuration errors. `workflow_inputs` and
+`workflow_outputs` control the displayed workflow's grouped boundary cards, including
+when an imported workflow is opened; they do not hide individual step sockets.
+`notes` controls authored note cards in every displayed owner, including groups.
+Hidden content contributes no canvas geometry or camera-fit space. Step summaries,
+media previews and socket-hover inspection retain their normal behavior.
+
+These are presentation defaults, not execution or disclosure settings. They change no
+workflow data, recorded evidence, scheduling, executable identity, cache lookup or
+resume semantics. An explicit `reveal_value` or `reveal_note` may temporarily materialize
+the selected recorded item even when its category is normally hidden; changing selection
+removes that temporary presentation. Existing inspection opt-ins remain independent.
+
+Native hosts serve `GET <api_base>/viewer_config` with the resolved configuration:
+
+```json
+{"display":{"workflow_inputs":true,"workflow_outputs":true,"notes":true}}
+```
+
+The response contains only display settings, never the configuration file's path or
+other project fields. The host reads current project configuration for this request;
+opening or refreshing the viewer picks up edits without executing or rewriting a run.
+A source-plan viewer uses the planning project, and the project service uses its owning
+project. Standalone saved-plan/run inspection uses the current command's project
+context, never an original project inferred from recorded paths. With no `fx.yaml`,
+all three defaults apply. Invalid current configuration yields a safe HTTP 422 response;
+it must not silently become another display policy. A reader of an older host with no
+endpoint (HTTP 404) uses the three `true` defaults.
+
+The response uses `Cache-Control: no-store` and the host's existing same-origin loopback
+request policy. It is configuration for presentation, not part of the observation cursor
+or recorded graph document.
+
+Portable exports may freeze the publishing project's resolved configuration in their
+optional `viewer` field ([exports.md](exports.md#2-manifest)); older exports without it
+use the defaults. Display choices never remove included note or value evidence from an
+export. The CLI and both SDKs consume the same `fx.yaml`; no workflow authoring API,
+viewer-message action, visibility toggle or user-preference store is added by this
+contract. `init` shows these defaults in its starter configuration and `doctor` reports
+their effective values and configuration source.
+
 ## Transport and peers
 
 Window messages use `channel: "fx_viewer"`, `version: 1`, and `type` equal to

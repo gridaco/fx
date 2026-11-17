@@ -88,6 +88,11 @@ Exact materialized-plan/export hashes still reflect the captured presentation.
 
 ## Canvas and details
 
+The project's [`viewer.display` settings](viewer.md#project-display-settings) independently
+control ordinary workflow-input and workflow-output boundary presentation. Both default
+to visible. They apply to existing recordings and every displayed workflow scope, without
+changing the captured values or their source relationships.
+
 Node cards show bounded inline summaries for unconnected effective settings, including
 declared defaults, plus recorded routing when available. Connected fields use their
 named sockets instead of repeating their values in an always-visible summary. Do not
@@ -111,8 +116,8 @@ Missing bytes, pending values and incomplete evidence keep explicit fallback sta
 Opening a preview never reevaluates expressions, rereads source, generates content or
 discovers provider data. If the recorded node parameter's JSON Schema has a description,
 show it as optional literal text. Missing descriptions stay absent; never invent
-annotations or reread current source to supply them. No new authoring setting or
-syntax is required.
+annotations or reread current source to supply them. No new workflow annotation syntax
+is required.
 
 The displayed workflow's inputs occupy one labelled Inputs frame on the input side;
 its declared outputs occupy one Outputs frame on the output side. Each frame packs its
@@ -122,8 +127,9 @@ cards keep their own recorded references, sockets and activation targets. Openin
 imported workflow groups that workflow's public boundary in the same way.
 Tables and named expressions do not add standalone cards by default; their effective
 values are available at consuming ports. Captured sources and contextual occurrences
-remain available for inspection. An explicit `reveal_value` may temporarily materialize the
-selected table/expression occurrence; changing selection removes it. Equal data does not
+remain available for inspection. An explicit `reveal_value` may temporarily materialize a
+selected occurrence normally omitted by the canvas, including a table/expression or hidden
+workflow boundary; changing selection removes it. Equal data does not
 merge recorded occurrences. Rendered connections can pass through hidden sources by
 following recorded typed links, never by inspecting value contents or exposing a closed
 import's private interior. Keep value placement separate from execution

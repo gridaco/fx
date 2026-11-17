@@ -3,6 +3,13 @@ runs: runs
 cache: .fx/cache
 workflows: [workflows]
 
+# Canvas content when opening this project's viewer. Each omitted setting defaults to true.
+viewer:
+  display:
+    workflow_inputs: true
+    workflow_outputs: true
+    notes: true
+
 # The most any one live run may spend, in US dollars; --max-usd overrides it.
 # budget:
 #   max_usd: 5

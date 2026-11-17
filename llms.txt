@@ -118,6 +118,11 @@ routes:                             # the model for each capability, where a ste
 provider_preferences:               # independent of model choice; keys alone never select it
   image.generate: gg
   structured.generate: gg
+viewer:
+  display:                          # project-wide canvas defaults; each defaults to true
+    workflow_inputs: true
+    workflow_outputs: true
+    notes: true
 # route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
@@ -773,6 +778,21 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `Skip reason unavailable in this viewer.`. Existing records are not rewritten to add reasons.
   Causes are display evidence, separate from output availability and execution success. The
   Python and JavaScript saved-record APIs preserve them in their raw observation documents.
+- **Canvas display defaults.** In `fx.yaml`, optional `viewer.display` booleans
+  `workflow_inputs`, `workflow_outputs` and `notes` each default to `true`.
+  The first two control the displayed workflow's grouped Inputs/Outputs boundary,
+  including opened imports; `notes` controls authored note cards in all displayed owners,
+  including groups. Hidden content takes no layout space. Step sockets, effective settings,
+  media previews and hover inspection keep their behavior. Opening or refreshing the viewer
+  reads current project settings, including from an already running service, so existing
+  plans/runs need no rerun. `doctor` reports effective values and their source; unknown keys
+  and non-booleans are refused. No setting is added to workflow authoring, execution identity,
+  caches or resume. Explicit note/value reveal may temporarily show the selected item even
+  when its category is normally hidden. Visibility never withholds recorded content;
+  portable exports freeze the publishing project's display defaults independently of
+  disclosure, and older exports without them show all three categories. Export refusal
+  `invalid_viewer_config` means current project configuration cannot supply valid display
+  defaults; fix `fx.yaml` and export again, without rerunning the workflow.
 - **Visible workflow data.** Current source records effective inputs (including defaults),
   shared tables, contextual `let` results and outputs as read-only value evidence. Input and
   output cards use labelled data sheets with monospaced binding names. Tables and `let`
@@ -806,7 +826,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   their normal identity effects. Export disclosure applies to these values too. Hosts opt
   into `{kind: "value", value_id, scope_id}` selection with `includeValues: true` on
   `ViewerClient`, or same-realm method options, then use `{action: "reveal_value", value_id}`.
-  Explicitly revealing a table/`let` occurrence temporarily adds that selected source card;
+  Explicitly revealing a normally omitted value temporarily adds that selected card;
   changing selection removes it. Contextual occurrences retain their distinct recorded IDs.
   Default clients see null for value selection; contexts contain references, never values.
   Source support does not imply an older release contains it.

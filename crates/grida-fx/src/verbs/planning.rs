@@ -84,7 +84,14 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
         let graph = materialized(&plan, &planner);
         let declarations = planner.project.declarations();
         if args.standalone || !planner.project.has_file {
-            super::view::serve(Some(graph), None, 0, args.open, &declarations)?;
+            super::view::serve(
+                Some(graph),
+                None,
+                0,
+                args.open,
+                &declarations,
+                &planner.project.root,
+            )?;
         } else {
             super::view::report_service(
                 super::service::register_plan(&planner.project, &graph, args.open),

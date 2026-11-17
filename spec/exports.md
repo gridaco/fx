@@ -10,7 +10,9 @@ not an execution backup or resumable run folder.
 
 `grida-fx export RUN --out DIR [--include-values] [--include-diagnostics] [--json]`
 reads exactly the selected saved run without importing author code, opening a
-cache, loading a project or credentials, or executing providers. It opens the
+cache, loading credentials, or executing providers. The publishing project's `fx.yaml`
+may be read only to resolve [viewer display defaults](viewer.md#project-display-settings);
+it does not supply or alter execution evidence. It opens the
 existing, non-symlink `run.lock` without creating it, acquires its exclusive OS
 lock without waiting, and verifies the opened lock is still the folder's lock.
 A missing lock is `unavailable`; a held lock is `busy`. The lock remains held
@@ -33,7 +35,7 @@ bytes. Consumers pin that digest externally; it is not inside the manifest.
 ## 2. Manifest
 
 All seven fields are required: `kind`, `producer`, `source`, `disclosure`, `view`,
-`layout`, `artifacts`.
+`layout`, `artifacts`. Optional `viewer` carries resolved presentation defaults.
 
 ```json
 {
@@ -53,6 +55,24 @@ local viewer returns. Export readers ignore unknown optional fields. Missing or
 invalid required fields, unsupported major kinds and broken references fail
 explicitly. Changed essential semantics require a new major kind; the producer
 version is diagnostic only.
+
+### Viewer defaults
+
+The optional `viewer` object has `display` with the three resolved booleans
+`workflow_inputs`, `workflow_outputs` and `notes` ([viewer.md](viewer.md#project-display-settings)).
+It freezes the publishing project's current display configuration, separately from the
+recorded run's `view` and `layout`. An export without `viewer` uses `true` for all three.
+The CLI and SDK export operations omit the field when all three settings are `true`,
+preserving the default manifest representation.
+Known malformed viewer configuration is refused rather than silently changing its
+meaning. Readers apply visibility before canvas measurement/layout while preserving the
+frozen execution cells and recorded note/value evidence. Explicit inspection can reveal
+one normally hidden selected item. Visibility is not disclosure: included content remains
+included, and existing disclosure options remain authoritative.
+
+This presentation field affects the exact manifest hash, never `source.plan_sha256`,
+`source.events_sha256`, execution identity or cache reuse. An exported viewer needs no
+current project files or configuration endpoint to apply the frozen defaults.
 
 ### Positive inspection projection
 
@@ -203,7 +223,9 @@ manifest data. Human output summarizes the same result. Refusal exits 2 and
 `--json` emits `{"kind":"fx-run-export-error-v1","code":"busy","message":"The run is active."}`.
 Codes: `unavailable`, `busy`, `incomplete_run`, `invalid_record`,
 `destination_exists`, `destination_invalid`, `artifact_unavailable`,
-`write_failed`. Messages contain no private absolute paths. CLI parse errors use
+`write_failed`, `invalid_viewer_config`. The last code means the publishing project's
+current configuration could not supply valid viewer defaults; no destination is created.
+Messages contain no private absolute paths. CLI parse errors use
 the ordinary CLI usage channel. Python and JavaScript saved-record methods invoke
 this offline operation and expose native typed results/errors.
 

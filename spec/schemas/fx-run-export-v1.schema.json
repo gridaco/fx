@@ -71,6 +71,39 @@
       },
       "additionalProperties": true
     },
+    "viewer": {
+      "description": "Publishing project viewer defaults. Omitted means all display categories are visible. This is presentation metadata, not disclosure or execution evidence.",
+      "type": "object",
+      "required": [
+        "display"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "type": "object",
+          "required": [
+            "workflow_inputs",
+            "workflow_outputs",
+            "notes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "workflow_inputs": {
+              "type": "boolean",
+              "default": true
+            },
+            "workflow_outputs": {
+              "type": "boolean",
+              "default": true
+            },
+            "notes": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    },
     "view": {
       "$ref": "#/$defs/viewer"
     },

@@ -175,6 +175,11 @@ fn run_opens_only_when_requested_and_launcher_failure_does_not_fail_execution() 
     for (open, fail_opener) in [(false, false), (true, false), (true, true)] {
         let folder = project(&python, fail_opener);
         let root = folder.path();
+        std::fs::write(
+            root.join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {notes: false}}\n",
+        )
+        .unwrap();
         let mut running = start(root, &python, open);
         let deadline = Instant::now() + Duration::from_secs(10);
         let url = loop {
@@ -192,6 +197,10 @@ fn run_opens_only_when_requested_and_launcher_failure_does_not_fail_execution() 
             }
         };
         assert!(url.starts_with("http://127.0.0.1:"));
+        assert_eq!(
+            json_at(&url, "api/viewer_config")["display"]["notes"],
+            false
+        );
         await_file(&root.join("entered"));
         let invocation = running.errors.recv_timeout(Duration::from_secs(5)).unwrap();
         let id = invocation.strip_prefix("invocation ").unwrap();
@@ -279,6 +288,10 @@ fn plan_project(python: &Path) -> tempfile::TempDir {
 }
 
 fn graph(url: &str) -> serde_json::Value {
+    json_at(url, "api/view")
+}
+
+fn json_at(url: &str, path: &str) -> serde_json::Value {
     let address = url.strip_prefix("http://").unwrap().trim_end_matches('/');
     let mut stream = TcpStream::connect(address).unwrap();
     stream
@@ -286,7 +299,7 @@ fn graph(url: &str) -> serde_json::Value {
         .unwrap();
     write!(
         stream,
-        "GET /api/view HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
+        "GET /{path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
     )
     .unwrap();
     let mut response = String::new();
@@ -304,6 +317,11 @@ fn view_opens_only_when_requested_and_remains_a_foreground_server() {
     for flag in [None, Some("--no-open"), Some("--open")] {
         let folder = plan_project(&python);
         let root = folder.path();
+        std::fs::write(
+            root.join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {workflow_inputs: false}}\n",
+        )
+        .unwrap();
         let mut command = command(root);
         command
             .env("PATH", root.join("bin"))
@@ -325,6 +343,19 @@ fn view_opens_only_when_requested_and_remains_a_foreground_server() {
             });
         assert!(url.starts_with("http://127.0.0.1:"), "{url}");
         assert_eq!(graph(&url)["workflow"]["id"], "browser-test");
+        assert_eq!(
+            json_at(&url, "api/viewer_config")["display"]["workflow_inputs"],
+            false
+        );
+        std::fs::write(
+            root.join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {workflow_outputs: false, notes: false}}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            json_at(&url, "api/viewer_config"),
+            serde_json::json!({"display":{"workflow_inputs":true,"workflow_outputs":false,"notes":false}})
+        );
         if flag == Some("--open") {
             await_file(&root.join("opened.json"));
             let receipt: serde_json::Value =

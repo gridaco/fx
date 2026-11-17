@@ -751,3 +751,13 @@ outputs differ, nested typed files, opaque JSON, disclosure, old records and opt
 Both SDKs declare the same node schemas and author ordinary workflow data; neither computes
 value identity or evaluates expressions independently. No new CLI verb or runtime permission
 is required. Source support does not imply availability in an older installed release.
+
+AR-25 and AR-26 also cover simplifying that canvas through the project's `fx.yaml`:
+`viewer.display.workflow_inputs`, `workflow_outputs` and `notes` independently default
+to `true`. Opening/refreshing native viewers reads current project configuration without
+rerunning saved work; portable exports freeze publishing defaults. Hiding removes canvas
+space, not evidence or disclosure. Explicit focus may temporarily reveal one selected
+hidden item. Project validation, scoped viewer configuration, display projection and
+export tests provide the provider-free acceptance evidence; `init`, `doctor`, the guide
+and `llms.txt` make the settings discoverable. Both SDKs use the same project file rather
+than implementing a separate display resolver or authoring API.

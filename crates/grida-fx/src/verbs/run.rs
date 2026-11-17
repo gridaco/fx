@@ -311,7 +311,7 @@ fn plan_and_run(
             let declarations = project.declarations();
             // Observation is independent: a bind failure must not fail or hold up execution.
             if !args.no_view && (args.standalone || !project.has_file) {
-                match RunViewer::start(engine, root, args.open, &declarations) {
+                match RunViewer::start(engine, root, args.open, &declarations, &project.root) {
                     Ok(host) => viewer = Some(host),
                     Err(_) => crate::print::print_error(&Error::usage(
                         "standalone viewer unavailable; the workflow will continue. Reopen it with inspect RUN --standalone after completion.",
@@ -369,8 +369,12 @@ impl RunViewer {
         root: &Path,
         open: bool,
         declarations: &Declarations,
+        project_root: &Path,
     ) -> std::io::Result<Self> {
-        let server = engine.handle.block_on(grida_fx_viewer::bind(root, 0))?;
+        let server =
+            engine
+                .handle
+                .block_on(grida_fx_viewer::bind_with_project(root, 0, project_root))?;
         let url = server.url().to_string();
         let (stop, stopped) = tokio::sync::oneshot::channel();
         let task = engine.handle.spawn(async move {

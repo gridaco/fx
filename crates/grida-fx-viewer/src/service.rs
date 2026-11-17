@@ -824,12 +824,14 @@ fn service_router(state: ServiceState) -> Router {
         source: Source::Plan(Arc::new(Value::Null)),
         authority: state.authority.clone(),
         artifact_prefix: String::new(),
+        project_root: state.catalog.root.clone(),
     });
     Router::new()
         .route("/api/service", get(health))
         .route("/api/service/stop", post(stop))
         .route("/api/view", get(index))
         .route("/api/catalog", get(index))
+        .route("/api/viewer_config", get(service_viewer_config))
         .route("/api/{*path}", get(api_missing))
         .fallback(dispatch)
         .layer(middleware::from_fn_with_state(guard, local_request))
@@ -884,6 +886,10 @@ async fn index(State(state): State<Arc<ServiceState>>) -> Response {
     }
 }
 
+async fn service_viewer_config(State(state): State<Arc<ServiceState>>) -> Response {
+    super::project_viewer_config(state.catalog.root.clone()).await
+}
+
 async fn dispatch(State(state): State<Arc<ServiceState>>, mut request: Request) -> Response {
     let path = request.uri().path().to_owned();
     if path.starts_with("/p/") {
@@ -926,6 +932,7 @@ async fn dispatch(State(state): State<Arc<ServiceState>>, mut request: Request) 
             source,
             authority: state.authority.clone(),
             artifact_prefix: prefix,
+            project_root: state.catalog.root.clone(),
         })
         .oneshot(request)
         .await

@@ -18,6 +18,7 @@
         "busy",
         "incomplete_run",
         "invalid_record",
+        "invalid_viewer_config",
         "destination_exists",
         "destination_invalid",
         "artifact_unavailable",

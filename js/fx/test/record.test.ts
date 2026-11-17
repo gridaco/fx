@@ -281,6 +281,37 @@ const offline = {
 };
 
 describe.skipIf(engine === null)("named SDK journeys against the engine", () => {
+  test("export reads current project display defaults without changing run evidence", async () => {
+    const folder = temporaryFolder("viewer-display");
+    try {
+      const config = join(folder.path, "fx.yaml");
+      writeFileSync(config, "fx: project/v1\n");
+      writeFileSync(join(folder.path, "workflow.yaml"), toYaml(workflow({
+        id: "display", title: "Display defaults",
+        steps: { choose: { uses: "fx/select@1", with: { first_of: [1] } } },
+        outputs: { result: "${{ steps.choose.outputs.value }}" },
+      })));
+      const options = { cwd: folder.path, env: offline, maxUsd: 0 };
+      const planned = await plan("workflow.yaml", options);
+      const result = await run(planned);
+      expect(result.ok).toBe(true);
+      const record = await loadRun(result.runDir, options);
+      const before = await record.snapshot();
+      writeFileSync(config, "fx: project/v1\nviewer:\n  display:\n    workflow_inputs: false\n    notes: false\n");
+      expect((await plan("workflow.yaml", options)).graph).toEqual(planned.graph);
+      const destination = join(folder.path, "shared");
+      await record.export(destination);
+      const manifest = JSON.parse(readFileSync(join(destination, "manifest.json"), "utf8"));
+      expect(manifest.viewer.display).toEqual({ workflow_inputs: false, workflow_outputs: true, notes: false });
+      expect(await record.snapshot()).toEqual(before);
+      writeFileSync(config, 'fx: project/v1\nviewer: {display: {notes: "false"}}\n');
+      const error = await record.export(join(folder.path, "invalid")).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(RunExportError);
+      expect((error as RunExportError).code).toBe("invalid_viewer_config");
+      expect(existsSync(join(folder.path, "invalid"))).toBe(false);
+    } finally { folder.cleanup(); }
+  }, SLOW);
+
   test("creates, refuses collisions, resumes the same plan, and pins saved reads", async () => {
     const folder = temporaryFolder("named-record");
     try {

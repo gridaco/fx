@@ -574,6 +574,58 @@ async fn public_index_has_no_private_paths_or_control_credentials() {
 }
 
 #[tokio::test]
+async fn viewer_configuration_uses_the_current_service_project_for_every_entry() {
+    let (_directory, catalog) = catalog();
+    let fixture = Fixture::new("image/png");
+    fs::write(
+        fixture.root().join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {notes: false}}\n",
+    )
+    .unwrap();
+    let run = catalog.register_run(&fixture.root()).unwrap();
+    let plan = catalog.register_plan(&static_plan()).unwrap();
+    let (app, _receiver) = app(catalog.clone());
+    fs::write(
+        catalog.root.join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {workflow_outputs: false}}\n",
+    )
+    .unwrap();
+    for path in [
+        "/api/viewer_config".to_string(),
+        format!("{}api/viewer_config", run.url),
+        format!("{}api/viewer_config", plan.url),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(request(&path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            value(response).await,
+            json!({"display":{"workflow_inputs":true,"workflow_outputs":false,"notes":true}})
+        );
+    }
+    fs::write(
+        catalog.root.join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {workflow_inputs: false, notes: false}}\n",
+    )
+    .unwrap();
+    let response = app
+        .oneshot(
+            request(&format!("{}api/viewer_config", run.url))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        value(response).await,
+        json!({"display":{"workflow_inputs":false,"workflow_outputs":true,"notes":false}})
+    );
+}
+
+#[tokio::test]
 async fn lifecycle_requires_authentication_and_same_origin() {
     let (_directory, catalog) = catalog();
     let (app, mut receiver) = app(catalog);

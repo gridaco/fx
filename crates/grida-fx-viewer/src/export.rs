@@ -2,6 +2,7 @@
 //! Neither source records nor artifacts are repaired, and no project or cache is opened.
 
 use crate::{layout, read};
+use grida_fx_core::docs::project::ViewerConfig;
 use grida_fx_core::value::{canon, sha256_hex, write_json};
 use grida_fx_runtime::{folder::same_file, observation};
 use serde::Serialize;
@@ -90,6 +91,24 @@ pub fn run_export(
     destination: &Path,
     output_label: &str,
     options: ExportOptions,
+) -> Result<ExportResult, ExportError> {
+    run_export_with_viewer(
+        root,
+        destination,
+        output_label,
+        options,
+        ViewerConfig::default(),
+    )
+}
+
+/// Export with caller-resolved publishing defaults. No project/source is opened here; display
+/// preferences alter only the portable manifest, never the saved execution record or disclosure.
+pub fn run_export_with_viewer(
+    root: &Path,
+    destination: &Path,
+    output_label: &str,
+    options: ExportOptions,
+    viewer: ViewerConfig,
 ) -> Result<ExportResult, ExportError> {
     let root = root.canonicalize().map_err(|_| unavailable())?;
     if !root.is_dir() {
@@ -268,12 +287,17 @@ pub fn run_export(
         &serde_json::to_value(snapshot.document).map_err(|_| invalid())?,
         options,
     );
-    let manifest = json!({
+    let mut manifest = json!({
         "kind":"fx-run-export-v1", "producer":{"version":env!("CARGO_PKG_VERSION")},
         "source":{"plan_sha256":sha256_hex(&plan_bytes),"events_sha256":sha256_hex(canon(&json!(captured.events)).as_bytes()),"event_count":captured.events.len()},
         "disclosure":{"values":options.include_values,"diagnostics":options.include_diagnostics,"artifacts":"media"},
         "view":view,"layout":layout,"artifacts":artifacts
     });
+    // Preserve default manifest bytes for existing publishers; omitted configuration means
+    // the same all-visible defaults to both old and new readers.
+    if viewer != ViewerConfig::default() {
+        manifest["viewer"] = serde_json::to_value(viewer).map_err(|_| invalid())?;
+    }
     let schema: Value = serde_json::from_str(include_str!(
         "../../../spec/schemas/fx-run-export-v1.schema.json"
     ))

@@ -46,6 +46,37 @@ workflow processes. Restarting it restores access to retained run URLs. Closing 
 browser tab has no effect on service or execution. Service commands accept
 `--project DIRECTORY` when you are outside the project.
 
+## Configure canvas display
+
+Set project-wide display defaults in `fx.yaml`:
+
+```yaml
+fx: project/v1
+viewer:
+  display:
+    workflow_inputs: false
+    workflow_outputs: true
+    notes: false
+```
+
+`workflow_inputs` controls the grouped **Inputs** boundary, `workflow_outputs` the
+grouped **Outputs** boundary, and `notes` the authored note cards, including notes inside
+groups. Each setting is optional and defaults to `true`. Hidden content takes no canvas
+space. Individual step sockets, effective settings, media previews and hover inspection
+keep their behavior.
+
+Open or refresh the viewer after editing `fx.yaml`; an already running project service
+uses the current settings too. Existing plans and runs adopt these display defaults
+without a rerun. Imported workflows use the viewing project's defaults when you navigate
+into them. `grida fx doctor` reports the effective settings and their source. Unknown
+names and non-boolean values are configuration errors.
+
+These settings control ordinary canvas visibility. Recorded content is preserved, and
+explicit note/value reveal can temporarily show one selected item. Export disclosure
+remains separate: hiding a note does not remove its included text from a shared recording.
+An export freezes the publishing project's display defaults for its portable viewer;
+older exports without display settings show all three categories.
+
 ## Read workflow notes
 
 A workflow can carry Markdown or literal-text notes beside its steps. Cards grow to show

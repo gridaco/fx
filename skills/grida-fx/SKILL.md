@@ -397,6 +397,23 @@ data edits keep their ordinary identity effect. Export disclosure also governs v
 Browser hosts use `includeValues: true` and `reveal_value` with a recorded value ID;
 focus carries references only. Older installed releases may not support this feature.
 
+Current source also reads project-wide canvas defaults from `fx.yaml`:
+
+```yaml
+viewer:
+  display:
+    workflow_inputs: false
+    workflow_outputs: true
+    notes: false
+```
+
+Each boolean defaults to `true`. These control grouped workflow boundary cards and authored
+notes, including group notes; step sockets, summaries, media previews and hover inspection
+keep their behavior. After editing the project file, open or refresh the viewer. Existing
+recordings need no rerun. `doctor` reports the effective values. Portable exports freeze
+the publishing project's defaults, separately from value disclosure; hiding content does
+not remove its included evidence. Use normal disclosure options when sharing.
+
 ## Explain a workflow with notes
 
 Use workflow/group `notes:` for static canvas documentation. Each named note has exactly

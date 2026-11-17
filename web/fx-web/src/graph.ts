@@ -6,6 +6,7 @@ import { isNodePorts, isPortBindings, parameterType, type NodePorts, type PortBi
 import { isInterfaceBindings, isWorkflowScopes, projectScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
 import { skipExplanation, type SkipExplanation } from "./skip";
 import { projectPortValues, recordedExecution, type PortInspection } from "./port-values";
+import { DEFAULT_VIEWER_DISPLAY, displayGraph, type ViewerDisplay } from "./display";
 export type { PortInspection, PortImage } from "./port-values";
 
 export type PlanState = "planned" | "maybe" | "absent" | "blocked" | "failed" | "done";
@@ -467,7 +468,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   return { nodes, edges: [...connections.values()], ...(view.notes?.length ? { notes: view.notes.map((note) => ({ ...note })) } : {}) };
 }
 
-export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api", selectedValueId: string | null = null): CanvasGraph {
+export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | null = null, apiBase = "/api", selectedValueId: string | null = null, display: Readonly<ViewerDisplay> = DEFAULT_VIEWER_DISPLAY): CanvasGraph {
   const graph = projectScopes(view, flatCanvasGraph(view, apiBase), scopeId);
   const artifacts = new Map(view.kind === "fx-viewer-run-v1" ? view.artifacts.map((artifact) => [artifact.digest, artifact]) : []);
   const resolve = (digest: string) => {
@@ -476,5 +477,5 @@ export function canvasGraph(view: GraphDocument | ViewerRun, scopeId: string | n
     const url = artifact.available && artifact.url === `${apiBase}/artifacts/${digest}` ? artifact.url : null;
     return { ...artifact, url, available: url !== null };
   };
-  return projectPortValues(view, projectValueViews(view, graph, scopeId, resolve, selectedValueId), resolve);
+  return displayGraph(projectPortValues(view, projectValueViews(view, graph, scopeId, resolve, selectedValueId), resolve), display, selectedValueId);
 }

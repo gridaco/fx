@@ -3,6 +3,7 @@ import { parseViewerRun, type ViewerRun } from "./index";
 import { isPrice, cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
 import { projectPortValues } from "./port-values";
+import { displayGraph, parseViewerConfig, viewerDisplay, type ViewerConfig, type ViewerDisplay } from "./display";
 
 export interface ExportArtifact {
   digest: string;
@@ -22,6 +23,8 @@ export interface RunExport {
   view: ViewerRun;
   layout: LayoutReport;
   artifacts: ExportArtifact[];
+  /** Publication-time defaults; older exports keep all content visible. */
+  viewer?: ViewerConfig;
 }
 
 export interface PinnedRunExport { url: string; sha256: string }
@@ -168,6 +171,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
 /** Static exports receive their own strict transport boundary; local URL validation is unchanged. */
 export function parseRunExport(value: unknown): RunExport {
   if (!record(value) || value.kind !== "fx-run-export-v1") throw new Error("This website does not support the recorded workflow format.");
+  if (value.viewer !== undefined) parseViewerConfig(value.viewer);
   if (!record(value.producer) || typeof value.producer.version !== "string"
     || !record(value.source) || !digest(value.source.plan_sha256) || !digest(value.source.events_sha256) || !count(value.source.event_count) || value.source.event_count < 1
     || !record(value.disclosure) || typeof value.disclosure.values !== "boolean" || typeof value.disclosure.diagnostics !== "boolean" || value.disclosure.artifacts !== "media"
@@ -248,7 +252,7 @@ export async function readRunExport(pin: PinnedRunExport, signal?: AbortSignal, 
 }
 
 /** Share wiring, scope projection and geometry while resolving previews through the static boundary. */
-export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null, selectedValueId: string | null = null): CanvasGraph {
+export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null, selectedValueId: string | null = null, display?: Partial<ViewerDisplay>): CanvasGraph {
   const { view, artifacts } = loaded.manifest;
   const flat = flatCanvasGraph(view);
   const inventory = new Map(artifacts.map((item) => [item.digest, item]));
@@ -269,5 +273,5 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
     const url = exportArtifactUrl(loaded, digest);
     return { digest, kind: artifact.media_type, name: artifact.name, size: artifact.size, available: url !== null, url };
   };
-  return projectPortValues(view, projectValueViews(view, projectScopes(view, flat, scope), scope, resolve, selectedValueId), resolve);
+  return displayGraph(projectPortValues(view, projectValueViews(view, projectScopes(view, flat, scope), scope, resolve, selectedValueId), resolve), viewerDisplay(display, loaded.manifest.viewer?.display), selectedValueId);
 }
