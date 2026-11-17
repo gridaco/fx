@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { canvasGraph, canvasPortAnchor, isNodePorts, isPortBindings, layoutGraph, parseGraph, parseViewerRun, type GraphDocument, type NodePorts, type ViewerRun } from "../src/index";
+import { canvasGraph, canvasPortAnchor, isNodePorts, isPortBindings, layoutGraph, parseGraph, parseViewerRun, type CanvasGraph, type GraphDocument, type NodePorts, type ViewerRun } from "../src/index";
 import { step } from "./graph.test";
+
+function withoutInspection(graph: CanvasGraph): CanvasGraph {
+  return { ...graph, nodes: graph.nodes.map((node) => ({ ...node, ...(node.ports ? { ports: { ...node.ports,
+    inputs: node.ports.inputs.map(({ inspection: _inspection, ...port }) => port),
+    outputs: node.ports.outputs.map(({ inspection: _inspection, ...port }) => port) } } : {}) })) };
+}
 
 const outputPorts: NodePorts = { inputs: {}, outputs: { color: "image/png", mask: "image/png", report: "json" }, params: { size: { type: "integer" } } };
 const inputPorts: NodePorts = { inputs: { image: "image", mask: "image?", images: "image[]", keyed: "image{}" }, outputs: { image: "image" }, params: { width: { type: "integer" }, pixels: { type: "integer" }, label: { type: "string" } } };
@@ -81,16 +87,16 @@ describe("named connection projection", () => {
     expect(new Set(graph.edges.map((edge) => edge.id)).size).toBe(7);
     expect(graph.edges.filter((edge) => edge.kind === "control").map((edge) => edge.kinds)).toEqual([["needs"]]);
     expect(graph.edges.filter((edge) => edge.kind === "dependency")).toHaveLength(0);
-    expect(source.ports?.outputs.find((port) => port.kind === "fact")).toEqual({ name: "pixel count", type: "fact", kind: "fact" });
+    expect(source.ports?.outputs.find((port) => port.kind === "fact")).toMatchObject({ name: "pixel count", type: "fact", kind: "fact" });
     expect(target.ports?.inputs.filter((port) => port.kind === "parameter").map((port) => port.name)).toEqual(["pixels", "width"]);
     expect(target.ports?.settings.map((setting) => setting.name)).toEqual(["label"]);
-    expect(target.ports?.inputs.filter((port) => port.name === "images")).toEqual([{ name: "images", type: "image[]", kind: "artifact" }]);
-    expect(target.ports?.inputs.filter((port) => port.name === "keyed")).toEqual([{ name: "keyed", type: "image{}", kind: "artifact" }]);
+    expect(target.ports?.inputs.filter((port) => port.name === "images").map(({ name, type, kind }) => ({ name, type, kind }))).toEqual([{ name: "images", type: "image[]", kind: "artifact" }]);
+    expect(target.ports?.inputs.filter((port) => port.name === "keyed").map(({ name, type, kind }) => ({ name, type, kind }))).toEqual([{ name: "keyed", type: "image{}", kind: "artifact" }]);
     expect(JSON.stringify(plan)).toBe(original);
-    expect(canvasGraph(parseViewerRun(runFromPlan(plan)))).toEqual({ ...graph,
+    expect(withoutInspection(canvasGraph(parseViewerRun(runFromPlan(plan))))).toEqual(withoutInspection({ ...graph,
       nodes: graph.nodes.map((node) => ({ ...node, state: "succeeded", executed: true })),
       edges: graph.edges.map((edge) => edge.kind === "data" ? { ...edge, consumed: true } : edge),
-    });
+    }));
   });
   test("retains unresolved dependencies without inventing data endpoints or sockets for legacy records", () => {
     const plan = portGraph();
@@ -121,7 +127,7 @@ describe("named connection projection", () => {
     const plan = portGraph();
     plan.instances[1].bindings = [{ source: "source#1", source_port: "", target_port: "pixels", source_kind: "fact" }];
     const graph = canvasGraph(parseGraph(plan));
-    expect(graph.nodes[0].ports?.outputs[0]).toEqual({ name: "", type: "fact", kind: "fact" });
+    expect(graph.nodes[0].ports?.outputs[0]).toMatchObject({ name: "", type: "fact", kind: "fact" });
     const layout = layoutGraph(graph);
     const edge = layout.edges.find((item) => item.kind === "data")!;
     expect(edge.points[0]).toEqual(canvasPortAnchor(layout.nodes[0], "output", "", "fact"));
@@ -147,13 +153,13 @@ describe("named connection projection", () => {
       ["alpha", "fact"], ["color", "artifact"], ["mask", "artifact"], ["pixel count", "fact"], ["report", "artifact"], ["report", "fact"],
     ]);
     const run = canvasGraph(runFromPlan(shuffled));
-    // Runtime state and evidence do not change the declared sockets, member order or geometry.
+    // Availability differs between plans/runs; socket order, topology and geometry do not.
     run.nodes.forEach((node, index) => { node.state = expected.nodes[index].state; delete node.executed; });
     run.edges.forEach((edge) => { delete edge.consumed; });
-    expect(run).toEqual(expected);
-    const expectedLayout = layoutGraph(expected);
-    expect(layoutGraph(projected)).toEqual(expectedLayout);
-    expect(layoutGraph(run)).toEqual(expectedLayout);
+    expect(withoutInspection(run)).toEqual(withoutInspection(expected));
+    const expectedLayout = layoutGraph(withoutInspection(expected));
+    expect(layoutGraph(withoutInspection(projected))).toEqual(expectedLayout);
+    expect(layoutGraph(withoutInspection(run))).toEqual(expectedLayout);
     const placed = layoutGraph(projected);
     for (const node of placed.nodes) for (const port of node.ports!.outputs) {
       expect(canvasPortAnchor(node, "output", port.name, port.kind)).toEqual(canvasPortAnchor(expectedLayout.nodes.find((item) => item.id === node.id)!, "output", port.name, port.kind));

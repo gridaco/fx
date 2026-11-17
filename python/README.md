@@ -154,6 +154,11 @@ engine's `inspection` and absolute `run_dir`. It accepts a folder, workflow/name
 or workflow ID for its newest-created run. The selected folder stays pinned even
 if a newer run appears. It has no invocation exit code.
 
+`record.export(destination)` and `export_async` retain the resolved loading `cwd` for
+the publishing project's current `fx.yaml` display defaults. Relative destinations still
+resolve against the export caller's current directory. Direct `RunRecord` construction
+uses the export caller's project context.
+
 Use `record.snapshot()` for a consistent plan/event prefix and
 `record.events(after=cursor, limit=256)` for bounded reads. Their async forms are
 `snapshot_async` and `events_async`; loading has `load_run_async`. Documents retain

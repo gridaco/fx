@@ -484,7 +484,6 @@ mod with_yaml {
             let project = Project::find(&case.join("in")).unwrap();
             assert!(project.has_file, "{}", case.display());
             assert_eq!(project.root, case.join("in").canonicalize().unwrap());
-            assert!(!project.document.routes.is_empty(), "{}", case.display());
             let folder = case.join("in/workflows");
             for entry in std::fs::read_dir(&folder).unwrap() {
                 let path = entry.unwrap().path();

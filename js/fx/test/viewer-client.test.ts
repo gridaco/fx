@@ -423,3 +423,25 @@ test("note-aware clients explicitly request note contexts while default clients 
   expect(legacy.page.requests).toHaveLength(count);
   legacy.client.dispose();
 });
+
+test("value inspection opts into portable references without exposing value content", async () => {
+  const source = new Source(), page = new Page(source);
+  const client = new ViewerClient({ sourceWindow: source, targetWindow: page, origin: ORIGIN, includeValues: true });
+  const selected: ViewerContext = { ...context(), selection: { kind: "value", value_id: "value:root:input:prompt", scope_id: null } };
+  page.handle = (request) => page.reply(request, request.method === "unsubscribe" ? null : selected);
+  expect((await client.getContext()).selection).toEqual(selected.selection);
+  expect(page.last().params).toEqual({ include_values: true });
+  const release = await client.subscribe(() => {});
+  expect(page.last().params).toEqual({ include_values: true });
+  await client.present({ action: "reveal_value", value_id: "value:root:input:prompt" });
+  expect(page.last().params).toEqual({ action: "reveal_value", value_id: "value:root:input:prompt", include_values: true });
+  release(); client.dispose();
+  const legacy = setup();
+  const count = legacy.page.requests.length;
+  await expect(legacy.client.present({ action: "reveal_value", value_id: "value:root:input:prompt" })).rejects.toMatchObject({ code: "unsupported_method" });
+  expect(legacy.page.requests).toHaveLength(count);
+  legacy.client.dispose();
+  expect(Protocol.isParams("get_context", { include_values: false })).toBe(false);
+  expect(Protocol.isParams("present", { action: "reveal_value", value_id: "v", include_notes: true, include_values: true })).toBe(true);
+  expect(Protocol.isSelection({ ...selected.selection, data: "private content" })).toBe(false);
+});

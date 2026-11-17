@@ -249,3 +249,44 @@ test("export notes preserve disclosure and presentation references without execu
   const badMember = structuredClone(value); badMember.layout.order.push(note.id);
   expect(() => parseRunExport(badMember)).toThrow("layout order");
 });
+
+test("explicit source inspection is temporary in static recordings too", async () => {
+  const manifest = fixture(), source = `value:${"c".repeat(64)}`;
+  manifest.disclosure.values = true;
+  manifest.view.value_views = [{ id: source, scope_id: null, kind: "let", name: "brief", state: "known", context: "root#1", data: { value: "A quiet forest" } }];
+  manifest.layout.values = { [source]: { column: 0, row: 0, source: "automatic" } };
+  const recording = loaded(manifest);
+  const controller = new ExportViewerController(async () => recording);
+  await controller.load({ url: recording.manifest_url, sha256: "a".repeat(64) });
+  expect(controller.getSnapshot().graph.nodes.some((node) => node.id === source)).toBeFalse();
+  expect(controller.restore(null, source)).toBeTrue();
+  expect(controller.getSnapshot().graph.nodes.find((node) => node.id === source)?.value?.context).toBe("root#1");
+  controller.select(null);
+  expect(controller.getSnapshot().selected).toBeNull();
+  expect(controller.getSnapshot().graph.nodes.some((node) => node.id === source)).toBeFalse();
+  expect(recording.manifest.view.value_views).toHaveLength(1);
+  controller.dispose();
+});
+
+test("value cards preserve disclosure and use the existing frozen media boundary", () => {
+  const manifest = withImage();
+  const prompt = `value:${"c".repeat(64)}`, reference = `value:${"d".repeat(64)}`;
+  manifest.view.value_views = [
+    { id: prompt, scope_id: null, kind: "input", name: "prompt", state: "withheld" },
+    { id: reference, scope_id: null, kind: "input", name: "reference", state: "known", data: { file: { digest: imageDigest, kind: "image/png", name: "preview.png", size: 20 } } },
+  ];
+  manifest.layout.values = Object.fromEntries([prompt, reference].map((id, row) => [id, { column: 0, row, source: "automatic" as const }]));
+  const recording = loaded(manifest);
+  const cards = exportCanvasGraph(recording).nodes.filter((node) => node.kind === "value");
+  expect(cards.find((node) => node.id === prompt)?.value?.state).toBe("withheld");
+  expect(cards.find((node) => node.id === reference)?.preview?.url).toBe(`https://assets.example.com/runs/example/artifacts/${imageDigest}.png`);
+  const disclosed = structuredClone(manifest);
+  disclosed.view.value_views![0] = { ...disclosed.view.value_views![0], state: "known", data: { value: "Private prompt" } };
+  expect(() => parseRunExport(disclosed)).toThrow("withheld value");
+  const dangling = structuredClone(manifest);
+  dangling.view.value_links = [{ source: { kind: "value", value_id: prompt }, target: { kind: "value", value_id: `value:${"e".repeat(64)}` } }];
+  expect(() => parseRunExport(dangling)).toThrow("missing evidence");
+  const unsafe = structuredClone(manifest);
+  unsafe.view.value_views![1].data = { file: { digest: imageDigest, kind: "image/png", name: "/private/reference.png", size: 20 } };
+  expect(() => parseRunExport(unsafe)).toThrow("malformed");
+});

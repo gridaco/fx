@@ -44,10 +44,15 @@ Source discovery uses recorded workflow, scope and type metadata. Older records
 may omit it. It is not a workspace-wide file browser. Runtime source imports are
 not performed to fill absent facts.
 
-Saved graphs use the [plain file projection](identity.md#3-the-plain-projection),
+Legacy saved graph value positions use the [plain file projection](identity.md#3-the-plain-projection),
 `{file: digest}`, which omits the name, kind and size required for an artifact
 target. Discovery does not invent those facts or interpret file-shaped user JSON
 as recorded artifact evidence.
+New [value views](values.md) preserve explicit typed file metadata. Run-local
+`values/<digest>` snapshots may supply original input bytes; they use the same confined
+verification and native resolution as output artifacts. A bare saved plan with metadata
+but no captured bytes remains unavailable. The viewer never reads current input source
+paths merely to display a thumbnail.
 
 ## Native resolution
 

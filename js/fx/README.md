@@ -82,6 +82,13 @@ recorded `scope_id` or `null`, `clear_selection`, and `fit`. Context identifies 
 current subject, scope and selection, without graph/value payloads or private file
 paths. Inspection of a take never changes the workflow's execution pick.
 
+`includeValues: true` opts into recorded value selections (`kind: "value"`, `value_id`,
+`scope_id`) and `present({ action: "reveal_value", value_id })`. It is independent of
+`includeNotes`. Values remain private to the rendered view: context carries references,
+not content. Default clients receive null when a value is selected. Schema defaults on
+custom nodes are available while planning, just as they are for built-in nodes; body-only
+fallbacks are not inferred. No extra constant/preview nodes are needed to display data.
+
 The viewer accepts same-origin peers. A cross-origin host must first be explicitly
 authorized by trusted code in the viewer realm using
 `window.fx_viewer.allowHost(hostWindow, hostOrigin)`. Parent/opener identity alone

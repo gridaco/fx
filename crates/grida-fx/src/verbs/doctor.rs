@@ -153,6 +153,7 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         let adapters = adapter_lines(&mut project, &mut host);
         let providers = Providers::of(&project, &env, adapters)?;
         providers.print();
+        print_line(&viewer_line(&project));
         return Ok(u8::from(providers.refused));
     };
     let mut host = crate::print::planning_host(target, &cwd);
@@ -247,7 +248,24 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
     for line in &lines {
         print_line(line);
     }
+    print_line(&viewer_line(&project));
     Ok(u8::from(missing > 0 || unservable))
+}
+
+fn viewer_line(project: &Project) -> String {
+    let display = project.document.viewer.display;
+    let source = if project.has_file {
+        "fx.yaml; omitted settings default to true"
+    } else {
+        "defaults; no fx.yaml"
+    };
+    labelled(
+        "viewer",
+        &format!(
+            "display: workflow_inputs={}, workflow_outputs={}, notes={} ({source})",
+            display.workflow_inputs, display.workflow_outputs, display.notes,
+        ),
+    )
 }
 
 /// The capability a paid step calls and the route id chosen for it (`None`: no route), with the

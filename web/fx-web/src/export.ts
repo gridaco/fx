@@ -1,6 +1,9 @@
+import { projectValueViews } from "./value-views";
 import { parseViewerRun, type ViewerRun } from "./index";
 import { isPrice, cardPreview, flatCanvasGraph, parseLayoutReport, recordedFileDigests, type CanvasGraph, type LayoutReport } from "./graph";
 import { projectScopes } from "./scopes";
+import { projectPortValues } from "./port-values";
+import { displayGraph, parseViewerConfig, viewerDisplay, type ViewerConfig, type ViewerDisplay } from "./display";
 
 export interface ExportArtifact {
   digest: string;
@@ -20,6 +23,8 @@ export interface RunExport {
   view: ViewerRun;
   layout: LayoutReport;
   artifacts: ExportArtifact[];
+  /** Publication-time defaults; older exports keep all content visible. */
+  viewer?: ViewerConfig;
 }
 
 export interface PinnedRunExport { url: string; sha256: string }
@@ -44,6 +49,7 @@ function inspectionShape(value: unknown): unknown {
   if (!record(value)) return value;
   return {
     ...value,
+    ...(Array.isArray(value.value_views) ? { value_views: value.value_views.map((item) => record(item) ? known(item, ["id", "scope_id", "kind", "name", "state", "data", "context", "diagnostic"]) : item) } : {}),
     ...(Array.isArray(value.notes) ? { notes: value.notes.map((item) => record(item) ? known(item, ["id", "name", "scope_id", "about", "format", "text", "source", "diagnostic", "withheld"]) : item) } : {}),
     ...(Array.isArray(value.nodes) ? { nodes: value.nodes.map((item) => !record(item) ? item : {
       ...item,
@@ -70,6 +76,10 @@ function validateValue(value: unknown, includeValues: boolean, inventory: Set<st
   if (record(value.file)) {
     const file = value.file;
     if (!record(file) || !digest(file.digest) || !inventory.has(file.digest) || typeof file.kind !== "string" || typeof file.name !== "string" || !count(file.size)) refuse("a file value is malformed or missing from the inventory.");
+    return;
+  }
+  if (record(value.object)) {
+    for (const item of Object.values(value.object)) validateValue(item, includeValues, inventory, depth + 1);
     return;
   }
   if (Array.isArray(value.list)) {
@@ -129,7 +139,16 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
     for (const binding of scope.input_bindings) { checkBinding(binding); if (!(binding.target_port in scope.ports.inputs)) refuse("a workflow input binding names a missing alias."); }
     for (const binding of scope.output_bindings) { checkBinding(binding); if (!scope.ports.outputs.includes(binding.target_port)) refuse("a workflow output binding names a missing alias."); }
   }
+  const valueIds = new Set((view.value_views ?? []).map((value) => value.id));
+  for (const value of view.value_views ?? []) {
+    if (value.scope_id !== null && !scopes.has(value.scope_id)) refuse("a value names a missing scope.");
+    if (layout.values && !(value.id in layout.values)) refuse("layout values do not cover the recorded value presentation.");
+  }
+  for (const link of view.value_links ?? []) for (const endpoint of [link.source, link.target]) {
+    if (endpoint.kind === "value" ? !valueIds.has(endpoint.value_id) : !ids.has(endpoint.instance_id)) refuse("a value connection names missing evidence.");
+  }
   const inventory = new Set(artifacts.map((item) => item.digest));
+  for (const value of view.value_views ?? []) if (recordedFileDigests(value.data).some((id) => !inventory.has(id))) refuse("a value artifact is missing from the inventory.");
   for (const values of [view.inputs, view.outputs, ...view.nodes.flatMap((node) => [node.with, node.outputs])]) {
     for (const value of Object.values(values)) if (recordedFileDigests(value).some((id) => !inventory.has(id))) refuse("an artifact reference is missing from the inventory.");
   }
@@ -152,6 +171,7 @@ function validateReferences(view: ViewerRun, layout: LayoutReport, artifacts: Ex
 /** Static exports receive their own strict transport boundary; local URL validation is unchanged. */
 export function parseRunExport(value: unknown): RunExport {
   if (!record(value) || value.kind !== "fx-run-export-v1") throw new Error("This website does not support the recorded workflow format.");
+  if (value.viewer !== undefined) parseViewerConfig(value.viewer);
   if (!record(value.producer) || typeof value.producer.version !== "string"
     || !record(value.source) || !digest(value.source.plan_sha256) || !digest(value.source.events_sha256) || !count(value.source.event_count) || value.source.event_count < 1
     || !record(value.disclosure) || typeof value.disclosure.values !== "boolean" || typeof value.disclosure.diagnostics !== "boolean" || value.disclosure.artifacts !== "media"
@@ -194,6 +214,10 @@ export function parseRunExport(value: unknown): RunExport {
   if (view.artifacts.length !== seen.size) refuse("the inspection view and artifact inventory disagree.");
   if (!value.disclosure.diagnostics && (view.warnings.length || view.nodes.some((node) => node.error !== null) || layout.diagnostics.length)) refuse("withheld diagnostics were unexpectedly disclosed.");
   for (const values of [view.inputs, view.outputs, ...view.nodes.flatMap((node) => [node.with, node.outputs])]) for (const item of Object.values(values)) validateValue(item, value.disclosure.values, seen);
+  for (const item of view.value_views ?? []) {
+    if (item.state === "known") validateValue(item.data, value.disclosure.values, seen);
+    if (!value.disclosure.diagnostics && item.diagnostic !== undefined) refuse("withheld value diagnostics were unexpectedly disclosed.");
+  }
   validateReferences(view, layout, value.artifacts as ExportArtifact[]);
   return value as unknown as RunExport;
 }
@@ -228,7 +252,7 @@ export async function readRunExport(pin: PinnedRunExport, signal?: AbortSignal, 
 }
 
 /** Share wiring, scope projection and geometry while resolving previews through the static boundary. */
-export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null): CanvasGraph {
+export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null = null, selectedValueId: string | null = null, display?: Partial<ViewerDisplay>): CanvasGraph {
   const { view, artifacts } = loaded.manifest;
   const flat = flatCanvasGraph(view);
   const inventory = new Map(artifacts.map((item) => [item.digest, item]));
@@ -243,5 +267,11 @@ export function exportCanvasGraph(loaded: LoadedRunExport, scope: string | null 
     if (preview) node.preview = preview;
     else delete node.preview;
   }
-  return projectScopes(view, flat, scope);
+  const resolve = (digest: string) => {
+    const artifact = inventory.get(digest);
+    if (!artifact) return null;
+    const url = exportArtifactUrl(loaded, digest);
+    return { digest, kind: artifact.media_type, name: artifact.name, size: artifact.size, available: url !== null, url };
+  };
+  return displayGraph(projectPortValues(view, projectValueViews(view, projectScopes(view, flat, scope), scope, resolve, selectedValueId), resolve), viewerDisplay(display, loaded.manifest.viewer?.display), selectedValueId);
 }

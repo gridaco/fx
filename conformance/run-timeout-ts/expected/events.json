@@ -191,6 +191,8 @@
   "pending": [],
   "plan": "cd398960ec6a953e906ddbe74c7264d83bd45dc58a6e5dc5ad292aae3123f5fe",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [],
+  "value_views": []
  }
 ]

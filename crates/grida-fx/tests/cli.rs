@@ -323,8 +323,8 @@ fn integrated_doctor_without_a_target() {
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
     // engine, python, node, a key per provider, a program per installed provider, a route per
-    // built-in route.
-    assert_eq!(lines.len(), 3 + 6 + 2 + 29, "{text}");
+    // built-in route, then current viewer defaults.
+    assert_eq!(lines.len(), 3 + 6 + 2 + 29 + 1, "{text}");
     assert_eq!(
         lines[0],
         format!("engine    grida-fx {}", env!("CARGO_PKG_VERSION"))
@@ -355,7 +355,11 @@ fn integrated_doctor_without_a_target() {
             "program   grok not installed"
         ]
     );
-    let routes = &lines[11..];
+    assert_eq!(
+        lines.last().unwrap(),
+        &"viewer    display: workflow_inputs=true, workflow_outputs=true, notes=true (fx.yaml; omitted settings default to true)"
+    );
+    let routes = &lines[11..lines.len() - 1];
     assert!(routes.iter().all(|l| l.starts_with("route     ")), "{text}");
     let codex = [
         "route     image.edit imagegen@codex not installed (codex)",
@@ -375,6 +379,19 @@ fn integrated_doctor_without_a_target() {
     let mut sorted = routes.to_vec();
     sorted.sort();
     assert_eq!(sorted, routes, "sorted by capability, then id");
+}
+
+#[test]
+fn integrated_doctor_reports_current_viewer_defaults() {
+    let project = empty_project();
+    std::fs::write(
+        project.path().join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {workflow_inputs: false, notes: false}}\n",
+    )
+    .unwrap();
+    let output = grida_fx(project.path(), &["doctor"]);
+    assert_eq!(status(&output), 0, "{}", stderr(&output));
+    assert!(stdout(&output).contains("viewer    display: workflow_inputs=false, workflow_outputs=true, notes=false (fx.yaml; omitted settings default to true)"));
 }
 
 /// A made-up key value, distinctive enough that finding it anywhere is a leak.

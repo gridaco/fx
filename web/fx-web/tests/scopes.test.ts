@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
   canvasGraph, flatCanvasGraph, isInterfaceBindings, isWorkflowScopes, navigationScopes, parseGraph, parseViewerRun,
-  ViewerController, canvasPortAnchor, layoutGraph, type GraphDocument, type InterfaceBinding, type ViewerRun, type WorkflowScope,
+  ViewerController, canvasPortAnchor, layoutGraph, type CanvasGraph, type GraphDocument, type InterfaceBinding, type ViewerRun, type WorkflowScope,
 } from "../src/index";
 import { step } from "./graph.test";
+
+function withoutInspection(graph: CanvasGraph): CanvasGraph {
+  return { ...graph, nodes: graph.nodes.map((node) => ({ ...node, ...(node.ports ? { ports: { ...node.ports,
+    inputs: node.ports.inputs.map(({ inspection: _inspection, ...port }) => port),
+    outputs: node.ports.outputs.map(({ inspection: _inspection, ...port }) => port) } } : {}) })) };
+}
 
 function binding(source: string, source_port: string, target_port: string, source_kind: InterfaceBinding["source_kind"] = "output"): InterfaceBinding {
   return { source, source_port, target_port, source_kind };
@@ -133,7 +139,7 @@ describe("hierarchical graph projection", () => {
     expect(graph.frames).toEqual([{ id: "scope:batch#1", title: "Batch", nodes: ["scope:batch.item#1", "scope:batch.item#2"], parent: null, address: "scope:batch#1", take: [1], key: "scope:batch#1", state: "planned" }]);
     const card = graph.nodes.find((node) => node.id === "scope:batch.item#1")!;
     expect(card).toMatchObject({ kind: "workflow", scope_id: card.id, child_count: 2, failure_count: 0, state: "planned" });
-    expect(card.ports?.outputs).toEqual([{ name: "alternate", type: "unknown", kind: "value" }, { name: "hero", type: "unknown", kind: "value" }]);
+    expect(card.ports?.outputs.map(({ name, type, kind }) => ({ name, type, kind }))).toEqual([{ name: "alternate", type: "unknown", kind: "value" }, { name: "hero", type: "unknown", kind: "value" }]);
     const aliases = graph.edges.filter((edge) => edge.target === "instance:save#1");
     expect(aliases.map((edge) => [edge.source, edge.source_port, edge.target_port])).toEqual([
       [card.id, "hero", "image"], [card.id, "alternate", "mask"],
@@ -150,7 +156,7 @@ describe("hierarchical graph projection", () => {
       "boundary:input:scope:batch.item#1", "instance:a.paint#1", "scope:batch.item.child#1.1", "boundary:output:scope:batch.item#1",
     ]);
     expect(graph.frames).toEqual([{ id: "scope:a.inline#1", title: "Preparation", nodes: ["instance:a.paint#1"], parent: null, address: "scope:a.inline#1", take: [1], key: "scope:a.inline#1", state: "planned" }]);
-    expect(graph.nodes[0].ports?.outputs).toEqual([{ name: "count", type: "integer", kind: "parameter" }, { name: "image", type: "image", kind: "artifact" }]);
+    expect(graph.nodes[0].ports?.outputs.map(({ name, type, kind }) => ({ name, type, kind }))).toEqual([{ name: "count", type: "integer", kind: "parameter" }, { name: "image", type: "image", kind: "artifact" }]);
     expect(graph.nodes[1].ports?.inputs.some((port) => port.name === "amount" && port.kind === "parameter")).toBeTrue();
     expect(graph.edges.filter((edge) => edge.target === "instance:a.paint#1").map((edge) => [edge.source_port, edge.target_port])).toEqual([["image", "image"], ["count", "amount"]]);
     expect(graph.edges.filter((edge) => edge.target === "boundary:output:scope:batch.item#1").map((edge) => edge.target_port)).toEqual(["hero", "alternate"]);
@@ -192,7 +198,7 @@ describe("hierarchical graph projection", () => {
   test("legacy remains flat and missing interface aliases only preserve known dependencies", () => {
     const plan = nestedPlan();
     const legacy = structuredClone(plan); delete legacy.scopes;
-    expect(canvasGraph(legacy)).toEqual(flatCanvasGraph(legacy));
+    expect(withoutInspection(canvasGraph(legacy))).toEqual(flatCanvasGraph(legacy));
     expect(canvasGraph(legacy).nodes.some((node) => node.kind === "workflow")).toBeFalse();
     plan.instances.forEach((node) => { delete node.interface_bindings; });
     const edges = canvasGraph(plan).edges.filter((edge) => edge.target === "instance:save#1");

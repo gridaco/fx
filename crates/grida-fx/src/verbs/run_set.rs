@@ -329,7 +329,7 @@ impl RunSet {
                     }
                     continue;
                 };
-                if is_run && matches!(name.as_str(), "files" | "outputs" | "views") {
+                if is_run && matches!(name.as_str(), "files" | "outputs" | "views" | "values") {
                     continue;
                 }
                 let kind = match item.file_type() {

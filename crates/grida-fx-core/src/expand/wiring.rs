@@ -57,6 +57,7 @@ struct Capture {
 pub(crate) struct Trace {
     captures: Vec<Option<Capture>>,
     accesses: Vec<Access>,
+    pub(crate) values: super::values::Trace,
 }
 
 impl Trace {
@@ -84,10 +85,12 @@ impl Trace {
 
     /// Expanding a referenced step must not attribute its own inputs to its reader.
     pub fn suspend(&mut self) {
+        self.values.suspend();
         self.captures.push(None);
     }
 
     pub fn resume(&mut self) {
+        self.values.resume();
         self.captures.pop();
     }
 
@@ -99,6 +102,7 @@ impl Trace {
     }
 
     pub fn begin_access(&mut self) {
+        self.values.begin_access();
         self.accesses.push(Access {
             capture: self.current_capture(),
             sources: Vec::new(),
@@ -106,6 +110,7 @@ impl Trace {
     }
 
     pub fn end_access(&mut self, ok: bool) {
+        self.values.end_access(ok);
         let Some(access) = self.accesses.pop() else {
             return;
         };
@@ -126,6 +131,7 @@ impl Trace {
     }
 
     pub fn result(&mut self, id: &str, kind: SourceKind, ports: Vec<String>, any_port: bool) {
+        self.values.result(id, kind, ports.clone(), any_port);
         let current = self.current_capture();
         if let Some(access) = self.accesses.last_mut()
             && access.capture == current
@@ -188,6 +194,7 @@ impl Trace {
     }
 
     pub fn member(&mut self, name: &str) {
+        self.values.member(name);
         let Some(access) = self.accesses.last_mut() else {
             return;
         };
@@ -199,12 +206,14 @@ impl Trace {
     }
 
     pub fn unknown_member(&mut self) {
+        self.values.unknown_member();
         if let Some(access) = self.accesses.last_mut() {
             access.sources.clear();
         }
     }
 
     pub fn references(&mut self, bindings: &[Binding], interfaces: &[Binding]) {
+        self.values.references(bindings);
         let Some(capture) = self.captures.last_mut().and_then(Option::as_mut) else {
             return;
         };

@@ -65,6 +65,7 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) 
   requests.push({ method: request.method, pathname });
   if (request.method !== "GET") return new Response("Read only", { status: 405 });
   if (pathname.endsWith("/api/view")) return Response.json(runAt(pathname, request.headers.has("X-FX-Test-Long-Names"), request.headers.has("X-FX-Test-Card-Only")));
+  if (pathname.endsWith("/api/viewer_config")) return Response.json({ display: { workflow_inputs: true, workflow_outputs: true, notes: true } });
   if (pathname.endsWith("/api/snapshot")) { snapshots++; return Response.json({ kind: "fx-run-snapshot-v1", cursor: `fixture:${revision}`, plan: request.headers.has("X-FX-Test-Card-Only") ? { ...plan, instances: instances.filter(node => ["animated", "static", "single"].includes(node.id)) } : plan, events: [], view: runAt(pathname, request.headers.has("X-FX-Test-Long-Names"), request.headers.has("X-FX-Test-Card-Only")) }); }
   if (pathname.endsWith("/api/events")) return Response.json({ kind: "fx-run-event-batch-v1", cursor: `fixture:${revision}`, events: new URL(request.url).searchParams.get("after") === `fixture:${revision}` ? [] : [{ kind: "fx-run-events-v1", event: "run_finished", invocation_id: "fixture", plan: "a".repeat(64), offset_ms: 1 }], has_more: false });
   if (pathname.endsWith("/api/layout")) return new Response("No fixture report", { status: 404 });

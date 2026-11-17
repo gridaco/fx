@@ -160,6 +160,31 @@
    }
   }
  },
+ "value_links": [],
+ "value_views": [
+  {
+   "data": {
+    "list": [
+     {
+      "value": {
+       "id": "a",
+       "note": "first"
+      }
+     },
+     {
+      "value": {
+       "id": "b"
+      }
+     }
+    ]
+   },
+   "id": "value:0c71aff79e94c6a7b4af4f2aa8ac37a13cbe03765954ea6049c4383e2c670e31",
+   "kind": "table",
+   "name": "rows",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

@@ -81,6 +81,12 @@ camera fit; it does not paint fixed cards and resize them afterward. These prese
 can change pixel bounds, never executable cells or member order. The authored layout-file
 feature is not a prerequisite.
 
+The project's [`viewer.display.notes`](viewer.md#project-display-settings) boolean defaults
+to `true`. Setting it to `false` omits ordinary note cards and their layout space in every
+displayed workflow/group scope. Captured text and placement evidence remain recorded;
+visibility is independent of export disclosure. An explicit `reveal_note` can temporarily
+show the selected note, with its recorded content, until selection changes.
+
 A short or ordinary note displays its complete content on the canvas. A generous maximum
 card height and bounded canvas rendering keep unusually long documents from dominating
 the workflow; those cards explicitly offer full text in the existing details panel. Selecting

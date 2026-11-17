@@ -144,6 +144,48 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "tune#1",
+    "kind": "instance",
+    "port": "audio",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:474dcb8b7ecd4d3bd1eaa934e622169ec29dc234cf41f6f84dd9ae2a63c43bb9"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "id": "value:f6d71a64444d6344fdce90132f7ef892fb89724c460f48d706b9526ab4af42e8",
+   "kind": "output",
+   "name": "image",
+   "scope_id": null,
+   "state": "pending"
+  },
+  {
+   "id": "value:474dcb8b7ecd4d3bd1eaa934e622169ec29dc234cf41f6f84dd9ae2a63c43bb9",
+   "kind": "output",
+   "name": "tune",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflow.yaml",
   "id": "thing",

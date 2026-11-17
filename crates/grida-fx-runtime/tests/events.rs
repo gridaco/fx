@@ -238,6 +238,8 @@ fn every_event() -> Vec<Event> {
             scopes: json!([]),
             skip_reasons: None,
             notes: None,
+            value_views: None,
+            value_links: None,
             node_interface_bindings: json!({"leaf#1": []}),
             instances: json!([
                 {"id": "leaf#1", "step": "leaf", "take": [1], "key": null},
@@ -580,6 +582,8 @@ fn structured_skip_causes_are_additive_display_metadata() {
         pending: json!([]),
         skip_reasons: Some(json!({"draw#3": reason.to_value()})),
         notes: None,
+        value_views: None,
+        value_links: None,
     };
     assert_eq!(
         snapshot.to_fields()["skip_reasons"]["draw#3"],

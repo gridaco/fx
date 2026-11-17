@@ -184,9 +184,10 @@ def missing_artifact(completed: Path, target: Path, digest: str | list[str]) -> 
 
 
 def legacy_graph(document: dict[str, Any]) -> dict[str, Any]:
-    """Remove optional port metadata, preserving the preexisting graph and authored values."""
+    """Remove optional display metadata, preserving the old graph and authored values."""
     old = copy.deepcopy(document)
-    old.pop("scopes", None)
+    for field in ("scopes", "value_views", "value_links"):
+        old.pop(field, None)
     for definition in old.get("types", {}).values():
         definition.pop("ports", None)
     for instance in old.get("instances", []):

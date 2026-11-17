@@ -13,7 +13,7 @@ import math
 import os
 import re
 from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +153,7 @@ class RunRecord:
 
     run_dir: Path
     inspection: dict[str, Any]
+    _cwd: Path | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "run_dir", Path(self.run_dir).resolve())
@@ -208,7 +209,9 @@ class RunRecord:
 
         Relative destinations resolve against the caller's current directory. Values and
         diagnostic messages are withheld by default; included media still needs review
-        before publication. This does not execute the workflow or publish files.
+        before publication. Loaded records retain their loading context for the publishing
+        project's display defaults; direct construction uses the export caller's context.
+        This does not execute the workflow or publish files.
         """
         _no_running_loop("RunRecord.export")
         return asyncio.run(
@@ -239,7 +242,7 @@ class RunRecord:
             args.append("--include-values")
         if include_diagnostics:
             args.append("--include-diagnostics")
-        done = await _call(args, Path.cwd())
+        done = await _call(args, self._cwd or Path.cwd())
         try:
             document = json.loads(done.stdout, parse_constant=_reject_constant)
         except ValueError:
@@ -349,7 +352,9 @@ async def load_run_async(
     folder = document["run"].get("folder")
     if not _text(folder) or "\0" in folder:
         raise FxError("grida-fx inspect printed no selected run folder", done.status)
-    return RunRecord(base / folder, document)
+    record = RunRecord(base / folder, document)
+    object.__setattr__(record, "_cwd", base)
+    return record
 
 
 def load_run(

@@ -545,7 +545,8 @@ def normalised_json(raw: bytes, label: str) -> bytes:
 def normalised_jsonl(raw: bytes, label: str) -> bytes:
     """JSON Lines (a run's events.jsonl) as the suite compares it: each line normalised as JSON
     is, and the lines sorted into one array, because the events of instances that run at the
-    same time may be written in any order."""
+    same time may be written in any order. Initial/final recorded values are kept per invocation;
+    intermediate value-only updates depend on which independent result arrived first."""
 
     values: list[object] = []
     try:
@@ -553,13 +554,81 @@ def normalised_jsonl(raw: bytes, label: str) -> bytes:
             if not line.strip():
                 continue
             try:
-                values.append(_normal(_loaded(line)))
+                values.append(_loaded(line))
             except ValueError as error:
                 raise ValueError(f"line {number}: {error}") from None
     except (UnicodeDecodeError, ValueError) as error:
         raise CaseFailure(f"{label}: not JSON Lines: {error}\n{_shown(raw)}") from None
+    values = [_normal(value) for value in _coalesced_scope_values(values)]
     values.sort(key=lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")))
     return _dumped(values, label)
+
+
+def _coalesced_scope_values(events: list[object]) -> list[object]:
+    """Keep exact endpoint values and all distinct structural snapshots in each invocation.
+
+    A complete display snapshot may change solely because a concurrent result became known.
+    Its intermediate value states and update count are scheduling-dependent. Select endpoints
+    in recorded order before sorting, and never strip authored data or structural expansion.
+    """
+
+    result: list[object] = []
+    invocation: list[object] = []
+    for event in events:
+        if (
+            isinstance(event, dict)
+            and event.get("kind") == "fx-run-events-v1"
+            and event.get("event") == "run_started"
+            and invocation
+        ):
+            result.extend(_coalesced_invocation_values(invocation))
+            invocation = []
+        invocation.append(event)
+    result.extend(_coalesced_invocation_values(invocation))
+    return result
+
+
+def _coalesced_invocation_values(events: list[object]) -> list[object]:
+    snapshots = {
+        index: event
+        for index, event in enumerate(events)
+        if isinstance(event, dict)
+        and event.get("kind") == "fx-run-events-v1"
+        and event.get("event") == "scopes_updated"
+        and ("value_views" in event or "value_links" in event)
+    }
+    if not snapshots:
+        return events
+
+    def key(event: object) -> str:
+        return json.dumps(_normal(event), sort_keys=True, separators=(",", ":"))
+
+    def structure(event: dict) -> dict:
+        return {
+            name: value
+            for name, value in event.items()
+            if name not in {"value_views", "value_links"}
+        }
+
+    endpoints = {min(snapshots), max(snapshots)}
+    structures = {key(structure(snapshots[index])) for index in endpoints}
+    kept_endpoints: set[str] = set()
+    result: list[object] = []
+    for index, event in enumerate(events):
+        if index not in snapshots:
+            result.append(event)
+        elif index in endpoints:
+            endpoint = key(event)
+            if endpoint not in kept_endpoints:
+                result.append(event)
+                kept_endpoints.add(endpoint)
+        else:
+            structural = structure(snapshots[index])
+            structural_key = key(structural)
+            if structural_key not in structures:
+                result.append(structural)
+                structures.add(structural_key)
+    return result
 
 
 def _loaded(text: str) -> object:

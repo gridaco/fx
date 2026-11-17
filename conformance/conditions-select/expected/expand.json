@@ -262,6 +262,19 @@
    }
   }
  },
+ "value_links": [],
+ "value_views": [
+  {
+   "data": {
+    "value": "a"
+   },
+   "id": "value:f0bd52ef6562192d28f6c8532a947929a0c1e70508244cf91a700ba6fad1e3ff",
+   "kind": "input",
+   "name": "mode",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

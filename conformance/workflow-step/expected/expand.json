@@ -193,6 +193,176 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:1fabc733a2ef4b3e336ba18b8ff3c639811284c21e63bb60e781a34ed05dad3c"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:618251b82df482ffcc5c623906e5a8821a39ffa6f6617c4f4343b23a8f8f1783"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:25d0e054f7e790a4934e44b6166d831b0882e09a5e38e5755c1dfe645d4213bf"
+   },
+   "target": {
+    "instance_id": "each['ada'].loud#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:3415b3c09447e5b46c0aa3c004fc99ae693c665218739f16e8e04728dd13b157"
+   },
+   "target": {
+    "instance_id": "each['bo'].loud#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:947e1c6fe7bbb54790a53ea97455cb767e6a8103281a1b8cb96bf48468f3703a"
+   },
+   "target": {
+    "instance_id": "each['bo'].loud#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:b6f92285faa846e7071c32d39baa8e20280e0d46893a3c047ea85d080c9405cf"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:618251b82df482ffcc5c623906e5a8821a39ffa6f6617c4f4343b23a8f8f1783"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:d8ba69a30d2254c4da2efc618918ef9eb9ca793730527ba708c64f75d1c62199"
+   },
+   "target": {
+    "instance_id": "each['ada'].loud#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "each['ada'].loud#1",
+    "kind": "instance",
+    "port": "text",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:1fabc733a2ef4b3e336ba18b8ff3c639811284c21e63bb60e781a34ed05dad3c"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "each['bo'].loud#1",
+    "kind": "instance",
+    "port": "text",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:b6f92285faa846e7071c32d39baa8e20280e0d46893a3c047ea85d080c9405cf"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "list": [
+     {
+      "value": "ada"
+     },
+     {
+      "value": "bo"
+     }
+    ]
+   },
+   "id": "value:83b4c345acf1cc3075e6945471500ce8df1ecd7ae3022cd8fa2bde195d38603e",
+   "kind": "input",
+   "name": "names",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "ada"
+   },
+   "id": "value:d8ba69a30d2254c4da2efc618918ef9eb9ca793730527ba708c64f75d1c62199",
+   "kind": "input",
+   "name": "name",
+   "scope_id": "scope:each['ada']#",
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "!"
+   },
+   "id": "value:25d0e054f7e790a4934e44b6166d831b0882e09a5e38e5755c1dfe645d4213bf",
+   "kind": "input",
+   "name": "suffix",
+   "scope_id": "scope:each['ada']#",
+   "state": "known"
+  },
+  {
+   "id": "value:1fabc733a2ef4b3e336ba18b8ff3c639811284c21e63bb60e781a34ed05dad3c",
+   "kind": "output",
+   "name": "loud",
+   "scope_id": "scope:each['ada']#",
+   "state": "pending"
+  },
+  {
+   "data": {
+    "value": "bo"
+   },
+   "id": "value:3415b3c09447e5b46c0aa3c004fc99ae693c665218739f16e8e04728dd13b157",
+   "kind": "input",
+   "name": "name",
+   "scope_id": "scope:each['bo']#",
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "!"
+   },
+   "id": "value:947e1c6fe7bbb54790a53ea97455cb767e6a8103281a1b8cb96bf48468f3703a",
+   "kind": "input",
+   "name": "suffix",
+   "scope_id": "scope:each['bo']#",
+   "state": "known"
+  },
+  {
+   "id": "value:b6f92285faa846e7071c32d39baa8e20280e0d46893a3c047ea85d080c9405cf",
+   "kind": "output",
+   "name": "loud",
+   "scope_id": "scope:each['bo']#",
+   "state": "pending"
+  },
+  {
+   "id": "value:618251b82df482ffcc5c623906e5a8821a39ffa6f6617c4f4343b23a8f8f1783",
+   "kind": "output",
+   "name": "loud",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

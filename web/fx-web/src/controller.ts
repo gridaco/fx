@@ -3,6 +3,7 @@ import { WorkflowNavigation, type Breadcrumb } from "./navigation";
 import { navigationScopes } from "./scopes";
 import { cancellationRequested, ObservationError, observationReader, readLayout, type RunObservationReader } from "./observation";
 import { validateViewerApiBase } from "./route";
+import { parseViewerConfig, readViewerConfig, temporaryDisplaySelection, viewerDisplay, type ViewerConfig, type ViewerDisplay } from "./display";
 
 export interface ViewerState {
   view: ViewerView | null;
@@ -30,6 +31,10 @@ export interface ViewerControllerOptions {
   apiBase?: string;
   /** Reads a saved plan's layout report (a run's comes with its snapshot); defaults to the host's `layout` route with the default reader. */
   layout?: ((signal: AbortSignal) => Promise<LayoutReport>) | false;
+  /** Optional host overrides; normal native viewers read the project's configuration. */
+  display?: Partial<ViewerDisplay>;
+  /** Custom readers have no configuration request unless explicitly supplied. */
+  viewerConfig?: ((signal: AbortSignal) => Promise<ViewerConfig>) | false;
 }
 
 const pollingScheduler: ViewerPollingScheduler = {
@@ -48,6 +53,9 @@ export class ViewerController {
   private readonly layoutReader: ((signal: AbortSignal) => Promise<LayoutReport>) | null;
   private readonly scheduler: ViewerPollingScheduler;
   private readonly apiBase: string;
+  private readonly configReader: ((signal: AbortSignal) => Promise<ViewerConfig>) | null;
+  private readonly displayOverrides: Partial<ViewerDisplay> | undefined;
+  private display = viewerDisplay();
   private timer: unknown = null;
   private cursor: string | null = null;
   private observingRun = false;
@@ -60,6 +68,9 @@ export class ViewerController {
     this.observation = options.observation === false ? null : options.observation ?? (defaultReader ? observationReader(this.apiBase) : null);
     this.scheduler = options.scheduler ?? pollingScheduler;
     this.layoutReader = options.layout === false ? null : options.layout ?? (defaultReader ? (signal) => readLayout(signal, this.apiBase) : null);
+    this.configReader = options.viewerConfig === false ? null : options.viewerConfig ?? (defaultReader ? (signal) => readViewerConfig(signal, this.apiBase) : null);
+    this.display = viewerDisplay(options.display);
+    this.displayOverrides = options.display === undefined ? undefined : { ...options.display };
   }
   /** A report that cannot be read keeps the previous one; the canvas still draws. */
   private async readLayout(signal: AbortSignal) {
@@ -78,16 +89,17 @@ export class ViewerController {
   }
   select = (id: string | null) => {
     if (id !== null && !this.state.graph.nodes.some((node) => node.id === id) && !this.state.graph.notes?.some((note) => note.id === id)) return;
+    const dismissSource = id !== this.state.selected && temporaryDisplaySelection(this.state.graph, this.state.selected, this.display);
     this.navigation.select(id);
-    this.update({ selected: id });
+    this.update(dismissSource && this.state.view ? this.project(this.state.view) : { selected: id });
   };
   private project(view: ViewerView) {
     const navigation = this.navigation.getSnapshot();
-    const graph = canvasGraph(view, navigation.scope, this.apiBase);
+    const graph = canvasGraph(view, navigation.scope, this.apiBase, navigation.selected, this.display);
     const selected = (graph.nodes.some((node) => node.id === navigation.selected) || graph.notes?.some((note) => note.id === navigation.selected)) ? navigation.selected : null;
     this.navigation.select(selected);
     const parentScope = navigation.breadcrumbs.at(-2)?.id ?? null;
-    const scopeNode = navigation.scope === null ? null : canvasGraph(view, parentScope, this.apiBase).nodes.find((node) => node.scope_id === navigation.scope) ?? null;
+    const scopeNode = navigation.scope === null ? null : canvasGraph(view, parentScope, this.apiBase, null, this.display).nodes.find((node) => node.scope_id === navigation.scope) ?? null;
     return { graph, selected, scope: navigation.scope, breadcrumbs: navigation.breadcrumbs, scopeNode };
   }
   openScope = (id: string) => {
@@ -105,7 +117,7 @@ export class ViewerController {
   restore(scope: string | null, selected: string | null): boolean {
     const view = this.state.view;
     if (!view || (scope !== null && !navigationScopes(view.scopes).some((item) => item.id === scope))) return false;
-    const graph = canvasGraph(view, scope, this.apiBase);
+    const graph = canvasGraph(view, scope, this.apiBase, selected, this.display);
     if (selected !== null && !graph.nodes.some((node) => node.id === selected) && !graph.notes?.some((note) => note.id === selected)) return false;
     if (!this.navigation.restore(scope, selected)) return false;
     this.update(this.project(view));
@@ -166,10 +178,15 @@ export class ViewerController {
     this.request?.abort();
     const request = new AbortController();
     this.request = request;
+    this.observingRun = false;
     this.update({ loading: true });
     try {
-      const view = await this.reader(request.signal);
+      const [view, config] = await Promise.all([
+        this.reader(request.signal),
+        this.configReader ? this.configReader(request.signal) : Promise.resolve({ display: viewerDisplay() }),
+      ]);
       if (request.signal.aborted) return;
+      this.display = viewerDisplay(this.displayOverrides, parseViewerConfig(config).display);
       this.observingRun = view.kind === "fx-viewer-run-v1" && this.observation !== null;
       if (this.observingRun) await this.snapshot(request);
       else {

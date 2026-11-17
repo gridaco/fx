@@ -1,11 +1,22 @@
 fx: workflow/v1
 id: viewer-notes
 title: A self-explanatory local workflow
-description: Static Markdown and text notes next to provider-free image steps.
+description: Notes, visible inputs, shared settings and results in a provider-free workflow.
 inputs:
-  prompt: {type: string, default: A geometric reference}
+  prompt:
+    type: string
+    default: >-
+      A geometric lantern made from a rounded blue shape, a warm orange circle and
+      a mint triangle. Keep the silhouette simple, leave generous space around the
+      object and use a warm paper background. The reference and both variations
+      are drawn locally; this description demonstrates a readable prompt without
+      calling any image provider.
+  reference: {type: file, kind: image, optional: true}
 tables:
-  style: {shape: rounded, seed: 42}
+  style: {shape: rounded, seed: 42, palette: [navy, amber, mint], transparent: false}
+let:
+  brief: "${{ inputs.prompt }} Shared shape: ${{ tables.style.shape }}."
+  variation_brief: "${{ item }} colors for the geometric lantern."
 notes:
   overview:
     about: seed
@@ -26,7 +37,11 @@ notes:
 steps:
   seed:
     title: Reference image
-    uses: ./nodes/media.py#seed
+    uses: ./nodes/values.py#reference
+    with:
+      reference: ${{ inputs.reference }}
+      prompt: ${{ let.brief }}
+      style: ${{ tables.style }}
   variations:
     title: Two local variations
     for_each: [warm, cool]
@@ -38,6 +53,10 @@ steps:
           This group consumes the reference and changes its channels.
           The note belongs to the group, with no execution state.
     steps:
+      describe:
+        title: Variation description
+        uses: ./nodes/values.py#describe
+        with: {prompt: "${{ let.variation_brief }}"}
       tint:
         title: Color variation
         uses: ./nodes/media.py#tint
@@ -53,3 +72,4 @@ outputs:
   reference: ${{ steps.seed.outputs.image }}
   variations: ${{ steps.variations.*.tint.outputs.image }}
   imported: ${{ steps.child.outputs.image }}
+  summary: ${{ steps.seed.outputs.summary }}

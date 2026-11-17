@@ -389,6 +389,7 @@ impl Expander<'_> {
         let saved_instances = self.instances.clone();
         let saved_display_scopes = self.display_scopes.clone();
         let saved_notes = self.notes.clone();
+        let saved_value_ledger = self.value_ledger.clone();
         let saved_skip_reasons = self.skip_reasons.clone();
         let skipped_positions_before = self.skipped_positions.len();
         let saved_pending = self.pending.clone();
@@ -484,6 +485,7 @@ impl Expander<'_> {
         self.instances = saved_instances;
         self.display_scopes = saved_display_scopes;
         self.notes = saved_notes;
+        self.value_ledger = saved_value_ledger;
         self.skip_reasons = saved_skip_reasons;
         self.skipped_positions.truncate(skipped_positions_before);
         self.pending = saved_pending;

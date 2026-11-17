@@ -10,7 +10,9 @@ not an execution backup or resumable run folder.
 
 `grida-fx export RUN --out DIR [--include-values] [--include-diagnostics] [--json]`
 reads exactly the selected saved run without importing author code, opening a
-cache, loading a project or credentials, or executing providers. It opens the
+cache, loading credentials, or executing providers. The publishing project's `fx.yaml`
+may be read only to resolve [viewer display defaults](viewer.md#project-display-settings);
+it does not supply or alter execution evidence. It opens the
 existing, non-symlink `run.lock` without creating it, acquires its exclusive OS
 lock without waiting, and verifies the opened lock is still the folder's lock.
 A missing lock is `unavailable`; a held lock is `busy`. The lock remains held
@@ -33,7 +35,7 @@ bytes. Consumers pin that digest externally; it is not inside the manifest.
 ## 2. Manifest
 
 All seven fields are required: `kind`, `producer`, `source`, `disclosure`, `view`,
-`layout`, `artifacts`.
+`layout`, `artifacts`. Optional `viewer` carries resolved presentation defaults.
 
 ```json
 {
@@ -54,6 +56,24 @@ invalid required fields, unsupported major kinds and broken references fail
 explicitly. Changed essential semantics require a new major kind; the producer
 version is diagnostic only.
 
+### Viewer defaults
+
+The optional `viewer` object has `display` with the three resolved booleans
+`workflow_inputs`, `workflow_outputs` and `notes` ([viewer.md](viewer.md#project-display-settings)).
+It freezes the publishing project's current display configuration, separately from the
+recorded run's `view` and `layout`. An export without `viewer` uses `true` for all three.
+The CLI and SDK export operations omit the field when all three settings are `true`,
+preserving the default manifest representation.
+Known malformed viewer configuration is refused rather than silently changing its
+meaning. Readers apply visibility before canvas measurement/layout while preserving the
+frozen execution cells and recorded note/value evidence. Explicit inspection can reveal
+one normally hidden selected item. Visibility is not disclosure: included content remains
+included, and existing disclosure options remain authoritative.
+
+This presentation field affects the exact manifest hash, never `source.plan_sha256`,
+`source.events_sha256`, execution identity or cache reuse. An exported viewer needs no
+current project files or configuration endpoint to apply the frozen defaults.
+
 ### Positive inspection projection
 
 The export view contains the following fields only. Identifiers, display labels
@@ -63,10 +83,12 @@ cannot certify arbitrary author text or file bytes public-safe.
 - Run: `kind`, workflow `id`/`title` (and `description` only with values),
   `run_name`, `state`, `stand_in`, `charged_usd`, estimate numeric
   `low_usd`/`high_usd`/`ceiling_usd`, `inputs`, `outputs`, `nodes`, `scopes`,
-  `pending`, `artifacts`, `warnings`. Workflow `file` is always absent.
+  `pending`, `artifacts`, `warnings`, optional `value_views` and `value_links`.
+  Workflow `file` is always absent.
 - Node: `id`, `path`, `step`, `take`, `key`, `title`, `uses`, `state`, `reads`,
   `ports`, `preview`, `bindings`, `interface_bindings`, `needs`, `judges`, `with`, `outputs`,
-  `cache`, `error`, `duration_ms`, `started_at`, `interrupted` where present in
+  `cache`, `error`, `duration_ms`, `started_at`, `interrupted`, recorded `routes` and
+  `routing` where present in
   the recorded projection. Required fields stay present. Textual values in
   `with`, `inputs` and `outputs` obey disclosure below.
   Optional `preview` retains only the literal `video` and optional `poster` output selectors
@@ -201,7 +223,9 @@ manifest data. Human output summarizes the same result. Refusal exits 2 and
 `--json` emits `{"kind":"fx-run-export-error-v1","code":"busy","message":"The run is active."}`.
 Codes: `unavailable`, `busy`, `incomplete_run`, `invalid_record`,
 `destination_exists`, `destination_invalid`, `artifact_unavailable`,
-`write_failed`. Messages contain no private absolute paths. CLI parse errors use
+`write_failed`, `invalid_viewer_config`. The last code means the publishing project's
+current configuration could not supply valid viewer defaults; no destination is created.
+Messages contain no private absolute paths. CLI parse errors use
 the ordinary CLI usage channel. Python and JavaScript saved-record methods invoke
 this offline operation and expose native typed results/errors.
 
@@ -216,3 +240,14 @@ text is included only with `--include-values`; otherwise each note has null text
 `withheld: true`. Source provenance and the private declaration snapshot ledger are omitted.
 Unavailable content remains distinct from withheld content. Readers with no note support
 may ignore these optional fields while preserving their existing execution projection.
+
+## Recorded values
+
+The frozen view may include [value views and source links](values.md), with a separate
+layout `values` map keyed by recorded value ID. Links retain only typed value/instance
+references. Scalar/opaque JSON content is included only with `--include-values`; otherwise
+the view has `state: withheld` and no data. Typed files and collections follow existing
+file/collection disclosure, including nested withholding markers. Pending, absent and
+unavailable states stay distinct. Diagnostics require `--include-diagnostics`. No original
+filesystem paths or current-source lookups are introduced. Artifact discovery only visits
+explicit encoded files, never arbitrary JSON that happens to contain a `file` key.

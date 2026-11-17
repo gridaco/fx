@@ -344,3 +344,32 @@ test("note context is an explicit capability and legacy peers retain valid v1 co
   expect(legacy.sent.at(-1)!.data).toMatchObject({ ok: true, result: { selection: null } });
   page.dispose(); data.controller.dispose();
 });
+
+
+test("value contexts are independently opted in without changing note capability or legacy peers", async () => {
+  const view = nestedPlan();
+  const id = `value:${"a".repeat(64)}`;
+  view.value_views = [{ id, scope_id: null, kind: "input", name: "prompt", state: "known", data: { value: "Private input text" } }];
+  const data = await harness(view);
+  const window = new PageWindow(), legacy = new PageWindow(), aware = new PageWindow(), notesOnly = new PageWindow();
+  const page = new ViewerPage(window as unknown as Window, { getContext: data.presentation.getContext, present: data.presentation.present, subscribe: data.controller.subscribe });
+  window.receive(legacy, request("subscribe"));
+  window.receive(aware, request("subscribe", { include_values: true }));
+  window.receive(notesOnly, request("subscribe", { include_notes: true }));
+  data.controller.select(id);
+  await Promise.resolve();
+  expect((legacy.sent.at(-1)!.data as ViewerProtocol.ContextEvent).context.selection).toBeNull();
+  expect((notesOnly.sent.at(-1)!.data as ViewerProtocol.ContextEvent).context.selection).toBeNull();
+  expect((aware.sent.at(-1)!.data as ViewerProtocol.ContextEvent).context.selection).toEqual({ kind: "value", value_id: id, scope_id: null });
+  expect(JSON.stringify(aware.sent)).not.toContain("Private input text");
+  expect(page.getContext().selection).toBeNull();
+  expect(page.getContext({ includeValues: true }).selection).toEqual({ kind: "value", value_id: id, scope_id: null });
+  const before = data.controller.getSnapshot();
+  window.receive(legacy, request("present", { action: "reveal_value", value_id: id }));
+  expect(legacy.sent.at(-1)!.data).toMatchObject({ ok: false, error: { code: "unsupported_method" } });
+  expect(data.controller.getSnapshot()).toBe(before);
+  window.receive(aware, request("present", { action: "reveal_value", value_id: id, include_values: true }));
+  expect(aware.sent.at(-1)!.data).toMatchObject({ ok: true, result: { selection: { kind: "value", value_id: id } } });
+  expect(() => page.present({ action: "reveal_value", value_id: id })).toThrow("includeValues");
+  page.dispose(); data.controller.dispose();
+});

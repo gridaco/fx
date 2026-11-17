@@ -19,6 +19,7 @@ use crate::error::{Error, Result};
 use crate::money::Usd;
 use crate::providers::{Declaration, Declarations};
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,45 @@ const PROJECT_FILE: &str = "fx.yaml";
 pub struct RouteDefault {
     pub route: String,
     pub concurrency: Option<u32>,
+}
+
+/// Project-wide presentation defaults, separate from workflow execution and recorded data.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ViewerConfig {
+    pub display: ViewerDisplay,
+}
+
+impl ViewerConfig {
+    /// Rereads only the bound project's `fx.yaml`; removing it restores defaults instead of
+    /// switching to a different ancestor project. An invalid or unreadable file is an error.
+    pub fn read(root: &Path) -> Result<Self> {
+        let path = root.join(PROJECT_FILE);
+        match std::fs::metadata(&path) {
+            Ok(_) => read_project(&path, PROJECT_FILE).map(|document| document.viewer),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(Error::io(PROJECT_FILE, &error)),
+        }
+    }
+}
+
+/// Visible canvas content. Omitted settings preserve the viewer's normal presentation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ViewerDisplay {
+    pub workflow_inputs: bool,
+    pub workflow_outputs: bool,
+    pub notes: bool,
+}
+
+impl Default for ViewerDisplay {
+    fn default() -> Self {
+        Self {
+            workflow_inputs: true,
+            workflow_outputs: true,
+            notes: true,
+        }
+    }
 }
 
 /// The typed project file.
@@ -50,6 +90,8 @@ pub struct ProjectDoc {
     /// The folders searched for a workflow by id after the root's own files, as written:
     /// relative to the root, or absolute ([`crate::project::project_workflow_files`]).
     pub workflows: Vec<String>,
+    /// Viewer defaults read from the current project, never executable workflow metadata.
+    pub viewer: ViewerConfig,
 }
 
 impl Default for ProjectDoc {
@@ -66,6 +108,7 @@ impl Default for ProjectDoc {
             sources: Vec::new(),
             nodes: "nodes".into(),
             workflows: vec!["workflows".into()],
+            viewer: ViewerConfig::default(),
         }
     }
 }
@@ -273,6 +316,12 @@ pub(crate) fn parse_project(value: &Value, label: &str) -> Result<ProjectDoc> {
             None | Some(Value::Null) => ProjectDoc::default().workflows,
             Some(_) => texts("workflows")?,
         },
+        viewer: value
+            .get("viewer")
+            .map(|viewer| {
+                serde_json::from_value(viewer.clone()).expect("validated viewer settings")
+            })
+            .unwrap_or_default(),
     })
 }
 
@@ -389,6 +438,60 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[test]
+    fn viewer_display_defaults_are_independent_and_strict() {
+        let project = parse_project(
+            &json!({"fx":"project/v1", "viewer":{"display":{"workflow_inputs":false,"notes":false}}}),
+            "fx.yaml",
+        ).unwrap();
+        assert_eq!(
+            project.viewer.display,
+            ViewerDisplay {
+                workflow_inputs: false,
+                workflow_outputs: true,
+                notes: false,
+            }
+        );
+        for viewer in [
+            json!(null),
+            json!({"display":null}),
+            json!({"display":{"notes":"false"}}),
+            json!({"display":{"workflow_outputs":0}}),
+            json!({"display":{"step_media_previews":false}}),
+            json!({"display":{"show_workflow_inputs":false}}),
+            json!({"unknown":true}),
+        ] {
+            assert!(parse_project(&json!({"fx":"project/v1","viewer":viewer}), "fx.yaml").is_err());
+        }
+    }
+
+    #[test]
+    fn bound_viewer_config_reloads_only_its_own_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let child = directory.path().join("project");
+        std::fs::create_dir(&child).unwrap();
+        std::fs::write(
+            directory.path().join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {notes: false}}\n",
+        )
+        .unwrap();
+        assert_eq!(ViewerConfig::read(&child).unwrap(), ViewerConfig::default());
+        std::fs::write(
+            child.join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {workflow_outputs: false}}\n",
+        )
+        .unwrap();
+        assert!(!ViewerConfig::read(&child).unwrap().display.workflow_outputs);
+        std::fs::write(
+            child.join("fx.yaml"),
+            "fx: project/v1\nviewer: {display: {notes: invalid}}\n",
+        )
+        .unwrap();
+        assert!(ViewerConfig::read(&child).is_err());
+        std::fs::remove_file(child.join("fx.yaml")).unwrap();
+        assert!(ViewerConfig::read(&child).unwrap().display.notes);
     }
 
     #[test]

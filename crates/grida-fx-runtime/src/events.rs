@@ -81,6 +81,8 @@ pub enum Event {
         skip_reasons: Option<Value>,
         /// Captured presentation notes in the current expansion, never executable instances.
         notes: Option<Value>,
+        value_views: Option<Value>,
+        value_links: Option<Value>,
     },
     RunStarted {
         workflow: String,
@@ -293,6 +295,8 @@ impl Event {
                 pending,
                 skip_reasons,
                 notes,
+                value_views,
+                value_links,
             } => {
                 fields.put("scopes", scopes.clone());
                 fields.put("node_interface_bindings", node_interface_bindings.clone());
@@ -303,6 +307,12 @@ impl Event {
                 }
                 if let Some(notes) = notes {
                     fields.put("notes", notes.clone());
+                }
+                if let Some(values) = value_views {
+                    fields.put("value_views", values.clone());
+                }
+                if let Some(links) = value_links {
+                    fields.put("value_links", links.clone());
                 }
             }
             Event::RunStarted {

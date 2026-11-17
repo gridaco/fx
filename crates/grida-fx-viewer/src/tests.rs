@@ -78,6 +78,7 @@ impl Fixture {
             source: Source::Run(self.root()),
             authority: "127.0.0.1:43123".into(),
             artifact_prefix: String::new(),
+            project_root: self.root(),
         })
     }
 
@@ -601,6 +602,7 @@ async fn static_plan_api_preserves_all_planner_evidence_without_mutation() {
         source,
         authority: "127.0.0.1:43123".into(),
         artifact_prefix: String::new(),
+        project_root: PathBuf::new(),
     });
     for _ in 0..2 {
         let response = app
@@ -681,6 +683,75 @@ async fn unified_view_api_keeps_run_api_compatible() {
     }
     assert_eq!(documents[0], documents[1]);
     assert_eq!(documents[0]["kind"], "fx-viewer-run-v1");
+}
+
+#[tokio::test]
+async fn current_viewer_configuration_reloads_without_changing_recorded_data() {
+    let fixture = Fixture::new("image/png");
+    let original_plan = std::fs::read(fixture.root().join("plan.json")).unwrap();
+    let original_events = std::fs::read(fixture.root().join("events.jsonl")).unwrap();
+    let app = fixture.app();
+    let read = || async {
+        app.clone()
+            .oneshot(
+                Fixture::request("/api/viewer_config")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    };
+    let response = read().await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    let defaults: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(
+        defaults,
+        json!({"display":{"workflow_inputs":true,"workflow_outputs":true,"notes":true}})
+    );
+    std::fs::write(
+        fixture.root().join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {workflow_inputs: false, notes: false}}\n",
+    )
+    .unwrap();
+    let config: Value = serde_json::from_slice(
+        &to_bytes(read().await.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        config,
+        json!({"display":{"workflow_inputs":false,"workflow_outputs":true,"notes":false}})
+    );
+    std::fs::write(
+        fixture.root().join("fx.yaml"),
+        "fx: project/v1\nviewer: {display: {notes: private_invalid_value}}\n",
+    )
+    .unwrap();
+    let refused = read().await;
+    assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = to_bytes(refused.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert!(!text.contains("private_invalid_value"));
+    assert!(!text.contains(&fixture.root().to_string_lossy().to_string()));
+    std::fs::remove_file(fixture.root().join("fx.yaml")).unwrap();
+    let reset: Value = serde_json::from_slice(
+        &to_bytes(read().await.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(reset, defaults);
+    assert_eq!(
+        std::fs::read(fixture.root().join("plan.json")).unwrap(),
+        original_plan
+    );
+    assert_eq!(
+        std::fs::read(fixture.root().join("events.jsonl")).unwrap(),
+        original_events
+    );
 }
 
 #[test]
@@ -1442,6 +1513,7 @@ async fn the_layout_route_serves_automatic_cells_for_a_plan_and_a_run() {
         source: plan_source(static_plan()).unwrap(),
         authority: "127.0.0.1:43123".into(),
         artifact_prefix: String::new(),
+        project_root: PathBuf::new(),
     });
     let report = layout_of(app).await;
     assert_eq!(report["state"], "none");

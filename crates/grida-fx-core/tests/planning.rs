@@ -2696,3 +2696,29 @@ fn integrated_notes_preserve_plan_identity_without_exempting_prompt_sources() {
         "the same file still affects executable prompt identity"
     );
 }
+
+#[test]
+fn integrated_viewer_display_does_not_change_workflow_evidence_or_identity() {
+    use grida_fx_core::plan::output::{graph_document, plan_digest};
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\n");
+    fixture.write("workflows/case.yaml", "fx: workflow/v1\nid: case\ntitle: Viewer defaults\ninputs:\n  word: {type: string, default: hello}\nnotes:\n  intro: {text: A recorded note}\nsteps:\n  pick:\n    uses: fx/select@1\n    with:\n      first_of: ['${{ inputs.word }}']\noutputs:\n  word: '${{ steps.pick.outputs.value }}'\n");
+    let mut host = FakeHost::new();
+    let mut before = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    let baseline = make_plan(&mut before, &mut host, None, &NoCache).unwrap();
+    assert!(baseline.ok(), "{:?}", baseline.problems);
+    fixture.write("fx.yaml", "fx: project/v1\nviewer:\n  display: {workflow_inputs: false, workflow_outputs: false, notes: false}\n");
+    let mut after = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+    let configured = make_plan(&mut after, &mut host, None, &NoCache).unwrap();
+    assert!(configured.ok());
+    assert_eq!(
+        plan_digest(&baseline, &before),
+        plan_digest(&configured, &after)
+    );
+    assert_eq!(
+        graph_document(&baseline, &before),
+        graph_document(&configured, &after)
+    );
+    assert!(!configured.expansion.notes.is_empty());
+    assert!(!configured.expansion.value_views.is_empty());
+}

@@ -99,6 +99,7 @@ function image(value: unknown, artifacts: Map<string, Artifact>) {
 /** A recorded value in its plain form: text, a file, or a list or collection of them. */
 export function Value({ value, artifacts, videoPreview, externalFiles }: { value: unknown; artifacts: Map<string, Artifact>; videoPreview?: CanvasPreview; externalFiles?: ExternalFileController }) {
   if (!record(value)) return <Json value={plainJson(value) ?? value} />;
+  if (value.withheld === true) return <p className="fx-value-note">Withheld by the author</p>;
   if ("value" in value && Object.keys(value).length === 1) return <Json value={value.value} />;
   if (record(value.file) && typeof value.file.digest === "string") {
     const artifact = artifacts.get(value.file.digest);

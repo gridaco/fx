@@ -126,6 +126,23 @@
       "items": {
         "$ref": "#/$defs/note"
       }
+    },
+    "value_views": {
+      "description": "Captured effective workflow values and lazy named-expression occurrences. Presentation only; absent in older evidence.",
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "$ref": "#/$defs/value_view"
+      }
+    },
+    "value_links": {
+      "description": "Observed value provenance, independent of execution dependencies.",
+      "type": "array",
+      "maxItems": 16384,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/value_link"
+      }
     }
   },
   "$defs": {
@@ -286,6 +303,75 @@
         },
         "diagnostic": {
           "$ref": "#/$defs/adapter_diagnostic"
+        },
+        "routes": {
+          "description": "Each capability the type calls, with the route bound to it.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "route"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "route": {
+                "type": "string",
+                "pattern": "^.+@[a-z0-9._-]+$"
+              },
+              "fingerprint": {
+                "description": "identity.md \u00a77.",
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "routing": {
+          "description": "Optional explanation of unqualified model resolution, keyed by capability (model-selection.md). Presentation metadata; no absolute paths and no identity effect.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "model",
+              "model_source",
+              "provider_preference",
+              "provider_source"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^@\\s]+$"
+              },
+              "model_source": {
+                "enum": [
+                  "step",
+                  "planning_project",
+                  "workflow_home"
+                ]
+              },
+              "provider_preference": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[a-z0-9._-]+$"
+              },
+              "provider_source": {
+                "enum": [
+                  "planning_project",
+                  "workflow_home"
+                ]
+              }
+            }
+          },
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+          }
         }
       },
       "allOf": [
@@ -846,6 +932,313 @@
           }
         }
       ]
+    },
+    "value_file": {
+      "type": "object",
+      "required": [
+        "digest",
+        "kind",
+        "name",
+        "size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "kind": {
+          "description": "identity.md \u00a74.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$",
+          "not": {
+            "enum": [
+              ".",
+              ".."
+            ]
+          }
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "key": {
+          "description": "A collection item's key; absent when none.",
+          "type": "string"
+        }
+      }
+    },
+    "value_data": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/value_file"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "collection"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "$ref": "#/$defs/value_data"
+                  }
+                ],
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "list"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/value_data"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "none": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "description": "A plain value (identity.md \u00a73)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "object"
+          ],
+          "properties": {
+            "object": {
+              "description": "Structured runtime value containing typed file descendants. Ordinary authored JSON remains wrapped in value.",
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/value_data"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "value_endpoint": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "value"
+            },
+            "value_id": {
+              "type": "string",
+              "pattern": "^value:[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "instance_id",
+            "port"
+          ],
+          "properties": {
+            "kind": {
+              "const": "instance"
+            },
+            "instance_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "port": {
+              "type": "string"
+            },
+            "source_kind": {
+              "enum": [
+                "output",
+                "fact"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "value_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope_id",
+        "kind",
+        "name",
+        "state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^value:[0-9a-f]{64}$"
+        },
+        "scope_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "input",
+            "table",
+            "let",
+            "output"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "enum": [
+            "known",
+            "pending",
+            "absent",
+            "unavailable"
+          ]
+        },
+        "data": {
+          "$ref": "#/$defs/value_data"
+        },
+        "context": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "known"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "data"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "data"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "value_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "target"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/value_endpoint",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "instance"
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "source_kind"
+                ]
+              }
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/value_endpoint",
+          "not": {
+            "required": [
+              "source_kind"
+            ]
+          }
+        }
+      }
     }
+  },
+  "dependentRequired": {
+    "value_views": [
+      "value_links"
+    ],
+    "value_links": [
+      "value_views"
+    ]
   }
 }

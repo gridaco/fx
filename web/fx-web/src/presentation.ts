@@ -48,6 +48,7 @@ export class ViewerPresentation {
     const card = state.graph.nodes.find((node) => node.id === state.selected);
     let selection: ViewerProtocol.Selection | null = null;
     if (note) selection = { kind: "note", note_id: note.id, scope_id: note.scope_id };
+    else if (card?.value) selection = { kind: "value", value_id: card.value.id, scope_id: card.value.scope_id };
     else if (card?.kind === "workflow" && card.scope_id) selection = { kind: "scope", scope_id: card.scope_id };
     else if (card?.kind === "boundary" && card.scope_id && card.side) selection = { kind: "scope_boundary", scope_id: card.scope_id, side: card.side };
     else if (card?.pending) selection = { kind: "pending_repeat", path: card.source_id };
@@ -76,6 +77,17 @@ export class ViewerPresentation {
     let selected = state.selected;
     let focus: string | "fit" | null = null;
     switch (action.action) {
+      case "reveal_value": {
+        const value = view.value_views?.find((value) => value.id === action.value_id);
+        if (!value) throw new ViewerPresentationError("not_found", "The recorded value does not exist in this view.");
+        const scopes = new Map((view.scopes ?? []).map((item) => [item.id, item]));
+        let owner = value.scope_id === null ? undefined : scopes.get(value.scope_id);
+        while (owner && owner.kind !== "workflow") owner = owner.parent === null ? undefined : scopes.get(owner.parent);
+        scope = owner?.id ?? null;
+        selected = value.id;
+        focus = selected;
+        break;
+      }
       case "reveal_note": {
         const note = view.notes?.find((note) => note.id === action.note_id);
         if (!note) throw new ViewerPresentationError("not_found", "The recorded note does not exist in this view.");

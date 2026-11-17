@@ -227,6 +227,9 @@ impl Expander<'_> {
         }
         match name {
             "inputs" => {
+                self.wiring
+                    .values
+                    .members(self.value_members(frame, "input"));
                 if let Some(scope) = &data.workflow_scope {
                     self.wiring.boundary(
                         (*data.input_bindings).clone(),
@@ -240,13 +243,18 @@ impl Expander<'_> {
                 Ok(Val::Object((*data.inputs).clone()))
             }
             // Raw: expressions inside tables are never evaluated.
-            "tables" => Ok(Val::Object(
-                data.workflow
-                    .tables
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Val::from_json(value)))
-                    .collect(),
-            )),
+            "tables" => {
+                self.wiring
+                    .values
+                    .members(self.value_members(frame, "table"));
+                Ok(Val::Object(
+                    data.workflow
+                        .tables
+                        .iter()
+                        .map(|(key, value)| (key.clone(), Val::from_json(value)))
+                        .collect(),
+                ))
+            }
             "let" => Ok(self.new_view(ViewData::Lets { frame })),
             "steps" => Ok(self.new_view(ViewData::Steps { frame })),
             _ => Err(ExprError::new(format!(
@@ -628,11 +636,20 @@ impl Expander<'_> {
             return Err(ExprError::new(format!("let.{name} refers back to itself")));
         }
         self.lets_active.push(active);
+        let id = self.value_id(frame, "let", name);
+        self.wiring.values.begin();
         let value = {
             let mut scope = StepScope { ex: self, frame };
             expr::resolve(source, &mut scope)
         };
         self.lets_active.pop();
+        let sources = self.wiring.values.end();
+        if let Ok(value) = &value {
+            self.value_view(frame, "let", name, value);
+        }
+        self.value_ledger
+            .sources(sources, super::values::ValueEndpoint::value(&id));
+        self.wiring.values.value(&id);
         value
     }
 
@@ -658,7 +675,15 @@ impl Expander<'_> {
         let mut interfaces = Vec::new();
         for (output, value) in &document.workflow.outputs {
             self.wiring.begin_capture(output);
+            let id = self.value_id(scope, "output", output);
+            self.value_consumers.push(id.clone());
+            self.wiring.values.begin();
             let value = self.evaluate(scope, value, &format!("outputs.{output}"));
+            let sources = self.wiring.values.end();
+            self.value_consumers.pop();
+            self.value_view(scope, "output", output, &value);
+            self.value_ledger
+                .sources(sources, super::values::ValueEndpoint::value(&id));
             let (bindings, boundary) = self.wiring.end_capture_full();
             aliases.insert(output.clone(), bindings);
             interfaces.extend(boundary);
@@ -677,6 +702,13 @@ impl Expander<'_> {
         } else {
             self.wiring.aliases(aliases);
         }
+        let ids = document
+            .workflow
+            .outputs
+            .keys()
+            .map(|name| (name.clone(), self.value_id(scope, "output", name)))
+            .collect();
+        self.wiring.values.members(ids);
         Val::Object(outputs)
     }
 

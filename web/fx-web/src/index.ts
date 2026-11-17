@@ -1,3 +1,4 @@
+import { isValueViews, isValueLinks, type ValueView, type ValueLink } from "./value-views";
 import { isWorkflowNotes, type WorkflowNote } from "./notes";
 import { isNodePorts, isPortBindings, type NodePorts, type PortBinding } from "./ports";
 import { isInterfaceBindings, isWorkflowScopes, type InterfaceBinding, type WorkflowScope } from "./scopes";
@@ -51,6 +52,8 @@ export interface RunNode {
   judges?: string | null;
   interface_bindings?: InterfaceBinding[];
   preview?: import("./graph").PreviewDescriptor;
+  routes?: Record<string, { route: string; fingerprint?: string }>;
+  routing?: Record<string, import("./graph").ModelSelection>;
 }
 
 export interface ViewerRun {
@@ -72,6 +75,8 @@ export interface ViewerRun {
   warnings: string[];
   scopes?: WorkflowScope[];
   notes?: WorkflowNote[];
+  value_views?: ValueView[];
+  value_links?: ValueLink[];
   /** The repeats not yet expanded. */
   pending?: { path: string; step?: string; max: number; phase: number; waiting_on?: string[] }[];
 }
@@ -135,6 +140,14 @@ function node(value: unknown): value is RunNode {
     && (value.waiting_for === undefined || typeof value.waiting_for === "string")
     && (value.waiting_since === undefined || utcTimestamp(value.waiting_since))
     && (value.waited_ms === undefined || (typeof value.waited_ms === "number" && Number.isSafeInteger(value.waited_ms) && value.waited_ms >= 0))
+    && (value.routes === undefined || record(value.routes) && Object.entries(value.routes).every(([capability, route]) => /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(capability)
+      && record(route) && typeof route.route === "string" && /^.+@[a-z0-9._-]+$/.test(route.route)
+      && (route.fingerprint === undefined || typeof route.fingerprint === "string" && /^[a-f0-9]{64}$/.test(route.fingerprint))))
+    && (value.routing === undefined || record(value.routing) && Object.values(value.routing).every((selection) => record(selection)
+      && typeof selection.model === "string" && /^[^@\s]+$/.test(selection.model)
+      && ["step", "planning_project", "workflow_home"].includes(String(selection.model_source))
+      && typeof selection.provider_preference === "string" && /^[a-z0-9._-]+$/.test(selection.provider_preference)
+      && ["planning_project", "workflow_home"].includes(String(selection.provider_source))))
     && (value.ports === undefined || isNodePorts(value.ports))
     && (value.bindings === undefined || isPortBindings(value.bindings))
     && (value.needs === undefined || strings(value.needs))
@@ -177,6 +190,8 @@ export function parseViewerRun(value: unknown, apiBase = "/api"): ViewerRun {
     && strings(value.warnings)
     && (value.scopes === undefined || isWorkflowScopes(value.scopes))
     && (value.notes === undefined || isWorkflowNotes(value.notes))
+    && (value.value_views === undefined || isValueViews(value.value_views))
+    && (value.value_links === undefined || isValueLinks(value.value_links))
     && (!Array.isArray(value.notes) || value.notes.every((note) => note.scope_id === null || Array.isArray(value.scopes) && value.scopes.some((scope) => scope.id === note.scope_id)));
   if (!valid) throw new Error("The run response is incomplete or malformed.");
   return value as unknown as ViewerRun;
@@ -229,3 +244,6 @@ export * from "./external-file";
 export * from "./files";
 
 export * from "./notes";
+
+export * from "./value-views";
+export * from "./display";

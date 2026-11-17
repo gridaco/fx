@@ -2038,3 +2038,97 @@ fn note_snapshots_cover_dynamic_imports_and_survive_source_edits_on_resume() {
             .all(|n| n["text"] == "# Original documentation\n")
     );
 }
+
+#[test]
+fn scoped_input_snapshots_capture_new_imports_and_resume_preserves_missing_copies() {
+    let _serial = serial();
+    let Some(python) = real_python() else {
+        return;
+    };
+    let project = Project::new(&[
+        (
+            "case",
+            r#"
+fx: workflow/v1
+id: case
+title: Scoped image inputs
+steps:
+  initial:
+    uses: ./workflows/child.yaml
+    with: {image: ./reference.png}
+  count:
+    uses: ./nodes/cases.py#count
+    with: {n: 1}
+  later:
+    for_each: "${{ steps.count.outputs.items.lines }}"
+    max: 1
+    uses: ./workflows/child.yaml
+    with: {image: ./late-reference.png}
+outputs:
+  images: "${{ steps.later.*.outputs.image }}"
+"#,
+        ),
+        (
+            "child",
+            r#"
+fx: workflow/v1
+id: child
+title: Transform a local reference
+inputs:
+  image: {type: file, kind: image}
+steps:
+  transform:
+    uses: ./nodes/cases.py#flip_image
+    with: {image: "${{ inputs.image }}"}
+outputs:
+  image: "${{ steps.transform.outputs.image }}"
+"#,
+        ),
+    ]);
+    std::fs::write(project.root.join("nodes/cases.py"), format!("{NODES}\n{}", r#"
+from PIL import Image
+
+@node("flip_image", inputs={"image": "image"}, outputs={"image": "image/png"}, version=1)
+def flip_image(ctx):
+    return {"image": ctx.out.png(ctx.read.image("image").transpose(Image.Transpose.FLIP_LEFT_RIGHT))}
+"#)).unwrap();
+    let make = std::process::Command::new(&python).arg("-c").arg("from PIL import Image; import sys; a=Image.new('RGB',(2,1)); a.putdata([(255,0,0),(0,0,255)]); a.save(sys.argv[1]); b=Image.new('RGB',(2,1)); b.putdata([(0,0,255),(0,255,0)]); b.save(sys.argv[2])").arg(project.root.join("reference.png")).arg(project.root.join("late-reference.png")).status().unwrap();
+    assert!(make.success());
+    let original = std::fs::read(project.root.join("reference.png")).unwrap();
+    let late = std::fs::read(project.root.join("late-reference.png")).unwrap();
+    let original_digest = grida_fx_core::value::file_digest(&original);
+    let late_digest = grida_fx_core::value::file_digest(&late);
+    let result = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert!(result.ok);
+    assert_eq!(result.charged, Usd::ZERO);
+    let run = project.root.join("runs/one");
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(run.join("plan.json")).unwrap()).unwrap();
+    assert!(saved.get("value_files").is_none());
+    assert!(!saved.to_string().contains(project.root.to_str().unwrap()));
+    assert_eq!(
+        std::fs::read(run.join("values").join(&original_digest)).unwrap(),
+        original
+    );
+    assert_eq!(
+        std::fs::read(run.join("values").join(&late_digest)).unwrap(),
+        late
+    );
+    for value in result.outputs.values() {
+        for file in grida_fx_runtime::store::files_in(value) {
+            assert_ne!(file.digest, original_digest);
+            assert_ne!(file.digest, late_digest);
+        }
+    }
+    std::fs::remove_file(run.join("values").join(&original_digest)).unwrap();
+    let resumed = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert!(resumed.ok);
+    assert!(
+        !run.join("values").join(original_digest).exists(),
+        "resume must not repair historical missing bytes from a current project source"
+    );
+}
