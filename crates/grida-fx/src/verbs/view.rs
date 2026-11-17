@@ -18,7 +18,7 @@ pub fn run(args: &ViewArgs) -> Result<u8, Error> {
     }
     // Finish planning, including the planning runtime and node host lifetimes, before
     // entering the viewer's runtime. No refresh can import or replan the source target.
-    let (graph, declarations) = if let Some(target) = &args.target {
+    let (graph, project) = if let Some(target) = &args.target {
         let (graph, project) = super::planning::graph(&PlanArgs {
             target: target.clone(),
             inputs: args.inputs.clone(),
@@ -28,33 +28,31 @@ pub fn run(args: &ViewArgs) -> Result<u8, Error> {
             rest: args.rest.clone(),
             ..PlanArgs::default()
         })?;
-        (Some(graph), project.declarations())
+        (Some(graph), project)
     } else if let Some(path) = &args.plan {
         let json =
             std::fs::read_to_string(path).map_err(|error| Error::io("saved plan", &error))?;
         let graph = grida_fx_core::value::parse_json(&json)
             .map_err(|_| Error::usage("saved plan is not valid JSON"))?;
-        (Some(graph), declarations_here())
+        (Some(graph), project_here()?)
     } else {
-        (None, declarations_here())
+        (None, project_here()?)
     };
+    let declarations = project.declarations();
     serve(
         graph,
         args.run.as_deref().map(Path::new),
         args.port,
         args.open,
         &declarations,
+        &project.root,
     )
 }
 
-/// The provider declarations of the project of the current directory, for `--run` and
-/// `--plan`, which read no project (spec/providers.md §1): FX's own alone when that project's
-/// `fx.yaml` cannot be read.
-fn declarations_here() -> Declarations {
-    std::env::current_dir()
-        .ok()
-        .and_then(|cwd| Project::find(&cwd).ok())
-        .map_or_else(Declarations::built_in, |project| project.declarations())
+/// Saved records retain their execution evidence; current presentation comes from the
+/// invoking project, without loading workflow source or a historical private source path.
+fn project_here() -> Result<Project, Error> {
+    Project::find(&super::planning::working_directory()?)
 }
 
 /// Independent inspection used by explicit standalone commands and legacy `view`. The browser
@@ -65,6 +63,7 @@ pub(crate) fn serve(
     port: u16,
     open: bool,
     declarations: &Declarations,
+    project_root: &Path,
 ) -> Result<u8, Error> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -72,12 +71,12 @@ pub(crate) fn serve(
         .map_err(|error| Error::io("viewer runtime", &error))?;
     runtime.block_on(async {
         let bound = if let Some(graph) = graph {
-            grida_fx_viewer::bind_plan(graph, port).await
+            grida_fx_viewer::bind_plan_with_project(graph, port, project_root).await
         } else {
             let run = run.ok_or_else(|| {
                 Error::usage("view needs a workflow target, --run DIRECTORY, or --plan FILE")
             })?;
-            grida_fx_viewer::bind(run, port).await
+            grida_fx_viewer::bind_with_project(run, port, project_root).await
         };
         let server = bound.map_err(|error| Error::io("viewer", &error))?;
         let url = server.url();

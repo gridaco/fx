@@ -383,6 +383,37 @@ An explicit resume can repeat an uncertain plain synchronous paid call; resumabl
 jobs retain their separate reconciliation protection. Cancellation is not pause;
 `pause` and `terminate` remain deferred.
 
+## Read workflow values
+
+Current source records effective inputs, referenced tables, contextual `let` results and
+outputs for the read-only canvas. Step cards show bounded effective parameters, including
+schema defaults from custom Python/TypeScript nodes before execution. Use ordinary data
+declarations; do not add executable constant/preview nodes merely to make data visible.
+Select a value for full details. Existing media/fullscreen/file actions require typed
+recorded files and available bytes, never path inference or regeneration. Old recordings
+may lack evidence; known null differs from pending, absent, unavailable and withheld.
+Display does not evaluate unused expressions or change execution/cache identities. Real
+data edits keep their ordinary identity effect. Export disclosure also governs value cards.
+Browser hosts use `includeValues: true` and `reveal_value` with a recorded value ID;
+focus carries references only. Older installed releases may not support this feature.
+
+Current source also reads project-wide canvas defaults from `fx.yaml`:
+
+```yaml
+viewer:
+  display:
+    workflow_inputs: false
+    workflow_outputs: true
+    notes: false
+```
+
+Each boolean defaults to `true`. These control grouped workflow boundary cards and authored
+notes, including group notes; step sockets, summaries, media previews and hover inspection
+keep their behavior. After editing the project file, open or refresh the viewer. Existing
+recordings need no rerun. `doctor` reports the effective values. Portable exports freeze
+the publishing project's defaults, separately from value disclosure; hiding content does
+not remove its included evidence. Use normal disclosure options when sharing.
+
 ## Explain a workflow with notes
 
 Use workflow/group `notes:` for static canvas documentation. Each named note has exactly

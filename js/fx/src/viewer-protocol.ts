@@ -16,6 +16,7 @@ export namespace ViewerProtocol {
     | { kind: "scope"; scope_id: string }
     | { kind: "pending_repeat"; path: string }
     | { kind: "note"; note_id: string; scope_id: string | null }
+    | { kind: "value"; value_id: string; scope_id: string | null }
     | { kind: "scope_boundary"; scope_id: string; side: "input" | "output" };
   export interface Context {
     subject: Subject;
@@ -32,6 +33,7 @@ export namespace ViewerProtocol {
   export type ExternalFileHandler = (reference: FileReference) => void | Promise<void>;
   export type Action =
     | { action: "reveal_note"; note_id: string }
+    | { action: "reveal_value"; value_id: string }
     | { action: "reveal_instance"; instance_id: string }
     | { action: "open_scope"; scope_id: string | null }
     | { action: "clear_selection" }
@@ -162,6 +164,9 @@ export namespace ViewerProtocol {
       case "note":
         return fields(value, ["kind", "note_id", "scope_id"]) && isIdentifier(value.note_id)
           && (value.scope_id === null || isIdentifier(value.scope_id));
+      case "value":
+        return fields(value, ["kind", "value_id", "scope_id"]) && isIdentifier(value.value_id)
+          && (value.scope_id === null || isIdentifier(value.scope_id));
       case "scope":
         return fields(value, ["kind", "scope_id"]) && isIdentifier(value.scope_id);
       case "pending_repeat":
@@ -184,6 +189,7 @@ export namespace ViewerProtocol {
     if (!record(value)) return false;
     switch (value.action) {
       case "reveal_note": return fields(value, ["action", "note_id"]) && isIdentifier(value.note_id);
+      case "reveal_value": return fields(value, ["action", "value_id"]) && isIdentifier(value.value_id);
       case "reveal_instance": return fields(value, ["action", "instance_id"]) && isIdentifier(value.instance_id);
       case "open_scope": return fields(value, ["action", "scope_id"]) && (value.scope_id === null || isIdentifier(value.scope_id));
       case "clear_selection":
@@ -198,8 +204,9 @@ export namespace ViewerProtocol {
   export function isParams(method: string, value: unknown): boolean {
     if (!isMethod(method) || !record(value)) return false;
     if (["get_context", "subscribe", "present"].includes(method)) {
-      const { include_notes, ...params } = value;
+      const { include_notes, include_values, ...params } = value;
       if (Object.hasOwn(value, "include_notes") && include_notes !== true) return false;
+      if (Object.hasOwn(value, "include_values") && include_values !== true) return false;
       return method === "present" ? isAction(params) : Object.keys(params).length === 0;
     }
     if (method === "register_external_file_handler" || method === "unregister_external_file_handler") {

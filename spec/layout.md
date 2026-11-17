@@ -756,3 +756,13 @@ initial camera fit. These footprints contribute to shared row heights, enclosing
 canvas bounds without changing cells, executable dependency depth or member order. Growing
 a group note can therefore enlarge its frame and move later pixel tracks; its declared cell
 and the group's executable topology remain the same.
+
+## Recorded value placement
+
+[Recorded values](values.md) have optional cells in the report's separate `values` map,
+keyed by recorded value IDs. Input values occupy the input band, shared table/expression
+sources sit near their consumers and workflow results occupy the output band. They never
+enter executable `cells` or member `order`. Browser grouping retains each logical value's
+reference/socket; source relationships cannot change executable dependency depth. Bounded
+text sizes are calculated before track sizing, and media bounds are reserved before loading.
+Contextual occurrences follow recorded scope ownership and the existing frame/deck model.

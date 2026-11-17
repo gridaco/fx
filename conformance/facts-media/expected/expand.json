@@ -72,6 +72,73 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:541862bb9d8988e00569020a2c91e8469d9c745cce6bed6a50b0bd9fffccf640"
+   },
+   "target": {
+    "instance_id": "describe#1",
+    "kind": "instance",
+    "port": "files"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:541862bb9d8988e00569020a2c91e8469d9c745cce6bed6a50b0bd9fffccf640"
+   },
+   "target": {
+    "instance_id": "describe#1",
+    "kind": "instance",
+    "port": "manifest"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:99d6d940cb75bc9ef383d068bd81ca6872e15a73b4ac2b12634acb05696966ed"
+   },
+   "target": {
+    "instance_id": "describe#1",
+    "kind": "instance",
+    "port": "manifest"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "file": {
+     "digest": "81d7d20885f44635e6a2eae5e5a471d24ebd0328caf7b18b777bf8519f85ae3c",
+     "kind": "audio/wav",
+     "name": "voice.wav",
+     "size": 2044
+    }
+   },
+   "id": "value:99d6d940cb75bc9ef383d068bd81ca6872e15a73b4ac2b12634acb05696966ed",
+   "kind": "input",
+   "name": "voice",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "file": {
+     "digest": "dc6118be05f87450cb663b9d42c66cb16d0e5fe2f5114c918c972db38fda589d",
+     "kind": "video/mp4",
+     "name": "clip.mp4",
+     "size": 2835
+    }
+   },
+   "id": "value:541862bb9d8988e00569020a2c91e8469d9c745cce6bed6a50b0bd9fffccf640",
+   "kind": "input",
+   "name": "clip",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

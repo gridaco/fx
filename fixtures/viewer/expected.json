@@ -365,7 +365,7 @@
       "file": "nesting.json",
       "node_count": 11,
       "pending_count": 0,
-      "root_node_count": 5,
+      "root_node_count": 9,
       "requires_scopes": [
         {
           "path": "imported['warm']",
@@ -384,7 +384,7 @@
           "nodes": [
             "imported['warm'].tint#1"
           ],
-          "visible_count": 6
+          "visible_count": 9
         },
         {
           "path": "imported['warm'].imported_leaf",
@@ -431,7 +431,7 @@
           "nodes": [
             "imported['cool'].tint#1"
           ],
-          "visible_count": 6
+          "visible_count": 9
         },
         {
           "path": "imported['cool'].imported_leaf",
@@ -621,7 +621,7 @@
       "file": "nesting-failure.json",
       "node_count": 5,
       "pending_count": 0,
-      "root_node_count": 4,
+      "root_node_count": 6,
       "requires_scopes": [
         {
           "path": "broken_wrapper",
@@ -1326,7 +1326,7 @@
     {
       "file": "nesting.json",
       "node_count": 11,
-      "root_node_count": 5,
+      "root_node_count": 9,
       "requires_scopes": [
         {
           "path": "imported['warm']",
@@ -1345,7 +1345,7 @@
           "nodes": [
             "imported['warm'].tint#1"
           ],
-          "visible_count": 6,
+          "visible_count": 9,
           "state": "succeeded"
         },
         {
@@ -1394,7 +1394,7 @@
           "nodes": [
             "imported['cool'].tint#1"
           ],
-          "visible_count": 6,
+          "visible_count": 9,
           "state": "succeeded"
         },
         {
@@ -1587,7 +1587,7 @@
     {
       "file": "nesting-failure.json",
       "node_count": 5,
-      "root_node_count": 4,
+      "root_node_count": 6,
       "requires_scopes": [
         {
           "path": "broken_wrapper",

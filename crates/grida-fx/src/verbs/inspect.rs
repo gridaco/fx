@@ -92,7 +92,14 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
         let project = Project::find(&cwd)?;
         let declarations = project.declarations();
         if args.standalone || !project.has_file {
-            super::view::serve(None, Some(&folder), 0, args.open, &declarations)?;
+            super::view::serve(
+                None,
+                Some(&folder),
+                0,
+                args.open,
+                &declarations,
+                &project.root,
+            )?;
         } else {
             super::view::report_service(
                 super::service::register_run(&project, &folder, args.open),

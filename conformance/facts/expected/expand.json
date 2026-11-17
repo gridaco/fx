@@ -145,6 +145,62 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:15ebd5864f2158aed905cd43de162789b29915f5e06f4caf370fb6d7aaaab676"
+   },
+   "target": {
+    "instance_id": "describe#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:73690759e28c41be7ecfb42d74e270b59a9f8e3ebcaf4898a5a9dbc6ba59ac6c"
+   },
+   "target": {
+    "instance_id": "describe#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "file": {
+     "digest": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+     "kind": "text/plain",
+     "name": "note.txt",
+     "size": 6
+    }
+   },
+   "id": "value:73690759e28c41be7ecfb42d74e270b59a9f8e3ebcaf4898a5a9dbc6ba59ac6c",
+   "kind": "input",
+   "name": "note",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "file": {
+     "digest": "43c45622827052254ce56ff4e896e5f49537dee31c0fae88b3af2bfe378aa6de",
+     "kind": "image/png",
+     "name": "art.png",
+     "size": 82
+    }
+   },
+   "id": "value:15ebd5864f2158aed905cd43de162789b29915f5e06f4caf370fb6d7aaaab676",
+   "kind": "input",
+   "name": "art",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

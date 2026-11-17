@@ -23,6 +23,12 @@ The canvas preserves recorded scopes and unused planned takes, including skipped
 steps. If an older record lacks scope membership, the client keeps those steps
 visible instead of inventing a nested execution history.
 
+The CLI and both SDKs also read the publishing project's `viewer.display` defaults from
+`fx.yaml` ([canvas display](07-viewing.md#configure-canvas-display)). The portable viewer
+keeps these choices independently of the saved run and needs no project file afterward.
+Old exports without these settings show inputs, outputs and notes. Hiding content does
+not remove it from the package; choose disclosure below for that.
+
 ## Choose what to disclose
 
 The default includes structure, status, timing, recorded cost and supported media.
@@ -65,6 +71,8 @@ console.log(receipt.manifest_sha256, receipt.omitted_artifacts);
 
 `RunExportError` carries a structured refusal code. A busy or unfinished source
 is a refusal to export, not an instruction to execute or cancel it.
+`invalid_viewer_config` means current project configuration cannot supply valid display
+defaults. Fix `fx.yaml` and export again; no workflow rerun is needed.
 
 ## Keep the manifest and files together
 

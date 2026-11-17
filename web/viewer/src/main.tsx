@@ -2,8 +2,8 @@ import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore,
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote } from "@grida/fx-web";
-import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel } from "@grida/fx-web";
+import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Value, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -203,6 +203,7 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
       {skipped.related.map((source) => <button key={source.id} type="button" className="fx-detail-skip-source" title={source.id} onClick={() => onInspectSource?.(source.id)}>View {source.label} <ArrowUpRight {...iconProps} /></button>)}
       {node.error && <details className="fx-detail-skip-diagnostic"><summary>Recorded diagnostic</summary><p>{node.error}</p></details>}
     </section> : node.error && <Problem>{node.error}</Problem>}
+    {node.routes && <Section title="Routes" values={Object.fromEntries(Object.entries(node.routes).map(([name, route]) => [name, route.route]))} artifacts={artifacts} />}
     <Section title="Outputs" values={node.outputs} artifacts={artifacts} videoPreview={canvasNode?.preview} />
     <Section title="Inputs" values={inputs} artifacts={artifacts} />
     <Section title="Settings" values={settings} artifacts={artifacts} />
@@ -217,6 +218,16 @@ function NoteDetails({ note }: { note: WorkflowNote }) {
     <Heading title={note.name} meta={["Note"]} />
     {note.source && <p className="fx-detail-meta">{source ? <ExternalFileLink controller={externalFiles} target={source.target} className="fx-source-link" title="Open note source outside the viewer">{note.source.path}</ExternalFileLink> : note.source.path}</p>}
     <NoteContent note={note} />
+  </section>;
+}
+
+function ValueDetails({ value, view }: { value: ValueView; view: GraphDocument | ViewerRun }) {
+  const inventory = new Map(view.kind === "fx-viewer-run-v1" ? view.artifacts.map((artifact) => [artifact.digest, artifact]) : []);
+  const artifacts = valueArtifacts(value.data, inventory);
+  return <section className="fx-value-details">
+    <Heading title={value.name} meta={[valueKindLabel(value.kind), value.context]} />
+    {value.state === "known" ? <Value value={valueInspectionData(value.data)} artifacts={artifacts} externalFiles={externalFiles} /> : <p className="fx-value-note">{valueStateLabel(value)}</p>}
+    {value.diagnostic && <Problem>{value.diagnostic}</Problem>}
   </section>;
 }
 
@@ -254,6 +265,7 @@ function WorkflowView() {
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
   const selectedNote = graph.notes?.find((note) => note.id === selected);
   const selectedNode = graph.nodes.find((node) => node.id === selected);
+  const stepNodes = graph.nodes.filter((node) => node.kind !== "value");
   const instance = plan?.instances.find((node) => !selectedNode?.pending && node.id === selectedNode?.source_id);
   const pending = plan?.pending.find((node) => selectedNode?.pending && node.path === selectedNode.source_id);
   const runNode = run?.nodes.find((node) => node.id === selectedNode?.source_id);
@@ -330,14 +342,14 @@ function WorkflowView() {
         </nav>
         <button ref={toggle} onClick={() => setSteps(!steps)} className="fx-steps-toggle" aria-expanded={steps} aria-controls="fx-steps" aria-label="Steps" title="Steps"><List {...iconProps} size={16} /></button>
         {steps && <nav ref={popover} id="fx-steps" aria-label="Workflow steps" className="fx-steps">
-          <p className="fx-steps-heading"><span>Steps</span><span>{graph.nodes.length}</span></p>
-          <div ref={list} className="fx-steps-list">{graph.nodes.map((node) => <button key={node.id} onClick={() => { select(node.id); setReveal({ id: node.id }); }} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}`} title={node.source_id} className="fx-step-row">
+          <p className="fx-steps-heading"><span>Steps</span><span>{stepNodes.length}</span></p>
+          <div ref={list} className="fx-steps-list">{stepNodes.map((node) => <button key={node.id} onClick={() => { select(node.id); setReveal({ id: node.id }); }} aria-current={selected === node.id ? "page" : undefined} data-state={node.state} aria-label={`${node.title}, ${node.state}`} title={node.source_id} className="fx-step-row">
             <span className="fx-step-label">{node.title}</span><StateIcon state={node.state} />
           </button>)}</div>
         </nav>}
         {open && <aside aria-label="Details" className="fx-details">
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
-          {selectedNote ? <NoteDetails note={selectedNote} /> : selectedNode?.kind ? <ScopeDetails node={selectedNode} />
+          {selectedNote ? <NoteDetails note={selectedNote} /> : selectedNode?.value ? <ValueDetails value={selectedNode.value} view={view} /> : selectedNode?.kind ? <ScopeDetails node={selectedNode} />
             : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />
               : selectedNode.pending ? <Heading title={selectedNode.title} id={selectedNode.source_id} kind="step path" state={selectedNode.state} meta={[selectedNode.subtitle]} />
               : <RunDetails run={run!} node={runNode} canvasNode={selectedNode} onInspectSource={inspectSource} />

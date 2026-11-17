@@ -148,6 +148,8 @@ impl Pending {
 pub(crate) struct Input {
     /// Captured note occurrences; not executable slots or members.
     pub notes: Vec<Value>,
+    /// Captured value occurrences; separate from executable slots and member order.
+    pub values: Vec<Value>,
     /// The plan's declared steps and their `order`.
     pub declared: HashMap<String, Option<u64>>,
     /// One per id, in record order; a member's own record is the one kept.
@@ -183,6 +185,11 @@ impl Input {
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
+        input.values = plan
+            .get("value_views")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         input.scopes = scopes(plan.get("scopes"));
         input.pending = plan_pending(plan).filter_map(Pending::parse).collect();
         input
@@ -199,6 +206,12 @@ impl Input {
         let mut input = Self::common(plan);
         input.notes = document
             .notes
+            .as_ref()
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        input.values = document
+            .value_views
             .as_ref()
             .and_then(Value::as_array)
             .cloned()

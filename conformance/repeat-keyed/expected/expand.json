@@ -243,6 +243,29 @@
    }
   }
  },
+ "value_links": [],
+ "value_views": [
+  {
+   "data": {
+    "list": [
+     {
+      "value": "ada"
+     },
+     {
+      "value": "bo"
+     },
+     {
+      "value": "cy"
+     }
+    ]
+   },
+   "id": "value:83b4c345acf1cc3075e6945471500ce8df1ecd7ae3022cd8fa2bde195d38603e",
+   "kind": "input",
+   "name": "names",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

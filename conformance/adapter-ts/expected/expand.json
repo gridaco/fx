@@ -186,6 +186,48 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "instance_id": "name#1",
+    "kind": "instance",
+    "port": "json",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:9e51105abfe6004c880a399a00f0aa696377acf38279e2043b94a45559bcc91f"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "slowly#1",
+    "kind": "instance",
+    "port": "json",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:44a60806fcc6d552c700ca6cdab9dd0b0e0e49ce3724bbb6799c28b6dbef2b0d"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "id": "value:9e51105abfe6004c880a399a00f0aa696377acf38279e2043b94a45559bcc91f",
+   "kind": "output",
+   "name": "name",
+   "scope_id": null,
+   "state": "pending"
+  },
+  {
+   "id": "value:44a60806fcc6d552c700ca6cdab9dd0b0e0e49ce3724bbb6799c28b6dbef2b0d",
+   "kind": "output",
+   "name": "slowly",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

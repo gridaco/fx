@@ -260,7 +260,7 @@ export function projectScopes(view: GraphDocument | ViewerRun, flat: CanvasGraph
     nodes: nodes.filter((node) => (node.kind === "workflow" ? byId.get(node.scope_id!)?.parent : parents.get(node.id)) === scope.id).map((node) => node.id),
     parent: scope.parent !== active && byId.get(scope.parent ?? "")?.kind === "group" ? scope.parent : null,
   }));
-  const nonemptyFrames = new Set(frames.filter((frame) => frame.nodes.length || notes.some((note) => note.frame_id === frame.id)).map((frame) => frame.id));
+  const nonemptyFrames = new Set(frames.filter((frame) => frame.nodes.length || notes.some((note) => note.frame_id === frame.id) || view.value_views?.some((value) => value.scope_id === frame.id)).map((frame) => frame.id));
   const framesById = new Map(frames.map((frame) => [frame.id, frame]));
   for (const id of nonemptyFrames) {
     const parent = framesById.get(id)?.parent;

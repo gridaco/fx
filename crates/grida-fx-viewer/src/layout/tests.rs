@@ -388,3 +388,33 @@ fn free_notes_pack_three_columns_without_displacing_associated_notes_or_steps() 
         .collect();
     assert_eq!(cells.len(), 5, "each note has its own cell");
 }
+
+#[test]
+fn value_bands_preserve_executable_cells_and_contextual_declaration_rows() {
+    let mut document = plan(
+        &["draw", "finish"],
+        &[
+            ("draw#1", "draw", None, 1, &[]),
+            ("finish#1", "finish", None, 1, &["draw#1"]),
+        ],
+    );
+    let before = report(&document);
+    let id = |letter: &str| format!("value:{}", letter.repeat(64));
+    document["value_views"] = json!([
+        {"id":id("a"),"scope_id":null,"kind":"input","name":"prompt","state":"known","data":{"value":"A lantern"}},
+        {"id":id("b"),"scope_id":null,"kind":"let","name":"brief","context":"item_a","state":"known","data":{"value":"warm"}},
+        {"id":id("c"),"scope_id":null,"kind":"let","name":"brief","context":"item_b","state":"known","data":{"value":"cool"}},
+        {"id":id("d"),"scope_id":null,"kind":"table","name":"canvas","state":"known","data":{"value":{"width":256}}},
+        {"id":id("e"),"scope_id":null,"kind":"output","name":"result","state":"pending"}
+    ]);
+    let after = report(&document);
+    assert_eq!(after["cells"], before["cells"]);
+    assert_eq!(after["order"], before["order"]);
+    assert_eq!(after["values"][id("a")]["column"], 0);
+    assert_eq!(after["values"][id("b")], after["values"][id("c")]);
+    assert_ne!(
+        after["values"][id("b")]["row"],
+        after["values"][id("d")]["row"]
+    );
+    assert_eq!(after["values"][id("e")]["column"], 2);
+}

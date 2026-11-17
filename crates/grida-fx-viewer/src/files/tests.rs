@@ -384,6 +384,7 @@ async fn http_inventory_contains_only_portable_descriptors_and_scoped_artifact_u
         source: crate::Source::Run(fixture.root()),
         authority: "127.0.0.1:43123".into(),
         artifact_prefix: "/p/acme/runs/one".into(),
+        project_root: project.path().to_path_buf(),
     });
     let response = app
         .oneshot(

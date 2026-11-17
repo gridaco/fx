@@ -222,6 +222,12 @@ A run a person interrupts exits 130; no case does.
   `json: true`, and the lines are sorted (by their compact form with sorted keys) into one
   array, printed as JSON is. The events of instances that run at the same time may be written in
   any order, so a case compares which events a run wrote, not their order.
+  For each invocation, `scopes_updated` retains its exact first and last `value_views` /
+  `value_links` captures, selected in recorded order before sorting. Intermediate values can
+  depend on which independent node finishes first, so those two presentation arrays are
+  omitted from intervening snapshots. Every distinct structural snapshot remains; identical
+  structure introduced only by value updates is coalesced. Changed final values, source links
+  or scope/instance structure still fail comparison. User data and other events are unchanged.
 - **`yaml: true`.** The text is parsed as YAML and normalised as JSON is, so a written YAML
   document (`fx.lock`) is held to its meaning, not its layout.
 - **Stale files.** A file under `expected/` that no step saves fails the case.

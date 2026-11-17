@@ -1,11 +1,18 @@
-//! Offline export of one exact saved run; never loads a project or starts a host.
+//! Offline export of one exact saved run. Only publishing display defaults come from the
+//! current project's configuration; no workflow source, provider or host is started.
 use crate::cli::ExportArgs;
 use grida_fx_core::Error;
-use grida_fx_viewer::export::{ExportOptions, run_export};
+use grida_fx_core::docs::project::Project;
+use grida_fx_viewer::export::{ExportError, ExportOptions, run_export_with_viewer};
 
 pub fn run(args: &ExportArgs) -> Result<u8, Error> {
     let cwd = super::planning::working_directory()?;
-    let result = run_export(
+    let viewer = Project::find(&cwd).map(|project| project.document.viewer);
+    let result = viewer.map_err(|_| ExportError {
+        kind: "fx-run-export-error-v1",
+        code: "invalid_viewer_config",
+        message: "The publishing project's fx.yaml cannot be read or is invalid; check it with doctor.",
+    }).and_then(|viewer| run_export_with_viewer(
         &cwd.join(&args.run),
         &cwd.join(&args.out),
         &args.out,
@@ -13,7 +20,8 @@ pub fn run(args: &ExportArgs) -> Result<u8, Error> {
             include_values: args.include_values,
             include_diagnostics: args.include_diagnostics,
         },
-    );
+        viewer,
+    ));
     match result {
         Ok(result) => {
             if args.json {

@@ -230,6 +230,93 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "instance_id": "draw['gull'].picture#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:8dbe11b2ead2dfb9982c8d61f52c943dc63f229178f9635b9a4a7b55e6e1a83b"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "draw['lantern'].picture#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:8dbe11b2ead2dfb9982c8d61f52c943dc63f229178f9635b9a4a7b55e6e1a83b"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "draw['rope'].picture#1",
+    "kind": "instance",
+    "port": "image",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:8dbe11b2ead2dfb9982c8d61f52c943dc63f229178f9635b9a4a7b55e6e1a83b"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "value": "a harbour"
+   },
+   "id": "value:ce0159826eb328da6ab651fab062640483e35a639aab76d4ecc9e008876b2f0a",
+   "kind": "input",
+   "name": "place",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "list": [
+     {
+      "value": "lantern"
+     },
+     {
+      "value": "rope"
+     },
+     {
+      "value": "gull"
+     }
+    ]
+   },
+   "id": "value:36dabfe5257f8d55143ffbda66d50702e4ca42cf8ca7d6b8d72b39f43d1c6b83",
+   "kind": "input",
+   "name": "things",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": 3
+   },
+   "id": "value:13d984cbd0cb449fc7f7872008bb72fbebae13e263679567484e870635225a08",
+   "kind": "input",
+   "name": "most",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "id": "value:8dbe11b2ead2dfb9982c8d61f52c943dc63f229178f9635b9a4a7b55e6e1a83b",
+   "kind": "output",
+   "name": "images",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

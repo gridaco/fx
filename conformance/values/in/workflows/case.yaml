@@ -1,0 +1,25 @@
+fx: workflow/v1
+id: case
+title: Recorded values
+inputs:
+  prompt: {type: string, default: An original geometric lantern}
+  optional: {type: string, optional: true}
+tables:
+  style: {tone: calm, seed: 42, metadata: {file: ordinary JSON}}
+let:
+  brief: "${{ inputs.prompt }}; ${{ tables.style.tone }}"
+  variation: "${{ item }} variation"
+  unused: ${{ let.unused }}
+steps:
+  echo:
+    uses: ./nodes/echo.py#echo
+    with: {p1: "${{ let.brief }}"}
+  variants:
+    for_each: [warm, cool]
+    steps:
+      echo:
+        uses: ./nodes/echo.py#echo
+        with: {p1: "${{ let.variation }}"}
+outputs:
+  message: ${{ steps.echo.outputs.text }}
+  optional: ${{ inputs.optional }}

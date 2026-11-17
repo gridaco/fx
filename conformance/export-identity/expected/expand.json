@@ -112,6 +112,80 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+   },
+   "target": {
+    "instance_id": "down#1",
+    "kind": "instance",
+    "port": "word"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+   },
+   "target": {
+    "instance_id": "up#1",
+    "kind": "instance",
+    "port": "word"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "down#1",
+    "kind": "instance",
+    "port": "text",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:e6dad182a150e63ef396f410de43ea2b9584dd8593630e75ed87aff17169d315"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "up#1",
+    "kind": "instance",
+    "port": "text",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:6aeae817adccf1e2b1be1e5dc7e6fda3c4b69484db58f9f78161c2c921d49f90"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "value": "Kite"
+   },
+   "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+   "kind": "input",
+   "name": "word",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "id": "value:6aeae817adccf1e2b1be1e5dc7e6fda3c4b69484db58f9f78161c2c921d49f90",
+   "kind": "output",
+   "name": "up",
+   "scope_id": null,
+   "state": "pending"
+  },
+  {
+   "id": "value:e6dad182a150e63ef396f410de43ea2b9584dd8593630e75ed87aff17169d315",
+   "kind": "output",
+   "name": "down",
+   "scope_id": null,
+   "state": "pending"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

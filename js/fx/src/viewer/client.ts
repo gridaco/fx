@@ -24,6 +24,8 @@ export interface ViewerClientOptions {
   timeoutMs?: number;
   /** Opt in to note selection references; older pages explicitly refuse this capability. */
   includeNotes?: boolean;
+  /** Opt in to recorded value selection references and presentation. */
+  includeValues?: boolean;
 }
 
 export class ViewerClientError extends Error {
@@ -58,6 +60,7 @@ export class ViewerClient {
   private readonly origin: string;
   private readonly timeoutMs: number;
   private readonly includeNotes: boolean;
+  private readonly includeValues: boolean;
   private readonly prefix = `fx-viewer-client-${++nextClient}-`;
   private nextRequest = 0;
   private readonly pending = new Map<string, Pending>();
@@ -89,6 +92,8 @@ export class ViewerClient {
     }
     if (options.includeNotes !== undefined && typeof options.includeNotes !== "boolean") throw new ViewerClientError("invalid_options", "includeNotes must be a boolean.");
     this.includeNotes = options.includeNotes === true;
+    if (options.includeValues !== undefined && typeof options.includeValues !== "boolean") throw new ViewerClientError("invalid_options", "includeValues must be a boolean.");
+    this.includeValues = options.includeValues === true;
     this.target = options.targetWindow;
     this.source = source;
     this.origin = options.origin;
@@ -103,6 +108,7 @@ export class ViewerClient {
   async present(action: ViewerAction): Promise<ViewerContext> {
     if (!ViewerProtocol.isAction(action)) throw new ViewerClientError("invalid_request", "Unknown or malformed presentation action.");
     if (action.action === "reveal_note" && !this.includeNotes) throw new ViewerClientError("unsupported_method", "Note presentation requires includeNotes.");
+    if (action.action === "reveal_value" && !this.includeValues) throw new ViewerClientError("unsupported_method", "Value presentation requires includeValues.");
     return (await this.request("present", action))!;
   }
 
@@ -182,6 +188,7 @@ export class ViewerClient {
   private request(method: ViewerProtocol.Method, params: Record<string, unknown>): Promise<ViewerContext | null> {
     this.assertOpen();
     if (this.includeNotes && ["get_context", "subscribe", "present"].includes(method)) params = { ...params, include_notes: true };
+    if (this.includeValues && ["get_context", "subscribe", "present"].includes(method)) params = { ...params, include_values: true };
     const request_id = this.prefix + ++this.nextRequest;
     return new Promise((resolve, reject) => {
       const timer = this.timers.setTimeout(() => {

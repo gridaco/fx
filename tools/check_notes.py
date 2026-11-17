@@ -10,6 +10,7 @@ provider keys, downloads or generated artwork are involved.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import shutil
@@ -32,6 +33,14 @@ def prepare(output: Path, command: Path) -> dict:
         project,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".env*", ".fx", "runs"),
     )
+    # Synthesized by the committed fixture body; no artwork or provider is involved.
+    source = ROOT / "fixtures/viewer/nodes/values.py"
+    spec = importlib.util.spec_from_file_location("viewer_values_fixture", source)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    (project / "inputs").mkdir(exist_ok=True)
+    module.reference_picture().save(project / "inputs/reference.png")
     environment = dict(os.environ)
     for name in (
         "GG_API_KEY",
@@ -60,7 +69,8 @@ def prepare(output: Path, command: Path) -> dict:
         return result.stdout
 
     run = output / "runs/notes"
-    invoke("run", "viewer-notes", "--run", str(run), "--no-view", "--max-usd", "0")
+    input_flags = ("--", "--reference", "inputs/reference.png")
+    invoke("run", "viewer-notes", "--run", str(run), "--no-view", "--max-usd", "0", *input_flags)
     original_bytes = (run / "plan.json").read_bytes()
     original = json.loads(original_bytes)
     notes = original.get("notes", [])
@@ -73,10 +83,10 @@ def prepare(output: Path, command: Path) -> dict:
     note_source.write_text(
         "# Updated documentation\nThis is a newer source file.\n", encoding="utf-8"
     )
-    invoke("run", "viewer-notes", "--run", str(run), "--no-view", "--max-usd", "0")
+    invoke("run", "viewer-notes", "--run", str(run), "--no-view", "--max-usd", "0", *input_flags)
     assert (run / "plan.json").read_bytes() == original_bytes, "resume preserves the exact snapshot"
     later = output / "runs/fresh"
-    invoke("run", "viewer-notes", "--run", str(later), "--no-view", "--max-usd", "0")
+    invoke("run", "viewer-notes", "--run", str(later), "--no-view", "--max-usd", "0", *input_flags)
     refreshed = json.loads((later / "plan.json").read_text())
     assert original["plan"] == refreshed["plan"], "note-only file edit preserves plan identity"
     assert any(n["text"] and "Updated documentation" in n["text"] for n in refreshed["notes"])

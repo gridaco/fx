@@ -145,6 +145,35 @@
           }
         }
       }
+    },
+    "values": {
+      "description": "Presentation-only value cells keyed by recorded value id, separate from executable slot cells and member order.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "column",
+          "row",
+          "source"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "enum": [
+              "automatic",
+              "authored"
+            ]
+          }
+        }
+      }
     }
   }
 }

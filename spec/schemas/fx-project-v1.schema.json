@@ -125,6 +125,36 @@
         "pattern": "^[a-z0-9._-]+$"
       },
       "default": {}
+    },
+    "viewer": {
+      "description": "Current project-wide viewer presentation defaults, loaded when viewing plans or recorded runs. These settings never enter executable plans, identities, cache keys or recorded workflow values.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "workflow_inputs": {
+              "description": "Display the current workflow's grouped input boundary cards.",
+              "type": "boolean",
+              "default": true
+            },
+            "workflow_outputs": {
+              "description": "Display the current workflow's grouped output boundary cards.",
+              "type": "boolean",
+              "default": true
+            },
+            "notes": {
+              "description": "Display authored note cards, including group-owned notes.",
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "default": {}
+        }
+      },
+      "default": {}
     }
   },
   "$defs": {

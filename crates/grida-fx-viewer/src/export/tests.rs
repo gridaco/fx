@@ -24,6 +24,48 @@ fn manifest(parent: &tempfile::TempDir) -> Value {
 }
 
 #[test]
+fn publishing_display_defaults_preserve_execution_and_disclosure_evidence() {
+    use grida_fx_core::docs::project::ViewerDisplay;
+
+    let fixture = source("image/png");
+    let visible = tempfile::tempdir().unwrap();
+    let hidden = tempfile::tempdir().unwrap();
+    let before_plan = std::fs::read(fixture.root().join("plan.json")).unwrap();
+    let before_events = std::fs::read(fixture.root().join("events.jsonl")).unwrap();
+    export(&fixture, &visible, ExportOptions::default()).unwrap();
+    let config = ViewerConfig {
+        display: ViewerDisplay {
+            workflow_inputs: false,
+            workflow_outputs: true,
+            notes: false,
+        },
+    };
+    run_export_with_viewer(
+        &fixture.root(),
+        &hidden.path().join("export"),
+        "export",
+        ExportOptions::default(),
+        config,
+    )
+    .unwrap();
+    let original = manifest(&visible);
+    let configured = manifest(&hidden);
+    assert!(original.get("viewer").is_none());
+    assert_eq!(configured["viewer"], serde_json::to_value(config).unwrap());
+    for field in ["source", "view", "layout", "disclosure", "artifacts"] {
+        assert_eq!(original[field], configured[field], "{field}");
+    }
+    assert_eq!(
+        std::fs::read(fixture.root().join("plan.json")).unwrap(),
+        before_plan
+    );
+    assert_eq!(
+        std::fs::read(fixture.root().join("events.jsonl")).unwrap(),
+        before_events
+    );
+}
+
+#[test]
 fn default_disclosure_preserves_media_and_withholds_author_values() {
     let fixture = source("image/png");
     let parent = tempfile::tempdir().unwrap();
@@ -775,5 +817,192 @@ fn captured_notes_are_disclosed_explicitly_without_exporting_local_source() {
         tampered = value;
         tampered["view"]["notes"][0]["scope_id"] = json!("scope:unknown#1");
         assert!(references::validate(&tampered).is_err());
+    }
+}
+
+#[test]
+fn effective_values_export_with_explicit_disclosure_and_closed_references() {
+    let fixture = source("image/png");
+    let path = fixture.root().join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let input = format!("value:{}", "a".repeat(64));
+    let file = format!("value:{}", "b".repeat(64));
+    let ordinary = format!("value:{}", "c".repeat(64));
+    plan["value_views"] = json!([
+        {"id":input,"scope_id":null,"kind":"input","name":"prompt","state":"known","data":{"value":"A recorded default"},"diagnostic":"Controlled presentation diagnostic."},
+        {"id":file,"scope_id":null,"kind":"output","name":"image","state":"known","data":{"file":{"digest":fixture.digest,"kind":"image/png","name":"original.png","size":b"a synthetic offline artifact".len()}}},
+        {"id":ordinary,"scope_id":null,"kind":"table","name":"configuration","state":"known","data":{"value":{"file":{"digest":"d".repeat(64),"kind":"image/png","name":"not-a-file","size":1}}}}
+    ]);
+    plan["value_links"] = json!([{"source":{"kind":"instance","instance_id":"draw#1","port":"image","source_kind":"output"},"target":{"kind":"value","value_id":file}}]);
+    std::fs::write(path, plan.to_string()).unwrap();
+    for include_values in [false, true] {
+        let parent = tempfile::tempdir().unwrap();
+        export(
+            &fixture,
+            &parent,
+            ExportOptions {
+                include_values,
+                include_diagnostics: false,
+            },
+        )
+        .unwrap();
+        let value = manifest(&parent);
+        let views = value["view"]["value_views"].as_array().unwrap();
+        assert_eq!(
+            views[0]["state"],
+            if include_values { "known" } else { "withheld" }
+        );
+        assert_eq!(views[0].get("data").is_some(), include_values);
+        assert!(views[0].get("diagnostic").is_none());
+        assert_eq!(views[1]["data"]["file"]["name"], "original.png");
+        assert_eq!(views[1]["state"], "known");
+        assert!(!value.to_string().contains("/private/"));
+        assert!(
+            !value["artifacts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|artifact| artifact["digest"] == "d".repeat(64))
+        );
+        assert!(value["layout"]["values"].get(&input).is_some());
+        assert!(
+            value["layout"]["order"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|id| id.as_str().is_none_or(|id| !id.starts_with("value:")))
+        );
+        references::validate(&value).unwrap();
+        let mut broken = value.clone();
+        broken["view"]["value_links"][0]["target"]["value_id"] =
+            json!(format!("value:{}", "f".repeat(64)));
+        assert!(references::validate(&broken).is_err());
+    }
+}
+
+#[test]
+fn recorded_input_snapshots_export_independently_of_transformed_outputs() {
+    let fixture = source("image/png");
+    let bytes = b"an original synthetic input, different from the transformed output";
+    let digest = grida_fx_core::value::file_digest(bytes);
+    let directory = fixture.root().join("values");
+    std::fs::create_dir(&directory).unwrap();
+    std::fs::write(directory.join(&digest), bytes).unwrap();
+    let path = fixture.root().join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    plan["value_views"] = json!([{
+        "id":format!("value:{}", "a".repeat(64)),"scope_id":null,"kind":"input","name":"reference","state":"known",
+        "data":{"file":{"digest":digest,"kind":"image/png","name":"reference.png","size":bytes.len()}}
+    }]);
+    plan["value_links"] = json!([]);
+    std::fs::write(path, plan.to_string()).unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    export(&fixture, &parent, ExportOptions::default()).unwrap();
+    let value = manifest(&parent);
+    let input = value["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|artifact| artifact["digest"] == digest)
+        .unwrap();
+    assert!(input["omitted_reason"].is_null());
+    let relative = input["path"].as_str().unwrap();
+    assert_eq!(
+        std::fs::read(parent.path().join("export").join(relative)).unwrap(),
+        bytes
+    );
+    assert_ne!(digest, fixture.digest);
+    // Input snapshot failure is display-only: retaining metadata still allows an export.
+    std::fs::remove_file(directory.join(&digest)).unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    export(&fixture, &parent, ExportOptions::default()).unwrap();
+    let value = manifest(&parent);
+    let input = value["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|artifact| artifact["digest"] == digest)
+        .unwrap();
+    assert!(input["path"].is_null());
+    assert_eq!(input["omitted_reason"], "unplaced_input");
+    // Existing replacement bytes are a broken recorded candidate, never silently exported.
+    std::fs::write(directory.join(&digest), b"replacement bytes").unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    assert_eq!(
+        export(&fixture, &parent, ExportOptions::default())
+            .unwrap_err()
+            .code,
+        "artifact_unavailable"
+    );
+}
+
+#[test]
+fn nested_typed_input_files_keep_their_identity_without_reinterpreting_opaque_objects() {
+    let fixture = source("image/png");
+    let bytes = b"synthetic nested reference bytes";
+    let digest = grida_fx_core::value::file_digest(bytes);
+    std::fs::create_dir(fixture.root().join("values")).unwrap();
+    std::fs::write(fixture.root().join("values").join(&digest), bytes).unwrap();
+    let path = fixture.root().join("plan.json");
+    let mut plan: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let opaque = json!({"object":{"image":{"file":{"digest":"f".repeat(64),"kind":"image/png","name":"opaque.png","size":1}}}});
+    plan["value_views"] = json!([{
+        "id":format!("value:{}", "a".repeat(64)),"scope_id":null,"kind":"input","name":"layers","state":"known",
+        "data":{"list":[{"object":{
+            "image":{"file":{"digest":digest,"kind":"image/png","name":"reference.png","size":bytes.len()}},
+            "caption":{"value":"A nested caption"},
+            "opaque":{"value":opaque}
+        }}]}
+    }]);
+    plan["value_links"] = json!([]);
+    std::fs::write(path, plan.to_string()).unwrap();
+    for include_values in [false, true] {
+        let parent = tempfile::tempdir().unwrap();
+        export(
+            &fixture,
+            &parent,
+            ExportOptions {
+                include_values,
+                include_diagnostics: false,
+            },
+        )
+        .unwrap();
+        let value = manifest(&parent);
+        let object = &value["view"]["value_views"][0]["data"]["list"][0]["object"];
+        assert_eq!(object["image"]["file"]["digest"], digest);
+        assert_eq!(
+            object["caption"],
+            if include_values {
+                json!({"value":"A nested caption"})
+            } else {
+                json!({"withheld":true})
+            }
+        );
+        assert_eq!(
+            object["opaque"],
+            if include_values {
+                json!({"value":opaque})
+            } else {
+                json!({"withheld":true})
+            }
+        );
+        assert!(
+            value["artifacts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|artifact| artifact["digest"] == digest && artifact["path"].is_string())
+        );
+        assert!(
+            !value["artifacts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|artifact| artifact["digest"] == "f".repeat(64))
+        );
+        let mut invalid = value;
+        invalid["view"]["value_views"][0]["data"]["list"][0]["object"]["image"]["file"]["digest"] =
+            json!("e".repeat(64));
+        assert!(references::validate(&invalid).is_err());
     }
 }

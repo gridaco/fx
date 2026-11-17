@@ -195,6 +195,202 @@
   "pending": [],
   "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "first#1",
+     "kind": "instance",
+     "port": "word"
+    }
+   },
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "second#1",
+     "kind": "instance",
+     "port": "word"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "first#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:cb409c5db95d1de72e0d2f9efdbff113b04229e8a580326949edd71ac8f3aa6e"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "second#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:4445ccbdad6d3cb6a69cfd5fe1daf610c7c64ece487ffa1f83c66e9372cb85b0"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "Kite"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "data": {
+     "file": {
+      "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+      "kind": "text/plain",
+      "name": "text",
+      "size": 5
+     }
+    },
+    "id": "value:cb409c5db95d1de72e0d2f9efdbff113b04229e8a580326949edd71ac8f3aa6e",
+    "kind": "output",
+    "name": "first",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "data": {
+     "file": {
+      "digest": "dee3f65ef9dae331d4077c6d0d9e1d11574ab8c13f6b9e759df10affe54f8f42",
+      "kind": "text/plain",
+      "name": "text",
+      "size": 5
+     }
+    },
+    "id": "value:4445ccbdad6d3cb6a69cfd5fe1daf610c7c64ece487ffa1f83c66e9372cb85b0",
+    "kind": "output",
+    "name": "second",
+    "scope_id": null,
+    "state": "known"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "first#1",
+    "key": null,
+    "path": "first",
+    "step": "first",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "second#1",
+    "key": null,
+    "path": "second",
+    "step": "second",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "first#1": [],
+   "second#1": []
+  },
+  "pending": [],
+  "plan": "b54bf877cc87ea7c656494d124c177a6f0d574a8f85c91401fbf0c456f52af9d",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "first#1",
+     "kind": "instance",
+     "port": "word"
+    }
+   },
+   {
+    "source": {
+     "kind": "value",
+     "value_id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb"
+    },
+    "target": {
+     "instance_id": "second#1",
+     "kind": "instance",
+     "port": "word"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "first#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:cb409c5db95d1de72e0d2f9efdbff113b04229e8a580326949edd71ac8f3aa6e"
+    }
+   },
+   {
+    "source": {
+     "instance_id": "second#1",
+     "kind": "instance",
+     "port": "text",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:4445ccbdad6d3cb6a69cfd5fe1daf610c7c64ece487ffa1f83c66e9372cb85b0"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "value": "Kite"
+    },
+    "id": "value:84bde183293c4ffe2c71cd0154821f767ea34d13502e634f0d80d2e9bf5b5ebb",
+    "kind": "input",
+    "name": "word",
+    "scope_id": null,
+    "state": "known"
+   },
+   {
+    "id": "value:cb409c5db95d1de72e0d2f9efdbff113b04229e8a580326949edd71ac8f3aa6e",
+    "kind": "output",
+    "name": "first",
+    "scope_id": null,
+    "state": "pending"
+   },
+   {
+    "id": "value:4445ccbdad6d3cb6a69cfd5fe1daf610c7c64ece487ffa1f83c66e9372cb85b0",
+    "kind": "output",
+    "name": "second",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
  }
 ]

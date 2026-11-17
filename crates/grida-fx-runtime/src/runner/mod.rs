@@ -535,6 +535,7 @@ fn invoke(
         cancel.clone(),
     ));
     let workflow = planner.workflow.workflow.id.clone();
+    let captured_value_views = captured_value_views(&folder, &prior);
     let mut scheduler = Scheduler {
         engine: Arc::clone(engine),
         planner,
@@ -555,6 +556,7 @@ fn invoke(
         failed: Vec::new(),
         tasks: Vec::new(),
         display_snapshot: None,
+        captured_value_views,
         known_instances: known_instances(&plan.expansion, &prior),
         cleanup_verified: true,
         cleanup_completed: false,
@@ -729,6 +731,9 @@ fn prepare(
         &options.takes_file,
         engine.stand_in_run(),
     );
+    if !folder.plan_path().exists() {
+        folder.capture_value_files(&plan.expansion.value_files);
+    }
     folder.write_plan_once(&document).map_err(|error| {
         RunError::Fatal(Error::io(&in_folder(&options.label, "plan.json"), &error))
     })?;
@@ -765,6 +770,34 @@ fn prepare(
     Ok((folder, prior))
 }
 
+/// Only new normally-evaluated input occurrences may capture bytes. Unioning historical
+/// known input IDs (not just the latest snapshot) preserves failed first-capture outcomes.
+fn captured_value_views(folder: &RunFolder, events: &[serde_json::Value]) -> BTreeSet<String> {
+    let saved = std::fs::read(folder.plan_path())
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+    saved
+        .iter()
+        .chain(events.iter())
+        .flat_map(|document| {
+            document
+                .get("value_views")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter(|view| {
+            view.get("kind").and_then(serde_json::Value::as_str) == Some("input")
+                && view.get("state").and_then(serde_json::Value::as_str) == Some("known")
+        })
+        .filter_map(|view| {
+            view.get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .collect()
+}
+
 /// One running instance: the concurrency group it takes a place in, and its own cancellation
 /// (a child of the run's).
 struct Running {
@@ -786,6 +819,8 @@ enum Message {
 
 /// The loop's state (module doc).
 struct Scheduler<'a> {
+    /// Input views already recorded as known: a resume cannot repair their missing snapshots.
+    captured_value_views: BTreeSet<String>,
     display_snapshot: Option<serde_json::Value>,
     /// Previously declared members, including conditional positions absent from a later expansion.
     known_instances: BTreeMap<String, (String, Vec<u32>)>,
@@ -896,6 +931,23 @@ impl Scheduler<'_> {
     /// in expansion order, and its pending repeats, so a reader knows every member and its step
     /// before it starts.
     fn emit_scopes(&mut self, expansion: &Expansion) -> Result<(), Error> {
+        let fresh_inputs: BTreeSet<_> = expansion
+            .value_views
+            .iter()
+            .filter(|view| {
+                view.kind == "input"
+                    && view.state == "known"
+                    && !self.captured_value_views.contains(&view.id)
+            })
+            .map(|view| view.id.clone())
+            .collect();
+        self.folder.capture_value_files(
+            expansion
+                .value_files
+                .iter()
+                .filter(|source| fresh_inputs.contains(&source.value_id)),
+        );
+        self.captured_value_views.extend(fresh_inputs);
         for instance in expansion
             .ordered()
             .filter(|instance| instance.state != State::Absent)
@@ -926,6 +978,8 @@ impl Scheduler<'_> {
             "scopes": expansion.scopes, "node_interface_bindings": node_interface_bindings,
             "instances": instances, "pending": pending,
             "skip_reasons": skip_reasons,
+            "value_views": expansion.value_views,
+            "value_links": expansion.value_links,
         });
         if !self.planner.registry.note_templates().is_empty() {
             snapshot["notes"] = serde_json::to_value(&expansion.notes).expect("serializable notes");
@@ -938,6 +992,8 @@ impl Scheduler<'_> {
                 pending: snapshot["pending"].clone(),
                 skip_reasons: Some(snapshot["skip_reasons"].clone()),
                 notes: snapshot.get("notes").cloned(),
+                value_views: snapshot.get("value_views").cloned(),
+                value_links: snapshot.get("value_links").cloned(),
             })?;
             self.display_snapshot = Some(snapshot);
         }

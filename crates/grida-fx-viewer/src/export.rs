@@ -2,6 +2,7 @@
 //! Neither source records nor artifacts are repaired, and no project or cache is opened.
 
 use crate::{layout, read};
+use grida_fx_core::docs::project::ViewerConfig;
 use grida_fx_core::value::{canon, sha256_hex, write_json};
 use grida_fx_runtime::{folder::same_file, observation};
 use serde::Serialize;
@@ -90,6 +91,24 @@ pub fn run_export(
     destination: &Path,
     output_label: &str,
     options: ExportOptions,
+) -> Result<ExportResult, ExportError> {
+    run_export_with_viewer(
+        root,
+        destination,
+        output_label,
+        options,
+        ViewerConfig::default(),
+    )
+}
+
+/// Export with caller-resolved publishing defaults. No project/source is opened here; display
+/// preferences alter only the portable manifest, never the saved execution record or disclosure.
+pub fn run_export_with_viewer(
+    root: &Path,
+    destination: &Path,
+    output_label: &str,
+    options: ExportOptions,
+    viewer: ViewerConfig,
 ) -> Result<ExportResult, ExportError> {
     let root = root.canonicalize().map_err(|_| unavailable())?;
     if !root.is_dir() {
@@ -268,12 +287,17 @@ pub fn run_export(
         &serde_json::to_value(snapshot.document).map_err(|_| invalid())?,
         options,
     );
-    let manifest = json!({
+    let mut manifest = json!({
         "kind":"fx-run-export-v1", "producer":{"version":env!("CARGO_PKG_VERSION")},
         "source":{"plan_sha256":sha256_hex(&plan_bytes),"events_sha256":sha256_hex(canon(&json!(captured.events)).as_bytes()),"event_count":captured.events.len()},
         "disclosure":{"values":options.include_values,"diagnostics":options.include_diagnostics,"artifacts":"media"},
         "view":view,"layout":layout,"artifacts":artifacts
     });
+    // Preserve default manifest bytes for existing publishers; omitted configuration means
+    // the same all-visible defaults to both old and new readers.
+    if viewer != ViewerConfig::default() {
+        manifest["viewer"] = serde_json::to_value(viewer).map_err(|_| invalid())?;
+    }
     let schema: Value = serde_json::from_str(include_str!(
         "../../../spec/schemas/fx-run-export-v1.schema.json"
     ))
@@ -449,6 +473,8 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                         "key",
                         "title",
                         "uses",
+                        "routes",
+                        "routing",
                         "state",
                         "reads",
                         "needs",
@@ -497,6 +523,39 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
             })
             .collect::<Vec<_>>()
     );
+    if let Some(values) = view.get("value_views").and_then(Value::as_array) {
+        projected["value_views"] = Value::Array(
+            values
+                .iter()
+                .map(|value| {
+                    let mut item = fields(
+                        value,
+                        &["id", "scope_id", "kind", "name", "state", "context"],
+                    );
+                    if let Some(data) = value.get("data") {
+                        let data = export_value(data, options.include_values);
+                        if data.get("withheld") == Some(&Value::Bool(true)) {
+                            item["state"] = json!("withheld");
+                        } else {
+                            item["data"] = data;
+                        }
+                    }
+                    if options.include_diagnostics
+                        && let Some(diagnostic) = value.get("diagnostic")
+                    {
+                        item["diagnostic"] = diagnostic.clone();
+                    }
+                    item
+                })
+                .collect(),
+        );
+    }
+    if let Some(links) = view.get("value_links").and_then(Value::as_array) {
+        projected["value_links"] = Value::Array(links.iter().map(|link| json!({
+            "source":fields(&link["source"], &["kind", "value_id", "instance_id", "port", "source_kind"]),
+            "target":fields(&link["target"], &["kind", "value_id", "instance_id", "port"]),
+        })).collect());
+    }
     if let Some(notes) = view.get("notes").and_then(Value::as_array) {
         projected["notes"] = Value::Array(
             notes
@@ -565,6 +624,9 @@ fn export_value(value: &Value, include: bool) -> Value {
             file["digest"].as_str().unwrap_or("artifact")
         ));
         return json!({"file":file});
+    }
+    if let Some(object) = value.get("object").and_then(Value::as_object) {
+        return json!({"object":object.iter().map(|(name,value)| (name.clone(),export_value(value,include))).collect::<serde_json::Map<_,_>>()});
     }
     if let Some(list) = value.get("list").and_then(Value::as_array) {
         return json!({"list":list.iter().map(|value| export_value(value,include)).collect::<Vec<_>>()});

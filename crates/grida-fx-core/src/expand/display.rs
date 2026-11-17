@@ -99,6 +99,12 @@ impl Expander<'_> {
                 pending: Vec::new(),
             },
         );
+        if let Some(loaded) = loaded {
+            self.input_value_views(frame);
+            for name in loaded.workflow.outputs.keys() {
+                self.unavailable_value_view(frame, "output", name);
+            }
+        }
         if let Some((workflow, root_prefix)) = note_owner {
             let container = note_prefix
                 .strip_prefix(&root_prefix)

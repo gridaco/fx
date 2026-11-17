@@ -32,6 +32,7 @@ pub(crate) fn run_report(plan: &Value, snapshot: &Snapshot, cursor: String) -> L
 fn report(input: &Input, cursor: Option<String>) -> LayoutReport {
     let cells = cells(input);
     let notes = note_cells(input, &cells);
+    let values = value_cells(input, &cells);
     LayoutReport {
         kind: report::KIND,
         file: None,
@@ -42,7 +43,69 @@ fn report(input: &Input, cursor: Option<String>) -> LayoutReport {
         cells,
         order: order(input),
         notes,
+        values,
     }
+}
+
+/// Values have independent input/shared/output bands. Contextual occurrences of one named
+/// declaration share a row, allowing the browser to show their existing deck convention.
+fn value_cells(input: &Input, cells: &IndexMap<String, CellEntry>) -> IndexMap<String, CellEntry> {
+    let mut rows: HashMap<(String, u8), u32> = HashMap::new();
+    let mut declarations: HashMap<(String, String, String), u32> = HashMap::new();
+    let mut placed = IndexMap::new();
+    for value in &input.values {
+        let (Some(id), Some(name), Some(kind)) = (
+            value["id"].as_str(),
+            value["name"].as_str(),
+            value["kind"].as_str(),
+        ) else {
+            continue;
+        };
+        let owner = match value["scope_id"].as_str() {
+            None => String::new(),
+            Some(id) => {
+                let Some(scope) = input.scopes.iter().find(|scope| scope.id == id) else {
+                    continue;
+                };
+                scope.step.clone()
+            }
+        };
+        let band = match kind {
+            "input" => 0,
+            "output" => 2,
+            _ => 1,
+        };
+        let row = *declarations
+            .entry((owner.clone(), kind.to_owned(), name.to_owned()))
+            .or_insert_with(|| {
+                let next = rows.entry((owner.clone(), band)).or_default();
+                let row = *next;
+                *next = next.saturating_add(1);
+                row
+            });
+        let column = if band == 2 {
+            cells
+                .iter()
+                .filter(|(address, _)| {
+                    address.rsplit_once('.').map_or("", |(parent, _)| parent) == owner
+                })
+                .map(|(_, cell)| cell.column)
+                .max()
+                .unwrap_or_default()
+                .saturating_add(1)
+        } else {
+            u32::from(band)
+        };
+        placed.insert(
+            id.to_owned(),
+            CellEntry {
+                column,
+                row,
+                source: "automatic",
+            },
+        );
+    }
+    placed
 }
 
 /// Notes occupy a packed band below executable slots in their owner container. Associations

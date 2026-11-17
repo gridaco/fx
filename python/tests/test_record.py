@@ -66,7 +66,10 @@ def test_load_run_forwards_selection_and_pins_inspected_folder(
     assert fake.invocations == [["inspect", str(target), "--json"]]
     assert record.run_dir == tmp_path.resolve() / "runs/selected"
     assert record.inspection == INSPECTION
-    assert set(vars(record)) == {"run_dir", "inspection"}
+    assert {name for name in vars(record) if not name.startswith("_")} == {
+        "run_dir",
+        "inspection",
+    }
     record.inspection["run"]["folder"] = "runs/changed"
     other = tmp_path / "other"
     other.mkdir()
@@ -551,6 +554,65 @@ def test_cancelling_follow_stops_only_its_spawned_observer(fake: Fake, tmp_path:
     asyncio.run(use())
     assert {"interrupted": True} in fake.calls
     assert [args[0] for args in fake.invocations] == ["inspect", "observe"]
+
+
+@pytest.mark.parametrize("async_api", [False, True])
+def test_export_reads_current_display_defaults_without_changing_recorded_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, async_api: bool
+) -> None:
+    engine = _api._packaged_binary()
+    if not engine.is_file():
+        pytest.skip("needs the engine beside the SDK")
+    monkeypatch.setenv("GRIDA_FX_BIN", str(engine))
+    monkeypatch.setenv("GRIDA_FX_NETWORK", "off")
+    monkeypatch.setenv("GRIDA_FX_DISABLE_DOTENV", "1")
+    project, caller = tmp_path / "project", tmp_path / "caller"
+    project.mkdir()
+    caller.mkdir()
+    monkeypatch.chdir(caller)
+    (caller / "fx.yaml").write_text(
+        "fx: project/v1\nviewer: {display: {workflow_outputs: false}}\n"
+    )
+    config = project / "fx.yaml"
+    config.write_text("fx: project/v1\n")
+    (project / "workflow.yaml").write_text(
+        "fx: workflow/v1\nid: case\ntitle: Display defaults\nsteps:\n"
+        "  pick:\n    uses: fx/select@1\n    with: {first_of: [1]}\n"
+        "outputs: {result: '${{ steps.pick.outputs.value }}'}\n"
+    )
+    planned = fx.plan("workflow.yaml", cwd=project)
+    result = fx.run("workflow.yaml", cwd=project)
+    assert result.ok
+    record = (
+        asyncio.run(fx.load_run_async(result.run_dir, cwd=project))
+        if async_api
+        else fx.load_run(result.run_dir, cwd=project)
+    )
+    before = record.snapshot()
+    config.write_text(
+        "fx: project/v1\nviewer:\n  display:\n    workflow_inputs: false\n    notes: false\n"
+    )
+    assert fx.plan("workflow.yaml", cwd=project).document == planned.document
+    if async_api:
+        asyncio.run(record.export_async("shared"))
+    else:
+        record.export("shared")
+    manifest = json.loads((caller / "shared/manifest.json").read_text())
+    assert not (project / "shared").exists()
+    assert manifest["viewer"]["display"] == {
+        "workflow_inputs": False,
+        "workflow_outputs": True,
+        "notes": False,
+    }
+    assert record.snapshot() == before
+    config.write_text("fx: project/v1\nviewer: {display: {notes: 'false'}}\n")
+    with pytest.raises(fx.RunExportError) as caught:
+        if async_api:
+            asyncio.run(record.export_async("invalid"))
+        else:
+            record.export("invalid")
+    assert caught.value.code == "invalid_viewer_config"
+    assert not (caller / "invalid").exists()
 
 
 def test_real_engine_named_collision_resume_and_pinned_loading(

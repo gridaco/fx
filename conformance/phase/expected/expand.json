@@ -110,6 +110,36 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:dbe6e364e3745fb66c53f5d68d42b827f72c75428d05b91e3e9ba49ce131c063"
+   },
+   "target": {
+    "instance_id": "split#1",
+    "kind": "instance",
+    "port": "text"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "file": {
+     "digest": "911169ddaaf146aff539f58c26c489af3b892dff0fe283c1c264c65ae5aa59a2",
+     "kind": "text/plain",
+     "name": "s.txt",
+     "size": 4
+    }
+   },
+   "id": "value:dbe6e364e3745fb66c53f5d68d42b827f72c75428d05b91e3e9ba49ce131c063",
+   "kind": "input",
+   "name": "script",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

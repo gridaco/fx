@@ -55,6 +55,7 @@ pub mod node;
 pub mod repeat;
 pub mod scope;
 pub mod skip;
+pub mod values;
 pub mod wiring;
 
 use crate::docs::takes::Takes;
@@ -311,6 +312,10 @@ pub struct Expansion {
     pub skipped_positions: Vec<skip::SkippedPosition>,
     pub scopes: Vec<display::Scope>,
     pub notes: Vec<crate::notes::Note>,
+    pub value_views: Vec<values::ValueView>,
+    pub value_links: Vec<values::ValueLink>,
+    /// Engine-only bound input file candidates; never serialized or included in identity.
+    pub value_files: Vec<values::ValueFileSource>,
     /// In insertion order: the graph's listing order.
     pub instances: IndexMap<String, Instance>,
     pub pending: Vec<PendingRepeat>,
@@ -410,6 +415,8 @@ pub(crate) struct Expander<'a> {
     pub(crate) wiring: wiring::Trace,
     pub(crate) display_scopes: IndexMap<String, display::Scope>,
     pub(crate) notes: IndexMap<String, crate::notes::Note>,
+    pub(crate) value_ledger: values::Ledger,
+    pub(crate) value_consumers: Vec<String>,
     /// Evaluating a select's `first_of`.
     pub(crate) selecting: bool,
     /// Views handed out to expressions; indices are [`crate::val::ViewId`]s.
@@ -461,6 +468,8 @@ impl<'a> Expander<'a> {
             wiring: wiring::Trace::default(),
             display_scopes: IndexMap::new(),
             notes: IndexMap::new(),
+            value_ledger: Default::default(),
+            value_consumers: Vec::new(),
             selecting: false,
             views: Vec::new(),
             lets_active: Vec::new(),
@@ -512,11 +521,15 @@ impl<'a> Expander<'a> {
             return Err(error);
         }
         self.finish_display_scopes();
+        self.finish_value_views();
         Ok(Expansion {
             skip_reasons: self.skip_reasons,
             skipped_positions: self.skipped_positions,
             scopes: self.display_scopes.into_values().collect(),
             notes: self.notes.into_values().collect(),
+            value_views: self.value_ledger.views.into_values().collect(),
+            value_links: self.value_ledger.links.into_iter().collect(),
+            value_files: self.value_ledger.files.into_values().collect(),
             instances: self.instances,
             pending: self.pending,
             problems: self.problems,
@@ -557,6 +570,7 @@ impl<'a> Expander<'a> {
         });
         self.workflow_roots
             .insert(root, (loaded.source.clone(), None));
+        self.input_value_views(root);
         root
     }
 
@@ -1019,7 +1033,15 @@ impl<'a> Expander<'a> {
         let workflow = Rc::clone(&self.frames[root.0].workflow);
         let mut outputs = IndexMap::new();
         for (name, value) in &workflow.outputs {
+            let id = self.value_id(root, "output", name);
+            self.value_consumers.push(id.clone());
+            self.wiring.values.begin();
             let value = self.evaluate(root, value, &format!("outputs.{name}"));
+            let sources = self.wiring.values.end();
+            self.value_consumers.pop();
+            self.value_view(root, "output", name, &value);
+            self.value_ledger
+                .sources(sources, values::ValueEndpoint::value(&id));
             outputs.insert(name.clone(), value);
         }
         outputs

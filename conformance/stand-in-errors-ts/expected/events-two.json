@@ -1236,6 +1236,172 @@
   "pending": [],
   "plan": "a7cb2d938e24f99c3228a033d37b542d21f97dec6dfdaa5290a8417dbc3edbea",
   "scopes": [],
-  "skip_reasons": {}
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "good#1",
+     "kind": "instance",
+     "port": "image",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "data": {
+     "file": {
+      "digest": "61551ab637dc15d883ebc2aae4ab25077f5c02697409d08f5941b6d485caa76f",
+      "kind": "image/png",
+      "name": "image",
+      "size": 12420
+     }
+    },
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "known"
+   }
+  ]
+ },
+ {
+  "event": "scopes_updated",
+  "instances": [
+   {
+    "id": "good#1",
+    "key": null,
+    "path": "good",
+    "step": "good",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "refused#1",
+    "key": null,
+    "path": "refused",
+    "step": "refused",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "failed#1",
+    "key": null,
+    "path": "failed",
+    "step": "failed",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "declined#1",
+    "key": null,
+    "path": "declined",
+    "step": "declined",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "small#1",
+    "key": null,
+    "path": "small",
+    "step": "small",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "text#1",
+    "key": null,
+    "path": "text",
+    "step": "text",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "extra#1",
+    "key": null,
+    "path": "extra",
+    "step": "extra",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "missing#1",
+    "key": null,
+    "path": "missing",
+    "step": "missing",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "data#1",
+    "key": null,
+    "path": "data",
+    "step": "data",
+    "take": [
+     1
+    ]
+   },
+   {
+    "id": "body#1",
+    "key": null,
+    "path": "body",
+    "step": "body",
+    "take": [
+     1
+    ]
+   }
+  ],
+  "kind": "fx-run-events-v1",
+  "node_interface_bindings": {
+   "body#1": [],
+   "data#1": [],
+   "declined#1": [],
+   "extra#1": [],
+   "failed#1": [],
+   "good#1": [],
+   "missing#1": [],
+   "refused#1": [],
+   "small#1": [],
+   "text#1": []
+  },
+  "pending": [],
+  "plan": "a7cb2d938e24f99c3228a033d37b542d21f97dec6dfdaa5290a8417dbc3edbea",
+  "scopes": [],
+  "skip_reasons": {},
+  "value_links": [
+   {
+    "source": {
+     "instance_id": "good#1",
+     "kind": "instance",
+     "port": "image",
+     "source_kind": "output"
+    },
+    "target": {
+     "kind": "value",
+     "value_id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424"
+    }
+   }
+  ],
+  "value_views": [
+   {
+    "id": "value:3f70ae9df0f1f82a8dd554c407f9bf8880399d101f99469f3b1c8cdd2ca4d424",
+    "kind": "output",
+    "name": "good",
+    "scope_id": null,
+    "state": "pending"
+   }
+  ]
  }
 ]

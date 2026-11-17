@@ -368,9 +368,10 @@ function checkScopes(view: ViewerView, expected: CaseExpectation, label: string)
     const owner = required.target_kind === "node" ? scopes.find((scope) => scope.nodes.includes(required.target))?.id ?? null : required.target_kind === "scope_input" ? targetScope!.parent : targetScope!.id;
     const current = enclosingWorkflow(owner);
     const graph = canvasGraph(view, current);
-    const targetId = required.target_kind === "node" ? `instance:${required.target}` : required.target_kind === "scope_input" ? targetScope!.id : `boundary:output:${targetScope!.id}`;
-    const from = required.source_kind === "scope_input" ? `boundary:input:${sourceId}` : required.source_kind === "scope_output" ? sourceId : `instance:${sourceId}`;
-    assert(graph.edges.some((edge) => edge.kind === "data" && edge.source === from && edge.target === targetId && edge.source_port === required.source_port && edge.target_port === required.target_port && edge.source_kind === (required.source_kind === "fact" ? "fact" : "output")), `${label}: scoped canvas lost named alias wire ${required.source}.${required.source_port} -> ${required.target}.${required.target_port}`);
+    const boundary = (scopeId: string, side: "input" | "output", port: string) => graph.nodes.find((node) => node.value?.scope_id === scopeId && node.value.kind === side && node.value.name === port)?.id ?? `boundary:${side}:${scopeId}`;
+    const targetId = required.target_kind === "node" ? `instance:${required.target}` : required.target_kind === "scope_input" ? targetScope!.id : boundary(targetScope!.id, "output", required.target_port);
+    const from = required.source_kind === "scope_input" ? boundary(sourceId, "input", required.source_port) : required.source_kind === "scope_output" ? sourceId : `instance:${sourceId}`;
+    assert(graph.edges.some((edge) => edge.kind === "data" && edge.source === from && edge.target === targetId && edge.source_port === required.source_port && edge.target_port === required.target_port && (edge.source_kind ?? "output") === (required.source_kind === "fact" ? "fact" : "output")), `${label}: scoped canvas lost named alias wire ${required.source}.${required.source_port} -> ${required.target}.${required.target_port}`);
   }
   const root = canvasGraph(view, null);
   count(expected.root_node_count, root.nodes.length, `${label} root scope nodes`);
@@ -388,6 +389,7 @@ function checkScopes(view: ViewerView, expected: CaseExpectation, label: string)
   }
   if (expected.legacy) {
     assert(scopes.length === 0, `${label}: legacy case retained scope metadata`);
+    assert(view.value_views === undefined && view.value_links === undefined, `${label}: legacy case retained recorded value metadata`);
     assert(root.nodes.every((node) => node.kind !== "workflow"), `${label}: old paths gained invented workflow cards`);
     count(source.length + (view.kind === "fx-graph-v1" ? view.pending.length : 0), root.nodes.length, `${label} legacy flat fallback`);
   }

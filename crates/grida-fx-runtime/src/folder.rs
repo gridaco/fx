@@ -166,6 +166,103 @@ impl RunFolder {
         put
     }
 
+    /// Snapshots already-bound typed input candidates from any concrete workflow scope.
+    /// Failure is presentation unavailability, never a reason to fail executable work. Sources
+    /// are copied through one regular-file handle and verified against captured bytes; a hard
+    /// link would let later source edits change this historical recording. Callers pass only
+    /// first-capture candidates, never current source files to repair a historical recording.
+    pub fn capture_value_files<'a>(
+        &self,
+        files: impl IntoIterator<Item = &'a grida_fx_core::expand::values::ValueFileSource>,
+    ) {
+        let mut copied = std::collections::BTreeSet::new();
+        for source in files {
+            if !copied.contains(&source.file.digest)
+                && self.capture_value_file(&source.file).is_ok()
+            {
+                copied.insert(source.file.digest.clone());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn capture_value_file(&self, value: &FileValue) -> std::io::Result<()> {
+        use rustix::fs::{AtFlags, Mode, OFlags, open, openat, renameat, unlinkat};
+        use std::io::{Read, Write};
+        let Some(source) = &value.location else {
+            return Err(invalid("value source"));
+        };
+        if !is_digest(&value.digest) {
+            return Err(invalid("value digest"));
+        }
+        let mut source = File::from(open(
+            source,
+            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?);
+        let metadata = source.metadata()?;
+        if !metadata.is_file() || metadata.len() != value.size {
+            return Err(invalid("value source"));
+        }
+        let path = self.path.join("values");
+        match std::fs::create_dir(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+        let directory = open(
+            &path,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?;
+        let temporary = temporary_name();
+        let mut target = File::from(openat(
+            &directory,
+            temporary.as_str(),
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::from_bits_truncate(0o600),
+        )?);
+        let copied = (|| {
+            let mut hasher = Sha256::new();
+            let mut remaining = value.size;
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let read = source.read(&mut buffer)?;
+                if read == 0 {
+                    break;
+                }
+                if read as u64 > remaining {
+                    return Err(invalid("changed value source"));
+                }
+                remaining -= read as u64;
+                hasher.update(&buffer[..read]);
+                target.write_all(&buffer[..read])?;
+            }
+            let digest = format!("{:x}", hasher.finalize());
+            if remaining != 0 || digest != value.digest {
+                return Err(invalid("changed value source"));
+            }
+            target.sync_all()?;
+            target.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o444))?;
+            renameat(
+                &directory,
+                temporary.as_str(),
+                &directory,
+                value.digest.as_str(),
+            )?;
+            Ok(())
+        })();
+        if copied.is_err() {
+            let _ = unlinkat(&directory, temporary.as_str(), AtFlags::empty());
+        }
+        copied
+    }
+
+    #[cfg(not(unix))]
+    fn capture_value_file(&self, _value: &FileValue) -> std::io::Result<()> {
+        Err(invalid("value source"))
+    }
+
     /// Removes what an earlier invocation left half placed: every file under the folder whose
     /// name is a temporary one ([`is_temporary_name`]). Only the invocation holding the lock
     /// places anything here, so none of them is being written. Best effort.
@@ -793,5 +890,83 @@ mod tests {
             digest_of(&path).unwrap(),
             "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8"
         );
+    }
+}
+
+#[cfg(test)]
+mod value_snapshot_tests {
+    use super::*;
+    use grida_fx_core::expand::values::ValueFileSource;
+
+    fn file(path: &Path, bytes: &[u8]) -> FileValue {
+        std::fs::write(path, bytes).unwrap();
+        FileValue {
+            digest: format!("{:x}", Sha256::digest(bytes)),
+            kind: "image/png".into(),
+            name: "reference.png".into(),
+            size: bytes.len() as u64,
+            key: None,
+            content: None,
+            location: Some(path.into()),
+        }
+    }
+    fn candidate(file: &FileValue) -> ValueFileSource {
+        ValueFileSource {
+            value_id: format!("value:{}", "a".repeat(64)),
+            file: file.clone(),
+        }
+    }
+
+    #[test]
+    fn original_input_snapshot_survives_source_edit() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = RunFolder::lock(&directory.path().join("run"), "run").unwrap();
+        let source = directory.path().join("source.png");
+        let input = file(&source, b"Original synthetic input");
+        folder.capture_value_files(&[candidate(&input)]);
+        let recorded = folder.path.join("values").join(&input.digest);
+        assert_eq!(
+            std::fs::read(&recorded).unwrap(),
+            b"Original synthetic input"
+        );
+        std::fs::write(&source, b"Changed user file").unwrap();
+        assert_eq!(
+            std::fs::read(&recorded).unwrap(),
+            b"Original synthetic input"
+        );
+        assert!(
+            std::fs::metadata(recorded)
+                .unwrap()
+                .permissions()
+                .readonly()
+        );
+    }
+
+    #[test]
+    fn changed_input_is_unavailable_without_publishing_a_partial_copy() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = RunFolder::lock(&directory.path().join("run"), "run").unwrap();
+        let source = directory.path().join("source.png");
+        let input = file(&source, b"Original synthetic input");
+        std::fs::write(&source, b"Different same-size input").unwrap();
+        folder.capture_value_files(&[candidate(&input)]);
+        assert!(!folder.path.join("values").join(&input.digest).exists());
+        if let Ok(entries) = std::fs::read_dir(folder.path.join("values")) {
+            assert_eq!(entries.count(), 0);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaced_symlink_input_is_not_followed() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder = RunFolder::lock(&directory.path().join("run"), "run").unwrap();
+        let source = directory.path().join("source.png");
+        let input = file(&source, b"Original synthetic input");
+        let other = directory.path().join("other.png");
+        std::fs::rename(&source, &other).unwrap();
+        std::os::unix::fs::symlink(&other, &source).unwrap();
+        assert!(folder.capture_value_file(&input).is_err());
+        assert!(!folder.path.join("values").join(input.digest).exists());
     }
 }

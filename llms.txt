@@ -118,6 +118,11 @@ routes:                             # the model for each capability, where a ste
 provider_preferences:               # independent of model choice; keys alone never select it
   image.generate: gg
   structured.generate: gg
+viewer:
+  display:                          # project-wide canvas defaults; each defaults to true
+    workflow_inputs: true
+    workflow_outputs: true
+    notes: true
 # route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
 # workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
 # cache: ../shared-cache               # share a cache across projects
@@ -773,6 +778,58 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `Skip reason unavailable in this viewer.`. Existing records are not rewritten to add reasons.
   Causes are display evidence, separate from output availability and execution success. The
   Python and JavaScript saved-record APIs preserve them in their raw observation documents.
+- **Canvas display defaults.** In `fx.yaml`, optional `viewer.display` booleans
+  `workflow_inputs`, `workflow_outputs` and `notes` each default to `true`.
+  The first two control the displayed workflow's grouped Inputs/Outputs boundary,
+  including opened imports; `notes` controls authored note cards in all displayed owners,
+  including groups. Hidden content takes no layout space. Step sockets, effective settings,
+  media previews and hover inspection keep their behavior. Opening or refreshing the viewer
+  reads current project settings, including from an already running service, so existing
+  plans/runs need no rerun. `doctor` reports effective values and their source; unknown keys
+  and non-booleans are refused. No setting is added to workflow authoring, execution identity,
+  caches or resume. Explicit note/value reveal may temporarily show the selected item even
+  when its category is normally hidden. Visibility never withholds recorded content;
+  portable exports freeze the publishing project's display defaults independently of
+  disclosure, and older exports without them show all three categories. Export refusal
+  `invalid_viewer_config` means current project configuration cannot supply valid display
+  defaults; fix `fx.yaml` and export again, without rerunning the workflow.
+- **Visible workflow data.** Current source records effective inputs (including defaults),
+  shared tables, contextual `let` results and outputs as read-only value evidence. Input and
+  output cards use labelled data sheets with monospaced binding names. Tables and `let`
+  results are available at consuming ports, without standalone cards by default.
+  The displayed workflow's input cards share an Inputs frame and its declared result
+  cards share an Outputs frame, including inside an opened imported workflow.
+  Boundary connections are hidden at rest and appear
+  on hover, keyboard focus or selection of an individual value or connected step.
+  Selection keeps those connections visible; processing connections remain visible.
+  Step cards keep bounded inline summaries for unconnected settings, including defaults
+  declared by built-in or custom Python/TypeScript nodes; a body-only fallback is unknown
+  before execution. At 75% zoom or above, hover a socket dot or label for an anchored
+  recorded-value popover. Below 75%, hover adds neither a popover nor a port-row tint.
+  Popovers anchor to the whole socket row so switching sides keeps its list clear.
+  Explicit click/tap and keyboard focus work at any zoom, with active preview feedback;
+  click/tap pins it, Escape or an outside press closes it. Only that port's connections
+  are highlighted. Pan, zoom and navigation dismiss the preview
+  without changing layout. Recorded images show a thumbnail or compact image collection
+  through verified recorded artifact inventory and existing viewer URLs; pin the image
+  preview to use the shared fullscreen control. Other media show metadata here and retain
+  existing cards/details for media inspection. Missing bytes and pending values keep
+  explicit fallbacks. Opening a preview evaluates nothing, generates no content and
+  discovers no provider data. An optional description comes from the recorded parameter JSON Schema
+  and renders as literal text; absent descriptions are never invented or read from current
+  source. Connected fields use this preview rather than repeated inline values.
+  Select text or objects for full details. Known null, pending, absent, unavailable and withheld remain
+  distinct when captured; old recordings are not backfilled. Typed media reuses previews,
+  fullscreen and file actions when recorded bytes exist. File-shaped JSON never becomes
+  media. Viewing never calls a provider or evaluates unused `let` declarations. Display
+  evidence changes no execution identities, scheduling or caches; actual data edits retain
+  their normal identity effects. Export disclosure applies to these values too. Hosts opt
+  into `{kind: "value", value_id, scope_id}` selection with `includeValues: true` on
+  `ViewerClient`, or same-realm method options, then use `{action: "reveal_value", value_id}`.
+  Explicitly revealing a normally omitted value temporarily adds that selected card;
+  changing selection removes it. Contextual occurrences retain their distinct recorded IDs.
+  Default clients see null for value selection; contexts contain references, never values.
+  Source support does not imply an older release contains it.
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
@@ -922,6 +979,9 @@ console.log(result.ok, result.chargedUsd, result.failed);
 Both raise `PlanRefused` for a refused plan and `FxError` for a run refused before it starts. Also:
 `run_async`, `load_run(...)`/`loadRun(...)` (saved records, `snapshot`, `events`, `follow`,
 `export`), `cancel`/`inspect_control`, `list_runs`/`remove_runs` (`listRuns`/`removeRuns`).
+Loaded records retain the resolved loading `cwd` for the publishing project's current
+`fx.yaml` display defaults on export. Relative export destinations still resolve against
+the export caller's current directory; no historical project path is inferred from a run.
 
 ## Recipes
 

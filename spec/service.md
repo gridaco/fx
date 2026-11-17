@@ -39,6 +39,12 @@ file. The planning project owns the run catalog, not an imported workflow's home
 `init` is recommended onboarding, not a prerequisite for execution or serving.
 Service commands can select their discovery directory with `--project`.
 
+The owning project's optional `viewer.display` settings define canvas defaults for its
+plans and runs ([viewer.md](viewer.md#project-display-settings)). They are read for viewing,
+not captured into executable plans. An existing recording therefore adopts current display
+settings when opened or refreshed, without a new run. Imported workflow homes do not
+override the service project's display choices.
+
 In a directory that is missing, or empty but for `.git` and `.DS_Store`, `init`
 starts a project. Without `--template` it writes the **starter** embedded in the
 engine, in this order: `fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`,
@@ -257,6 +263,11 @@ no run observation or artifact bytes. Artifact URLs are confined to the selected
 entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
+
+`GET /api/viewer_config` under the selected entry returns the owning project's current
+resolved display settings ([viewer.md](viewer.md#project-display-settings)), with
+`Cache-Control: no-store`. It contains no paths, credentials or other project fields.
+Standalone inspection serves the same response for its explicitly selected project context.
 
 `GET /api/files` under the selected entry returns the portable recorded file
 inventory defined by [files.md](files.md), with `Cache-Control: no-store`.

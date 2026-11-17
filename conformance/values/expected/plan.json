@@ -1,0 +1,343 @@
+{
+ "estimate": {
+  "ceiling_usd": null,
+  "high_usd": 0,
+  "low_usd": 0
+ },
+ "instances": [
+  {
+   "bindings": [],
+   "id": "echo#1",
+   "identity": "defedc1a5302d0052cbf13a7e28c78d162c17144537ff976b8159772a041b7f2",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "echo",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "echo",
+   "take": [
+    1
+   ],
+   "type": "nodes/echo.py#echo@1",
+   "uses": "./nodes/echo.py#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "p1": "An original geometric lantern; calm",
+    "p2": "schema default"
+   }
+  },
+  {
+   "bindings": [],
+   "id": "variants['0'].echo#1",
+   "identity": "90de952e3460e62880822c62b0631fe3ff59c38ae9778c961740cf380b9f5ba1",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "variants['0'].echo",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "variants.echo",
+   "take": [
+    1
+   ],
+   "type": "nodes/echo.py#echo@1",
+   "uses": "./nodes/echo.py#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "p1": "warm variation",
+    "p2": "schema default"
+   }
+  },
+  {
+   "bindings": [],
+   "id": "variants['1'].echo#1",
+   "identity": "c2c3e114da857d8d66e15a426766df6bc4f611142dae1b5e7b237e68dadaf03e",
+   "interface_bindings": [],
+   "judged_by": [],
+   "judges": null,
+   "key": null,
+   "needs": [],
+   "path": "variants['1'].echo",
+   "phase": 1,
+   "price": {
+    "high_usd": 0,
+    "low_usd": 0
+   },
+   "reads": [],
+   "routes": {},
+   "state": "planned",
+   "step": "variants.echo",
+   "take": [
+    1
+   ],
+   "type": "nodes/echo.py#echo@1",
+   "uses": "./nodes/echo.py#echo",
+   "view": false,
+   "waiting_on": [],
+   "with": {
+    "p1": "cool variation",
+    "p2": "schema default"
+   }
+  }
+ ],
+ "kind": "fx-graph-v1",
+ "pending": [],
+ "problems": [],
+ "scopes": [
+  {
+   "id": "scope:variants['0']#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "variants['0'].echo#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "variants['0']",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "variants",
+   "take": [],
+   "title": "variants"
+  },
+  {
+   "id": "scope:variants['1']#",
+   "input_bindings": [],
+   "kind": "group",
+   "nodes": [
+    "variants['1'].echo#1"
+   ],
+   "output_bindings": [],
+   "parent": null,
+   "path": "variants['1']",
+   "pending": [],
+   "ports": {
+    "inputs": {},
+    "outputs": []
+   },
+   "source": null,
+   "step": "variants",
+   "take": [],
+   "title": "variants"
+  }
+ ],
+ "types": {
+  "./nodes/echo.py#echo": {
+   "identity": "nodes/echo.py#echo@1",
+   "ports": {
+    "inputs": {},
+    "outputs": {
+     "text": "text/plain"
+    },
+    "params": {
+     "p1": {
+      "type": "string"
+     },
+     "p2": {
+      "default": "schema default",
+      "type": "string"
+     }
+    }
+   },
+   "source": {
+    "files": {
+     "nodes/echo.py": "1fa35f920d54b09f22f7c955a160a634f07fe2240b2600cd13175c92f259dc52"
+    },
+    "resources": {}
+   }
+  }
+ },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:01a853e0799299d33de41030b4ace06cfeabecfb80b3b6b68f2fbc70ed9399b5"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:871a7f2a88926381a71d6c498384ae662fabe0795d9399eebd91a22476f7f703"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:0ef09ac35c883a8cd7149ffbb3f5dfcaf5a9306dd6f3d1fa9283238a521def7d"
+   },
+   "target": {
+    "instance_id": "variants['0'].echo#1",
+    "kind": "instance",
+    "port": "p1"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:1b47ec7ecb2c5bae1860fbf25ed141defb475a042e76e8198e6c75c326eab2ce"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:871a7f2a88926381a71d6c498384ae662fabe0795d9399eebd91a22476f7f703"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:871a7f2a88926381a71d6c498384ae662fabe0795d9399eebd91a22476f7f703"
+   },
+   "target": {
+    "instance_id": "echo#1",
+    "kind": "instance",
+    "port": "p1"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:a0866a6d2eb1195991f4ae57b9450d5d7ba0c6876d9db1d1e1906a1ca5f4b1b1"
+   },
+   "target": {
+    "instance_id": "variants['1'].echo#1",
+    "kind": "instance",
+    "port": "p1"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:e36923eaa8f4445f176e2dbafecd136e089dc70e945d869123a2ac67ba243c49"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:ef3d8d10fadcc5ea376d64a93b156b7fa75207305761c229c8f5aaeae84a22f6"
+   }
+  },
+  {
+   "source": {
+    "instance_id": "echo#1",
+    "kind": "instance",
+    "port": "text",
+    "source_kind": "output"
+   },
+   "target": {
+    "kind": "value",
+    "value_id": "value:6a00915091441be739cbcaa97800a497d47468a0ebf704c202c9247116065312"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "value": "An original geometric lantern"
+   },
+   "id": "value:1b47ec7ecb2c5bae1860fbf25ed141defb475a042e76e8198e6c75c326eab2ce",
+   "kind": "input",
+   "name": "prompt",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": null
+   },
+   "id": "value:e36923eaa8f4445f176e2dbafecd136e089dc70e945d869123a2ac67ba243c49",
+   "kind": "input",
+   "name": "optional",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "context": "root#1",
+   "data": {
+    "value": "An original geometric lantern; calm"
+   },
+   "id": "value:871a7f2a88926381a71d6c498384ae662fabe0795d9399eebd91a22476f7f703",
+   "kind": "let",
+   "name": "brief",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "context": "variants['0'].echo#1",
+   "data": {
+    "value": "warm variation"
+   },
+   "id": "value:0ef09ac35c883a8cd7149ffbb3f5dfcaf5a9306dd6f3d1fa9283238a521def7d",
+   "kind": "let",
+   "name": "variation",
+   "scope_id": "scope:variants['0']#",
+   "state": "known"
+  },
+  {
+   "context": "variants['1'].echo#1",
+   "data": {
+    "value": "cool variation"
+   },
+   "id": "value:a0866a6d2eb1195991f4ae57b9450d5d7ba0c6876d9db1d1e1906a1ca5f4b1b1",
+   "kind": "let",
+   "name": "variation",
+   "scope_id": "scope:variants['1']#",
+   "state": "known"
+  },
+  {
+   "id": "value:6a00915091441be739cbcaa97800a497d47468a0ebf704c202c9247116065312",
+   "kind": "output",
+   "name": "message",
+   "scope_id": null,
+   "state": "pending"
+  },
+  {
+   "data": {
+    "value": null
+   },
+   "id": "value:ef3d8d10fadcc5ea376d64a93b156b7fa75207305761c229c8f5aaeae84a22f6",
+   "kind": "output",
+   "name": "optional",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": {
+     "metadata": {
+      "file": "ordinary JSON"
+     },
+     "seed": 42,
+     "tone": "calm"
+    }
+   },
+   "id": "value:01a853e0799299d33de41030b4ace06cfeabecfb80b3b6b68f2fbc70ed9399b5",
+   "kind": "table",
+   "name": "style",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
+ "workflow": {
+  "file": "workflows/case.yaml",
+  "id": "case",
+  "title": "Recorded values"
+ }
+}

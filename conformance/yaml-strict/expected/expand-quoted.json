@@ -86,6 +86,94 @@
    }
   }
  },
+ "value_links": [
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:14c55d52e081a3bbee54dbd6c98d92786812acc38ffe1fa0613d703d0980128c"
+   },
+   "target": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:4c9e6370fccfe6dbcb67a149b4411f7c3a7e925397b7831c8d64903fc0cd6b19"
+   },
+   "target": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:c50e3b96a95f86f1ed281e536119b4ec06545e75014416ee2e0a5fa9ae83e85b"
+   },
+   "target": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  },
+  {
+   "source": {
+    "kind": "value",
+    "value_id": "value:eb1416388ade3fa2edbbaeb12aeffe9269a20265812901923fafa90139e07a78"
+   },
+   "target": {
+    "instance_id": "draw#1",
+    "kind": "instance",
+    "port": "prompt"
+   }
+  }
+ ],
+ "value_views": [
+  {
+   "data": {
+    "value": "off"
+   },
+   "id": "value:14c55d52e081a3bbee54dbd6c98d92786812acc38ffe1fa0613d703d0980128c",
+   "kind": "input",
+   "name": "on",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "yes"
+   },
+   "id": "value:eb1416388ade3fa2edbbaeb12aeffe9269a20265812901923fafa90139e07a78",
+   "kind": "input",
+   "name": "answer",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "017"
+   },
+   "id": "value:4c9e6370fccfe6dbcb67a149b4411f7c3a7e925397b7831c8d64903fc0cd6b19",
+   "kind": "input",
+   "name": "code",
+   "scope_id": null,
+   "state": "known"
+  },
+  {
+   "data": {
+    "value": "2026-10-05"
+   },
+   "id": "value:c50e3b96a95f86f1ed281e536119b4ec06545e75014416ee2e0a5fa9ae83e85b",
+   "kind": "input",
+   "name": "when",
+   "scope_id": null,
+   "state": "known"
+  }
+ ],
  "workflow": {
   "file": "workflows/case.yaml",
   "id": "case",

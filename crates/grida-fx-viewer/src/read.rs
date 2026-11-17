@@ -40,6 +40,11 @@ pub struct RunDocument {
     /// Captured authored documentation, independent of executable instances.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<Value>,
+    /// Recorded effective values and lazy-expression occurrences, independent of execution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_views: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_links: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scopes: Option<Value>,
     /// The repeats not yet expanded: the latest `scopes_updated` `pending`, else the plan's
@@ -66,6 +71,10 @@ pub struct Node {
     pub key: Option<Option<String>>,
     pub title: String,
     pub uses: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routes: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub routing: Option<Value>,
     pub state: String,
     pub reads: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -429,6 +438,8 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         title,
         preview,
         uses: text(value, "uses").map(str::to_string),
+        routes: super::values::routes(value.get("routes")),
+        routing: super::values::routing(value.get("routing")),
         state: if text(value, "state") == Some("done") {
             "succeeded"
         } else {
@@ -683,6 +694,7 @@ fn project_inventory(
         .collect();
     let mut scopes = plan.get("scopes").cloned();
     let mut notes = crate::notes::Captured::from_plan(plan, &mut warnings);
+    let mut values = crate::values::Captured::from_plan(plan, &mut warnings);
     let mut node_interfaces = None;
     let mut recorded = Recorded::default();
     // The latest scopes_updated `instances` and `pending`, and every listing recorded; borrowed
@@ -729,6 +741,7 @@ fn project_inventory(
         match text(event, "event") {
             Some("scopes_updated") => {
                 notes.capture(event.get("notes"), &mut warnings);
+                values.capture(event, &mut warnings);
                 // A current display snapshot replaces earlier absent-instance causes. Older
                 // snapshots lacking the optional map cannot preserve a newer stale cause.
                 skip_reasons = event
@@ -835,6 +848,12 @@ fn project_inventory(
                 // failed or was blocked before dispatch. Absence preserves older records.
                 if let Some(uses) = text(event, "uses") {
                     current.uses = Some(uses.to_string());
+                }
+                if let Some(routes) = super::values::routes(event.get("routes")) {
+                    current.routes = Some(routes);
+                }
+                if let Some(routing) = super::values::routing(event.get("routing")) {
+                    current.routing = Some(routing);
                 }
                 if let Some(ports) = event.get("ports").filter(|v| v.is_object()) {
                     current.ports = Some(ports.clone());
@@ -1055,6 +1074,21 @@ fn project_inventory(
             .collect();
         super::scopes::valid_pending(Value::Array(unplanned))
     });
+    let (value_views, value_links) = values.project(scopes.as_ref(), &nodes);
+    for view in value_views
+        .as_ref()
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(data) = view.get("data") {
+            collect_object(
+                &json!({"value":data}),
+                Some(Placement::Value(root)),
+                &mut candidates,
+            );
+        }
+    }
     warnings.sort();
     warnings.dedup();
     let workflow = plan.get("workflow").cloned().unwrap_or_else(|| json!({}));
@@ -1075,6 +1109,8 @@ fn project_inventory(
         outputs,
         nodes,
         notes: notes.project(scopes.as_ref()),
+        value_views,
+        value_links,
         scopes,
         pending,
         artifacts: Vec::new(),
@@ -1091,6 +1127,8 @@ fn project_inventory(
 enum Placement<'a> {
     Step(&'a str),
     Outputs,
+    /// Input snapshots are optional display copies, not required execution outputs.
+    Value(&'a Path),
 }
 
 fn collect_object(
@@ -1103,7 +1141,12 @@ fn collect_object(
     };
     for (port, value) in values {
         let mut found = Vec::new();
-        collect_files(value, None, &mut found);
+        collect_files(
+            value,
+            None,
+            &mut found,
+            matches!(placement, Some(Placement::Value(_))),
+        );
         let one = found.len() == 1;
         for (index, (artifact, key)) in found.into_iter().enumerate() {
             let label = key.map_or_else(|| index.to_string(), |key| keyed_path(&key));
@@ -1124,6 +1167,21 @@ fn collect_object(
                         &format!("outputs/{}", named(&name, &artifact.kind)),
                         &artifact.kind,
                     ))
+                }
+                Some(Placement::Value(root)) => {
+                    let relative = format!("values/{}", artifact.digest);
+                    // A failed input snapshot is nonfatal and may retain metadata only.
+                    // Existing unsafe entries remain candidates so verified serving/export
+                    // explicitly refuses them rather than following a replacement.
+                    let directory = std::fs::symlink_metadata(root.join("values"));
+                    match directory {
+                        // Do not probe a child through an unsafe replacement directory.
+                        Ok(metadata) if !metadata.is_dir() => Some(relative),
+                        Ok(_) => std::fs::symlink_metadata(root.join(&relative))
+                            .is_ok()
+                            .then_some(relative),
+                        Err(_) => None,
+                    }
                 }
                 None => None,
             };
@@ -1146,6 +1204,7 @@ fn collect_files(
     value: &Value,
     item_key: Option<&str>,
     files: &mut Vec<(Artifact, Option<String>)>,
+    allow_objects: bool,
 ) {
     if let Some(file) = value.get("file").filter(|file| file.is_object()) {
         let (Some(digest), Some(kind), Some(size)) = (
@@ -1172,14 +1231,22 @@ fn collect_files(
                 .or(item_key)
                 .map(str::to_string),
         ));
+    } else if let Some(items) = value
+        .get("object")
+        .and_then(Value::as_object)
+        .filter(|_| allow_objects)
+    {
+        for item in items.values() {
+            collect_files(item, None, files, allow_objects);
+        }
     } else if let Some(items) = value.get("list").and_then(Value::as_array) {
         for item in items {
-            collect_files(item, None, files);
+            collect_files(item, None, files, allow_objects);
         }
     } else if let Some(items) = value.get("collection").and_then(Value::as_array) {
         for item in items {
             if let Some([key, value]) = item.as_array().map(Vec::as_slice) {
-                collect_files(value, key.as_str(), files);
+                collect_files(value, key.as_str(), files, allow_objects);
             }
         }
     }

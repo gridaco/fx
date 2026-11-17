@@ -327,3 +327,29 @@ recorded note with `viewer.present({action: "reveal_note", note_id})`. Default c
 legacy context shapes: selecting a note projects to null. Same-realm `getContext`, `subscribe`
 and `present` accept an optional `{includeNotes: true}` options argument. Older viewers can
 refuse the opt-in explicitly; no presentation is automatically retried.
+
+## Inspect recorded values
+
+Pass `includeValues: true` when constructing `ViewerClient` to receive
+`{kind: "value", value_id, scope_id}` selections. This option is independent of
+`includeNotes`; both may be enabled. Value contents never enter context messages.
+
+```ts
+const viewer = new ViewerClient({
+  targetWindow: viewerWindow,
+  origin: viewerOrigin,
+  includeValues: true,
+});
+const context = await viewer.getContext();
+if (context.selection?.kind === "value") {
+  await viewer.present({ action: "reveal_value", value_id: context.selection.value_id });
+}
+```
+
+The ID identifies captured input/table/expression/output evidence, independent of how rows
+are grouped visually. `scope_id: null` means root. Reveal enters its containing workflow
+and foregrounds a contextual group/deck when needed. Default clients see null when a value
+is selected. Tables and named expressions normally appear only as effective parameters
+inside steps. Revealing one temporarily shows that exact source occurrence as a selected
+card; changing selection removes it. Same-realm methods accept `{includeValues: true}`; old viewers may explicitly
+refuse the capability. No new process, file or execution-control authority is granted.

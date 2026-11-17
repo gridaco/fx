@@ -70,6 +70,10 @@ fn file_references(value: &Value, inventory: &BTreeMap<&str, &Value>) -> Result<
         {
             return Err(invalid());
         }
+    } else if let Some(values) = value["object"].as_object() {
+        for value in values.values() {
+            file_references(value, inventory)?;
+        }
     } else if let Some(values) = value["list"].as_array() {
         for value in values {
             file_references(value, inventory)?;
@@ -89,6 +93,7 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
     let scopes = indexed(list(&view["scopes"]), "id")?;
     let pending = indexed(list(&view["pending"]), "path")?;
     let notes = indexed(list(&view["notes"]), "id")?;
+    let values = indexed(list(&view["value_views"]), "id")?;
     let inventory = indexed(list(&manifest["artifacts"]), "digest")?;
     if pending.values().any(|repeat| {
         list(&repeat["waiting_on"])
@@ -188,6 +193,48 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
             file_references(value, &inventory)?;
         }
     }
+    for value in values.values() {
+        if value["scope_id"]
+            .as_str()
+            .is_some_and(|id| !scopes.contains_key(id))
+        {
+            return Err(invalid());
+        }
+        if let Some(data) = value.get("data") {
+            file_references(data, &inventory)?;
+        }
+    }
+    for link in list(&view["value_links"]) {
+        for (side, endpoint) in [("source", &link["source"]), ("target", &link["target"])] {
+            match endpoint["kind"].as_str() {
+                Some("value") if values.contains_key(text(endpoint, "value_id")) => {}
+                Some("instance") => {
+                    let node = nodes
+                        .get(text(endpoint, "instance_id"))
+                        .ok_or_else(invalid)?;
+                    let port = text(endpoint, "port");
+                    if side == "source" {
+                        if endpoint["source_kind"] == "output" {
+                            if node.get("ports").is_some()
+                                && !has_port(&node["ports"]["outputs"], port)
+                            {
+                                return Err(invalid());
+                            }
+                        } else if endpoint["source_kind"] != "fact" {
+                            return Err(invalid());
+                        }
+                    } else if endpoint.get("source_kind").is_some()
+                        || node.get("ports").is_some()
+                            && !has_port(&node["ports"]["inputs"], port)
+                            && !has_port(&node["ports"]["params"], port)
+                    {
+                        return Err(invalid());
+                    }
+                }
+                _ => return Err(invalid()),
+            }
+        }
+    }
     let layout = &manifest["layout"];
     for value in nodes
         .values()
@@ -216,6 +263,15 @@ pub(super) fn validate(manifest: &Value) -> Result<(), ExportError> {
     if layout["notes"]
         .as_object()
         .is_some_and(|placements| placements.keys().any(|id| !notes.contains_key(id.as_str())))
+    {
+        return Err(invalid());
+    }
+    if values.keys().any(|id| layout["values"].get(*id).is_none())
+        || layout["values"].as_object().is_some_and(|placements| {
+            placements
+                .keys()
+                .any(|id| !values.contains_key(id.as_str()))
+        })
     {
         return Err(invalid());
     }
