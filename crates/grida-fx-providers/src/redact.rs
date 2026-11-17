@@ -25,10 +25,10 @@
 //! 3. whitespace collapsed to single spaces, trimmed, and the result cut to
 //!    [`MAX_REASON_CHARS`] characters, ending in `…` when cut.
 
-use crate::keys::Secret;
+use crate::keys::{Secret, StoredCredentials};
 use regex::Regex;
 use std::borrow::Cow;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 /// The longest reason, in characters.
 pub const MAX_REASON_CHARS: usize = 500;
@@ -37,9 +37,16 @@ pub const MAX_REASON_CHARS: usize = 500;
 pub const REDACTED: &str = "[redacted]";
 
 /// Redacts reasons (module doc).
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 pub struct Redactor {
     secrets: Vec<Secret>,
+    stored: Option<Arc<StoredCredentials>>,
+}
+
+impl std::fmt::Debug for Redactor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Redactor").finish_non_exhaustive()
+    }
 }
 
 impl Redactor {
@@ -49,20 +56,38 @@ impl Redactor {
             .filter(|s| !s.expose().is_empty())
             .collect();
         secrets.sort_by_key(|s| std::cmp::Reverse(s.expose().len()));
-        Redactor { secrets }
+        Redactor {
+            secrets,
+            stored: None,
+        }
+    }
+
+    pub(crate) fn with_stored(mut self, stored: Option<Arc<StoredCredentials>>) -> Redactor {
+        self.stored = stored;
+        self
     }
 
     /// The same redactor with one more secret (a signed URL, an upload token).
     pub fn with(&self, extra: &str) -> Redactor {
         let mut secrets = self.secrets.clone();
         secrets.push(Secret::new(extra));
-        Redactor::new(secrets)
+        Redactor::new(secrets).with_stored(self.stored.clone())
     }
 
     /// Steps 1 and 2 of the module doc.
     pub fn redact(&self, text: &str) -> String {
         let mut out = text.to_string();
-        for secret in &self.secrets {
+        let mut combined;
+        let secrets: &[Secret] = match self.stored.as_ref().and_then(|stored| stored.loaded()) {
+            Some(stored) if !stored.is_empty() => {
+                combined = self.secrets.clone();
+                combined.extend(stored.values().cloned());
+                combined.sort_by_key(|secret| std::cmp::Reverse(secret.expose().len()));
+                &combined
+            }
+            _ => &self.secrets,
+        };
+        for secret in secrets {
             out = out.replace(secret.expose(), REDACTED);
         }
         for (pattern, replacement) in PATTERNS.iter() {

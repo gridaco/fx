@@ -37,7 +37,8 @@ of them, so you can tell two installations apart. Setting them up, and source de
 Grida Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
 organization's Grida AI credits, so there is no provider account to open for each model. Set it in
 the environment, or put it in a `.env` file in your project (`GG_API_KEY=…`, and keep the file
-out of version control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX
+out of version control). On macOS and Linux, FX can also use a standalone GG key
+[saved in Grida](05-running.md#keys-and-live-runs) as a fallback. Keys never go in `fx.yaml` or a workflow, and FX
 never prints them: only a `--live` run uses them, and `grida fx doctor` says which ones it found,
 where, and which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
 

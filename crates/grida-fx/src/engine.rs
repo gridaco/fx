@@ -37,7 +37,8 @@
 //!      transport when `GRIDA_FX_NETWORK=off` (every exchange is refused before it leaves);
 //!   4. every provider's adapters on that setup (`live::adapters`), a family's for each provider
 //!      the planning project declares with one included, registered whether or not their key is
-//!      present: a call without its key is refused before sending;
+//!      present. After a cache miss, a built-in adapter may resolve a missing key from Grida's
+//!      store for its default endpoint. A call without its key is refused before sending;
 //!   5. the planning project's own adapters, which planning loaded
 //!      (`grida_fx_runtime::adapter_host::register`): for each declaration with one, an adapter
 //!      host, the node host program of the module's language found from the planning project
@@ -68,7 +69,7 @@ use grida_fx_core::project::Planner;
 use grida_fx_core::providers::Declaration;
 use grida_fx_core::routes::RouteTable;
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_providers::keys::{Environment, Secret};
+use grida_fx_providers::keys::{DISABLE_GRIDA_STORE, Environment, KeyName, Secret};
 use grida_fx_providers::live::{self, Network};
 use grida_fx_providers::{Adapters, Endpoints, Keys};
 use grida_fx_runtime::adapter_host::{self, Launch, ProcessLaunch};
@@ -107,9 +108,18 @@ pub fn engine_for(
     stand_in: Option<Arc<StandIn>>,
     private: &[PathBuf],
 ) -> Result<Arc<Engine>, Error> {
-    engine_with_env(runtime, planner, live, stand_in, private, &|name: &str| {
-        std::env::var(name).ok()
-    })
+    engine_with_env(runtime, planner, live, stand_in, private, &process_env)
+}
+
+/// A supplied but non-Unicode credential home is invalid, not an absent override.
+pub(crate) fn process_env(name: &str) -> Option<String> {
+    match std::env::var(name) {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotUnicode(_)) if matches!(name, "GRIDA_HOME" | "HOME") => {
+            Some(String::new())
+        }
+        Err(_) => None,
+    }
 }
 
 /// The engine of `planner` (module doc); `env` reads an environment variable.
@@ -190,12 +200,26 @@ pub fn adapters_for(
         return Ok(Adapters::new());
     }
     let (environment, keys, endpoints) = provider_variables(&planner.project, env)?;
-    let setup = live::live_setup(keys, endpoints, Network::from_env(env)).map_err(|reason| {
+    let network = Network::from_env(env);
+    let mut setup = live::live_setup(keys, endpoints, network).map_err(|reason| {
         Error::new(
             ErrorKind::Internal,
             format!("cannot start the provider transport: {reason}"),
         )
     })?;
+    if network == Network::On {
+        let eligible: Vec<_> = KeyName::STORED
+            .into_iter()
+            .filter(|name| {
+                setup.keys.get(*name).is_none() && store_eligible(env, &setup.endpoints, *name)
+            })
+            .collect();
+        if !eligible.is_empty()
+            && let Some(home) = store_home(env)
+        {
+            setup = setup.with_stored_credentials(home, &eligible);
+        }
+    }
     let mut adapters = live::adapters(&setup);
     let project = &planner.project;
     adapter_host::register(&mut adapters, &setup, |declaration, adapter| {
@@ -250,6 +274,77 @@ pub fn provider_variables(
     let keys = Keys::from_environment(&environment);
     let endpoints = Endpoints::from_environment(&environment, &keys).map_err(Error::usage)?;
     Ok((environment, keys, endpoints))
+}
+
+/// May this invocation use stored keys for this provider? A configured alternative
+/// endpoint has to use an explicit key, wherever its URL came from.
+pub(crate) fn store_eligible(
+    env: &dyn Fn(&str) -> Option<String>,
+    endpoints: &Endpoints,
+    name: KeyName,
+) -> bool {
+    cfg!(any(target_os = "macos", target_os = "linux"))
+        && KeyName::STORED.contains(&name)
+        && !env(DISABLE_GRIDA_STORE).is_some_and(|value| value.trim() == "1")
+        && endpoints.base(name.provider()) == Some(name.declaration().base_url.default.as_str())
+}
+
+fn store_home(env: &dyn Fn(&str) -> Option<String>) -> Option<Result<PathBuf, String>> {
+    if let Some(value) = env("GRIDA_HOME") {
+        return Some(Ok(PathBuf::from(value)));
+    }
+    env("HOME").map(|home| {
+        let home = PathBuf::from(home);
+        if !home.is_absolute() || home.parent().is_none() {
+            return Err("Grida provider credentials need an absolute home directory".into());
+        }
+        Ok(home.join(".grida"))
+    })
+}
+
+/// Check the store for the requested slots for doctor or online metadata discovery.
+pub(crate) fn stored_keys(
+    env: &dyn Fn(&str) -> Option<String>,
+    keys: &mut Keys,
+    environment: &Environment,
+    endpoints: &Endpoints,
+    providers: &[KeyName],
+) -> Result<(), String> {
+    let eligible: Vec<_> = providers
+        .iter()
+        .copied()
+        .filter(|&name| {
+            let declaration = name.declaration();
+            let configured = declaration
+                .base_url
+                .variable
+                .as_deref()
+                .and_then(|variable| environment.get(variable));
+            keys.get(name).is_none()
+                && store_eligible(env, endpoints, name)
+                // Doctor substitutes the default when a base URL is refused. Only
+                // read a stored key if an explicitly supplied URL is itself the default.
+                && configured.is_none_or(|value| {
+                    grida_fx_providers::wire::normalize_base_url(value, &declaration.label)
+                        .is_ok_and(|base| base == declaration.base_url.default)
+                })
+        })
+        .collect();
+    if eligible.is_empty() {
+        return Ok(());
+    }
+    let Some(home) = store_home(env) else {
+        return Ok(());
+    };
+    let selected: Vec<_> = eligible.iter().map(|name| name.provider()).collect();
+    let mut found = grida_fx_providers::grida_store::read(&home?, &selected)
+        .map_err(|error| error.to_string())?;
+    for name in eligible {
+        if let Some(secret) = found.remove(name.provider()) {
+            keys.insert_stored(name, secret);
+        }
+    }
+    Ok(())
 }
 
 /// The planning project's key file.
@@ -364,6 +459,82 @@ mod tests {
                 .find(|(key, _)| key == name)
                 .map(|(_, value)| value.clone())
         }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn saved_credentials_fill_only_missing_keys_from_the_process_home() {
+        use grida_fx_providers::keys::KeySource;
+        use std::fs::{DirBuilder, OpenOptions};
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(&root, "fx: project/v1\n");
+        let home = root.join(".grida");
+        std::fs::create_dir(&home).unwrap();
+        let providers = home.join("providers");
+        DirBuilder::new().mode(0o700).create(&providers).unwrap();
+        OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(providers.join("credentials.toml"))
+            .unwrap()
+            .write_all(
+                b"version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+                  [providers.gg]\napi_key = 'synthetic-saved-gg'\n\
+                  [providers.fal]\napi_key = 'synthetic-saved-fal'\n\
+                  [providers.tripo]\napi_key = 'synthetic-saved-tripo'\n",
+            )
+            .unwrap();
+        std::fs::write(
+            root.join(".env"),
+            "GG_API_KEY=synthetic-local-gg\nFAL_KEY=synthetic-local-fal\nGRIDA_HOME=/unused\n",
+        )
+        .unwrap();
+        let env = |name: &str| match name {
+            "HOME" => Some(root.to_str().unwrap().into()),
+            "GG_API_KEY" => Some("synthetic-explicit-gg".into()),
+            "FAL_KEY" => Some(" ".into()),
+            _ => None,
+        };
+        let (environment, mut keys, endpoints) =
+            provider_variables(&planner.project, &env).unwrap();
+        let lock = providers.join("profile.lock.sqlite");
+        stored_keys(
+            &|name| {
+                (name == DISABLE_GRIDA_STORE)
+                    .then(|| "1".into())
+                    .or_else(|| env(name))
+            },
+            &mut keys,
+            &environment,
+            &endpoints,
+            &KeyName::STORED,
+        )
+        .unwrap();
+        assert!(!lock.exists());
+
+        stored_keys(&env, &mut keys, &environment, &endpoints, &KeyName::STORED).unwrap();
+        for (name, value, source) in [
+            (
+                KeyName::GridaGateway,
+                "synthetic-explicit-gg",
+                KeySource::Environment,
+            ),
+            (KeyName::Fal, "synthetic-local-fal", KeySource::DotEnv),
+            (
+                KeyName::Tripo,
+                "synthetic-saved-tripo",
+                KeySource::GridaStore,
+            ),
+        ] {
+            assert_eq!(keys.get(name).map(Secret::expose), Some(value));
+            assert_eq!(keys.source(name), Some(source));
+        }
+        assert!(lock.exists());
     }
 
     #[test]

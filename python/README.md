@@ -64,6 +64,10 @@ for key, image in result.outputs["images"].items():  # a keyed collection
 missing = result.deliver({"images": "out/{key}.png"})
 ```
 
+The engine resolves provider keys from the environment, project `.env`, and eligible
+[keys saved in Grida](../spec/providers.md#1-keys-and-endpoints) on macOS and Linux.
+Use `grida fx doctor` to check which source the engine found.
+
 Cost forecasts can be unknown: `planned.estimate()` returns `(None, None)` when unpriced
 calls prevent a complete total. `planned.forecast` exposes the known subtotal as
 `known_low_usd` / `known_high_usd` and its missing coverage as `unpriced_calls`.

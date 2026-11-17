@@ -69,7 +69,9 @@ def clean_environment() -> dict[str, str]:
         "PYTHONHOME",
     ):
         environment.pop(name, None)
-    environment.update(GRIDA_FX_DISABLE_DOTENV="1", GRIDA_FX_NETWORK="off")
+    environment.update(
+        GRIDA_FX_DISABLE_DOTENV="1", GRIDA_FX_DISABLE_GRIDA_STORE="1", GRIDA_FX_NETWORK="off"
+    )
     return environment
 
 

@@ -68,9 +68,14 @@
 //!   value) and the rest is reported from the process environment alone; each base-URL
 //!   variable that is refused prints `keys      <VARIABLE>: <sentence>` (or `… holds a
 //!   credential`). Either makes doctor exit 1, as either stops a live run;
+//! - after valid `.env` input, eligible missing built-in keys are checked in Grida's store.
+//!   A storage refusal prints `keys      <sentence>` without a key or local path and makes
+//!   doctor exit 1. This diagnostic lookup is deliberate, unlike live calls' lazy lookup;
 //! - one line per built-in declaration, in their order: `key       <VARIABLE> present
-//!   (environment)`, `… present (.env)` or `… missing`; then one per declaration of the project,
-//!   in its order: `provider  <name> <host> <VARIABLE> present (environment)` (or the other two
+//!   (environment)`, `… present (.env)`, `… present (grida)` or `… missing`; eligible missing
+//!   stored keys get `hint      grida ai providers configure <provider>` when no prerequisite
+//!   was refused. Then one per declaration of the project, in its order:
+//!   `provider  <name> <host> <VARIABLE> present (environment)` (or the other explicit-key
 //!   states), or `provider  <name> <host> needs no key` for one without a credential, `<host>`
 //!   its base URL's host (with a port the URL names), the default's when its variable is refused.
 //!   A missing key alone does not change the exit status, unless a route the target uses needs
@@ -112,7 +117,7 @@ use grida_fx_core::registry::{Registry, RegistryError, Resolved};
 use grida_fx_core::routes::{Route, RouteSelection, RouteTable, load_catalog};
 use grida_fx_protocol::{CallKind, DescribeParams};
 use grida_fx_providers::installed::Version;
-use grida_fx_providers::keys::{Environment, KeySource};
+use grida_fx_providers::keys::{Environment, KeyName, KeySource};
 use grida_fx_providers::live::{self, Installed, Servable};
 use grida_fx_providers::{Adapters, Endpoints, Keys, RouteRef};
 use grida_fx_runtime::adapter_host::{self, Launch, NoLaunch};
@@ -128,7 +133,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
-    let env = |name: &str| std::env::var(name).ok();
+    let env = crate::engine::process_env;
     let cwd = super::planning::working_directory()?;
     print_line(&format!(
         "engine    {} {}",
@@ -191,8 +196,15 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &mut Vec::new(),
         &mut used,
     );
-    let preparation =
-        crate::models::prepare_used(&project, &mut providers.catalog, &used, None, false, &env);
+    let preparation = crate::models::prepare_used(
+        &project,
+        &mut providers.catalog,
+        &used,
+        None,
+        false,
+        true,
+        &env,
+    );
     let (uses, unservable) = uses_lines(
         &used,
         &providers.catalog,
@@ -498,19 +510,35 @@ impl Providers {
         let mut lines = Vec::new();
         let declarations = project.declarations();
         let dotenv = crate::engine::dotenv_path(&project.root);
-        let environment = match Environment::read(env, Some(&dotenv), &declarations) {
-            Ok(environment) => environment,
+        let (environment, valid_file) = match Environment::read(env, Some(&dotenv), &declarations) {
+            Ok(environment) => (environment, true),
             Err(sentence) => {
                 lines.push(dotenv_refusal(&sentence));
-                process_environment(env, &declarations)
+                (process_environment(env, &declarations), false)
             }
         };
-        let keys = Keys::from_environment(&environment);
+        let mut keys = Keys::from_environment(&environment);
+        let (endpoints, _) = Endpoints::each_from_environment(&environment, &keys);
+        if valid_file
+            && let Err(sentence) = crate::engine::stored_keys(
+                env,
+                &mut keys,
+                &environment,
+                &endpoints,
+                &KeyName::STORED,
+            )
+        {
+            lines.push(labelled("keys", &sentence));
+        }
+        // Recheck every endpoint against newly loaded secrets before showing diagnostics.
         let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
         lines.extend(refusals.iter().map(|sentence| labelled("keys", sentence)));
         let (adapter_lines, unloaded) = adapters;
         let refused = !lines.is_empty() || unloaded;
         lines.extend(key_lines(&keys));
+        if !refused {
+            lines.extend(stored_key_hints(env, &keys, &endpoints));
+        }
         lines.extend(provider_lines(&keys, &endpoints));
         lines.extend(adapter_lines);
         let installed = tokio::runtime::Builder::new_current_thread()
@@ -570,8 +598,29 @@ fn key_state(keys: &Keys, provider: &str) -> &'static str {
     match keys.source_of(provider) {
         Some(KeySource::Environment) => "present (environment)",
         Some(KeySource::DotEnv) => "present (.env)",
+        Some(KeySource::GridaStore) => "present (grida)",
         None => "missing",
     }
+}
+
+/// Missing canonical stored providers can be configured by their credential owner.
+fn stored_key_hints(
+    env: &dyn Fn(&str) -> Option<String>,
+    keys: &Keys,
+    endpoints: &Endpoints,
+) -> Vec<String> {
+    KeyName::STORED
+        .into_iter()
+        .filter(|key| {
+            keys.get(*key).is_none() && crate::engine::store_eligible(env, endpoints, *key)
+        })
+        .map(|key| {
+            labelled(
+                "hint",
+                &format!("grida ai providers configure {}", key.provider()),
+            )
+        })
+        .collect()
 }
 
 /// One `key` line per built-in declaration, in their order: where its key came from, never its
@@ -889,6 +938,52 @@ mod tests {
             ]
         );
         assert!(lines.iter().all(|line| !line.contains(value)));
+    }
+
+    #[test]
+    fn stored_key_source_is_reported_without_its_value() {
+        let secret = "fx-made-up-stored-key-31ad";
+        let mut keys = Keys::from_pairs(&[]);
+        keys.insert_stored(KeyName::Fal, grida_fx_providers::Secret::new(secret));
+        let lines = key_lines(&keys);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "key       FAL_KEY present (grida)")
+        );
+        assert!(lines.iter().all(|line| !line.contains(secret)));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn configuration_hints_only_name_missing_eligible_stored_providers() {
+        let keys = Keys::from_pairs(&[(KeyName::Fal, "fx-made-up-explicit-key")]);
+        let endpoints = Endpoints::default().with_base("openrouter", "https://proxy.acme.test/v1");
+        let hints = stored_key_hints(&|_| None, &keys, &endpoints);
+        assert!(
+            hints
+                .iter()
+                .any(|hint| hint.ends_with(" configure elevenlabs"))
+        );
+        assert!(hints.iter().all(|hint| !hint.ends_with(" configure fal")));
+        assert!(
+            hints
+                .iter()
+                .all(|hint| !hint.ends_with(" configure openrouter"))
+        );
+        assert!(
+            hints
+                .iter()
+                .all(|hint| !hint.ends_with(" configure openai"))
+        );
+        assert!(
+            stored_key_hints(
+                &|name| (name == "GRIDA_FX_DISABLE_GRIDA_STORE").then(|| "1".into()),
+                &keys,
+                &endpoints,
+            )
+            .is_empty()
+        );
     }
 
     #[test]

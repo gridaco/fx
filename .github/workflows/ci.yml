@@ -17,6 +17,7 @@ concurrency:
 env:
   CARGO_INCREMENTAL: "0"
   GRIDA_FX_NETWORK: "off"
+  GRIDA_FX_DISABLE_GRIDA_STORE: "1"
 
 jobs:
   rust:
@@ -268,6 +269,8 @@ jobs:
         working-directory: js/fx
       - run: cargo build --locked --bin grida-fx
       - run: uv sync --locked --project python
+      - run: cargo test --locked -p grida-fx-providers --test grida_store
+      - run: cargo test --locked -p grida-fx-providers --test gg stored_gg
       - name: tools/check_host.py
         env:
           GRIDA_FX_PYTHON: python/.venv/bin/python

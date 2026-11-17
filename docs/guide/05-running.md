@@ -183,8 +183,8 @@ speech and music have no GG route yet. `GG_BASE_URL`, `OPENAI_BASE_URL`,
 address, such as a proxy. A key that is missing refuses only the calls that need it, before
 anything is sent and for nothing: the step fails, refused with `GG_API_KEY is not set`.
 Without `--live` no paid capability call is sent. Preparing a selected missing GG/OpenRouter
-image binding may use that provider's key for a read-only metadata lookup before planning;
-it never generates or spends. `GRIDA_FX_NETWORK=off` disables this lookup. A provider FX does not ship is declared in `fx.yaml`, with the
+image binding may make a read-only metadata lookup before planning. The OpenRouter lookup can
+use its key. `GRIDA_FX_NETWORK=off` disables requests. A provider FX does not ship is declared in `fx.yaml`, with the
 variables of its own key and address
 ([Community providers](15-community-providers.md#declare-the-provider)).
 
@@ -209,8 +209,17 @@ blank lines and `#` comments are skipped. A file FX cannot use stops a live run 
 planned (exit 2), with a message that names the variable and the line and never the value: a
 symlink or anything but a plain file, text that is not UTF-8, a name given twice, an empty value,
 a quote out of place, or a control character in the value. Keys are never printed, logged or
-recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off, so only the environment counts
-(credential-free checks set it).
+recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
+
+**Saved Grida keys.** On macOS and Linux, if neither the environment nor the project's `.env`
+supplies a key, FX can use a standalone GG, OpenRouter, fal, Tripo, or ElevenLabs key saved in
+Grida. Save the key in your Grida CLI where supported, for example with
+`grida ai providers configure fal`. FX reads the store under the process's `GRIDA_HOME` (an
+absolute normalized path), or `$HOME/.grida` by default. A custom base URL requires an explicit
+key. FX reads a saved key when it needs to make a live call, including during resume. Replaying
+a cached call, running offline, or using a stand-in needs no saved key. If FX cannot use the
+store, the lookup stops with a diagnostic that omits secrets and the store path. Set
+`GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip this source.
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
 adapters as usual, but nothing FX sends leaves the machine: every request through FX's transport
@@ -231,7 +240,7 @@ and node types the workflow needs follow:
 engine    grida-fx 0.9.0
 python    .venv/bin/python (grida 0.9.0)
 node      /usr/local/bin/node (@grida/fx 0.9.0)
-key       GG_API_KEY present (.env)
+key       GG_API_KEY present (grida)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
 key       FAL_KEY present (environment)
@@ -257,7 +266,7 @@ or `not installed (grok)` (no Codex or Grok Build found), `too old (codex 0.150.
 0.160.1+)` or `no version (codex)` (a Codex a live run would refuse), or has `no adapter` (no
 adapter of FX serves the capability on that provider, or none under the `adapter` its contract
 names). A missing key alone doesn't change doctor's exit status, unless the target uses a route
-that needs it (below); a `.env` or base URL that a live run would refuse does: doctor prints
+that needs it (below); a store, `.env`, or base URL lookup that doctor refuses does: it prints
 `keys      <why>` and exits 1. So does an adapter that cannot load, as a plan would refuse it:
 its line reads `adapter   acme adapters/acme.py#acme cannot load: <why>` where a loaded one reads
 `adapter   acme adapters/acme.py#acme version 1: structured.generate (request)`.

@@ -57,9 +57,11 @@ a new cache key, so earlier results do not carry over.
 ## 3. Ask the user to connect a provider
 
 Never ask the user to paste a key into the conversation, and never read, print or
-write a key yourself. The user puts it in their shell environment or in the
-project's `.env` (`NAME=value`, one per line); FX reads both, and the environment
-wins.
+write a key yourself. Ask them to set it in the shell environment, project `.env`
+(`NAME=value`, one per line), or Grida's credential store for a supported key on
+macOS or Linux. FX tries those sources in that order. For example, the user can
+save fal's key with `grida ai providers configure fal`. A custom base URL uses a
+key from the environment or `.env`.
 
 ### Grida Gateway
 
@@ -73,7 +75,8 @@ yet, so give the user these steps rather than sending them to search:
    `media` (images, video and 3D). A key with only one scope refuses the other
    steps. A spending cap on the key is a good extra guard for a first run.
 4. Copy the key when it is shown; it is shown once. Set it as `GG_API_KEY` in the
-   environment, or add the line `GG_API_KEY=…` to the project's `.env`.
+   environment, add `GG_API_KEY=…` to the project's `.env`, or save it through a
+   Grida CLI that supports standalone GG keys.
 
 For questions about GG itself (key scopes, credits, spending caps, rate limits,
 how a charge is settled), read <https://gateway.grida.ai/llms.txt>. It is GG's
@@ -151,7 +154,7 @@ grida fx doctor
 grida fx doctor workflows/example.yaml
 ```
 
-Each `key` line says `present` (with its source, `environment` or `.env`) or
+Each `key` line says `present` (with its source, `environment`, `.env`, or `grida`) or
 `missing`, never the value. Each `route` line says whether a live run could serve
 it; with a workflow, `doctor` exits 1 when a route the workflow uses is not
 servable. `not installed (codex)` means FX found no Codex: put `codex` on `PATH`

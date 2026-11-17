@@ -141,6 +141,7 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
         &mut host,
         snapshot.as_ref(),
         !args.routes.is_empty(),
+        true,
     )?;
     let runtime = crate::engine::runtime()?;
     let engine = crate::engine::engine_for(

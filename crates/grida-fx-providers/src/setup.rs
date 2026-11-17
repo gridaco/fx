@@ -7,11 +7,12 @@
 //! spec/adapters.md §4), and `grida-fx doctor` reports the route as not servable.
 
 use crate::clock::Clock;
-use crate::keys::{Environment, KeyName, Keys, Secret};
+use crate::keys::{Environment, KeyName, Keys, Secret, StoredCredentials};
 use crate::redact::Redactor;
 use crate::transport::{Credential, HttpRequest, HttpResponse, Transport, TransportError};
 use grida_fx_core::providers::{Declaration, Declarations};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// fal's queue host: not configurable, so not a declared base URL (spec/providers.md §1).
@@ -121,6 +122,7 @@ pub struct Setup {
     /// The user's Grok Build program, or why there is none (the refusal of every Grok call). Only
     /// [`crate::live::live_setup`] looks for one.
     pub grok: Result<std::path::PathBuf, String>,
+    pub(crate) stored: Option<Arc<StoredCredentials>>,
 }
 
 impl Setup {
@@ -135,12 +137,35 @@ impl Setup {
             clock,
             codex: Err(crate::codex::NOT_INSTALLED.into()),
             grok: Err(crate::grok::NOT_INSTALLED.into()),
+            stored: None,
         }
+    }
+
+    /// Enable deferred fallback for eligible built-in providers in a live invocation.
+    pub fn with_stored_credentials(
+        mut self,
+        home: Result<PathBuf, String>,
+        providers: &[KeyName],
+    ) -> Setup {
+        let eligible: Vec<_> = providers
+            .iter()
+            .copied()
+            .filter(|name| {
+                KeyName::STORED.contains(name)
+                    && self.keys.get(*name).is_none()
+                    && self.endpoints.base(name.provider())
+                        == Some(name.declaration().base_url.default.as_str())
+            })
+            .collect();
+        if !eligible.is_empty() {
+            self.stored = Some(Arc::new(StoredCredentials::new(home, &eligible)));
+        }
+        self
     }
 
     /// A redactor over every key of the invocation.
     pub fn redactor(&self) -> Redactor {
-        Redactor::new(self.keys.secrets())
+        Redactor::new(self.keys.secrets()).with_stored(self.stored.clone())
     }
 
     /// The declarations of the invocation: FX's, then the planning project's.
@@ -177,14 +202,25 @@ impl Setup {
     }
 
     fn client_for(&self, declaration: &Declaration, base: &str) -> Client {
+        let base = base.trim_end_matches('/');
+        let stored = self
+            .stored
+            .as_ref()
+            .filter(|stored| {
+                stored.eligible(&declaration.name)
+                    && (base == declaration.base_url.default
+                        || (declaration.name == "fal" && base == FAL_QUEUE))
+            })
+            .cloned();
         Client {
             transport: Arc::clone(&self.transport),
             provider: declaration.name.clone(),
             declared: declaration.credential.clone(),
             key: self.keys.of(&declaration.name).cloned(),
-            base: base.trim_end_matches('/').to_string(),
+            base: base.to_string(),
             download_hosts: declaration.download_hosts.clone(),
             redactor: self.redactor(),
+            stored,
         }
     }
 }
@@ -214,6 +250,7 @@ pub struct Client {
     /// The hosts its results may be downloaded from ([`crate::wire::download_url`]).
     pub download_hosts: Vec<String>,
     pub redactor: Redactor,
+    stored: Option<Arc<StoredCredentials>>,
 }
 
 impl Client {
@@ -223,8 +260,13 @@ impl Client {
         let Some(declared) = &self.declared else {
             return Err(format!("{} is declared without a key", self.provider));
         };
-        match &self.key {
-            Some(secret) if !secret.expose().trim().is_empty() => Ok(Credential {
+        let key = self
+            .key
+            .as_ref()
+            .filter(|secret| !secret.expose().trim().is_empty())
+            .or_else(|| self.stored.as_ref()?.loaded()?.get(&self.provider));
+        match key {
+            Some(secret) => Ok(Credential {
                 header: declared.header.clone(),
                 prefix: declared.prefix(),
                 secret: secret.clone(),

@@ -7,7 +7,7 @@ use grida_fx_providers::adapter::{Adapter, Answer, RequestAdapter, Sent};
 use grida_fx_providers::keys::{Environment, Keys};
 use grida_fx_providers::openai_compatible::{self, agent, structured};
 use grida_fx_providers::registry::Adapters;
-use grida_fx_providers::setup::{Endpoints, Setup};
+use grida_fx_providers::setup::Endpoints;
 use grida_fx_providers::testing::{CallBuilder, TestCall, block_on, media, setup};
 use grida_fx_providers::transport::replay::{Expect, ExpectBody, ReplayTransport};
 use grida_fx_providers::transport::{Body, HttpResponse};
@@ -39,11 +39,9 @@ fn registry(transport: Arc<ReplayTransport>, keyed: bool) -> Adapters {
     let pairs: &[(&str, &str)] = if keyed { &[("ACME_API_KEY", KEY)] } else { &[] };
     let environment = Environment::declared(pairs, &declarations);
     let keys = Keys::from_environment(&environment);
-    let endpoints = Endpoints::from_environment(&environment, &keys).unwrap();
-    grida_fx_providers::live::adapters(&Setup {
-        endpoints,
-        ..setup(transport, keys)
-    })
+    let mut setup = setup(transport, keys);
+    setup.endpoints = Endpoints::from_environment(&environment, &setup.keys).unwrap();
+    grida_fx_providers::live::adapters(&setup)
 }
 
 fn serving(adapters: &Adapters, call: &TestCall) -> Arc<dyn RequestAdapter> {

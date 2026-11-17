@@ -154,6 +154,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         &mut host,
         snapshot.as_ref(),
         !args.routes.is_empty(),
+        args.stand_in.is_none(),
     )?;
     let declared: Vec<&str> = planner
         .workflow

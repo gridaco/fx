@@ -123,6 +123,10 @@ console.log(result.ok, result.chargedUsd, result.failed);
 const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 ```
 
+The engine resolves provider keys from the environment, project `.env`, and eligible
+[keys saved in Grida](../../spec/providers.md#1-keys-and-endpoints) on macOS and Linux.
+Use `grida fx doctor` to check which source the engine found.
+
 Cost forecasts can be unknown. `planned.estimate.lowUsd` and `highUsd` are `null` when
 unpriced calls prevent a complete total. `planned.forecast` also exposes `knownLowUsd`,
 `knownHighUsd` and `unpricedCalls`; these describe the priced subtotal and its missing coverage.

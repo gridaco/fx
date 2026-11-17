@@ -103,9 +103,10 @@ moves FX forward happens in this order:
 `grida` owns telling its users that a newer `grida` is available; that covers `grida fx`,
 because the pin moves with `grida`'s version. `@grida/fx` and `grida-fx` never check for updates.
 
-Provider keys are FX's own today ([providers.md](providers.md) §1). Reading the provider
-credentials `grida` manages, which `grida` alone writes, is tracked in
-[gridaco/fx#45](https://github.com/gridaco/fx/issues/45).
+All launchers and SDKs use the engine's provider key resolution ([providers.md](providers.md)
+§1). Grida manages saved provider keys. The engine can read eligible keys from the Grida
+store as a fallback, including a standalone Gateway API key once the host supports saving
+it. The launchers do not pass saved keys to the engine or read the shared store themselves.
 
 ## 5. Holding to this contract
 

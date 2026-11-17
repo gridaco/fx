@@ -36,6 +36,12 @@ tempfile.workspace = true
 # Ending a Codex's process group (src/codex/process.rs).
 rustix = { version = "1.1", features = ["process"] }
 
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+# Grida provider credential file protocol v1: native private opens and its shared lock.
+libc = "0.2"
+rusqlite = { version = "0.40", default-features = false, features = ["bundled", "load_extension"] }
+toml = { version = "1.1", default-features = false, features = ["std", "parse", "serde"] }
+
 [dev-dependencies]
 tokio.workspace = true
 png.workspace = true

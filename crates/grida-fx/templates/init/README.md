@@ -29,6 +29,7 @@ need their language's SDK too: `pip install grida` for Python (3.11 or later), o
 | Your own keys | `OPENAI_API_KEY`, `FAL_KEY`, …: see `.env.example` | `gpt-image-2.5-sunburst@openai` |
 
 Put keys in the environment, or copy `.env.example` to `.env` (kept out of git) and fill it in.
+On macOS and Linux, FX can also use supported keys saved in Grida.
 `grida fx doctor` says which keys and routes FX can use. Workflows of plain code need no provider.
 More: [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md).
 

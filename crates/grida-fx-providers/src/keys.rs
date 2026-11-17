@@ -37,11 +37,15 @@ use grida_fx_core::providers::{Declaration, Declarations};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
+use tokio::sync::OnceCell;
 
 /// The variable that turns the `.env` file off (credential-free gates set it).
 pub const DISABLE_DOTENV: &str = "GRIDA_FX_DISABLE_DOTENV";
+
+/// Process-only opt-out for the user-wide Grida store.
+pub const DISABLE_GRIDA_STORE: &str = "GRIDA_FX_DISABLE_GRIDA_STORE";
 
 /// A key's value. Prints as `[redacted]`; compared by value.
 #[derive(Clone, PartialEq, Eq)]
@@ -87,6 +91,15 @@ impl KeyName {
     pub const ALL: [KeyName; 6] = [
         KeyName::GridaGateway,
         KeyName::OpenAi,
+        KeyName::OpenRouter,
+        KeyName::Fal,
+        KeyName::Tripo,
+        KeyName::ElevenLabs,
+    ];
+
+    /// Built-in provider IDs that can use an API key from Grida's v1 store.
+    pub const STORED: [KeyName; 5] = [
+        KeyName::GridaGateway,
         KeyName::OpenRouter,
         KeyName::Fal,
         KeyName::Tripo,
@@ -142,6 +155,57 @@ pub fn not_set(variable: &str) -> String {
 pub enum KeySource {
     Environment,
     DotEnv,
+    GridaStore,
+}
+
+type StoreKeys = BTreeMap<String, Secret>;
+
+/// Invocation-local fallback for the built-in clients that lack an explicit key.
+/// Constructing or looking at this object never opens the store. A live adapter
+/// calls `prepare` on a cache miss, before it can ask a client for a key.
+pub(crate) struct StoredCredentials {
+    home: Result<PathBuf, String>,
+    providers: Vec<&'static str>,
+    result: OnceCell<Result<StoreKeys, String>>,
+}
+
+impl StoredCredentials {
+    pub(crate) fn new(home: Result<PathBuf, String>, providers: &[KeyName]) -> Self {
+        Self {
+            home,
+            providers: providers.iter().map(|key| key.provider()).collect(),
+            result: OnceCell::new(),
+        }
+    }
+
+    pub(crate) fn eligible(&self, provider: &str) -> bool {
+        self.providers.contains(&provider)
+    }
+
+    pub(crate) fn loaded(&self) -> Option<&StoreKeys> {
+        self.result.get()?.as_ref().ok()
+    }
+
+    pub(crate) async fn prepare(self: &Arc<Self>, provider: &str) -> Result<(), String> {
+        if !self.eligible(provider) {
+            return Ok(());
+        }
+        self.result
+            .get_or_init(|| async {
+                let owner = Arc::clone(self);
+                tokio::task::spawn_blocking(move || {
+                    let home = owner.home.as_ref().map_err(Clone::clone)?;
+                    crate::grida_store::read(home, &owner.providers)
+                        .map_err(|error| error.to_string())
+                })
+                .await
+                .unwrap_or_else(|_| Err("Grida provider credentials: storage_failed".into()))
+            })
+            .await
+            .as_ref()
+            .map(|_| ())
+            .map_err(Clone::clone)
+    }
 }
 
 /// The declared variables of one invocation, after precedence (module doc), and the declarations
@@ -287,6 +351,19 @@ impl Keys {
         Keys {
             found,
             declarations,
+        }
+    }
+
+    /// Fill a missing built-in key without trimming it or changing the explicit sources.
+    pub fn insert_stored(&mut self, name: KeyName, secret: Secret) {
+        if self.get(name).is_none() {
+            self.found
+                .push((name.provider().into(), secret, KeySource::GridaStore));
+            self.found.sort_by_key(|(name, _, _)| {
+                self.declarations
+                    .iter()
+                    .position(|declaration| &declaration.name == name)
+            });
         }
     }
 

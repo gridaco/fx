@@ -15,7 +15,7 @@ use crate::adapter::{
 };
 use crate::clock::SystemClock;
 use crate::installed::{Program, Version};
-use crate::keys::Keys;
+use crate::keys::{Keys, StoredCredentials};
 use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
@@ -108,10 +108,12 @@ pub fn adapters(setup: &Setup) -> Adapters {
         Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
             inner: Arc::clone(inner),
             redactor: redactor.clone(),
+            stored: setup.stored.clone(),
         })),
         Adapter::Job(inner) => Adapter::Job(Arc::new(Redacting {
             inner: Arc::clone(inner),
             redactor: redactor.clone(),
+            stored: setup.stored.clone(),
         })),
     })
 }
@@ -122,11 +124,26 @@ pub fn adapters(setup: &Setup) -> Adapters {
 struct Redacting<A: ?Sized> {
     inner: Arc<A>,
     redactor: Redactor,
+    stored: Option<Arc<StoredCredentials>>,
+}
+
+impl<A: ?Sized> Redacting<A> {
+    async fn prepare(&self, call: &CallRequest) -> Result<(), String> {
+        if let Some(stored) = &self.stored {
+            stored.prepare(&call.route.provider).await?;
+        }
+        Ok(())
+    }
 }
 
 impl RequestAdapter for Redacting<dyn RequestAdapter> {
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
-        self.inner.send(call)
+        Box::pin(async move {
+            match self.prepare(call).await {
+                Ok(()) => self.inner.send(call).await,
+                Err(reason) => Sent::Refused { reason },
+            }
+        })
     }
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {
@@ -152,11 +169,21 @@ impl RequestAdapter for Redacting<dyn RequestAdapter> {
 
 impl LongJob for Redacting<dyn LongJob> {
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
-        self.inner.submit(call)
+        Box::pin(async move {
+            match self.prepare(call).await {
+                Ok(()) => self.inner.submit(call).await,
+                Err(reason) => Submitted::Refused { reason },
+            }
+        })
     }
 
     fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
-        self.inner.collect(call, handle)
+        Box::pin(async move {
+            match self.prepare(call).await {
+                Ok(()) => self.inner.collect(call, handle).await,
+                Err(reason) => Collected::Unreachable { reason },
+            }
+        })
     }
 
     fn check(&self, call: &CallRequest, answer: &Answer) -> Result<(), String> {

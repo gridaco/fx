@@ -224,6 +224,7 @@ def environment() -> dict[str, str]:
     env = {name: value for name, value in os.environ.items() if name not in KEYS}
     env["GRIDA_FX_NETWORK"] = "off"
     env["GRIDA_FX_DISABLE_DOTENV"] = "1"
+    env["GRIDA_FX_DISABLE_GRIDA_STORE"] = "1"
     env.setdefault("GRIDA_FX_PYTHON", sys.executable)
     return env
 

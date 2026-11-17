@@ -296,10 +296,8 @@ fn the_base_url_comes_from_the_endpoints() {
         .body(ExpectBody::JsonText(DOOR.into()))
         .reply(mp3(MP3)),
     ]));
-    let setup = Setup {
-        endpoints: Endpoints::default().with_base("elevenlabs", "http://127.0.0.1:8089/v1"),
-        ..Setup::new(transport.clone(), test_keys(), Arc::new(FakeClock::new()))
-    };
+    let mut setup = Setup::new(transport.clone(), test_keys(), Arc::new(FakeClock::new()));
+    setup.endpoints = Endpoints::default().with_base("elevenlabs", "http://127.0.0.1:8089/v1");
     let adapter = ElevenLabsSound::new(elevenlabs::client(&setup));
     let sent = block_on(adapter.send(&sound_call(json!({"prompt": "wooden door opens"}))));
     assert!(matches!(sent, Sent::Answered(_)));

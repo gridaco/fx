@@ -68,6 +68,100 @@ fn image_call(capability: &str, request: Value) -> TestCall {
         .build()
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn stored_gg_is_loaded_on_demand_and_used_by_the_gateway_adapter() {
+    use grida_fx_providers::{Adapter, keys::KeyName, live::adapters};
+    use std::fs::{self, DirBuilder, OpenOptions};
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path().canonicalize().unwrap();
+    let providers = home.join("providers");
+    DirBuilder::new().mode(0o700).create(&providers).unwrap();
+    let credential_file = providers.join("credentials.toml");
+    let credentials = b"version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+                        [providers.gg]\napi_key = 'synthetic-gg-store-key'\n";
+    OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(&credential_file)
+        .unwrap()
+        .write_all(credentials)
+        .unwrap();
+    let transport = replay(vec![
+        Expect::new(
+            Method::Post,
+            format!("{BASE}/images/generations"),
+            Lane::Provider,
+        )
+        .credential("authorization", "Bearer synthetic-gg-store-key")
+        .body(ExpectBody::Any)
+        .reply(picture_answer(&media::png(2, 2, Some(255)), "80")),
+    ]);
+    let setup =
+        setup(transport.clone(), Keys::none()).with_stored_credentials(Ok(home), &KeyName::STORED);
+    let adapters = adapters(&setup);
+    let call = image_call("image.generate", json!({"prompt": "A kite."}));
+    let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
+        panic!("GG image route has no adapter");
+    };
+    let before_send = adapter.redactor().with("synthetic-upload-secret");
+    assert!(!providers.join("profile.lock.sqlite").exists());
+    assert!(matches!(block_on(adapter.send(&call)), Sent::Answered(_)));
+    transport.assert_done();
+    assert_eq!(
+        before_send.reason("synthetic-gg-store-key and synthetic-upload-secret"),
+        "[redacted] and [redacted]"
+    );
+    assert!(providers.join("profile.lock.sqlite").exists());
+    assert_eq!(fs::read(credential_file).unwrap(), credentials);
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn stored_gg_failure_only_refuses_calls_that_would_use_the_store() {
+    use grida_fx_providers::{Adapter, keys::KeyName, live::adapters};
+
+    let call = image_call("image.generate", json!({"prompt": "A kite."}));
+    let on = |setup: &grida_fx_providers::setup::Setup| {
+        let adapters = adapters(setup);
+        let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
+            panic!("GG image route has no adapter");
+        };
+        block_on(adapter.send(&call))
+    };
+    let home = Err("Grida provider credentials: invalid_input".to_string());
+    let unset = setup(Arc::new(NoNetwork), Keys::none());
+    let refused = unset
+        .clone()
+        .with_stored_credentials(home.clone(), &KeyName::STORED);
+    assert!(matches!(on(&refused), Sent::Refused { reason }
+        if reason == "Grida provider credentials: invalid_input"));
+
+    let mut custom = unset;
+    custom.endpoints = custom.endpoints.with_base("gg", "https://acme.test/v1");
+    let custom = custom.with_stored_credentials(home.clone(), &KeyName::STORED);
+    assert!(matches!(on(&custom), Sent::Refused { reason } if reason == "GG_API_KEY is not set"));
+
+    let transport = replay(vec![
+        Expect::new(
+            Method::Post,
+            format!("{BASE}/images/generations"),
+            Lane::Provider,
+        )
+        .credential("authorization", BEARER)
+        .body(ExpectBody::Any)
+        .reply(picture_answer(&media::png(2, 2, Some(255)), "80")),
+    ]);
+    let explicit =
+        setup(transport.clone(), test_keys()).with_stored_credentials(home, &KeyName::STORED);
+    assert!(matches!(on(&explicit), Sent::Answered(_)));
+    transport.assert_done();
+}
+
 fn picture_answer(png: &[u8], reserved: &str) -> HttpResponse {
     let (_, b64) = wire::data_url("image/png", png)
         .split_once(',')
