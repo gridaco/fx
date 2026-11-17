@@ -48,12 +48,32 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
   - a default base URL that does not normalize: `providers.<name>.base_url.default: <name> base_url must …`, with the base-URL sentences below.
 
   The variables Codex and Grok Build are started without beside the declared ones (`CODEX_API_KEY`, `XAI_API_KEY`, …; [Codex](../crates/grida-fx-providers/src/codex/README.md), [Grok Build](../crates/grida-fx-providers/src/grok/README.md)) are not read by FX, so a declaration may read them.
-- **Only the declared variables are read:** the eleven of the built-in declarations, then each declaration's key and base-URL variable. A variable comes from the process environment when it is set and not blank (trimmed). Otherwise it comes from the planning project's `.env` file, if there is one. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
+- **Credential source order.** FX resolves each provider's key independently. The first available
+  value in this order wins.
+
+  1. A nonblank value from the process environment.
+  2. A nonblank value from the planning project's `.env` file, when enabled.
+  3. The matching entry in Grida's credential store, when enabled and eligible (below).
+
+  For precedence, FX trims values from the environment and the parsed `.env` and skips blanks.
+  Different providers in the same run may obtain keys from different sources. For example,
+  `.env` can supply `FAL_KEY` while Grida supplies `GG_API_KEY`. Only absence advances the cascade.
+  Authentication failures are reported against the chosen credential without trying a
+  lower-priority key.
+- **File source controls.** Set `GRIDA_FX_DISABLE_DOTENV=1` in the process to skip the project's
+  `.env`, or `GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip the store. Set both to use only process
+  environment keys. Each opt-out leaves the remaining sources in the same order. The same
+  process settings apply through the CLI and SDKs.
+- **Only the declared variables are read:** the eleven of the built-in declarations, then each
+  project declaration's key and base-URL variable. Base URLs use the process environment and
+  `.env` in the same order.
 - **The `.env` file is optional**, and it is read for the declared names only. Lines that name other variables are skipped without reading their values. It is refused when it is a symlink or not a regular file (`.env must be a regular file`), cannot be read (`.env could not be read`), or is not UTF-8 (`.env must be valid UTF-8`). Blank lines and `#` comments are skipped.
   - An assignment is `[export] NAME = value`. A line that starts with a declared name and is not an assignment is refused: `.env contains malformed assignment for <NAME> on line <n>`.
   - A declared name may appear only once: `.env contains duplicate key: <NAME>`.
   - A value may be unquoted (a trailing ` #` comment is removed, and a quote inside it is refused), `'single quoted'` (literal), or `"double quoted"` (a JSON string literal: `.env contains malformed quoted value for <NAME> on line <n>`). An empty value is refused: `.env contains an empty value for <NAME>`. A control character in the decoded value is refused: `.env contains an unsafe value for <NAME>`.
   - Every refusal names the variable and the line, never the value.
+  - Whenever FX loads provider settings with `.env` enabled, it validates the file even if
+    process values take precedence for all declared variables.
 - **Grida's provider credential store** is a fallback on macOS and Linux when neither the process
   environment nor the project's `.env` supplies the key. FX reads the
   [v1 file protocol](https://github.com/gridaco/grida/blob/273961f8f050e4c9fd3df8714f1fe409484d5b00/packages/grida-auth/PROVIDER-CREDENTIALS-V1.md)
@@ -63,9 +83,8 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
   - The engine reads `<Grida home>/providers/credentials.toml`. The home is the process
     `GRIDA_HOME` or, if unset, `$HOME/.grida`. If both variables are unset, the store is absent.
     The home must be an absolute normalized path and pass the protocol's ownership, mode, alias
-    and ACL checks. An invalid explicit home refuses the lookup. A project cannot choose the home
-    or disable this source. Set `GRIDA_FX_DISABLE_GRIDA_STORE=1` in the process to turn the source
-    off independently of `GRIDA_FX_DISABLE_DOTENV`.
+    and ACL checks. An invalid explicit home refuses the lookup. The process alone selects the
+    home and whether this source is enabled.
   - The store IDs are `gg` for `GG_API_KEY`, `openrouter` for `OPENROUTER_API_KEY`,
     `fal` for `FAL_KEY`, `tripo` for `TRIPO_API_KEY`, and `elevenlabs` for
     `ELEVENLABS_API_KEY`. The `gg` entry is a standalone Gateway API key. Account sessions and
