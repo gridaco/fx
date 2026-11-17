@@ -21,7 +21,7 @@ fn repository() -> PathBuf {
 }
 
 /// `grida-fx` in `cwd` with a minimal environment: no provider key or base URL, the network off
-/// (`--live` builds its adapters over a transport that sends nothing) and the `.env` file off.
+/// (`--live` builds its adapters over a transport that sends nothing), and both files off.
 fn command(cwd: &Path, args: &[&str]) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_grida-fx"));
     command.args(args).current_dir(cwd).env_clear();
@@ -33,6 +33,7 @@ fn command(cwd: &Path, args: &[&str]) -> Command {
         .env("NO_COLOR", "1")
         .env("GRIDA_FX_NETWORK", "off")
         .env("GRIDA_FX_DISABLE_DOTENV", "1")
+        .env("GRIDA_FX_DISABLE_GRIDA_STORE", "1")
         // No Codex and no Grok Build, whatever this machine has installed.
         .env("GRIDA_FX_TOOL_CODEX", cwd.join("no-codex"))
         .env("GRIDA_FX_TOOL_GROK", cwd.join("no-grok"));
@@ -401,6 +402,46 @@ const MADE_UP_KEY: &str = "fx-made-up-key-3f9a1c";
 fn assert_no_key(output: &Output) {
     assert!(!stdout(output).contains(MADE_UP_KEY), "{}", stdout(output));
     assert!(!stderr(output).contains(MADE_UP_KEY), "{}", stderr(output));
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn integrated_doctor_reports_a_saved_gg_key_without_its_value() {
+    use std::fs::{DirBuilder, OpenOptions};
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+    let project = empty_project();
+    let folder = tempfile::tempdir().unwrap();
+    let home = folder.path().canonicalize().unwrap();
+    let providers = home.join("providers");
+    DirBuilder::new().mode(0o700).create(&providers).unwrap();
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(providers.join("credentials.toml"))
+        .unwrap();
+    writeln!(
+        file,
+        "version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n[providers.gg]\napi_key = '{MADE_UP_KEY}'"
+    )
+    .unwrap();
+    drop(file);
+    let output = command(project.path(), &["doctor"])
+        .env_remove("GRIDA_FX_DISABLE_GRIDA_STORE")
+        .env("GRIDA_HOME", &home)
+        .output()
+        .unwrap();
+    assert_eq!(status(&output), 0, "{}", stdout(&output));
+    assert_no_key(&output);
+    let text = stdout(&output);
+    assert!(
+        text.contains("key       GG_API_KEY present (grida)"),
+        "{text}"
+    );
+    assert!(!text.contains("grida ai providers configure gg"), "{text}");
+    assert!(!text.contains(home.to_str().unwrap()), "{text}");
 }
 
 #[test]
