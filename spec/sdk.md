@@ -186,6 +186,10 @@ include_diagnostics=False)` and its `export_async` counterpart, and JavaScript
 invoke the engine's [portable export](exports.md). The saved source folder stays
 pinned. Relative destinations resolve against the caller's current working
 directory at the method call, not the earlier inspection location.
+For viewer display defaults, a loaded record retains the resolved `cwd` supplied to
+`load_run`/`loadRun` (or the loading caller's directory when omitted). The engine reads
+that publishing project's current `fx.yaml`; it never infers a historical project from
+the saved run. A directly constructed Python `RunRecord` uses the export caller's context.
 
 The engine requires terminal, inactive evidence and a new destination. It owns
 locking, disclosure projection, media selection, verification, atomic placement

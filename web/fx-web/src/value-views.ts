@@ -231,7 +231,9 @@ export function projectValueViews(view: GraphDocument | ViewerRun, graph: Canvas
     const sourcePort = link.source.kind === "value" ? allValues.get(link.source.value_id)!.name : link.source.port;
     const targetPort = link.target.kind === "value" ? allValues.get(link.target.value_id)!.name : link.target.port;
     if (!source.ports || !target.ports) return;
-    if (link.source.kind === "instance" && !source.ports.outputs.some((port) => port.name === sourcePort)) {
+    const sourceKind = link.source.kind === "instance" ? link.source.source_kind ?? "output" : "output";
+    const hasSourcePort = () => source.ports?.outputs.some((port) => port.name === sourcePort && (port.kind === "fact") === (sourceKind === "fact")) ?? false;
+    if (link.source.kind === "instance" && !hasSourcePort()) {
       if (link.source.source_kind !== "fact") return;
       source.ports.outputs = [...source.ports.outputs, { name: sourcePort, type: "fact", kind: "fact" }];
     }
@@ -241,8 +243,7 @@ export function projectValueViews(view: GraphDocument | ViewerRun, graph: Canvas
       target.ports.inputs = [...target.ports.inputs, { name: setting.name, type: setting.type, kind: "parameter" }];
       target.ports.settings = target.ports.settings.filter((setting) => setting.name !== targetPort);
     }
-    if (!source.ports.outputs.some((port) => port.name === sourcePort) || !target.ports.inputs.some((port) => port.name === targetPort)) return;
-    const sourceKind = link.source.kind === "instance" ? link.source.source_kind ?? "output" : "output";
+    if (!hasSourcePort() || !target.ports.inputs.some((port) => port.name === targetPort)) return;
     const key = connectionKey(source.id, sourcePort, sourceKind, target.id, targetPort);
     if (projected.has(key)) return;
     projected.add(key);

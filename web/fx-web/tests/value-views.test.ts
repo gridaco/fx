@@ -66,6 +66,32 @@ test("known null, absence, pending, unavailable and withheld stay distinct", () 
   expect(() => parseGraph({ ...view, value_views: [value("a"), value("a")] })).toThrow();
 });
 
+test("workflow values keep same-named facts and declared outputs on distinct sockets", () => {
+  const view = graph();
+  view.instances = [step("pick#1", { uses: "fx/select@1", type: "fx/select@1.1", with: { first_of: [1] } })];
+  view.pending = [];
+  view.types = { "fx/select@1": { identity: "fx/select@1.1", ports: { inputs: {}, outputs: { value: "file?" }, params: { first_of: { type: "array" } } } } };
+  view.value_views = [value("a", { kind: "output", name: "quality", state: "pending", data: undefined }),
+    value("b", { kind: "output", name: "chosen", state: "pending", data: undefined })];
+  for (const item of view.value_views) delete item.data;
+  view.value_links = [
+    { source: { kind: "instance", instance_id: "pick#1", port: "value", source_kind: "fact" }, target: { kind: "value", value_id: id("a") } },
+    { source: { kind: "instance", instance_id: "pick#1", port: "value", source_kind: "output" }, target: { kind: "value", value_id: id("b") } },
+  ];
+  const projected = canvasGraph(parseGraph(view));
+  expect(projected.nodes.find((node) => node.id === "instance:pick#1")?.ports?.outputs).toEqual([
+    expect.objectContaining({ name: "value", kind: "artifact" }),
+    expect.objectContaining({ name: "value", kind: "fact" }),
+  ]);
+  const placed = layoutGraph(projected);
+  const fact = placed.edges.find((edge) => edge.target === id("a"))!;
+  const output = placed.edges.find((edge) => edge.target === id("b"))!;
+  expect(fact).toMatchObject({ source: "instance:pick#1", source_port: "value", source_kind: "fact" });
+  expect(output).toMatchObject({ source: "instance:pick#1", source_port: "value", source_kind: "output" });
+  expect(fact.points[0].x).toBe(output.points[0].x);
+  expect(fact.points[0].y).not.toBe(output.points[0].y);
+});
+
 test("file-shaped JSON never becomes a media preview while typed file evidence does", () => {
   const plan = graph();
   const artifact = { digest: "d".repeat(64), name: "reference.png", kind: "image/png", size: 8, available: true, url: `/api/artifacts/${"d".repeat(64)}` };

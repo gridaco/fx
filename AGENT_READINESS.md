@@ -748,6 +748,9 @@ AR-26 uses the notes-and-values fixture, [public CLI acceptance](tools/check_val
 [value conformance](conformance/values/), core/runtime/viewer tests and browser inspection.
 It covers effective defaults before execution, contextual expressions, original inputs whose
 outputs differ, nested typed files, opaque JSON, disclosure, old records and opt-in value focus.
+Regression coverage keeps same-named fact/output sockets distinct, displays full values in
+published inspectors, and retains Python's explicit publishing context in sync/async exports
+while relative destinations follow the export caller's directory.
 Both SDKs declare the same node schemas and author ordinary workflow data; neither computes
 value identity or evaluates expressions independently. No new CLI verb or runtime permission
 is required. Source support does not imply availability in an older installed release.

@@ -1,4 +1,4 @@
-import { CanvasController, ExportViewerController, exportArtifactUrl, renderNoteContent, ownsKeys, skipExplanation, skipSourceScopes, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
+import { CanvasController, ExportViewerController, exportArtifactUrl, renderNoteContent, ownsKeys, skipExplanation, skipSourceScopes, valueKindLabel, valueStateLabel, type CanvasGraph, type ExportViewerState, type LoadedRunExport, type PinnedRunExport } from "@grida/fx-web";
 
 export interface Recording extends PinnedRunExport { id: string; label: string }
 export interface CanvasFragment { graph: boolean; recording: string | null; scope: string | null; node: string | null }
@@ -187,6 +187,14 @@ export class RecordedCanvasController {
     }
     if (!selected || !state.recording) return;
     const loaded = state.recording;
+    if (selected.value) {
+      const value = selected.value;
+      body.append(this.node("h2", value.name), this.node("p", [valueKindLabel(value.kind), value.context].filter(Boolean).join(" · ")));
+      if (value.state === "known") this.renderValue(body, value.data, loaded, true);
+      else body.append(this.node("p", valueStateLabel(value)));
+      if (value.diagnostic) body.append(this.node("p", value.diagnostic));
+      return;
+    }
     const source = loaded.manifest.view.nodes.find((node) => node.id === selected.source_id);
     body.append(this.node("h2", selected.title), this.node("p", `${selected.state}${source?.duration_ms !== null && source?.duration_ms !== undefined ? ` · ${(source.duration_ms / 1000).toFixed(1)} s` : ""}`));
     if (selected.kind) {
@@ -220,8 +228,14 @@ export class RecordedCanvasController {
       body.append(list);
     }
   }
-  private renderValue(target: HTMLElement, value: unknown, loaded: LoadedRunExport) {
-    if (isWithheldValue(value, loaded.manifest.disclosure.values)) { target.append(this.node("p", "Withheld by the author")); return; }
+  private renderValue(target: HTMLElement, value: unknown, loaded: LoadedRunExport, encoded = false) {
+    if (isWithheldValue(value, loaded.manifest.disclosure.values) || encoded && record(value) && value.withheld === true) { target.append(this.node("p", "Withheld by the author")); return; }
+    // Only the explicit variant unwraps JSON; authored members stay literal, including
+    // objects whose keys happen to be named file, object, list or withheld.
+    if (encoded && record(value) && "value" in value) {
+      target.append(this.node("pre", typeof value.value === "string" ? value.value : JSON.stringify(value.value, null, 2)));
+      return;
+    }
     if (record(value) && record(value.file) && typeof value.file.digest === "string") {
       const digest = value.file.digest;
       const artifact = loaded.manifest.artifacts.find((item) => item.digest === digest);
@@ -235,11 +249,20 @@ export class RecordedCanvasController {
       const link = this.node("a", `Open ${artifact.name}`) as HTMLAnchorElement; link.href = url; link.target = "_blank"; link.rel = "noopener noreferrer"; target.append(link);
       return;
     }
-    if (record(value) && Array.isArray(value.list)) { for (const item of value.list) this.renderValue(target, item, loaded); return; }
-    if (record(value) && Array.isArray(value.collection)) {
-      for (const entry of value.collection) if (Array.isArray(entry) && entry.length === 2) { target.append(this.node("p", String(entry[0]))); this.renderValue(target, entry[1], loaded); }
+    if (encoded && record(value) && record(value.object)) {
+      const list = this.node("dl");
+      for (const [name, field] of Object.entries(value.object)) {
+        const item = this.node("dd"); this.renderValue(item, field, loaded, true); list.append(this.node("dt", name), item);
+      }
+      target.append(list);
       return;
     }
+    if (record(value) && Array.isArray(value.list)) { for (const item of value.list) this.renderValue(target, item, loaded, encoded); return; }
+    if (record(value) && Array.isArray(value.collection)) {
+      for (const entry of value.collection) if (Array.isArray(entry) && entry.length === 2) { target.append(this.node("p", String(entry[0]))); this.renderValue(target, entry[1], loaded, encoded); }
+      return;
+    }
+    if (encoded && record(value) && value.none === true) { target.append(this.node("p", "No value recorded")); return; }
     target.append(this.node("pre", typeof value === "string" ? value : JSON.stringify(value, null, 2)));
   }
   dispose() { this.abort.abort(); this.unsubscribe(); this.viewer.dispose(); this.canvas?.dispose(); this.canvas = null; }

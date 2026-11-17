@@ -979,6 +979,9 @@ console.log(result.ok, result.chargedUsd, result.failed);
 Both raise `PlanRefused` for a refused plan and `FxError` for a run refused before it starts. Also:
 `run_async`, `load_run(...)`/`loadRun(...)` (saved records, `snapshot`, `events`, `follow`,
 `export`), `cancel`/`inspect_control`, `list_runs`/`remove_runs` (`listRuns`/`removeRuns`).
+Loaded records retain the resolved loading `cwd` for the publishing project's current
+`fx.yaml` display defaults on export. Relative export destinations still resolve against
+the export caller's current directory; no historical project path is inferred from a run.
 
 ## Recipes
 
