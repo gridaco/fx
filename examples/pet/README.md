@@ -184,7 +184,10 @@ play in place. `outputs/` has `video.mp4` (960 x 600, 30 fps) and `poster.webp`.
 
 The [FX website](https://grida.co/fx/workflows/pet) shows Coral, drawn from
 `inputs/coral.yaml`. Its reference picture, itself generated from a text prompt, and the recorded
-sheet are public downloads:
+sheet are public downloads. In a checkout of the FX repository, the shared downloader is one
+directory above this example. For a standalone copy, get
+[`fetch_showcase_inputs.py`](https://github.com/gridaco/fx/blob/main/examples/fetch_showcase_inputs.py)
+separately and pass it the Pet project directory. From `examples/pet` in the checkout:
 
 ```bash
 python ../fetch_showcase_inputs.py .

@@ -166,6 +166,46 @@ recommended, not required for execution. For a one-off workflow, call `run` dire
 `--standalone` inside an existing project to request an independent viewer for that invocation.
 See [Viewing](07-viewing.md#standalone-inspection).
 
+## Start from a template
+
+`add` is available from FX 0.10.0. Use `grida fx --version` to check your installed engine.
+To make your own animated pet, run this from the workspace where you want to keep it.
+
+```sh
+grida fx init --list-templates
+grida fx add pet fox-pet
+cd fox-pet
+```
+
+`add` creates a new, editable project with its own `fx.yaml`. Without a destination, `add pet`
+creates `./pet`. Pass a destination to name the new folder yourself. Its parent must already
+exist. If the destination already exists, FX exits 2 and leaves your edits in place. Use a
+different destination for a second copy. Run subsequent commands from the new folder to use its
+project settings.
+
+FX downloads the authored files from the release that matches your engine version. Setup checks
+the project configuration and the advertised workflow and preset. It reports prerequisites without
+installing them, running the workflow, or starting a service.
+
+For Pet, edit the description in `inputs/pebble.yaml` and work with `workflows/pet.yaml`. The
+preset starts from text. Follow the copied README to set up Python or try the stand-in, which
+substitutes simple drawings for provider calls. Once the Python environment is ready, plan
+the workflow and use `doctor` to check live-run prerequisites such as signed-in Codex.
+
+```sh
+grida fx plan workflows/pet.yaml --inputs inputs/pebble.yaml
+grida fx doctor workflows/pet.yaml
+```
+
+For automation, `grida fx init --list-templates --json` lists the templates from the embedded
+index without a download. Entries with a `workflow_entry` are available to `add`.
+`grida fx add pet fox-pet --json` returns an absolute `project_root`, a project-relative
+`workflow_entry` and, for Pet, `inputs_file`. It also reports missing declared input files and
+prerequisites for the entry. Use the returned folder as the working directory.
+
+For example, adding `image-recolor` reports `inputs/source.png` in `missing_inputs`. The copied
+README shows how to create that file with `python make_input.py` or supply your own image.
+
 ## Your first workflow
 
 Generate one item icon on a transparent background. If the background isn't actually clean,

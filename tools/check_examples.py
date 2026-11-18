@@ -18,11 +18,11 @@ the others run only free steps, or have the example's stand-in answer the paid o
 ``self-contained`` checks, without running anything, that no example links outside its own folder
 except by absolute URL.
 
-An example ``examples/templates.json`` offers as an ``init`` template is not copied: the engine
-starts it with ``init --template``, from an archive shaped like the release's (one top-level
-folder, the examples' tracked files as they are in the working tree) served on loopback, so each
-check runs on exactly what a user gets. ``templates`` checks that every template has a check and
-that no indexed folder is ``export-ignore``d out of the release archive.
+The engine installs indexed templates with ``add`` or ``init --template`` from an archive shaped
+like the release's (one top-level folder, tracked files as they are in the working tree), served
+on loopback. Each check runs on exactly what a user gets. For ``add``, also verify the receipt
+and that its advertised starter plans once fixtures supply any declared inputs.
+``templates`` checks that every template has a check and ships in the release archive.
 
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
 """
@@ -45,11 +45,11 @@ import threading
 import traceback
 from collections.abc import Callable
 from pathlib import Path
-
-from PIL import Image, ImageOps
+from typing import Any
 
 import grida.fx as fx
 from grida.fx import RunResult, _api
+from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
@@ -586,18 +586,18 @@ def self_contained() -> list[str]:
     return found
 
 
-def templates() -> dict[str, str]:
-    """The templates ``init`` offers, by example folder name: ``{folder: template name}``."""
+def templates() -> dict[str, dict[str, Any]]:
+    """The templates the engine offers, by example folder name."""
     index = json.loads((EXAMPLES / "templates.json").read_text(encoding="utf-8"))
-    return {Path(entry["path"]).name: entry["name"] for entry in index["templates"]}
+    return {Path(entry["path"]).name: entry for entry in index["templates"]}
 
 
-def template_problems(offered: dict[str, str]) -> list[str]:
+def template_problems(offered: dict[str, dict[str, Any]]) -> list[str]:
     problems = []
     checked = {example for example, _ in CHECKS.values()}
-    for folder, name in offered.items():
+    for folder, entry in offered.items():
         if folder not in checked:
-            problems.append(f"template {name} ({folder}) has no check here")
+            problems.append(f"template {entry['name']} ({folder}) has no check here")
         attribute = subprocess.run(
             ["git", "check-attr", "export-ignore", "--", f"examples/{folder}/fx.yaml"],
             cwd=ROOT,
@@ -652,12 +652,13 @@ def serve(archive: bytes) -> tuple[str, http.server.ThreadingHTTPServer]:
     return f"http://127.0.0.1:{server.server_address[1]}/gridaco/fx/tar.gz/vcheck", server
 
 
-def started(name: str, home: Path, source: str) -> None:
-    """Starts ``home`` from template ``name`` with the engine's own ``init`` (network on, for the
-    loopback source only)."""
+def started(entry: dict[str, Any], home: Path, source: str) -> dict[str, Any]:
+    """Install through the CLI, with network on for the loopback source only."""
     environment = _api.engine_environment()
     environment.pop("GRIDA_FX_NETWORK", None)
-    command = [str(_api.binary()), "init", str(home), "--template", name]
+    name, starter = entry["name"], entry.get("starter")
+    args = ["add", name, str(home)] if starter else ["init", str(home), "--template", name]
+    command = [str(_api.binary()), *args]
     result = subprocess.run(
         [*command, "--template-source", source, "--json"],
         env=environment,
@@ -665,11 +666,26 @@ def started(name: str, home: Path, source: str) -> None:
         text=True,
     )
     if result.returncode != 0:
-        raise Failed(f"init --template {name} failed: {result.stderr.strip()}")
+        raise Failed(f"{args[0]} for {name} failed: {result.stderr.strip()}")
     outcome = json.loads(result.stdout)
-    expect(outcome["template"] == {"name": name, "source": "local"}, f"init said {outcome}")
+    expect(outcome["template"] == {"name": name, "source": "local"}, f"wrong template for {name}")
+    expect(
+        outcome["created"] and Path(outcome["project_root"]) == home.resolve(),
+        f"wrong root for {name}",
+    )
     for file in ("fx.yaml", "AGENTS.md", ".gitignore", ".agents/skills/grida-fx/SKILL.md"):
-        expect((home / file).is_file(), f"init --template {name} wrote no {file}")
+        expect((home / file).is_file(), f"{args[0]} for {name} wrote no {file}")
+    if starter:
+        for key in ("workflow_entry", "inputs_file", "prerequisites"):
+            expect(
+                outcome.get(key) == starter.get(key, [] if key == "prerequisites" else None),
+                f"wrong {key} for {name}",
+            )
+        missing = [
+            file for file in starter.get("required_inputs", []) if not (home / file).is_file()
+        ]
+        expect(outcome["missing_inputs"] == missing, f"wrong missing_inputs for {name}")
+    return outcome
 
 
 def main(names: list[str]) -> int:
@@ -686,7 +702,8 @@ def main(names: list[str]) -> int:
             failures += 1
             print("FAIL templates: " + "; ".join(problems))
         else:
-            print(f"ok   templates: {', '.join(offered.values())} each have a check and ship")
+            names_offered = ", ".join(entry["name"] for entry in offered.values())
+            print(f"ok   templates: {names_offered} each have a check and ship")
     url, server = serve(release_archive(sorted(offered)))
     typed: set[str] = set()  # the TypeScript examples whose types are checked: once each
     if not names or "self-contained" in names:
@@ -704,8 +721,9 @@ def main(names: list[str]) -> int:
         with tempfile.TemporaryDirectory(prefix="fx-example-") as scratch:
             home = Path(scratch) / example
             try:
+                outcome = {}
                 if example in offered:
-                    started(offered[example], home, url)
+                    outcome = started(offered[example], home, url)
                 else:
                     shutil.copytree(
                         EXAMPLES / example,
@@ -723,7 +741,13 @@ def main(names: list[str]) -> int:
                 if (home / "package.json").is_file():
                     typescript(home, check_types=example not in typed)
                     typed.add(example)
-                print(f"ok   {name}: {check(home)}")
+                detail = check(home)
+                if "workflow_entry" in outcome and all(
+                    (home / file).is_file() for file in outcome["missing_inputs"]
+                ):
+                    inputs = outcome.get("inputs_file")
+                    planned(outcome["workflow_entry"], home, input_files=[inputs] if inputs else [])
+                print(f"ok   {name}: {detail}")
             except Failed as failure:
                 failures += 1
                 print(f"FAIL {name}: {failure}")

@@ -95,7 +95,7 @@ FX is versioned and released on its own ([RELEASING.md](../RELEASING.md)). A Gri
 moves FX forward happens in this order:
 
 1. FX tags `v<version>` and publishes `@grida/fx` and its engine packages. The tag's source
-   archive also serves `init --template` ([service.md](service.md) §2.1): an engine of that
+   archive also serves `init --template` and `add` ([service.md](service.md) §2.1): an engine of that
    version reads its templates from it, so the tag must hold every folder its
    `examples/templates.json` names.
 2. `grida` pins `@grida/fx` to exactly that version, bumps its own version, and publishes.

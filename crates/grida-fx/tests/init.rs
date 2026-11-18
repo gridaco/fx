@@ -1,5 +1,4 @@
-//! `init`: the built-in starter, templates from a checkout, an archive and a loopback URL, and the
-//! refusals that leave a folder untouched (spec/service.md §2, §2.1). Nothing reaches beyond this
+//! Project setup with `init` and `add` (spec/service.md §2). Nothing reaches beyond this
 //! machine: the release archive is stood in for by archives built here, served on loopback.
 #![cfg(unix)]
 
@@ -198,6 +197,19 @@ fn the_listing_is_the_starter_then_the_index() {
             .map(|template| template["name"].as_str().unwrap()),
     );
     assert_eq!(names, expected);
+    assert!(listed["templates"][0].get("workflow_entry").is_none());
+    for (entry, template) in listed["templates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .skip(1)
+        .zip(index)
+    {
+        for field in ["workflow_entry", "inputs_file", "prerequisites"] {
+            assert_eq!(entry.get(field), template["starter"].get(field));
+        }
+        assert!(entry.get("missing_inputs").is_none());
+    }
     refused(
         &execute(root.path(), &["init", "x", "--template", "nope"]),
         "no template \"nope\"; the templates: starter,",
@@ -306,6 +318,7 @@ fn a_template_s_own_gitignore_keeps_its_lines() {
 // --- Archives -----------------------------------------------------------------------------------
 
 /// An entry of an archive built here.
+#[derive(Clone, Copy)]
 enum Item<'a> {
     File(&'a str, &'a [u8]),
     Link(&'a str, &'a str),
@@ -358,6 +371,188 @@ const HELLO: [Item<'static>; 3] = [
         b"fx: workflow/v1\n",
     ),
 ];
+
+const PET: [Item<'static>; 3] = [
+    Item::File(
+        "fx-9.9.9/examples/pet/fx.yaml",
+        include_bytes!("../../../examples/pet/fx.yaml"),
+    ),
+    Item::File(
+        "fx-9.9.9/examples/pet/workflows/pet.yaml",
+        include_bytes!("../../../examples/pet/workflows/pet.yaml"),
+    ),
+    Item::File(
+        "fx-9.9.9/examples/pet/inputs/pebble.yaml",
+        include_bytes!("../../../examples/pet/inputs/pebble.yaml"),
+    ),
+];
+
+fn write_test_archive(root: &Path, items: &[Item]) {
+    std::fs::write(root.join("release.tar.gz"), archive(items)).unwrap();
+}
+
+#[test]
+fn add_installs_pet_as_its_own_project_and_preserves_local_edits() {
+    let root = tempfile::tempdir().unwrap();
+    let parent_config = "fx: project/v1\nroutes:\n  image.generate: imagegen@openai\n";
+    std::fs::write(root.path().join("fx.yaml"), parent_config).unwrap();
+    write_test_archive(root.path(), &PET);
+    let args = [
+        "add",
+        "pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    let result = success(execute(root.path(), &args));
+    conforms("fx-project-init-v1", &result);
+    let project = root.path().join("pet").canonicalize().unwrap();
+    assert_eq!(result["project_root"], json!(project));
+    assert_eq!(
+        result["template"],
+        json!({"name": "pet", "source": "local"})
+    );
+    assert_eq!(result["workflow_entry"], "workflows/pet.yaml");
+    assert_eq!(result["inputs_file"], "inputs/pebble.yaml");
+    assert_eq!(result["missing_inputs"], json!([]));
+    assert_eq!(result["prerequisites"].as_array().unwrap().len(), 2);
+    assert_eq!(result["files_created"], json!(files(&project)));
+    assert!(project.join(".agents/skills/grida-fx/SKILL.md").is_file());
+
+    let inputs = project.join("inputs/pebble.yaml");
+    std::fs::write(&inputs, "id: edited\n").unwrap();
+    // Even with no network, the collision is diagnosed before a template is acquired.
+    refused(
+        &execute(root.path(), &["add", "pet", "--json"]),
+        "already exists",
+    );
+    assert_eq!(std::fs::read_to_string(inputs).unwrap(), "id: edited\n");
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
+        parent_config
+    );
+}
+
+#[test]
+fn add_rejects_a_broken_starter_before_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let args = [
+        "add",
+        "pet",
+        "fox-pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    let cases = [
+        (
+            [
+                Item::File("fx-9.9.9/examples/pet/fx.yaml", b"fx: wrong/v1\n"),
+                PET[1],
+                PET[2],
+            ],
+            "fx.yaml",
+        ),
+        (
+            [
+                PET[0],
+                Item::File(
+                    "fx-9.9.9/examples/pet/workflows/pet.yaml",
+                    b"fx: wrong/v1\n",
+                ),
+                PET[2],
+            ],
+            "workflows/pet.yaml",
+        ),
+        (
+            [PET[0], PET[1], Item::File("fx-9.9.9/README.md", b"")],
+            "starter input preset",
+        ),
+    ];
+    for (items, says) in cases {
+        write_test_archive(root.path(), &items);
+        refused(&execute(root.path(), &args), says);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+    refused(
+        &execute(root.path(), &["add", "starter"]),
+        "no add template",
+    );
+    assert!(!root.path().join("starter").exists());
+    refused(
+        &execute(root.path(), &["add", "pet", "absent/fox"]),
+        "destination parent",
+    );
+    assert!(!root.path().join("absent").exists());
+}
+
+#[test]
+fn add_reports_a_missing_declared_input_without_creating_it() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/fx.yaml",
+                b"fx: project/v1\n",
+            ),
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/workflows/image-recolor.yaml",
+                include_bytes!("../../../examples/image-recolor/workflows/image-recolor.yaml"),
+            ),
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/inputs/example.yaml",
+                include_bytes!("../../../examples/image-recolor/inputs/example.yaml"),
+            ),
+        ],
+    );
+    let result = success(execute(
+        root.path(),
+        &[
+            "add",
+            "image-recolor",
+            "--template-source",
+            "release.tar.gz",
+            "--json",
+        ],
+    ));
+    assert_eq!(result["missing_inputs"], json!(["inputs/source.png"]));
+    assert!(!root.path().join("image-recolor/inputs/source.png").exists());
+}
+
+#[test]
+fn concurrent_add_has_one_complete_winner() {
+    use std::process::Stdio;
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(root.path(), &PET);
+    let mut call = command(root.path());
+    call.args([
+        "add",
+        "pet",
+        "fox-pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    let first = call.spawn().unwrap();
+    let second = call.spawn().unwrap();
+    let first = first.wait_with_output().unwrap();
+    let second = second.wait_with_output().unwrap();
+    let (winner, loser) = if first.status.success() {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    refused(&loser, "already exists");
+    let winner = success(winner);
+    assert_eq!(
+        winner["files_created"],
+        json!(files(&root.path().join("fox-pet")))
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 2);
+}
 
 fn from_archive(root: &Path, bytes: &[u8]) -> Output {
     let path = root.join("release.tar.gz");
@@ -420,6 +615,10 @@ fn an_unsafe_or_wrong_archive_is_refused_and_writes_nothing() {
                 Item::File("fx-9.9.9/examples/hello/fx.yaml", b"fx: project/v1\n"),
                 Item::Raw("fx-9.9.9/examples/hello/../../../evil", b"x"),
             ]),
+            "leaves its folder",
+        ),
+        (
+            archive(&[Item::Raw("/examples/hello/fx.yaml", b"fx: project/v1\n")]),
             "leaves its folder",
         ),
         (archive(&crowded), "more than 1000 files"),

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-project-templates-v1",
-  "title": "Templates init can start a project from",
+  "title": "FX project templates and installable workflow starters",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -9,6 +9,12 @@
     "version",
     "templates"
   ],
+  "$defs": {
+    "project_file": {
+      "type": "string",
+      "pattern": "^(?!(?:.*/)?[.]{1,2}(?:/|$))[^/:\\\\\\u0000-\\u001f\\u007f-\\u009f]+(?:/[^/:\\\\\\u0000-\\u001f\\u007f-\\u009f]+)*$"
+    }
+  },
   "properties": {
     "kind": {
       "const": "fx-project-templates-v1"
@@ -24,6 +30,9 @@
       "items": {
         "type": "object",
         "additionalProperties": true,
+        "dependentRequired": {
+          "workflow_entry": ["prerequisites"]
+        },
         "required": [
           "name",
           "description",
@@ -46,6 +55,19 @@
               "gg",
               "any"
             ]
+          },
+          "workflow_entry": {
+            "$ref": "#/$defs/project_file",
+            "description": "Presence indicates that add accepts this template."
+          },
+          "inputs_file": {
+            "$ref": "#/$defs/project_file",
+            "description": "The starter's bundled input preset, when declared."
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Requirements for using the starter, supplied by its author."
           },
           "source": {
             "enum": [

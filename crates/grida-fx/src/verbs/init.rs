@@ -1,5 +1,5 @@
-//! `init`: start a project from the built-in starter or a template, or validate an existing one
-//! (spec/service.md §2, §2.1).
+//! `init`: start or validate a project. `add`: install an editable template as a new project
+//! (spec/service.md §2).
 //!
 //! A template is an example of the FX repository, listed in `examples/templates.json` (embedded
 //! here) and read from the release's source archive: the only network exchange outside a live
@@ -7,12 +7,14 @@
 //! it carries no credential, honours the environment's proxies, follows no redirect and is never
 //! retried. Nothing a template holds is executed.
 
-use crate::cli::InitArgs;
+use crate::cli::{AddArgs, InitArgs};
 use grida_fx_core::docs::project::Project;
+use grida_fx_core::docs::workflow::load_workflow;
 use grida_fx_core::{ENGINE_VERSION, Error, ErrorKind};
 use grida_fx_providers::transport::http::{HttpConfig, HttpTransport};
 use grida_fx_providers::transport::{Body, HttpRequest, Lane, Method, Transport};
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -76,6 +78,67 @@ pub struct Template {
     pub description: String,
     pub provider: String,
     pub path: String,
+    starter: Option<Starter>,
+}
+
+/// The supported entry point for an independent, editable copy of an example.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Starter {
+    workflow_entry: String,
+    inputs_file: Option<String>,
+    required_inputs: Vec<String>,
+    prerequisites: Vec<String>,
+}
+
+impl Starter {
+    fn parse(entry: &Value) -> Option<Self> {
+        let object = entry.as_object()?;
+        let workflow_entry = starter_path(object.get("workflow_entry")?)?;
+        if !workflow_entry.ends_with(".yaml") && !workflow_entry.ends_with(".yml") {
+            return None;
+        }
+        let inputs_file = match object.get("inputs_file") {
+            Some(value) => Some(starter_path(value)?.to_string()),
+            None => None,
+        };
+        let strings = |key: &str, parse: fn(&Value) -> Option<&str>| match object.get(key) {
+            None => Some(Vec::new()),
+            Some(value) => value
+                .as_array()?
+                .iter()
+                .map(|item| parse(item).map(str::to_string))
+                .collect(),
+        };
+        let required_inputs: Vec<String> = strings("required_inputs", starter_path)?;
+        if required_inputs.iter().collect::<BTreeSet<_>>().len() != required_inputs.len() {
+            return None;
+        }
+        Some(Self {
+            workflow_entry: workflow_entry.to_string(),
+            inputs_file,
+            required_inputs,
+            prerequisites: strings("prerequisites", |value| {
+                value.as_str().filter(|text| !text.trim().is_empty())
+            })?,
+        })
+    }
+
+    fn write_fields(&self, result: &mut Value) {
+        result["workflow_entry"] = json!(self.workflow_entry);
+        result["prerequisites"] = json!(self.prerequisites);
+        if let Some(inputs) = &self.inputs_file {
+            result["inputs_file"] = json!(inputs);
+        }
+    }
+}
+
+fn starter_path(value: &Value) -> Option<&str> {
+    let path = value.as_str()?;
+    if path.contains(['\\', ':']) || path.chars().any(char::is_control) {
+        return None;
+    }
+    relative_parts(path)?;
+    Some(path)
 }
 
 /// The embedded index, in order. A malformed index is a fault of the build, not of the user.
@@ -95,11 +158,21 @@ pub fn templates() -> Result<Vec<Template>, Error> {
                 .map(str::to_string)
                 .ok_or_else(|| Error::internal(format!("a template has no {key}")))
         };
+        let name = text("name")?;
+        let starter = match entry.get("starter") {
+            Some(value) => Some(Starter::parse(value).ok_or_else(|| {
+                Error::internal(format!(
+                    "examples/templates.json: malformed starter for {name:?}"
+                ))
+            })?),
+            None => None,
+        };
         let template = Template {
-            name: text("name")?,
+            name,
             description: text("description")?,
             provider: text("provider")?,
             path: text("path")?,
+            starter,
         };
         let named = !template.name.is_empty()
             && template
@@ -195,6 +268,150 @@ pub fn init(args: &InitArgs) -> Result<u8, Error> {
     report(args, &project, Some((name, source)), &files)
 }
 
+pub fn add(args: &AddArgs) -> Result<u8, Error> {
+    let all = templates()?;
+    let supported = all
+        .iter()
+        .filter_map(|template| template.starter.as_ref().map(|starter| (template, starter)));
+    let (template, starter) = supported
+        .clone()
+        .find(|(template, _)| template.name == args.name)
+        .ok_or_else(|| {
+            let names: Vec<&str> = supported
+                .map(|(template, _)| template.name.as_str())
+                .collect();
+            Error::usage(format!(
+                "no add template {:?}; the templates: {}",
+                args.name,
+                names.join(", ")
+            ))
+        })?;
+    let requested = Path::new(args.destination.as_deref().unwrap_or(&template.name));
+    let name = requested
+        .file_name()
+        .ok_or_else(|| Error::usage("the destination must name a new project folder"))?;
+    let parent = requested
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+        .canonicalize()
+        .map_err(|error| Error::io("the destination parent", &error))?;
+    let target = parent.join(name);
+    // Reject existing paths, including dangling links, before reading or downloading a template.
+    match target.symlink_metadata() {
+        Ok(_) => return Err(destination_exists(requested)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(Error::io("the destination", &error)),
+    }
+    if args.json && target.to_str().is_none() {
+        return Err(Error::usage(
+            "the destination path must be UTF-8 for --json",
+        ));
+    }
+
+    let source = Source::of(args.template_source.as_deref())?;
+    let staging = tempfile::Builder::new()
+        .prefix(".fx-add-")
+        .tempdir_in(&parent)
+        .map_err(|error| Error::io("the destination parent", &error))?;
+    let project = staging.path().join("project");
+    std::fs::create_dir(&project).map_err(|error| Error::io("the template folder", &error))?;
+    let files = prepare_template(&project, template, &source)?;
+    Project::find(&project)?;
+    load_workflow(
+        &project.join(&starter.workflow_entry),
+        &starter.workflow_entry,
+        &starter.workflow_entry,
+    )?;
+    if let Some(inputs) = &starter.inputs_file
+        && !project.join(inputs).is_file()
+    {
+        return Err(refused(format!(
+            "the starter input preset {inputs} is missing"
+        )));
+    }
+    let missing: Vec<&str> = starter
+        .required_inputs
+        .iter()
+        .filter(|path| !project.join(path).is_file())
+        .map(String::as_str)
+        .collect();
+    // The early check is for prompt feedback. The publication itself must also reject a collision.
+    publish_directory(&project, &target).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            destination_exists(requested)
+        } else {
+            Error::io("the destination", &error)
+        }
+    })?;
+    if args.json {
+        let mut result = init_result(&target, Some((&template.name, source.kind())), &files);
+        starter.write_fields(&mut result);
+        result["missing_inputs"] = json!(missing);
+        println!("{result}");
+    } else {
+        println!("Installed {} in {}", template.name, target.display());
+        println!("Workflow entry: {}", starter.workflow_entry);
+        if let Some(inputs) = &starter.inputs_file {
+            println!("Input preset: {inputs}");
+        }
+        for input in missing {
+            println!("Missing input: {input}");
+        }
+        for prerequisite in &starter.prerequisites {
+            println!("Prerequisite: {prerequisite}");
+        }
+        println!("See the project's README.md for setup and usage.");
+    }
+    Ok(0)
+}
+
+fn destination_exists(path: &Path) -> Error {
+    Error::usage(format!(
+        "destination {} already exists; choose a new project folder",
+        path.display()
+    ))
+}
+
+fn publish_directory(source: &Path, target: &Path) -> io::Result<()> {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios"
+    ))]
+    {
+        use rustix::fs::{CWD, RenameFlags, renameat_with};
+        renameat_with(CWD, source, CWD, target, RenameFlags::NOREPLACE).map_err(io::Error::from)
+    }
+    #[cfg(windows)]
+    {
+        std::fs::rename(source, target)
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        windows
+    )))]
+    {
+        let _ = (source, target);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "exclusive directory rename is unavailable",
+        ))
+    }
+}
+
+fn init_result(root: &Path, started: Option<(&str, &str)>, files: &[String]) -> Value {
+    let template = started.map(|(name, source)| json!({"name": name, "source": source}));
+    json!({
+        "kind": "fx-project-init-v1", "created": started.is_some(),
+        "project_root": root, "files_created": files, "template": template,
+    })
+}
+
 /// Prints the outcome (spec/service.md §5): what was written, and what to do next.
 fn report(
     args: &InitArgs,
@@ -204,14 +421,7 @@ fn report(
 ) -> Result<u8, Error> {
     let command = crate::invoker::command();
     if args.json {
-        let template = started.map(|(name, source)| json!({"name": name, "source": source}));
-        println!(
-            "{}",
-            json!({
-                "kind": "fx-project-init-v1", "created": started.is_some(),
-                "project_root": project.root, "files_created": files, "template": template,
-            })
-        );
+        println!("{}", init_result(&project.root, started, files));
         return Ok(0);
     }
     let Some((name, _)) = started else {
@@ -252,10 +462,14 @@ fn list(as_json: bool) -> Result<u8, Error> {
             "provider": "any", "source": "built_in",
         })];
         listed.extend(templates.iter().map(|template| {
-            json!({
+            let mut entry = json!({
                 "name": template.name, "description": template.description,
                 "provider": template.provider, "source": "release",
-            })
+            });
+            if let Some(starter) = &template.starter {
+                starter.write_fields(&mut entry);
+            }
+            entry
         }));
         println!(
             "{}",
@@ -433,8 +647,7 @@ fn loopback(url: &url::Url) -> bool {
     }
 }
 
-/// Unpacks `template` into a hidden folder inside `root`, adds the starter's files it lacks, and
-/// moves it into place. On a failure nothing of it remains.
+/// The init destination may already have a .git directory. Stage inside it, then place the files.
 fn write_template(
     root: &Path,
     template: &Template,
@@ -446,8 +659,23 @@ fn write_template(
         .tempdir_in(root)
         .map_err(|error| Error::io("project directory", &error))?;
     let unpacked = staging.path();
+    let files = prepare_template(unpacked, template, &source)?;
+    for entry in std::fs::read_dir(unpacked).map_err(|error| Error::io("the template", &error))? {
+        let entry = entry.map_err(|error| Error::io("the template", &error))?;
+        std::fs::rename(entry.path(), root.join(entry.file_name()))
+            .map_err(|error| Error::io("project directory", &error))?;
+    }
+    Ok((files, source.kind()))
+}
+
+/// Fill a private staging folder with the selected example and the shared starter overlay.
+fn prepare_template(
+    unpacked: &Path,
+    template: &Template,
+    source: &Source,
+) -> Result<Vec<String>, Error> {
     let mut limits = Limits::default();
-    match &source {
+    match source {
         Source::Directory(directory) => {
             let folder = directory.join(&template.path);
             if !folder.is_dir() {
@@ -474,12 +702,7 @@ fn write_template(
     let mut files = Vec::new();
     list_files(unpacked, Path::new(""), &mut files)?;
     files.sort();
-    for entry in std::fs::read_dir(unpacked).map_err(|error| Error::io("the template", &error))? {
-        let entry = entry.map_err(|error| Error::io("the template", &error))?;
-        std::fs::rename(entry.path(), root.join(entry.file_name()))
-            .map_err(|error| Error::io("project directory", &error))?;
-    }
-    Ok((files, source.kind()))
+    Ok(files)
 }
 
 fn missing(template: &Template) -> Error {
@@ -681,7 +904,7 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
         if inside.is_empty() {
             continue;
         }
-        if inside.iter().any(|part| part == "..") {
+        if first == ".." || inside.iter().any(|part| part == "..") {
             return Err(refused(format!("{} leaves its folder", inside.join("/"))));
         }
         let target = inside
@@ -719,7 +942,7 @@ fn download(url: &str) -> Result<Vec<u8>, Error> {
     if network == grida_fx_providers::live::Network::Off {
         return Err(Error::new(
             ErrorKind::Io,
-            "init --template downloads its template, and the network is off (GRIDA_FX_NETWORK=off)",
+            "the template requires a download, and the network is off (GRIDA_FX_NETWORK=off)",
         ));
     }
     let transport = HttpTransport::new(HttpConfig::default()).map_err(Error::internal)?;
@@ -800,5 +1023,22 @@ mod tests {
         assert_eq!(relative_parts("/examples"), None);
         assert_eq!(relative_parts("examples/../x"), None);
         assert_eq!(relative_parts("examples//x"), None);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn publication_does_not_replace_a_directory_that_appeared_after_preflight() {
+        let root = tempfile::tempdir().unwrap();
+        let staged = root.path().join("staged");
+        let target = root.path().join("target");
+        std::fs::create_dir(&staged).unwrap();
+        std::fs::write(staged.join("fx.yaml"), "fx: project/v1\n").unwrap();
+        std::fs::create_dir(&target).unwrap();
+        assert_eq!(
+            publish_directory(&staged, &target).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert!(staged.join("fx.yaml").is_file());
+        assert!(std::fs::read_dir(&target).unwrap().next().is_none());
     }
 }

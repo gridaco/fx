@@ -15,7 +15,8 @@ discussion is shorthand, not a newly installed executable alias.
 | Command | Responsibility |
 |---|---|
 | `init [DIRECTORY] [--template NAME] [--json]` | Start a new project from the built-in starter or a named template, or validate an existing `fx.yaml`. |
-| `init --list-templates [--json]` | List the templates `init` can start from. |
+| `init --list-templates [--json]` | List the templates `init` can start from and identify the starters accepted by `add`. |
+| `add NAME [DESTINATION] [--json]` | Install an editable copy of a named starter project in a new directory. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
 | `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
@@ -101,7 +102,7 @@ the release archive: a directory (a checkout of the repository, whose
 they occur, so that it yields what the archive would.
 
 Only entries under `<top>/<path>/` are read; the rest of the archive is skipped
-unread. Within the template, `init` refuses, leaving the target untouched:
+unread. Within the template, the installer refuses:
 
 - a path that is absolute or holds `..`, or an entry that is a symbolic or hard
   link, a device or a FIFO;
@@ -109,12 +110,37 @@ unread. Within the template, `init` refuses, leaving the target untouched:
 - entries under more than one top-level folder;
 - a template folder that is missing from the archive, or holds no `fx.yaml`.
 
-The template is unpacked into a hidden temporary folder inside the target. The
-starter's `AGENTS.md`, `.env.example` and `README.md`, and each skill file under
+The template is unpacked into a hidden temporary folder. The starter's
+`AGENTS.md`, `.env.example` and `README.md`, and each skill file under
 `.agents/skills/`, are added where the template has none. A template's own
 `.gitignore` keeps its lines and gains each line of the starter's it lacks;
-without one, it gets the starter's. Only then is the whole moved into place; on a
-failure nothing of it remains. Nothing from a template is executed.
+without one, it gets the starter's. `init` stages inside its target before
+moving the files into place. Nothing from a template is executed.
+
+**Installing with `add`.** An index entry with a `starter` declaration is
+available to `add`. It names a YAML `workflow_entry`, optionally a bundled
+`inputs_file`, any `required_inputs` paths checked for presence, and human-readable
+`prerequisites` for using the starter. Paths are relative to the new project.
+`init --list-templates --json` exposes `workflow_entry`, `inputs_file` when
+declared, and `prerequisites` on eligible entries. The built-in starter remains
+available through `init`.
+
+`add` defaults to `./NAME`. A supplied destination is the exact new project
+directory, relative to the working directory or absolute. Its parent must already
+be a directory. An existing directory, file, or link at the destination is an error (exit 2).
+The parent may contain an FX project. The installed copy owns its own `fx.yaml`
+and project settings. `add` never merges into the parent.
+
+`add` shares the release source, network rules, extraction limits, agent files,
+and hidden test source with `init`. It stages the source beside the destination,
+validates the staged `fx.yaml` and the declared YAML workflow entry, and verifies
+the bundled preset file when one is declared. Missing declared user-supplied inputs
+are reported on success. Prerequisites are declarations. The installer does not
+probe them, launch code, install dependencies, load credentials, or consult
+providers. It publishes the finished directory with one exclusive rename. If
+two installs target the same path, at most one publishes and the other fails.
+Template inputs in the source tree are copied as files. Canonical runs and
+downloads of separately hosted input or output files are outside this operation.
 
 With an explicit project, ordinary `run` registers the initialized record and
 uses a compatible running service if present. It does not implicitly start a
@@ -309,8 +335,12 @@ readers ignore members they do not know.
 `init --json` lists every file it wrote in `files_created`, relative and `/`-separated, and
 names the template it started from (`template`: its `name` and `source`, `built_in`,
 `release` or `local`), or `null` when it started nothing. It includes the local absolute
-`project_root`; this is command output,
-not a portable workflow record. `stop --json` returns the final status document,
+`project_root`; this is local command output rather than a portable workflow
+record. `add --json` uses the same result kind on success, with `created: true`,
+the installed `template`, and the extra members `workflow_entry`, `inputs_file`
+when declared, `missing_inputs` and `prerequisites`. File paths other than
+`project_root` are project-relative and `/`-separated. `missing_inputs` and
+`prerequisites` are arrays and may be empty. `stop --json` returns the final status document,
 whereas its private HTTP endpoint acknowledges `stopping` before shutdown completes.
 
 ## 6. Verification and delivery

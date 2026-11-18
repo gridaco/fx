@@ -35,8 +35,14 @@ ceiling limits spending; it does not guarantee completion or artistic quality. T
 Each example folder stands on its own: copy it anywhere and it still works. Its links to the
 guide and other repository pages are absolute URLs, and everything else it uses is inside it.
 
-`npm install -g grida` installs `grida fx`. Python-node projects also need the Python
-SDK and their own processing libraries. Copy the example and follow its README:
+`npm install -g grida` installs `grida fx`. For examples in the installed template index,
+`grida fx add pet` is a way to copy one into a fresh folder. Discover names with
+`grida fx init --list-templates`. Follow
+[Start from a template](../docs/guide/01-getting-started.md#start-from-a-template) for destinations
+and setup.
+
+Python-node projects also need the Python SDK and their own processing libraries. Follow the
+copied example's README:
 most showcase projects use `uv sync`, with dependencies declared in their own
 `pyproject.toml`. These application helpers are not installed with the FX SDK.
 TypeScript-node projects ([hello-ts](hello-ts/), [item-icons](item-icons/)) use

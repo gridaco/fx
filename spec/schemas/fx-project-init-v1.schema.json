@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-project-init-v1",
-  "title": "Local FX project initialization result",
+  "title": "Local FX project initialization or template installation result",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -10,6 +10,15 @@
     "project_root",
     "files_created"
   ],
+  "dependentRequired": {
+    "workflow_entry": ["template", "missing_inputs", "prerequisites"]
+  },
+  "$defs": {
+    "project_file": {
+      "type": "string",
+      "pattern": "^(?!(?:.*/)?[.]{1,2}(?:/|$))[^/:\\\\\\u0000-\\u001f\\u007f-\\u009f]+(?:/[^/:\\\\\\u0000-\\u001f\\u007f-\\u009f]+)*$"
+    }
+  },
   "properties": {
     "kind": {
       "const": "fx-project-init-v1"
@@ -29,6 +38,25 @@
         "minLength": 1,
         "pattern": "^[^/\\\\]+(/[^/\\\\]+)*$"
       }
+    },
+    "workflow_entry": {
+      "$ref": "#/$defs/project_file",
+      "description": "The installed starter's workflow entry when using add."
+    },
+    "inputs_file": {
+      "$ref": "#/$defs/project_file",
+      "description": "The starter's bundled input preset, when declared."
+    },
+    "missing_inputs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/project_file" },
+      "description": "Declared user-supplied inputs absent from the installed source."
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Requirements for using the starter, supplied by its author."
     },
     "template": {
       "oneOf": [
