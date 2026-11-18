@@ -13,7 +13,7 @@ use crate::transport::{
     Credential, HttpRequest, HttpResponse, Transport, TransportError, TransportErrorKind,
 };
 use grida_fx_core::providers::{Declaration, Declarations};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -48,7 +48,7 @@ impl std::fmt::Debug for Endpoints {
 
 #[derive(Clone)]
 struct ConfiguredBase {
-    variable: String,
+    name: String,
     raw: Secret,
 }
 
@@ -67,7 +67,19 @@ impl Endpoints {
                 .iter()
                 .map(|d| (d.name.clone(), d.base_url.default.clone()))
                 .collect(),
-            configured: BTreeMap::new(),
+            configured: declarations
+                .declared()
+                .iter()
+                .map(|d| {
+                    (
+                        d.name.clone(),
+                        ConfiguredBase {
+                            name: format!("providers.{}.base_url.default", d.name),
+                            raw: Secret::new(&d.base_url.default),
+                        },
+                    )
+                })
+                .collect(),
             fal_queue: FAL_QUEUE.into(),
         }
     }
@@ -76,8 +88,9 @@ impl Endpoints {
     /// environment gives normalized ([`crate::wire::normalize_base_url`]) and put in its place, in
     /// the declarations' order. A value that does not normalize is refused with
     /// `<VARIABLE>: <sentence>`; a value containing any key's value is refused with
-    /// `<VARIABLE> holds a credential` (never showing either value). The first refusal is the
-    /// error.
+    /// `<VARIABLE> holds a credential` (never showing either value). An effective project
+    /// default containing a key is refused with `providers.<name>.base_url.default holds a
+    /// credential`. The first refusal is the error.
     pub fn from_environment(environment: &Environment, keys: &Keys) -> Result<Endpoints, String> {
         let (endpoints, mut refused) = Endpoints::each_from_environment(environment, keys);
         if refused.is_empty() {
@@ -97,39 +110,40 @@ impl Endpoints {
         let mut endpoints = Endpoints::of(declarations);
         let mut refused = Vec::new();
         let secrets = keys.secrets();
-        for declaration in declarations.iter() {
-            let Some(variable) = &declaration.base_url.variable else {
-                continue;
-            };
-            let Some(value) = environment.get(variable) else {
-                continue;
-            };
-            if secrets
+        let contains_credential = |url: &str| {
+            secrets
                 .iter()
-                .any(|secret| !secret.expose().is_empty() && value.contains(secret.expose()))
+                .any(|secret| !secret.expose().is_empty() && url.contains(secret.expose()))
+        };
+        for declaration in declarations.iter() {
+            if let Some(variable) = &declaration.base_url.variable
+                && let Some(value) = environment.get(variable)
             {
-                refused.push(format!("{variable} holds a credential"));
-                continue;
-            }
-            match crate::wire::normalize_base_url(value, &declaration.label) {
-                Ok(base) => {
-                    if secrets
-                        .iter()
-                        .any(|secret| !secret.expose().is_empty() && base.contains(secret.expose()))
-                    {
-                        refused.push(format!("{variable} holds a credential"));
-                        continue;
+                let holds_credential = || format!("{variable} holds a credential");
+                if contains_credential(value) {
+                    refused.push(holds_credential());
+                } else {
+                    match crate::wire::normalize_base_url(value, &declaration.label) {
+                        Ok(base) if contains_credential(&base) => refused.push(holds_credential()),
+                        Ok(base) => {
+                            endpoints.bases.insert(declaration.name.clone(), base);
+                            endpoints.configured.insert(
+                                declaration.name.clone(),
+                                ConfiguredBase {
+                                    name: variable.clone(),
+                                    raw: Secret::new(value),
+                                },
+                            );
+                            continue;
+                        }
+                        Err(sentence) => refused.push(format!("{variable}: {sentence}")),
                     }
-                    endpoints.bases.insert(declaration.name.clone(), base);
-                    endpoints.configured.insert(
-                        declaration.name.clone(),
-                        ConfiguredBase {
-                            variable: variable.clone(),
-                            raw: Secret::new(value),
-                        },
-                    );
                 }
-                Err(sentence) => refused.push(format!("{variable}: {sentence}")),
+            }
+            if let Some(default) = endpoints.configured.get(&declaration.name)
+                && contains_credential(default.raw.expose())
+            {
+                refused.push(format!("{} holds a credential", default.name));
             }
         }
         (endpoints, refused)
@@ -164,6 +178,7 @@ pub struct Setup {
     /// [`crate::live::live_setup`] looks for one.
     pub grok: Result<std::path::PathBuf, String>,
     pub(crate) stored: Option<Arc<StoredCredentials>>,
+    pub(crate) openrouter_without_key: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Setup {
@@ -179,7 +194,18 @@ impl Setup {
             codex: Err(crate::codex::NOT_INSTALLED.into()),
             grok: Err(crate::grok::NOT_INSTALLED.into()),
             stored: None,
+            openrouter_without_key: BTreeMap::new(),
         }
+    }
+
+    /// OpenRouter image bindings whose metadata was resolved without a provider key, grouped by
+    /// capability and model.
+    pub fn with_openrouter_without_key(
+        mut self,
+        bindings: BTreeMap<String, BTreeSet<String>>,
+    ) -> Setup {
+        self.openrouter_without_key = bindings;
+        self
     }
 
     /// Enable deferred fallback for eligible built-in providers in a live invocation.
@@ -206,7 +232,10 @@ impl Setup {
 
     /// A redactor over every key of the invocation.
     pub fn redactor(&self) -> Redactor {
-        Redactor::new(self.keys.secrets()).with_stored(self.stored.clone())
+        Redactor::new(self.keys.secrets()).with_stored(
+            self.keys.stored_secrets().cloned().collect(),
+            self.stored.clone(),
+        )
     }
 
     /// The declarations of the invocation: FX's, then the planning project's.
@@ -339,15 +368,13 @@ impl Client {
         self.checked_base().map(|_| ())
     }
 
-    /// The base URL, or a refusal if a key loaded since setup matches its configured value.
+    /// The base URL, or a refusal if a known key matches its configured value.
     pub fn checked_base(&self) -> Result<&str, String> {
         if let Some(configured) = &self.configured
-            && (self
-                .redactor
-                .contains_stored_secret(configured.raw.expose())
-                || self.redactor.contains_stored_secret(&self.base))
+            && (self.redactor.contains_secret(configured.raw.expose())
+                || self.redactor.contains_secret(&self.base))
         {
-            return Err(format!("{} holds a credential", configured.variable));
+            return Err(format!("{} holds a credential", configured.name));
         }
         Ok(&self.base)
     }
@@ -472,6 +499,59 @@ mod tests {
                 .unwrap()
                 .header_value(),
             "Bearer test-explicit-key"
+        );
+    }
+
+    #[test]
+    fn a_project_default_base_refuses_explicit_and_resolved_store_keys() {
+        use crate::testing::block_on;
+        use crate::transport::{Lane, Method};
+        use grida_fx_core::providers::BaseUrl;
+
+        let declarations = Declarations::with(&[Declaration {
+            name: "acme".into(),
+            label: "acme".into(),
+            credential: None,
+            base_url: BaseUrl {
+                variable: Some("ACME_BASE_URL".into()),
+                default: "https://api.acme.test/test-gg-key".into(),
+            },
+            download_hosts: Vec::new(),
+            family: Some("openai-compatible".into()),
+            adapter: None,
+        }]);
+        let acme = declarations.get("acme").unwrap();
+        let environment = |pairs: &[(&str, &str)]| Environment::declared(pairs, &declarations);
+        let empty = environment(&[]);
+        let mut saved = Keys::from_environment(&empty);
+        saved.insert_stored(KeyName::GridaGateway, Secret::new("test-gg-key"));
+        let explicit = Keys::from_environment(&environment(&[("GG_API_KEY", "test-gg-key")]));
+        let safe = environment(&[("ACME_BASE_URL", "https://api.acme.test/v1")]);
+        let reason = "providers.acme.base_url.default holds a credential";
+        for keys in [explicit, saved] {
+            assert_eq!(
+                Endpoints::from_environment(&empty, &keys).unwrap_err(),
+                reason
+            );
+            assert_eq!(
+                Endpoints::from_environment(&safe, &keys)
+                    .unwrap()
+                    .base("acme"),
+                Some("https://api.acme.test/v1")
+            );
+            let client = setup(keys).declared_client(acme);
+            let request = HttpRequest::new(Method::Post, client.url("chat"), Lane::Provider);
+            let refusal = block_on(client.send(request)).unwrap_err();
+            assert_eq!(refusal.kind, TransportErrorKind::Refused);
+            assert_eq!(refusal.reason, reason);
+        }
+        let unavailable = setup(Keys::from_environment(&empty)).with_stored_credentials(
+            Err("test store unavailable".into()),
+            &[KeyName::GridaGateway],
+        );
+        assert_eq!(
+            block_on(unavailable.declared_client(acme).prepare()),
+            Ok(())
         );
     }
 

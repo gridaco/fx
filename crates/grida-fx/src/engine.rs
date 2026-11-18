@@ -79,6 +79,7 @@ use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
 use grida_fx_runtime::stand_in::StandIn;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -214,17 +215,20 @@ pub fn adapters_for(
         environment,
         keys,
         endpoints,
+        openrouter_without_key,
     } = match settings {
         Some(settings) => settings,
         None => provider_variables(&planner.project, env)?,
     };
     let network = Network::from_env(env);
-    let mut setup = live::live_setup(keys, endpoints, network).map_err(|reason| {
-        Error::new(
-            ErrorKind::Internal,
-            format!("cannot start the provider transport: {reason}"),
-        )
-    })?;
+    let mut setup = live::live_setup(keys, endpoints, network)
+        .map_err(|reason| {
+            Error::new(
+                ErrorKind::Internal,
+                format!("cannot start the provider transport: {reason}"),
+            )
+        })?
+        .with_openrouter_without_key(openrouter_without_key);
     if network == Network::On {
         let eligible: Vec<_> = KeyName::STORED
             .into_iter()
@@ -252,7 +256,8 @@ pub fn adapters_for(
             )
         });
         let spec = spec.map(|spec| spec.with_environment(withheld, given));
-        Arc::new(ProcessLaunch::new(spec)) as Arc<dyn Launch>
+        Arc::new(ProcessLaunch::new(spec).with_credential_guard(setup.redactor()))
+            as Arc<dyn Launch>
     });
     Ok(adapters)
 }
@@ -284,6 +289,7 @@ pub(crate) struct ProviderSettings {
     pub environment: Environment,
     pub keys: Keys,
     pub endpoints: Endpoints,
+    pub openrouter_without_key: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// The variables, keys and endpoints of the planning project `project` (spec/providers.md §1):
@@ -303,6 +309,7 @@ pub fn provider_variables(
         environment,
         keys,
         endpoints,
+        openrouter_without_key: BTreeMap::new(),
     })
 }
 
@@ -534,6 +541,7 @@ mod tests {
             environment,
             mut keys,
             endpoints,
+            ..
         } = provider_variables(&planner.project, &env).unwrap();
         let lock = providers.join("profile.lock.sqlite");
         stored_keys(

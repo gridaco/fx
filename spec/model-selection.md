@@ -90,6 +90,9 @@ provider settings and credentials it diagnosed for that invocation. A run that l
 binding reuses the resolved provider settings, including any saved key that scoped the lookup,
 for execution in the same invocation. Provider settings stay in memory. Only model facts
 are saved with a prepared plan or run for use in another invocation.
+An OpenRouter binding prepared without a key can replay a cached paid result. An uncached
+call on that binding requires a new plan with a key. Other bindings keep their normal
+credential lookup.
 
 Authored route tables remain authoritative. Discovery MUST NOT replace an admitted binding,
 repair an ambiguous binding, or weaken a route's authored feature, input, contract or price

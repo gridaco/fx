@@ -121,11 +121,21 @@ pub struct Launched {
 /// `Err` is why there is none.
 pub struct ProcessLaunch {
     spec: Result<HostSpec, String>,
+    credential_guard: Option<Redactor>,
 }
 
 impl ProcessLaunch {
     pub fn new(spec: Result<HostSpec, String>) -> ProcessLaunch {
-        ProcessLaunch { spec }
+        ProcessLaunch {
+            spec,
+            credential_guard: None,
+        }
+    }
+
+    /// Refuse to pass already-resolved Grida store keys to the host through its environment.
+    pub fn with_credential_guard(mut self, redactor: Redactor) -> ProcessLaunch {
+        self.credential_guard = Some(redactor);
+        self
     }
 }
 
@@ -137,7 +147,13 @@ impl Launch for ProcessLaunch {
     ) -> BoxFuture<'_, Result<Launched, String>> {
         Box::pin(async move {
             let spec = self.spec.as_ref().map_err(String::clone)?;
-            let process = HostProcess::start_accountable(spec, incoming, cleanup_verified).await?;
+            let process = HostProcess::start_accountable(
+                spec,
+                incoming,
+                cleanup_verified,
+                self.credential_guard.as_ref(),
+            )
+            .await?;
             Ok(Launched {
                 connection: process.connection().clone(),
                 process: Some(process),

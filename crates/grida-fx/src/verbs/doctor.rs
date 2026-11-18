@@ -119,6 +119,7 @@ use grida_fx_protocol::{CallKind, DescribeParams};
 use grida_fx_providers::installed::Version;
 use grida_fx_providers::keys::{Environment, KeyName, KeySource};
 use grida_fx_providers::live::{self, Installed, Network, Servable};
+use grida_fx_providers::redact::Redactor;
 use grida_fx_providers::{Adapters, Endpoints, Keys, RouteRef};
 use grida_fx_runtime::adapter_host::{self, Launch, NoLaunch};
 use grida_fx_runtime::host::locate::{
@@ -655,6 +656,7 @@ fn key_lines(keys: &Keys) -> Vec<String> {
 /// One `provider` line per declaration of the project, in its order (module doc, "Providers"):
 /// its base URL's host and where its key came from, never the key.
 fn provider_lines(keys: &Keys, endpoints: &Endpoints) -> Vec<String> {
+    let redactor = Redactor::new(keys.secrets());
     keys.declarations()
         .declared()
         .iter()
@@ -667,7 +669,8 @@ fn provider_lines(keys: &Keys, endpoints: &Endpoints) -> Vec<String> {
                 Some(credential) => format!("{} {}", credential.variable, key_state(keys, name)),
                 None => "needs no key".to_string(),
             };
-            labelled("provider", &format!("{name} {} {key}", shown_host(base)))
+            let host = redactor.reason(&shown_host(base));
+            labelled("provider", &format!("{name} {host} {key}"))
         })
         .collect()
 }
@@ -1073,6 +1076,29 @@ mod tests {
         // The built-in `key` lines are unchanged by a declaration.
         assert_eq!(key_lines(&keys).len(), 6);
         assert!(provider_lines(&Keys::none(), &Endpoints::default()).is_empty());
+
+        let value = "fx-test-store-label";
+        let declarations = Declarations::with(&[declare(
+            "acme",
+            None,
+            &format!("https://{value}.acme.test/v1"),
+        )]);
+        let environment = Environment::declared(&[], &declarations);
+        let mut keys = Keys::from_environment(&environment);
+        keys.insert_stored(
+            KeyName::GridaGateway,
+            grida_fx_providers::keys::Secret::new(value),
+        );
+        let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
+        assert_eq!(
+            refusals,
+            ["providers.acme.base_url.default holds a credential"]
+        );
+        assert!(
+            provider_lines(&keys, &endpoints)
+                .iter()
+                .all(|line| !line.contains(value))
+        );
     }
 
     #[test]

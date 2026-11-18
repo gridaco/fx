@@ -15,7 +15,7 @@ use crate::adapter::{
 };
 use crate::clock::SystemClock;
 use crate::installed::{Program, Version};
-use crate::keys::Keys;
+use crate::keys::{KeyName, Keys};
 use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
@@ -129,8 +129,17 @@ struct Redacting<A: ?Sized> {
 
 impl<A: ?Sized> Redacting<A> {
     fn preparation(&self, call: &CallRequest) -> Option<BoxFuture<'_, Result<(), String>>> {
-        self.setup.stored.as_ref()?;
         let route = &call.route;
+        if route.provider == "openrouter"
+            && self
+                .setup
+                .openrouter_without_key
+                .get(&route.capability)
+                .is_some_and(|models| models.contains(&route.model))
+        {
+            return Some(Box::pin(async { Err(KeyName::OpenRouter.missing()) }));
+        }
+        self.setup.stored.as_ref()?;
         // Video is the only fal adapter that sends through the queue client.
         let client = if route.provider == "fal" && route.capability == "video.generate" {
             self.setup.fal_queue_client()
@@ -374,6 +383,37 @@ mod tests {
             setup.endpoints.fal_queue = base.into();
             assert_eq!(result(&setup), None);
         }
+    }
+
+    #[test]
+    fn keyless_openrouter_bindings_refuse_paid_calls_without_reopening_the_store() {
+        use crate::testing::{CallBuilder, block_on};
+
+        let setup = setup(Keys::none())
+            .with_stored_credentials(Err("cannot read test store".into()), &[KeyName::OpenRouter])
+            .with_openrouter_without_key(
+                [("image.generate".into(), ["acme/img-a".into()].into())].into(),
+            );
+        let adapters = adapters(&setup);
+        let prepare = |capability, route| {
+            let call = CallBuilder::new(capability, route).build();
+            let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
+                panic!("no request adapter");
+            };
+            block_on(adapter.prepare(&call).unwrap())
+        };
+        assert_eq!(
+            prepare("image.generate", "acme/img-a@openrouter"),
+            Err(KeyName::OpenRouter.missing())
+        );
+        assert_eq!(
+            prepare("image.generate", "acme/img-b@openrouter"),
+            Err("cannot read test store".into())
+        );
+        assert_eq!(
+            prepare("image.edit", "acme/img-a@openrouter"),
+            Err("cannot read test store".into())
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]

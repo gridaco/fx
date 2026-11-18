@@ -98,7 +98,8 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
     before polling an existing submission. A found key is retained for that provider during the
     invocation. A missing entry or refused lookup can be checked again by later calls.
     Offline preparation and execution and stand-in calls skip the store. Online OpenRouter
-    discovery may use its stored key for a valid, missing selected binding
+    discovery may use its stored key for a valid, missing selected binding. A binding prepared
+    without a key can replay cached paid results and requires a new plan for an uncached call
     ([model-selection.md](model-selection.md) §3).
   - A missing home, store or entry supplies no key. Invalid, inaccessible, unsafe,
     unsupported-version, or migration-pending storage, or a lock that cannot be acquired,
@@ -106,7 +107,17 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
     the protocol's shared lock and orphan-file housekeeping. Grida owns credential records,
     permissions and migration state. Stored secrets stay in the engine and are never injected
     into child process environments or written to portable records.
-- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host, no userinfo, no query, no fragment and a valid port, and `http` is allowed only for a loopback host. The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`, `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`, `<Provider>` being `Grida Gateway`, `OpenAI`, `OpenRouter`, `fal` or `ElevenLabs` for a built-in, and the name for a declared provider. FX checks each configured base URL against the invocation's explicit keys and saved keys it has resolved before using the URL. A match is refused as `<VARIABLE> holds a credential`. A custom destination with an explicit key does not itself trigger a Grida store lookup. A base URL is configuration: it is not part of a route's fingerprint.
+- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host,
+  no userinfo, no query, no fragment and a valid port. `http` is allowed only for a loopback host.
+  The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`,
+  `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`,
+  `<Provider>` being `Grida Gateway`, `OpenAI`, `OpenRouter`, `fal` or `ElevenLabs` for a built-in,
+  and the name for a declared provider. Before use, FX refuses a configured base URL if any part
+  of it, including its host or path, contains the value of an explicit key or a saved key already
+  resolved in this invocation. The refusal is `<VARIABLE> holds a credential` for a variable
+  override or `providers.<name>.base_url.default holds a credential` for a project default.
+  A custom destination with an explicit key does not itself trigger a Grida store lookup. A base
+  URL is connection configuration and stays outside route fingerprints.
 - **A built-in adapter downloads a result at the URL its provider returned.** FX owns credential isolation, bounded downloads and output checks; the provider owns the choice of download host. FX's fal image and background-removal adapters and its Tripo adapters accept `https` URLs with a DNS hostname rather than an IP literal, no userinfo, no port but 443 and no fragment, without a provider-host catalog ([fal](../crates/grida-fx-providers/src/fal/README.md), [Tripo](../crates/grida-fx-providers/src/tripo/README.md)). Their empty `download_hosts` entries do not deny these built-in downloads. GG's adapters and fal's video adapter keep their existing acceptance of any `https` URL ([GG](../crates/grida-fx-providers/src/gg/README.md)). Every download is credential-free, refuses redirects and has its adapter's response cap ([adapters.md](adapters.md) §2, §7).
 - **A project adapter's `fetch` downloads only from its declaration's `download_hosts`.** The URL is `https`, its host a name (not an address) that matches an entry or lies below a `*.` entry's domain, compared in lower case without a trailing `.`, with no userinfo, no port but 443 and no fragment. An empty list denies every download through `fetch` ([adapters.md](adapters.md) §9).
 - **Codex, Grok Build, the background service and the browser opener never inherit a declared variable.** Codex and Grok Build (§2), the background service `grida-fx start --background` starts, and the program that opens a browser start without every declared variable of the project the command works in: the planning project, the project `start` serves, or for `inspect` the project of the directory FX runs in. `view --run` and `view --plan` read no project, so their browser opener takes the declarations of the project of the directory FX runs in, or the built-in ones alone when that `fx.yaml` cannot be read. A node host ([protocol.md](protocol.md) §1), and so every program user code starts, inherits FX's environment as before: a declared variable set there reaches it, and one read only from `.env` does not. An adapter host ([adapters.md](adapters.md) §9) starts without every declared variable but its own declaration's, which it gets as FX read them, from the environment or `.env`.

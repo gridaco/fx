@@ -17,6 +17,7 @@ use grida_fx_providers::transport::http::HttpTransport;
 use grida_fx_providers::transport::{Offline, Transport};
 use grida_fx_providers::{Endpoints, Keys};
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -296,6 +297,7 @@ fn prepare_with_transport(
     // Construct a metadata transport lazily: ordinary authored/shipped selections stay local.
     let mut setup = None;
     let mut environment = None;
+    let mut openrouter_without_key = BTreeMap::<_, BTreeSet<_>>::new();
     let mut store = None;
     let mut runtime = None;
     let mut online = false;
@@ -373,6 +375,7 @@ fn prepare_with_transport(
                             environment: loaded,
                             keys,
                             endpoints,
+                            ..
                         } = crate::engine::provider_variables(project, env)?;
                         let network = Network::from_env(env);
                         if allow_stored_keys && matches!(network, Network::On) {
@@ -480,6 +483,18 @@ fn prepare_with_transport(
         };
         match result {
             Ok(entry) => {
+                if provider == "openrouter"
+                    && online
+                    && environment.is_some()
+                    && setup
+                        .as_ref()
+                        .is_some_and(|settings| settings.keys.get(KeyName::OpenRouter).is_none())
+                {
+                    openrouter_without_key
+                        .entry(capability.clone())
+                        .or_default()
+                        .insert(model);
+                }
                 let doc = json!({"fx":"routes/v1","routes":[entry.clone()]});
                 let table = RouteTable::from_document(&doc, "resolved model facts")?;
                 catalog.overlay(table);
@@ -498,6 +513,7 @@ fn prepare_with_transport(
             environment,
             keys: setup.keys,
             endpoints: setup.endpoints,
+            openrouter_without_key,
         });
     Ok(PreparedModels {
         facts: json!({"fx":"routes/v1","routes":resolved}),
@@ -902,6 +918,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(prepared.facts["routes"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            prepared.settings.unwrap().openrouter_without_key["image.generate"],
+            ["acme/img-a".into(), "acme/img-b".into()]
+                .into_iter()
+                .collect()
+        );
         assert_eq!(reads.get(), 1);
         assert!(!missing_home.exists());
     }

@@ -71,6 +71,7 @@ use grida_fx_protocol::{
     EngineInfo, ErrorCode, ErrorData, InitializeParams, InitializeResult, PROTOCOL, method,
 };
 use grida_fx_providers::keys::Secret;
+use grida_fx_providers::redact::Redactor;
 use serde_json::Value;
 use std::ffi::OsString;
 use std::future::Future;
@@ -248,7 +249,7 @@ impl HostProcess {
         cwd: &Path,
         incoming: Arc<dyn Incoming>,
     ) -> Result<HostProcess, String> {
-        HostProcess::start_at(spec, cwd, incoming, GRACE, None, None).await
+        HostProcess::start_at(spec, cwd, incoming, GRACE, None, None, None).await
     }
 
     /// [`HostProcess::start`], giving a host that fails to initialize `grace` to exit.
@@ -257,7 +258,7 @@ impl HostProcess {
         incoming: Arc<dyn Incoming>,
         grace: Duration,
     ) -> Result<HostProcess, String> {
-        HostProcess::start_at(spec, &spec.project_root, incoming, grace, None, None).await
+        HostProcess::start_at(spec, &spec.project_root, incoming, grace, None, None, None).await
     }
 
     /// [`HostProcess::start`] for an owner that must certify local cleanup: a host dropped
@@ -267,6 +268,7 @@ impl HostProcess {
         spec: &HostSpec,
         incoming: Arc<dyn Incoming>,
         cleanup_verified: Arc<AtomicBool>,
+        credential_guard: Option<&Redactor>,
     ) -> Result<HostProcess, String> {
         HostProcess::start_at(
             spec,
@@ -275,6 +277,7 @@ impl HostProcess {
             GRACE,
             None,
             Some(cleanup_verified),
+            credential_guard,
         )
         .await
     }
@@ -294,6 +297,7 @@ impl HostProcess {
             grace,
             Some(cancel),
             Some(cleanup_verified),
+            None,
         )
         .await
     }
@@ -306,6 +310,7 @@ impl HostProcess {
         grace: Duration,
         cancel: Option<&crate::engine::Cancel>,
         cleanup_verified: Option<Arc<AtomicBool>>,
+        credential_guard: Option<&Redactor>,
     ) -> Result<HostProcess, String> {
         let shown = &spec.label;
         let title = spec.language.title();
@@ -335,7 +340,18 @@ impl HostProcess {
                 super::read_reason(&e)
             )
         })?;
+        let check_host_environment = || {
+            if let Some(guard) = credential_guard {
+                for (name, value) in &spec.given {
+                    if guard.contains_stored_secret(value.expose()) {
+                        return Err(format!("{name} holds a credential"));
+                    }
+                }
+            }
+            Ok(())
+        };
         if spec.check_version {
+            check_host_environment()?;
             let probed = match cancel {
                 Some(cancel) => tokio::select! {
                     biased;
@@ -376,6 +392,7 @@ impl HostProcess {
             .kill_on_drop(true);
         #[cfg(unix)]
         command.process_group(0);
+        check_host_environment()?;
         let mut child = command.spawn().map_err(|e| {
             format!(
                 "cannot start the {title} node host with {shown}: {}; {}",

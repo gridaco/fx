@@ -420,6 +420,12 @@ impl Keys {
             .collect()
     }
 
+    pub(crate) fn stored_secrets(&self) -> impl Iterator<Item = &Secret> {
+        self.found
+            .iter()
+            .filter_map(|(_, secret, source)| (*source == KeySource::GridaStore).then_some(secret))
+    }
+
     /// The declarations the keys were read for.
     pub fn declarations(&self) -> &Declarations {
         &self.declarations

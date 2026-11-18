@@ -40,6 +40,7 @@ pub const REDACTED: &str = "[redacted]";
 #[derive(Clone, Default)]
 pub struct Redactor {
     secrets: Vec<Secret>,
+    resolved_stored: Vec<Secret>,
     stored: Option<Arc<StoredCredentials>>,
 }
 
@@ -58,11 +59,17 @@ impl Redactor {
         secrets.sort_by_key(|s| std::cmp::Reverse(s.expose().len()));
         Redactor {
             secrets,
+            resolved_stored: Vec::new(),
             stored: None,
         }
     }
 
-    pub(crate) fn with_stored(mut self, stored: Option<Arc<StoredCredentials>>) -> Redactor {
+    pub(crate) fn with_stored(
+        mut self,
+        resolved: Vec<Secret>,
+        stored: Option<Arc<StoredCredentials>>,
+    ) -> Redactor {
+        self.resolved_stored = resolved;
         self.stored = stored;
         self
     }
@@ -71,7 +78,7 @@ impl Redactor {
     pub fn with(&self, extra: &str) -> Redactor {
         let mut secrets = self.secrets.clone();
         secrets.push(Secret::new(extra));
-        Redactor::new(secrets).with_stored(self.stored.clone())
+        Redactor::new(secrets).with_stored(self.resolved_stored.clone(), self.stored.clone())
     }
 
     /// Steps 1 and 2 of the module doc.
@@ -104,11 +111,19 @@ impl Redactor {
         out
     }
 
-    pub(crate) fn contains_stored_secret(&self, text: &str) -> bool {
-        self.stored
+    /// Whether `text` contains a Grida store key already resolved in this invocation.
+    pub fn contains_stored_secret(&self, text: &str) -> bool {
+        self.resolved_stored
             .iter()
-            .flat_map(|stored| stored.secrets())
+            .chain(self.stored.iter().flat_map(|stored| stored.secrets()))
+            .any(|secret| !secret.expose().is_empty() && text.contains(secret.expose()))
+    }
+
+    pub(crate) fn contains_secret(&self, text: &str) -> bool {
+        self.secrets
+            .iter()
             .any(|secret| text.contains(secret.expose()))
+            || self.contains_stored_secret(text)
     }
 
     /// Steps 1 to 3: the sentence an adapter may report.

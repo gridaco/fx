@@ -928,7 +928,9 @@ async fn a_send_without_its_key_is_refused_before_the_host_is_asked() {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[tokio::test]
 async fn a_project_base_holding_a_loaded_key_is_refused_before_the_host_starts() {
-    use grida_fx_providers::{Endpoints, KeyName, live, testing::CallBuilder};
+    use grida_fx_providers::{Endpoints, KeyName, Secret, live, testing::CallBuilder};
+    use grida_fx_runtime::adapter_host::ProcessLaunch;
+    use grida_fx_runtime::host::{connection::NoIncoming, process::HostSpec};
     use std::fs::{DirBuilder, OpenOptions};
     use std::io::Write;
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -968,12 +970,23 @@ async fn a_project_base_holding_a_loaded_key_is_refused_before_the_host_starts()
         Ok(home.path().canonicalize().unwrap()),
         &[KeyName::GridaGateway],
     );
+    let spec = HostSpec::python(root.join("missing"), "missing", &root, Vec::new())
+        .unchecked()
+        .with_environment(
+            Vec::new(),
+            vec![("ACME_API_KEY".into(), Secret::new("test-gg-key"))],
+        );
+    let process = ProcessLaunch::new(Ok(spec)).with_credential_guard(setup.redactor());
     let mut adapters = live::adapters(&setup);
     let gg = CallBuilder::new("image.generate", "img-a@gg").build();
     let Some(Adapter::Request(adapter)) = adapters.serving(&gg.route) else {
         panic!("a GG image adapter");
     };
     adapter.prepare(&gg).unwrap().await.unwrap();
+    let launch = process
+        .launch(Arc::new(NoIncoming), Arc::new(AtomicBool::new(true)))
+        .await;
+    assert!(matches!(launch, Err(reason) if reason == "ACME_API_KEY holds a credential"));
 
     adapter_host::register(&mut adapters, &setup, |_, _| {
         Arc::new(adapter_host::NoLaunch("unexpected host launch".into()))
