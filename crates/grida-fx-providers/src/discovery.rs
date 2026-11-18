@@ -383,9 +383,10 @@ fn accepts(bundle: &Value, schema: &Value, value: Value) -> bool {
 }
 
 fn openrouter_id(model: &str) -> Result<(&str, &str), String> {
+    let segment = |value: &str| !matches!(value, "" | "." | "..");
     model
         .split_once('/')
-        .filter(|(author, slug)| !author.is_empty() && !slug.is_empty())
+        .filter(|(author, slug)| segment(author) && segment(slug) && !slug.contains('/'))
         .ok_or_else(|| invalid("openrouter"))
 }
 

@@ -373,6 +373,8 @@ mod native {
                 Err(rusqlite::Error::SqliteFailure(error, _))
                     if error.code == ErrorCode::DatabaseBusy =>
                 {
+                    #[cfg(test)]
+                    tests::signal_sqlite_busy();
                     wait(deadline)?;
                 }
                 Err(error) => return Err(storage(error)),
@@ -565,10 +567,23 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use std::cell::Cell;
         use std::io::{BufRead, BufReader, Write};
         use std::process::{Child, Command, Stdio};
+        use std::sync::mpsc;
 
         const HOLDER_HOME: &str = "GRIDA_FX_TEST_STORE_HOLDER";
+        const HOLDER_READY: &str = "FX_STORE_LOCKED";
+
+        thread_local! {
+            static SQLITE_BUSY: Cell<Option<mpsc::Sender<()>>> = const { Cell::new(None) };
+        }
+
+        pub(super) fn signal_sqlite_busy() {
+            if let Some(signal) = SQLITE_BUSY.take() {
+                let _ = signal.send(());
+            }
+        }
 
         #[test]
         fn lock_holder_child() {
@@ -579,7 +594,7 @@ mod native {
             let connection =
                 Connection::open_with_flags(lock, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
             connection.execute_batch("BEGIN IMMEDIATE").unwrap();
-            println!("FX_STORE_LOCKED");
+            println!("{HOLDER_READY}");
             std::io::stdout().flush().unwrap();
             let mut line = String::new();
             std::io::stdin().read_line(&mut line).unwrap();
@@ -595,27 +610,37 @@ mod native {
                         "--exact",
                         "grida_store::native::tests::lock_holder_child",
                         "--nocapture",
+                        "--format",
+                        "terse",
+                        "--test-threads=1",
                     ])
                     .env_clear()
                     .env(HOLDER_HOME, home)
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
+                    .stderr(Stdio::inherit())
                     .spawn()
                     .unwrap();
                 let mut holder = Self(child);
-                let mut output = BufReader::new(holder.0.stdout.take().unwrap());
-                let mut line = String::new();
-                loop {
-                    assert!(
-                        output.read_line(&mut line).unwrap() > 0,
-                        "holder exited before acquiring lock"
-                    );
-                    if line.trim() == "FX_STORE_LOCKED" {
-                        return holder;
+                let output = BufReader::new(holder.0.stdout.take().unwrap());
+                let (signal, ready) = mpsc::channel();
+                let reader = std::thread::spawn(move || {
+                    if output
+                        .lines()
+                        .map_while(Result::ok)
+                        .any(|line| line.trim() == HOLDER_READY)
+                    {
+                        let _ = signal.send(());
                     }
-                    line.clear();
+                });
+                if let Err(error) = ready.recv_timeout(Duration::from_secs(5)) {
+                    // Close the child's pipe before joining the output reader.
+                    drop(holder);
+                    reader.join().unwrap();
+                    panic!("holder did not signal lock acquisition: {error}");
                 }
+                reader.join().unwrap();
+                holder
             }
         }
 
@@ -649,31 +674,32 @@ mod native {
             );
             let cancelled = AtomicBool::new(false);
             std::thread::scope(|scope| {
-                let (send, receive) = std::sync::mpsc::channel();
-                let (started, ready) = std::sync::mpsc::channel();
+                let (send, receive) = mpsc::channel();
+                let (busy, ready) = mpsc::channel();
                 let home = &home;
                 let flag = &cancelled;
+                let lock_timeout = Duration::from_secs(10);
                 scope.spawn(move || {
-                    started.send(()).unwrap();
-                    let result =
-                        read_with_timeout(home, &["acme"], Duration::from_secs(5), Some(flag));
-                    send.send(result).unwrap();
+                    SQLITE_BUSY.set(Some(busy));
+                    let began = Instant::now();
+                    let result = read_with_timeout(home, &["acme"], lock_timeout, Some(flag));
+                    let _ = send.send((result, began.elapsed()));
                 });
-                ready.recv().unwrap();
+                ready
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("reader did not encounter the SQLite lock");
                 cancelled.store(true, Ordering::Relaxed);
-                assert_eq!(
-                    receive
-                        .recv_timeout(Duration::from_secs(2))
-                        .unwrap()
-                        .unwrap_err(),
-                    StoreError::StoreBusy
-                );
+                let (result, elapsed) = receive
+                    .recv_timeout(Duration::from_secs(2))
+                    .expect("reader did not stop after cancellation");
+                assert!(elapsed < lock_timeout, "reader reached its lock deadline");
+                assert_eq!(result.unwrap_err(), StoreError::StoreBusy);
             });
             assert!(holder.0.try_wait().unwrap().is_none());
             holder.0.kill().unwrap();
             holder.0.wait().unwrap();
 
-            let found = read(&home, &["acme"], None).unwrap();
+            let found = read_with_timeout(&home, &["acme"], Duration::from_secs(5), None).unwrap();
             assert_eq!(found["acme"].expose(), "fx-fixture-lock-key");
             let after = fs::metadata(lock).unwrap();
             assert_eq!(after.ino(), original.ino());

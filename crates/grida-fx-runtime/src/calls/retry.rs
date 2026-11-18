@@ -1253,9 +1253,9 @@ mod tests {
             }
         }
 
-        struct NoJobRecords;
+        struct NoAttempt;
 
-        impl JobBook for NoJobRecords {
+        impl JobBook for NoAttempt {
             fn save_job(&self, _: &JobRecord) -> Result<(), StoreError> {
                 panic!("job saved during preparation");
             }
@@ -1265,12 +1265,26 @@ mod tests {
             }
         }
 
+        impl Admission for NoAttempt {
+            fn admit<'a>(
+                &'a self,
+                _: &'a str,
+                _: Option<u32>,
+                _: Option<u32>,
+                _: &'a Cancel,
+                _: &'a (dyn Fn() + Sync),
+            ) -> BoxFuture<'a, Option<Slot>> {
+                panic!("admission reached during preparation");
+            }
+        }
+
         for submit in [false, true] {
             let rig = Rig::new();
             let adapter = Preparing(tokio::sync::Notify::new());
             let mut attempts = rig.attempts(submit.then(job), None);
             attempts.hold_name = &|| panic!("reservation reached during preparation");
-            attempts.jobs = &NoJobRecords;
+            attempts.jobs = &NoAttempt;
+            attempts.pacing = &NoAttempt;
             let outcome = block_on(async {
                 let send = async {
                     if submit {
@@ -1283,7 +1297,11 @@ mod tests {
                     adapter.0.notified().await;
                     rig.cancel.cancel();
                 };
-                tokio::join!(send, cancel).0
+                tokio::time::timeout(Duration::from_secs(2), async {
+                    tokio::join!(send, cancel).0
+                })
+                .await
+                .expect("credential preparation should respond to cancellation")
             });
             assert_eq!(outcome, Outcome::Cancelled);
         }

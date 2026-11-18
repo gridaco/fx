@@ -1,6 +1,7 @@
 //! Selected-model preparation outside the offline core. Sources yield ordinary route entries;
 //! authored routes always win. Only sanitized entries are cached, never provider responses.
 
+use crate::engine::ProviderSettings;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::host::NodeHost;
 use grida_fx_core::project::Planner;
@@ -209,7 +210,7 @@ pub(crate) fn prepare(
     snapshot: Option<&Value>,
     isolated: bool,
     allow_stored_keys: bool,
-) -> Result<Value, Error> {
+) -> Result<PreparedModels, Error> {
     let mut used = crate::verbs::doctor::UsedRoutes::new();
     crate::verbs::doctor::used_routes(
         &planner.workflow.workflow.steps,
@@ -231,6 +232,12 @@ pub(crate) fn prepare(
     )
 }
 
+#[derive(Debug)]
+pub(crate) struct PreparedModels {
+    pub facts: Value,
+    pub settings: Option<ProviderSettings>,
+}
+
 pub(crate) enum MetadataCredentials<'a> {
     Environment {
         env: &'a dyn Fn(&str) -> Option<String>,
@@ -250,7 +257,7 @@ pub(crate) fn prepare_used(
     snapshot: Option<&Value>,
     isolated: bool,
     credentials: MetadataCredentials<'_>,
-) -> Result<Value, Error> {
+) -> Result<PreparedModels, Error> {
     prepare_with_transport(
         project,
         catalog,
@@ -275,9 +282,12 @@ fn prepare_with_transport(
     isolated: bool,
     credentials: MetadataCredentials<'_>,
     make_transport: impl Fn(Network) -> Result<Arc<dyn Transport>, Error>,
-) -> Result<Value, Error> {
+) -> Result<PreparedModels, Error> {
     if isolated {
-        return Ok(empty());
+        return Ok(PreparedModels {
+            facts: empty(),
+            settings: None,
+        });
     }
     if let Some(snapshot) = snapshot {
         validate(snapshot)?;
@@ -285,6 +295,7 @@ fn prepare_with_transport(
     let mut resolved = Vec::new();
     // Construct a metadata transport lazily: ordinary authored/shipped selections stay local.
     let mut setup = None;
+    let mut environment = None;
     let mut store = None;
     let mut runtime = None;
     let mut online = false;
@@ -358,12 +369,16 @@ fn prepare_with_transport(
                         env,
                         allow_stored_keys,
                     } => {
-                        let (loaded, keys, endpoints) =
-                            crate::engine::provider_variables(project, env)?;
+                        let ProviderSettings {
+                            environment: loaded,
+                            keys,
+                            endpoints,
+                        } = crate::engine::provider_variables(project, env)?;
                         let network = Network::from_env(env);
                         if allow_stored_keys && matches!(network, Network::On) {
-                            store = Some((env, loaded));
+                            store = Some(env);
                         }
+                        environment = Some(loaded);
                         (keys, endpoints, network)
                     }
                     MetadataCredentials::Diagnosed {
@@ -395,19 +410,20 @@ fn prepare_with_transport(
                 return Err(Error::usage(reason));
             }
             if provider == "openrouter"
-                && let Some((env, environment)) = store.take()
+                && let Some(env) = store.take()
             {
+                let environment = environment.as_ref().expect("metadata environment");
                 crate::engine::stored_keys(
                     env,
                     &mut setup.keys,
-                    &environment,
+                    environment,
                     &setup.endpoints,
                     &[KeyName::OpenRouter],
                 )
                 .map_err(Error::usage)?;
                 // Stored secrets join the same endpoint-value checks as explicit keys.
                 setup.endpoints =
-                    Endpoints::from_environment(&environment, &setup.keys).map_err(Error::usage)?;
+                    Endpoints::from_environment(environment, &setup.keys).map_err(Error::usage)?;
             }
             let rt = runtime.as_ref().expect("metadata runtime");
             let scope = digest(
@@ -476,7 +492,17 @@ fn prepare_with_transport(
             ),
         }
     }
-    Ok(json!({"fx":"routes/v1","routes":resolved}))
+    let settings = environment
+        .zip(setup)
+        .map(|(environment, setup)| ProviderSettings {
+            environment,
+            keys: setup.keys,
+            endpoints: setup.endpoints,
+        });
+    Ok(PreparedModels {
+        facts: json!({"fx":"routes/v1","routes":resolved}),
+        settings,
+    })
 }
 
 fn transient(reason: &str) -> bool {
@@ -598,7 +624,8 @@ mod tests {
                     allow_stored_keys: true,
                 },
             )
-            .unwrap(),
+            .unwrap()
+            .facts,
             empty(),
         );
         assert_eq!(
@@ -613,7 +640,8 @@ mod tests {
                     allow_stored_keys: true,
                 },
             )
-            .unwrap(),
+            .unwrap()
+            .facts,
             snapshot,
         );
         assert_eq!(
@@ -628,7 +656,8 @@ mod tests {
                     allow_stored_keys: true,
                 },
             )
-            .unwrap(),
+            .unwrap()
+            .facts,
             empty(),
         );
     }
@@ -637,27 +666,36 @@ mod tests {
     fn invalid_openrouter_selection_does_not_read_provider_settings() {
         let root = tempfile::tempdir().unwrap();
         let project = Project::find(root.path()).unwrap();
-        let mut catalog = RouteTable::default();
-        let used = used_model("img-a", Some("openrouter"));
-        let prepared = prepare_used(
-            &project,
-            &mut catalog,
-            &used,
-            None,
-            false,
-            MetadataCredentials::Environment {
-                env: &|name| panic!("unexpected environment read: {name}"),
-                allow_stored_keys: true,
-            },
-        )
-        .unwrap();
-        assert_eq!(prepared, empty());
-        assert!(
-            catalog
-                .resolve_selector("image.generate", "img-a", Some("openrouter"))
-                .unwrap_err()
-                .contains("model metadata is invalid or incompatible")
-        );
+        for model in [
+            "img-a",
+            "acme/.",
+            "./img-a",
+            "acme/img-a/extra",
+            "acme/img-a/",
+        ] {
+            let mut catalog = RouteTable::default();
+            let used = used_model(model, Some("openrouter"));
+            let prepared = prepare_used(
+                &project,
+                &mut catalog,
+                &used,
+                None,
+                false,
+                MetadataCredentials::Environment {
+                    env: &|name| panic!("unexpected environment read: {name}"),
+                    allow_stored_keys: true,
+                },
+            )
+            .unwrap();
+            assert_eq!(prepared.facts, empty());
+            assert!(prepared.settings.is_none());
+            let error = catalog
+                .resolve_selector("image.generate", model, Some("openrouter"))
+                .unwrap_err();
+            if safe_model(model) {
+                assert!(error.contains("model metadata is invalid or incompatible"));
+            }
+        }
     }
 
     #[test]
@@ -684,7 +722,7 @@ mod tests {
                 },
             )
             .unwrap();
-            assert_eq!(prepared["routes"], json!([entry()]));
+            assert_eq!(prepared.facts["routes"], json!([entry()]));
         }
     }
 
@@ -766,8 +804,9 @@ mod tests {
         };
         let hit = Arc::new(ReplayTransport::new(vec![]));
         let prepared = prepare(environment(), hit.clone());
-        assert_eq!(prepared["routes"], json!([entry()]));
+        assert_eq!(prepared.facts["routes"], json!([entry()]));
         assert!(hit.requests().is_empty());
+        let live_settings = prepared.settings.expect("discovery read provider settings");
 
         let endpoints = Endpoints::default();
         let mut keys = Keys::default();
@@ -796,11 +835,31 @@ mod tests {
             ]));
             let prepared = prepare(credentials, refresh.clone());
             refresh.assert_done();
-            assert_eq!(prepared["routes"][0]["route"], "acme/img-a@openrouter");
-            assert!(prepared["routes"][0].get("price").is_none());
-            assert!(!prepared.to_string().contains(&secret));
-            assert!(!prepared.to_string().contains(home.to_str().unwrap()));
+            assert_eq!(
+                prepared.facts["routes"][0]["route"],
+                "acme/img-a@openrouter"
+            );
+            assert!(prepared.facts["routes"][0].get("price").is_none());
+            assert!(!prepared.facts.to_string().contains(&secret));
+            assert!(!prepared.facts.to_string().contains(home.to_str().unwrap()));
         }
+
+        // A rotation between discovery and execution cannot change the same run's
+        // account. Its live engine receives these already-resolved settings.
+        let stored = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            stored.replace(&secret, &format!("sk-or-v1-{}", "b".repeat(64))),
+        )
+        .unwrap();
+        assert_eq!(
+            live_settings
+                .keys
+                .get(KeyName::OpenRouter)
+                .unwrap()
+                .expose(),
+            secret
+        );
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -842,7 +901,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(prepared["routes"].as_array().unwrap().len(), 2);
+        assert_eq!(prepared.facts["routes"].as_array().unwrap().len(), 2);
         assert_eq!(reads.get(), 1);
         assert!(!missing_home.exists());
     }
@@ -875,10 +934,13 @@ mod tests {
                     },
                 )
                 .unwrap();
-                assert_eq!(prepared["routes"].as_array().unwrap().len(), MAX_ENTRIES);
+                assert_eq!(
+                    prepared.facts["routes"].as_array().unwrap().len(),
+                    MAX_ENTRIES
+                );
                 let path = root.path().join("prepared.json");
-                std::fs::write(&path, serde_json::to_vec(&prepared).unwrap()).unwrap();
-                assert_eq!(read(&path).unwrap(), prepared);
+                std::fs::write(&path, serde_json::to_vec(&prepared.facts).unwrap()).unwrap();
+                assert_eq!(read(&path).unwrap(), prepared.facts);
             }
             used.insert(
                 (

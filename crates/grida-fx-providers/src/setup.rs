@@ -7,7 +7,7 @@
 //! spec/adapters.md §4), and `grida-fx doctor` reports the route as not servable.
 
 use crate::clock::Clock;
-use crate::keys::{Environment, KeyName, Keys, Secret, StoredCredentials};
+use crate::keys::{Environment, KeyName, KeySource, Keys, Secret, StoredCredentials};
 use crate::redact::Redactor;
 use crate::transport::{
     Credential, HttpRequest, HttpResponse, Transport, TransportError, TransportErrorKind,
@@ -234,14 +234,14 @@ impl Setup {
         } else {
             &declaration.base_url.default
         };
-        self.client_for(declaration, base, trusted_base, None)
+        self.client_for(declaration, base, Some(trusted_base), None)
     }
 
     pub(crate) fn fal_queue_client(&self) -> Client {
         self.client_for(
             KeyName::Fal.declaration(),
             &self.endpoints.fal_queue,
-            FAL_QUEUE,
+            Some(FAL_QUEUE),
             None,
         )
     }
@@ -250,10 +250,12 @@ impl Setup {
     /// is declared with one and the key is set), its declaration and the shared transport.
     pub fn declared_client(&self, declaration: &Declaration) -> Client {
         let base = self.endpoints.base(&declaration.name);
+        let trusted_base = KeyName::of_provider(&declaration.name)
+            .map(|key| key.declaration().base_url.default.as_str());
         self.client_for(
             declaration,
             base.unwrap_or(&declaration.base_url.default),
-            &declaration.base_url.default,
+            trusted_base,
             self.endpoints.configured.get(&declaration.name).cloned(),
         )
     }
@@ -262,20 +264,31 @@ impl Setup {
         &self,
         declaration: &Declaration,
         base: &str,
-        trusted_base: &str,
+        trusted_base: Option<&str>,
         configured: Option<ConfiguredBase>,
     ) -> Client {
         let base = base.trim_end_matches('/');
+        let store_allowed = trusted_base == Some(base)
+            && KeyName::of_provider(&declaration.name)
+                .is_some_and(|key| KeyName::STORED.contains(&key));
         let stored = self
             .stored
             .as_ref()
-            .filter(|stored| stored.eligible(&declaration.name) && base == trusted_base)
+            .filter(|stored| store_allowed && stored.eligible(&declaration.name))
+            .cloned();
+        let key = self
+            .keys
+            .of(&declaration.name)
+            .filter(|_| {
+                store_allowed
+                    || self.keys.source_of(&declaration.name) != Some(KeySource::GridaStore)
+            })
             .cloned();
         Client {
             transport: Arc::clone(&self.transport),
             provider: declaration.name.clone(),
             declared: declaration.credential.clone(),
-            key: self.keys.of(&declaration.name).cloned(),
+            key,
             base: base.to_string(),
             download_hosts: declaration.download_hosts.clone(),
             redactor: self.redactor(),
@@ -425,6 +438,41 @@ mod tests {
         let blank = setup(Keys::from_pairs(&[(KeyName::Tripo, "  ")])).client(KeyName::Tripo);
         assert_eq!(blank.credential().unwrap_err(), "TRIPO_API_KEY is not set");
         assert_eq!(blank.base, "https://openapi.tripo3d.ai/v3");
+    }
+
+    #[test]
+    fn an_eager_store_key_authenticates_only_at_the_built_in_base() {
+        let mut keys = Keys::none();
+        keys.insert_stored(KeyName::OpenRouter, Secret::new("test-saved-key"));
+        let origin = setup(keys.clone()).client(KeyName::OpenRouter);
+        assert_eq!(
+            origin.credential().unwrap().header_value(),
+            "Bearer test-saved-key"
+        );
+
+        let proxy = "https://proxy.example.test/v1";
+        let mut saved = setup(keys);
+        saved.endpoints = saved.endpoints.with_base("openrouter", proxy);
+        let saved = saved.client(KeyName::OpenRouter);
+        assert_eq!(saved.base, proxy);
+        assert_eq!(
+            saved.credential().unwrap_err(),
+            KeyName::OpenRouter.missing()
+        );
+
+        let mut explicit = setup(Keys::from_pairs(&[(
+            KeyName::OpenRouter,
+            "test-explicit-key",
+        )]));
+        explicit.endpoints = explicit.endpoints.with_base("openrouter", proxy);
+        assert_eq!(
+            explicit
+                .client(KeyName::OpenRouter)
+                .credential()
+                .unwrap()
+                .header_value(),
+            "Bearer test-explicit-key"
+        );
     }
 
     #[test]

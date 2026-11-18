@@ -136,7 +136,7 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
         .as_ref()
         .map(|file| crate::models::read(&request.cwd.join(file)))
         .transpose()?;
-    let resolved_models = crate::models::prepare(
+    let prepared = crate::models::prepare(
         &mut planner,
         &mut host,
         snapshot.as_ref(),
@@ -150,6 +150,7 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
         false,
         None,
         std::slice::from_ref(&request.cwd),
+        None,
     )?;
     let plan = crate::engine::plan(&engine, &mut planner, &mut host);
     crate::engine::shutdown(&runtime, &engine);
@@ -157,7 +158,7 @@ fn planned(args: &PlanArgs) -> Result<(Plan, Planner, Value), Error> {
     if args.require_estimates {
         plan.require_estimates();
     }
-    Ok((plan, planner, resolved_models))
+    Ok((plan, planner, prepared.facts))
 }
 
 /// The request of a planning verb's arguments.

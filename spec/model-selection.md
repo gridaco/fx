@@ -86,7 +86,10 @@ model or make a paid fallback call.
 
 The OpenRouter resolver requires a native `author/model` identifier before loading provider
 settings or consulting Grida's store. When `doctor` looks up metadata, it uses the same
-provider settings and credentials it diagnosed for that invocation.
+provider settings and credentials it diagnosed for that invocation. A run that looks up a
+binding reuses the resolved provider settings, including any saved key that scoped the lookup,
+for execution in the same invocation. Provider settings stay in memory. Only model facts
+are saved with a prepared plan or run for use in another invocation.
 
 Authored route tables remain authoritative. Discovery MUST NOT replace an admitted binding,
 repair an ambiguous binding, or weaken a route's authored feature, input, contract or price

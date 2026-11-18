@@ -90,8 +90,9 @@ The default classes are below. Each adapter's reference ([providers.md](provider
 A call MUST be refused before any byte leaves (`Refused`, $0, `capability_refused`) in this order. The first refusal wins.
 
 An eligible uncached call resolves a missing Grida credential before it enters a paid attempt.
-The engine checks the built-in contract and capabilities before resolving the saved key. A
-credential lookup refusal or cancellation leaves no attempt or new job submission
+For these calls, the engine runs steps 1 and 2 as a preflight before looking up the saved key.
+If either check fails, the normal attempt reports the refusal as described below. A credential
+lookup refusal or cancellation leaves no attempt or new job submission
 ([providers.md](providers.md) §1). The engine resolves credentials for collection before polling
 an existing submission.
 
