@@ -12,6 +12,10 @@
 //!   win first and preserve the actual terminal outcome. Repeated SIGTERM stays
 //!   cooperative. A second explicit SIGINT is emergency force, with cleanup unverified.
 //!   There is no elapsed-time escalation while the runner owns cleanup.
+//! - while `add` holds a staged template, an interruption accepted before publication stops
+//!   setup after dropping staging. A second explicit SIGINT can force exit before cleanup
+//!   finishes. Repeated SIGTERM stays cooperative. Once publication starts, FX finishes the
+//!   rename and staging cleanup before resuming immediate-exit handling.
 //! - at any other time (planning, `at: plan` steps, every other verb) the command ends at once:
 //!   the process group of every node host it started is killed
 //!   ([`grida_fx_runtime::host::end_every_host_now`]) and it exits 130. Nothing is written: planning
@@ -25,7 +29,8 @@
 //! ([`grida_fx_runtime::stderr::write_within`]): an interrupted command always ends.
 
 use crate::verbs::run::INTERRUPTED;
-use std::sync::atomic::{AtomicBool, Ordering};
+use grida_fx_core::Error;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -35,6 +40,13 @@ static RUNNER_EXPECTED: AtomicBool = AtomicBool::new(false);
 static RUNNER_OWNS: AtomicBool = AtomicBool::new(false);
 /// One explicit SIGINT has arrived; a second grants emergency force authority.
 static SIGINT_SEEN: AtomicBool = AtomicBool::new(false);
+const IDLE: u8 = 0;
+const EXITING: u8 = 1;
+const STAGING: u8 = 2;
+const CANCELLED: u8 = 3;
+const CANCELLED_BY_SIGINT: u8 = 4;
+const PUBLISHING: u8 = 5;
+static INSTALL: AtomicU8 = AtomicU8::new(IDLE);
 /// Held by an end at once from its start until it exits the process, and by the command's own
 /// return ([`ending`]): a command that finishes while it is forced to end waits for that end,
 /// so the forced exit's message is never cut short by the command's own exit.
@@ -70,16 +82,58 @@ pub fn runner_ended() {
     RUNNER_OWNS.store(false, Ordering::SeqCst);
 }
 
+/// Gives the installer the first interruption while it owns a temporary directory. Unless a
+/// second SIGINT forces exit, the closure drops the directory before its caller returns.
+pub fn with_template_staging<T>(
+    stage: impl FnOnce() -> Result<T, Error>,
+) -> Result<Option<T>, Error> {
+    if INSTALL
+        .compare_exchange(IDLE, STAGING, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Ok(None);
+    }
+    let outcome = stage();
+    if matches!(
+        INSTALL.swap(IDLE, Ordering::SeqCst),
+        CANCELLED | CANCELLED_BY_SIGINT | EXITING
+    ) {
+        Ok(None)
+    } else {
+        outcome.map(Some)
+    }
+}
+
+/// Checks for cancellation between entries while materializing a template.
+pub fn check_template_staging() -> Result<(), Error> {
+    if matches!(
+        INSTALL.load(Ordering::SeqCst),
+        CANCELLED | CANCELLED_BY_SIGINT | EXITING
+    ) {
+        return Err(Error::usage("template installation interrupted"));
+    }
+    Ok(())
+}
+
+/// Claims publication. A signal that already cancelled staging wins; later signals leave the
+/// atomic rename and staging cleanup to the installer.
+pub fn begin_template_publication() -> Result<(), Error> {
+    if INSTALL
+        .compare_exchange(STAGING, PUBLISHING, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(Error::usage("template installation interrupted"));
+    }
+    Ok(())
+}
+
 /// How long the forced exit's message may wait for the command's stderr to take it.
 const LAST_WORD_WAIT: Duration = Duration::from_millis(500);
 
 /// Kills every node host's group, waits two seconds at most for their stderr copies, writes
 /// `last_word` when there is one ([`LAST_WORD_WAIT`] at most), then exits 130. What the command
 /// printed is flushed by the exit, which never waits for a verb that holds its output.
-fn end_now(last_word: Option<&str>) -> ! {
-    let _ending = ENDING
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+fn end_now(_ending: MutexGuard<'static, ()>, last_word: Option<&str>) -> ! {
     grida_fx_runtime::host::end_every_host_now();
     if let Some(text) = last_word {
         grida_fx_runtime::stderr::write_within(text, LAST_WORD_WAIT);
@@ -95,15 +149,55 @@ pub fn ending() -> MutexGuard<'static, ()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum SetupInterrupt {
+    Continue,
+    Exit,
+    ForceStaging,
+}
+
+/// Settles an interruption against the installer and any concurrent publication claim.
+fn interrupt_setup(install: &AtomicU8, terminate: bool) -> SetupInterrupt {
+    use SetupInterrupt::{Continue, Exit, ForceStaging};
+
+    loop {
+        let state = install.load(Ordering::SeqCst);
+        let (next, action) = match (state, terminate) {
+            (IDLE, _) => (EXITING, Exit),
+            (STAGING, true) => (CANCELLED, Continue),
+            (STAGING | CANCELLED, false) => (CANCELLED_BY_SIGINT, Continue),
+            (CANCELLED_BY_SIGINT, false) => (EXITING, ForceStaging),
+            _ => return Continue,
+        };
+        if install
+            .compare_exchange(state, next, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            return action;
+        }
+    }
+}
+
 /// One interruption (module doc). `terminate`: it was a SIGTERM.
 fn interrupted(terminate: bool) {
     if !RUNNER_OWNS.load(Ordering::SeqCst) {
-        end_now(None);
+        // Hold this before accepting a forced transition. The command may finish staging and
+        // reach its normal return immediately after the transition.
+        let ending = ending();
+        match interrupt_setup(&INSTALL, terminate) {
+            SetupInterrupt::Continue => return,
+            SetupInterrupt::Exit => end_now(ending, None),
+            SetupInterrupt::ForceStaging => end_now(
+                ending,
+                Some("interrupted again: forcing exit; template staging may remain\n"),
+            ),
+        }
     }
     if !terminate && SIGINT_SEEN.swap(true, Ordering::SeqCst) {
-        end_now(Some(
-            "interrupted again: forcing exit; run completion and cleanup are unverified\n",
-        ));
+        end_now(
+            ending(),
+            Some("interrupted again: forcing exit; run completion and cleanup are unverified\n"),
+        );
     }
 }
 
@@ -146,4 +240,46 @@ fn listen(ready: std::sync::mpsc::SyncSender<()>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interrupted_template_staging_cleans_up_before_returning() {
+        let root = tempfile::tempdir().unwrap();
+        let outcome = with_template_staging(|| {
+            let staging = tempfile::tempdir_in(root.path()).unwrap();
+            std::fs::write(staging.path().join("fx.yaml"), "fx: project/v1\n").unwrap();
+            interrupted(false);
+            assert!(staging.path().is_dir());
+            assert!(check_template_staging().is_err());
+            begin_template_publication()
+        })
+        .unwrap();
+        assert!(outcome.is_none());
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn a_second_explicit_interrupt_can_force_cancelled_staging() {
+        use SetupInterrupt::{Continue, ForceStaging};
+
+        let install = AtomicU8::new(STAGING);
+        assert_eq!(interrupt_setup(&install, true), Continue);
+        assert_eq!(interrupt_setup(&install, true), Continue);
+        assert_eq!(install.load(Ordering::SeqCst), CANCELLED);
+        assert_eq!(interrupt_setup(&install, false), Continue);
+        assert_eq!(interrupt_setup(&install, true), Continue);
+        assert_eq!(install.load(Ordering::SeqCst), CANCELLED_BY_SIGINT);
+        assert_eq!(interrupt_setup(&install, false), ForceStaging);
+        assert_eq!(install.load(Ordering::SeqCst), EXITING);
+
+        install.store(PUBLISHING, Ordering::SeqCst);
+        assert_eq!(interrupt_setup(&install, false), Continue);
+        assert_eq!(interrupt_setup(&install, false), Continue);
+        assert_eq!(interrupt_setup(&install, true), Continue);
+        assert_eq!(install.load(Ordering::SeqCst), PUBLISHING);
+    }
 }

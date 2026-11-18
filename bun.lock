@@ -10,7 +10,7 @@
     },
     "web/fx-react": {
       "name": "@grida/fx-react",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
         "@grida/fx-web": "workspace:*",
       },
@@ -23,7 +23,7 @@
     },
     "web/fx-web": {
       "name": "@grida/fx-web",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
         "@google/model-viewer": "4.4.0",
         "fflate": "0.8.3",

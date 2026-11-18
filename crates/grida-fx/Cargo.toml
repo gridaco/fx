@@ -35,9 +35,9 @@ base64.workspace = true
 grida-fx-providers = { workspace = true, features = ["testing"] }
 jsonschema.workspace = true
 
-[target.'cfg(unix)'.dev-dependencies]
-# `node_output`: how much an engine's stderr pipe holds, and a non-blocking one.
-rustix = "1.1"
+[target.'cfg(unix)'.dependencies]
+# Exclusive directory installation. The node_output tests also use its pipe ioctls.
+rustix = { version = "1.1", features = ["fs"] }
 
 [lints]
 workspace = true

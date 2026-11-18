@@ -15,7 +15,9 @@ discussion is shorthand, not a newly installed executable alias.
 | Command | Responsibility |
 |---|---|
 | `init [DIRECTORY] [--template NAME] [--json]` | Start a new project from the built-in starter or a named template, or validate an existing `fx.yaml`. |
-| `init --list-templates [--json]` | List the templates `init` can start from. |
+| `init --list-templates [--json]` | List the templates `init` can start from and identify the starters accepted by `add`. |
+| `add NAME [DESTINATION] [--json]` | Install an editable copy of an indexed starter in a new directory. |
+| `add OWNER/REPO@REF [DESTINATION] [--workflow NAME] [--json]` | Install a starter from a pinned public GitHub repository. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
 | `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
@@ -71,8 +73,8 @@ starter. Agents and scripts never see the question.
 
 ### 2.1 Templates
 
-A **template** is an example of the FX repository offered as a starting point.
-The engine embeds the index `examples/templates.json` of the commit it was built
+A **template** is an editable FX project offered as a starting point. For first-party examples,
+the engine embeds the index `examples/templates.json` of the commit it was built
 from: each entry has a `name` (`[a-z0-9-]+`, unique, not `starter`), a one-line
 `description`, the `provider` its AI steps use (`none`, `codex`, `gg`, or `any`
 when the user picks) and its `path`, a folder under `examples/`.
@@ -81,11 +83,11 @@ when the user picks) and its `path`, a folder under `examples/`.
 Listing reads nothing but the engine. An unknown `--template` is refused before
 anything is read or sent, naming the templates.
 
-`--template starter` is the built-in starter. Any other template's files come
+`--template starter` is the built-in starter. Other indexed templates' files come
 from the FX release the engine belongs to:
 `https://codeload.github.com/gridaco/fx/tar.gz/v<ENGINE_VERSION>`, the tag's
 gzip-compressed tar archive, whose entries lie under one top-level folder. The
-download and the bounded read-only model lookups in
+template downloads and the bounded read-only model lookups in
 [model-selection.md](model-selection.md) §3 are the engine's network exchanges outside a
 live run's provider calls. The template download goes through the providers' default transport on its download lane
 ([adapters.md](adapters.md) §2): no credential, no cookie, the environment's
@@ -101,7 +103,7 @@ the release archive: a directory (a checkout of the repository, whose
 they occur, so that it yields what the archive would.
 
 Only entries under `<top>/<path>/` are read; the rest of the archive is skipped
-unread. Within the template, `init` refuses, leaving the target untouched:
+unread. Within the template, the installer refuses:
 
 - a path that is absolute or holds `..`, or an entry that is a symbolic or hard
   link, a device or a FIFO;
@@ -109,12 +111,88 @@ unread. Within the template, `init` refuses, leaving the target untouched:
 - entries under more than one top-level folder;
 - a template folder that is missing from the archive, or holds no `fx.yaml`.
 
-The template is unpacked into a hidden temporary folder inside the target. The
-starter's `AGENTS.md`, `.env.example` and `README.md`, and each skill file under
+The template is unpacked into a hidden temporary folder. FX checks the gzip
+checksum before publication. The starter's
+`AGENTS.md`, `.env.example` and `README.md`, and each skill file under
 `.agents/skills/`, are added where the template has none. A template's own
 `.gitignore` keeps its lines and gains each line of the starter's it lacks;
-without one, it gets the starter's. Only then is the whole moved into place; on a
-failure nothing of it remains. Nothing from a template is executed.
+without one, it gets the starter's. `init` stages inside its target before
+moving the files into place. Nothing from a template is executed.
+
+**Installing with `add`.** An index entry with a `starter` declaration is
+available to `add`. It names a YAML `workflow_entry`, optionally a bundled
+`inputs_file`, any `required_inputs` paths checked for presence, and human-readable
+`prerequisites` for using the starter. Paths are relative to the new project.
+`init --list-templates --json` exposes `workflow_entry`, `inputs_file` when
+declared, and `prerequisites` on eligible entries. The built-in starter remains
+available through `init`.
+
+`add` defaults to `./NAME` for an indexed example and `./REPO` for a GitHub source.
+A supplied destination is the exact new project
+directory, relative to the working directory or absolute. Its parent must already
+be a directory. An existing directory, file, or link at the destination is an error (exit 2).
+The parent may contain an FX project. The installed copy owns its own `fx.yaml`
+and project settings. `add` never merges into the parent.
+
+`add` shares the release source, network rules, extraction limits, agent files,
+and hidden test source with `init`. It downloads the archive before staging the
+source beside the destination. For a checkout source, the destination must be
+outside the selected example folder. FX validates the staged `fx.yaml` against the
+final project root, including workflow search links that will resolve once the
+project exists there. It validates the declared YAML workflow entry and verifies
+the bundled preset file when one is declared. Missing declared user-supplied inputs
+are reported on success. Prerequisites are declarations. The installer does not
+probe them, launch code, install dependencies, load credentials, or consult
+providers. It publishes the finished directory with one exclusive rename. If
+two installs target the same path, at most one publishes and the other fails.
+If FX accepts an interrupt before publication, it stops staging, removes the
+temporary directory, and exits 130. A second Ctrl-C while staging is being
+cancelled can force exit with a warning that staging may remain. Publication
+completes once it starts.
+Template inputs in the source tree are copied as files. Canonical runs and
+downloads of separately hosted input or output files are outside this operation.
+
+**Public GitHub templates.** `add OWNER/REPO@REF` downloads the repository
+snapshot from `codeload.github.com`. `REF` is required. A complete 40-hex-digit
+commit SHA selects that revision. Other supported refs select tags through
+`refs/tags/` and never fall back to a branch. Tags can be moved by repository
+owners. Use a full commit SHA to pin immutable source. The same credential-free
+download and staging rules apply as for an FX release. No clone, submodule
+fetch, or private repository authentication is involved. The hidden
+`--template-source` override can supply a fixture with the same archive layout.
+
+Owner names have 1–39 ASCII letters, digits, or hyphens, beginning and ending
+with a letter or digit. Repository names have 1–100 ASCII letters, digits,
+dots, underscores, or hyphens, excluding `.` and `..`. Tag names have 1–255
+ASCII letters, digits, dots, underscores, hyphens, plus signs, or slashes.
+Each slash-separated segment must be nonempty, must start with a character
+other than a dot, and must not end with `.lock`. The tag cannot end in a dot
+or contain `..`.
+
+FX copies the repository tree as one project, with `fx.yaml` at the root.
+It omits `.git`, `.fx`, `runs`, `.venv`, `node_modules`, `__pycache__`,
+`.showcase-inputs`, and `.env` or `.env.*` other than `.env.example`, at any
+depth, matching those names case-insensitively. It refuses links, special
+entries, nonportable paths, and directory spellings that differ only in case.
+The decoded archive scan is capped at 64 MiB,
+including skipped files and tar metadata. The copied source tree has the same
+1,000-file and 32 MiB limits as an indexed template. It may have at most 1,000 directories
+including implied parents, with no path deeper than 64 components below the
+archive root. Archive paths have a limit of 4,096 UTF-8 bytes and 255 bytes per
+component.
+
+The project can declare one starter in an optional root `fx-template.json`,
+using the same object fields as an indexed `starter`. Specify `workflow_entry`
+as a project-relative YAML path. Optional `inputs_file`, `required_inputs`, and
+`prerequisites` describe the selected starter. FX refuses malformed declarations.
+
+Without a declaration FX scans immediate `.yaml` and `.yml` files in `workflows/`
+and `fx/` for `fx: workflow/v1`. It chooses a sole candidate automatically.
+With several candidates, use `--workflow NAME` to select an exact, unique file
+stem, without its extension. An explicit selector can choose a discovered entry
+even when a declaration exists. The declared entry can also be selected by its
+stem. Declared inputs and prerequisites apply only to that entry. Missing or
+ambiguous selections are refused before publication.
 
 With an explicit project, ordinary `run` registers the initialized record and
 uses a compatible running service if present. It does not implicitly start a
@@ -309,8 +387,14 @@ readers ignore members they do not know.
 `init --json` lists every file it wrote in `files_created`, relative and `/`-separated, and
 names the template it started from (`template`: its `name` and `source`, `built_in`,
 `release` or `local`), or `null` when it started nothing. It includes the local absolute
-`project_root`; this is command output,
-not a portable workflow record. `stop --json` returns the final status document,
+`project_root`; this is local command output rather than a portable workflow
+record. `add --json` uses the same result kind on success, with `created: true`,
+the installed `template`, and the extra members `workflow_entry`, `inputs_file`
+when declared, `missing_inputs` and `prerequisites`. File paths other than
+`project_root` are project-relative and `/`-separated. `missing_inputs` and
+`prerequisites` are arrays and may be empty. A public GitHub install reports
+`template.source: github` and the supplied `OWNER/REPO@REF` in `template.name`.
+`stop --json` returns the final status document,
 whereas its private HTTP endpoint acknowledges `stopping` before shutdown completes.
 
 ## 6. Verification and delivery

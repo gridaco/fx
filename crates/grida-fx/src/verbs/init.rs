@@ -1,18 +1,20 @@
-//! `init`: start a project from the built-in starter or a template, or validate an existing one
-//! (spec/service.md §2, §2.1).
+//! `init`: start or validate a project. `add`: install an editable template as a new project
+//! (spec/service.md §2).
 //!
-//! A template is an example of the FX repository, listed in `examples/templates.json` (embedded
-//! here) and read from the release's source archive: the only network exchange outside a live
-//! run's provider calls. It goes through the providers' default transport on its download lane, so
-//! it carries no credential, honours the environment's proxies, follows no redirect and is never
-//! retried. Nothing a template holds is executed.
+//! Indexed templates are read from the FX release archive. `add` can also download a public
+//! GitHub repository at a tag or commit. Both use the shared download transport without
+//! credentials, redirects or retries. Nothing a template holds is executed.
 
-use crate::cli::InitArgs;
+mod community;
+
+use crate::cli::{AddArgs, InitArgs};
 use grida_fx_core::docs::project::Project;
+use grida_fx_core::docs::workflow::load_workflow;
 use grida_fx_core::{ENGINE_VERSION, Error, ErrorKind};
 use grida_fx_providers::transport::http::{HttpConfig, HttpTransport};
 use grida_fx_providers::transport::{Body, HttpRequest, Lane, Method, Transport};
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -67,6 +69,9 @@ const SKIPPED: [&str; 8] = [
 const MAX_DOWNLOAD: u64 = 64 * 1024 * 1024;
 const MAX_FILES: usize = 1000;
 const MAX_UNPACKED: u64 = 32 * 1024 * 1024;
+const MAX_REPOSITORY_SCAN: u64 = 64 * 1024 * 1024;
+const MAX_REPOSITORY_DIRS: usize = 1000;
+const MAX_REPOSITORY_DEPTH: usize = 64;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// One entry of `examples/templates.json`.
@@ -76,6 +81,85 @@ pub struct Template {
     pub description: String,
     pub provider: String,
     pub path: String,
+    starter: Option<Starter>,
+}
+
+/// A server archive's selected subfolder, or its entire repository root for community templates.
+#[derive(Clone, Copy)]
+struct TemplateLocation<'a> {
+    name: &'a str,
+    subfolder: Option<&'a str>,
+}
+
+impl Template {
+    fn location(&self) -> TemplateLocation<'_> {
+        TemplateLocation {
+            name: &self.name,
+            subfolder: Some(&self.path),
+        }
+    }
+}
+
+/// The supported entry point for an independent, editable copy of an example.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Starter {
+    workflow_entry: String,
+    inputs_file: Option<String>,
+    required_inputs: Vec<String>,
+    prerequisites: Vec<String>,
+}
+
+impl Starter {
+    fn parse(entry: &Value) -> Option<Self> {
+        let object = entry.as_object()?;
+        let workflow_entry = starter_path(object.get("workflow_entry")?)?;
+        if !workflow_entry.ends_with(".yaml") && !workflow_entry.ends_with(".yml") {
+            return None;
+        }
+        let inputs_file = match object.get("inputs_file") {
+            Some(value) => Some(starter_path(value)?.to_string()),
+            None => None,
+        };
+        let strings = |key: &str, parse: fn(&Value) -> Option<&str>| match object.get(key) {
+            None => Some(Vec::new()),
+            Some(value) => value
+                .as_array()?
+                .iter()
+                .map(|item| parse(item).map(str::to_string))
+                .collect(),
+        };
+        let required_inputs: Vec<String> = strings("required_inputs", starter_path)?;
+        if required_inputs.iter().collect::<BTreeSet<_>>().len() != required_inputs.len() {
+            return None;
+        }
+        Some(Self {
+            workflow_entry: workflow_entry.to_string(),
+            inputs_file,
+            required_inputs,
+            prerequisites: strings("prerequisites", |value| {
+                value
+                    .as_str()
+                    .filter(|text| !text.trim().is_empty() && !text.chars().any(char::is_control))
+            })?,
+        })
+    }
+
+    fn write_fields(&self, result: &mut Value) {
+        result["workflow_entry"] = json!(self.workflow_entry);
+        result["prerequisites"] = json!(self.prerequisites);
+        if let Some(inputs) = &self.inputs_file {
+            result["inputs_file"] = json!(inputs);
+        }
+    }
+}
+
+fn starter_path(value: &Value) -> Option<&str> {
+    let path = value.as_str()?;
+    if path.contains(['\\', ':']) || path.chars().any(char::is_control) {
+        return None;
+    }
+    relative_parts(path)?;
+    Some(path)
 }
 
 /// The embedded index, in order. A malformed index is a fault of the build, not of the user.
@@ -95,11 +179,21 @@ pub fn templates() -> Result<Vec<Template>, Error> {
                 .map(str::to_string)
                 .ok_or_else(|| Error::internal(format!("a template has no {key}")))
         };
+        let name = text("name")?;
+        let starter = match entry.get("starter") {
+            Some(value) => Some(Starter::parse(value).ok_or_else(|| {
+                Error::internal(format!(
+                    "examples/templates.json: malformed starter for {name:?}"
+                ))
+            })?),
+            None => None,
+        };
         let template = Template {
-            name: text("name")?,
+            name,
             description: text("description")?,
             provider: text("provider")?,
             path: text("path")?,
+            starter,
         };
         let named = !template.name.is_empty()
             && template
@@ -195,6 +289,183 @@ pub fn init(args: &InitArgs) -> Result<u8, Error> {
     report(args, &project, Some((name, source)), &files)
 }
 
+fn indexed_add_template(name: &str) -> Result<Template, Error> {
+    let all = templates()?;
+    let supported = all.iter().filter(|entry| entry.starter.is_some());
+    if let Some(template) = supported.clone().find(|entry| entry.name == name) {
+        return Ok(template.clone());
+    }
+    let names: Vec<&str> = supported.map(|entry| entry.name.as_str()).collect();
+    Err(Error::usage(format!(
+        "no add template {name:?}; the templates: {}",
+        names.join(", ")
+    )))
+}
+
+pub fn add(args: &AddArgs) -> Result<u8, Error> {
+    let (indexed, repository) = if args.name.contains(['/', '@']) {
+        (None, Some(community::Repository::parse(&args.name)?))
+    } else {
+        if args.workflow.is_some() {
+            return Err(Error::usage(
+                "--workflow requires a GitHub template (OWNER/REPO@REF)",
+            ));
+        }
+        (Some(indexed_add_template(&args.name)?), None)
+    };
+    let location = TemplateLocation {
+        name: &args.name,
+        subfolder: indexed.as_ref().map(|template| template.path.as_str()),
+    };
+    let default_destination = repository
+        .as_ref()
+        .map_or(&*args.name, |repository| repository.name);
+    let requested = Path::new(args.destination.as_deref().unwrap_or(default_destination));
+    let name = requested
+        .file_name()
+        .ok_or_else(|| Error::usage("the destination must name a new project folder"))?;
+    let parent = requested
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+        .canonicalize()
+        .map_err(|error| Error::io("the destination parent", &error))?;
+    let target = parent.join(name);
+    // Reject existing paths, including dangling links, before reading or downloading a template.
+    match target.symlink_metadata() {
+        Ok(_) => return Err(destination_exists(requested)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(Error::io("the destination", &error)),
+    }
+    if args.json && target.to_str().is_none() {
+        return Err(Error::usage(
+            "the destination path must be UTF-8 for --json",
+        ));
+    }
+
+    let source = Source::of(args.template_source.as_deref(), repository.as_ref())?;
+    let contents = source.acquire(location, &parent)?;
+    let source_kind = if repository.is_some() {
+        "github"
+    } else {
+        source.kind()
+    };
+    let installed = crate::interrupt::with_template_staging(|| {
+        let staging = tempfile::Builder::new()
+            .prefix(".fx-add-")
+            .tempdir_in(&parent)
+            .map_err(|error| Error::io("the destination parent", &error))?;
+        let project = staging.path().join("project");
+        std::fs::create_dir(&project).map_err(|error| Error::io("the template folder", &error))?;
+        let files = prepare_template(&project, location, &contents)?;
+        Project::validate_installation(&project, &target)?;
+        let starter = match indexed.as_ref().and_then(|entry| entry.starter.as_ref()) {
+            Some(starter) => starter.clone(),
+            None => community::starter(&project, args.workflow.as_deref())?,
+        };
+        load_workflow(
+            &project.join(&starter.workflow_entry),
+            &starter.workflow_entry,
+            &starter.workflow_entry,
+        )?;
+        if let Some(inputs) = &starter.inputs_file
+            && !project.join(inputs).is_file()
+        {
+            return Err(refused(format!(
+                "the starter input preset {inputs} is missing"
+            )));
+        }
+        let missing: Vec<String> = starter
+            .required_inputs
+            .iter()
+            .filter(|path| !project.join(path).is_file())
+            .cloned()
+            .collect();
+        // The early check is for prompt feedback. The publication itself must also reject a collision.
+        crate::interrupt::begin_template_publication()?;
+        publish_directory(&project, &target).map_err(|error| {
+            if matches!(
+                error.kind(),
+                io::ErrorKind::AlreadyExists | io::ErrorKind::DirectoryNotEmpty
+            ) {
+                destination_exists(requested)
+            } else {
+                Error::io("the destination", &error)
+            }
+        })?;
+        Ok((starter, files, missing))
+    })?;
+    let Some((starter, files, missing)) = installed else {
+        return Ok(super::run::INTERRUPTED);
+    };
+    if args.json {
+        let mut result = init_result(&target, Some((&args.name, source_kind)), &files);
+        starter.write_fields(&mut result);
+        result["missing_inputs"] = json!(missing);
+        println!("{result}");
+    } else {
+        println!("Installed {} in {}", args.name, target.display());
+        println!("Workflow entry: {}", starter.workflow_entry);
+        if let Some(inputs) = &starter.inputs_file {
+            println!("Input preset: {inputs}");
+        }
+        for input in missing {
+            println!("Missing input: {input}");
+        }
+        for prerequisite in &starter.prerequisites {
+            println!("Prerequisite: {prerequisite}");
+        }
+        println!("See the project's README.md for setup and usage.");
+    }
+    Ok(0)
+}
+
+fn destination_exists(path: &Path) -> Error {
+    Error::usage(format!(
+        "destination {} already exists; choose a new project folder",
+        path.display()
+    ))
+}
+
+fn publish_directory(source: &Path, target: &Path) -> io::Result<()> {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios"
+    ))]
+    {
+        use rustix::fs::{CWD, RenameFlags, renameat_with};
+        renameat_with(CWD, source, CWD, target, RenameFlags::NOREPLACE).map_err(io::Error::from)
+    }
+    #[cfg(windows)]
+    {
+        std::fs::rename(source, target)
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        windows
+    )))]
+    {
+        let _ = (source, target);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "exclusive directory rename is unavailable",
+        ))
+    }
+}
+
+fn init_result(root: &Path, started: Option<(&str, &str)>, files: &[String]) -> Value {
+    let template = started.map(|(name, source)| json!({"name": name, "source": source}));
+    json!({
+        "kind": "fx-project-init-v1", "created": started.is_some(),
+        "project_root": root, "files_created": files, "template": template,
+    })
+}
+
 /// Prints the outcome (spec/service.md §5): what was written, and what to do next.
 fn report(
     args: &InitArgs,
@@ -204,14 +475,7 @@ fn report(
 ) -> Result<u8, Error> {
     let command = crate::invoker::command();
     if args.json {
-        let template = started.map(|(name, source)| json!({"name": name, "source": source}));
-        println!(
-            "{}",
-            json!({
-                "kind": "fx-project-init-v1", "created": started.is_some(),
-                "project_root": project.root, "files_created": files, "template": template,
-            })
-        );
+        println!("{}", init_result(&project.root, started, files));
         return Ok(0);
     }
     let Some((name, _)) = started else {
@@ -252,10 +516,14 @@ fn list(as_json: bool) -> Result<u8, Error> {
             "provider": "any", "source": "built_in",
         })];
         listed.extend(templates.iter().map(|template| {
-            json!({
+            let mut entry = json!({
                 "name": template.name, "description": template.description,
                 "provider": template.provider, "source": "release",
-            })
+            });
+            if let Some(starter) = &template.starter {
+                starter.write_fields(&mut entry);
+            }
+            entry
         }));
         println!(
             "{}",
@@ -381,15 +649,27 @@ fn write_new(file: &Path, contents: &[u8], label: &str) -> Result<(), Error> {
 /// Where a template's files come from (spec/service.md §2.1).
 enum Source {
     Release(String),
+    Github(String),
     Url(String),
     Archive(PathBuf),
     Directory(PathBuf),
 }
 
+enum TemplateContents {
+    Directory(PathBuf),
+    Archive(Vec<u8>),
+}
+
 impl Source {
-    fn of(given: Option<&str>) -> Result<Source, Error> {
+    fn of(
+        given: Option<&str>,
+        repository: Option<&community::Repository<'_>>,
+    ) -> Result<Source, Error> {
         let Some(given) = given else {
-            return Ok(Source::Release(release_url()));
+            return Ok(match repository {
+                Some(repository) => Source::Github(repository.archive_url()),
+                None => Source::Release(release_url()),
+            });
         };
         if given.starts_with("http://") || given.starts_with("https://") {
             let url = url::Url::parse(given)
@@ -413,11 +693,50 @@ impl Source {
         }
     }
 
-    /// `release` or `local`, as the init result names it.
+    /// The public source kind, independently of its acquisition mechanism.
     fn kind(&self) -> &'static str {
         match self {
             Source::Release(_) => "release",
+            Source::Github(_) => "github",
             _ => "local",
+        }
+    }
+
+    /// Acquire the archive before a temporary directory exists. A checkout is read in place,
+    /// so staging anywhere in the example would include staged files in its own source walk.
+    fn acquire(
+        &self,
+        template: TemplateLocation<'_>,
+        staging_parent: &Path,
+    ) -> Result<TemplateContents, Error> {
+        match self {
+            Self::Directory(directory) => {
+                let folder = match template.subfolder {
+                    Some(subfolder) => directory.join(subfolder),
+                    None => directory.clone(),
+                };
+                if !folder.is_dir() {
+                    return Err(missing(template));
+                }
+                let folder = folder
+                    .canonicalize()
+                    .map_err(|error| Error::io("the template source", &error))?;
+                let staging_parent = staging_parent
+                    .canonicalize()
+                    .map_err(|error| Error::io("the staging parent", &error))?;
+                if staging_parent.starts_with(&folder) {
+                    return Err(Error::usage(
+                        "the destination is inside the template source",
+                    ));
+                }
+                Ok(TemplateContents::Directory(folder))
+            }
+            Self::Archive(path) => std::fs::read(path)
+                .map(TemplateContents::Archive)
+                .map_err(|error| Error::io("the archive", &error)),
+            Self::Url(url) | Self::Release(url) | Self::Github(url) => {
+                download(url, matches!(self, Self::Github(_))).map(TemplateContents::Archive)
+            }
         }
     }
 }
@@ -433,36 +752,47 @@ fn loopback(url: &url::Url) -> bool {
     }
 }
 
-/// Unpacks `template` into a hidden folder inside `root`, adds the starter's files it lacks, and
-/// moves it into place. On a failure nothing of it remains.
+/// The init destination may already have a .git directory. Stage inside it, then place the files.
 fn write_template(
     root: &Path,
     template: &Template,
     given: Option<&str>,
 ) -> Result<(Vec<String>, &'static str), Error> {
-    let source = Source::of(given)?;
+    let source = Source::of(given, None)?;
+    let location = template.location();
+    let contents = source.acquire(location, root)?;
     let staging = tempfile::Builder::new()
         .prefix(".fx-init-")
         .tempdir_in(root)
         .map_err(|error| Error::io("project directory", &error))?;
     let unpacked = staging.path();
+    let files = prepare_template(unpacked, location, &contents)?;
+    for entry in std::fs::read_dir(unpacked).map_err(|error| Error::io("the template", &error))? {
+        let entry = entry.map_err(|error| Error::io("the template", &error))?;
+        std::fs::rename(entry.path(), root.join(entry.file_name()))
+            .map_err(|error| Error::io("project directory", &error))?;
+    }
+    Ok((files, source.kind()))
+}
+
+/// Fill a private staging folder with the selected example and the shared starter overlay.
+fn prepare_template(
+    unpacked: &Path,
+    template: TemplateLocation<'_>,
+    contents: &TemplateContents,
+) -> Result<Vec<String>, Error> {
     let mut limits = Limits::default();
-    match &source {
-        Source::Directory(directory) => {
-            let folder = directory.join(&template.path);
-            if !folder.is_dir() {
-                return Err(missing(template));
-            }
-            copy_tree(&folder, unpacked, Path::new(""), &mut limits)?;
+    match contents {
+        TemplateContents::Directory(folder) => {
+            copy_tree(
+                folder,
+                unpacked,
+                Path::new(""),
+                &mut limits,
+                template.subfolder.is_none(),
+            )?;
         }
-        Source::Archive(path) => {
-            let bytes = std::fs::read(path).map_err(|error| Error::io("the archive", &error))?;
-            unpack(&bytes, template, unpacked, &mut limits)?;
-        }
-        Source::Url(url) | Source::Release(url) => {
-            let bytes = download(url)?;
-            unpack(&bytes, template, unpacked, &mut limits)?;
-        }
+        TemplateContents::Archive(bytes) => unpack(bytes, template, unpacked, &mut limits)?,
     }
     if !unpacked.join("fx.yaml").is_file() {
         return Err(Error::new(
@@ -474,20 +804,16 @@ fn write_template(
     let mut files = Vec::new();
     list_files(unpacked, Path::new(""), &mut files)?;
     files.sort();
-    for entry in std::fs::read_dir(unpacked).map_err(|error| Error::io("the template", &error))? {
-        let entry = entry.map_err(|error| Error::io("the template", &error))?;
-        std::fs::rename(entry.path(), root.join(entry.file_name()))
-            .map_err(|error| Error::io("project directory", &error))?;
-    }
-    Ok((files, source.kind()))
+    Ok(files)
 }
 
-fn missing(template: &Template) -> Error {
+fn missing(template: TemplateLocation<'_>) -> Error {
     Error::new(
         ErrorKind::Io,
         format!(
             "the {} template ({}) is not in the source",
-            template.name, template.path
+            template.name,
+            template.subfolder.unwrap_or("repository root")
         ),
     )
 }
@@ -565,6 +891,7 @@ fn list_files(folder: &Path, relative: &Path, files: &mut Vec<String>) -> Result
 struct Limits {
     files: usize,
     bytes: u64,
+    directories: BTreeMap<String, String>,
 }
 
 impl Limits {
@@ -579,6 +906,33 @@ impl Limits {
                 "it holds more than {} MiB",
                 MAX_UNPACKED / 1024 / 1024
             )));
+        }
+        Ok(())
+    }
+
+    /// Count implicit parents and preserve directory spellings on case-insensitive disks.
+    fn add_directories(&mut self, parts: &[String], is_directory: bool) -> Result<(), Error> {
+        let count = parts.len() - usize::from(!is_directory);
+        let mut directory = String::new();
+        for part in &parts[..count] {
+            if !directory.is_empty() {
+                directory.push('/');
+            }
+            directory.push_str(part);
+            let original = self
+                .directories
+                .entry(directory.to_lowercase())
+                .or_insert_with(|| directory.clone());
+            if original != &directory {
+                return Err(refused(format!(
+                    "{directory} differs only in case from {original}"
+                )));
+            }
+            if self.directories.len() > MAX_REPOSITORY_DIRS {
+                return Err(refused(format!(
+                    "it holds more than {MAX_REPOSITORY_DIRS} directories"
+                )));
+            }
         }
         Ok(())
     }
@@ -603,24 +957,94 @@ fn relative_parts(path: &str) -> Option<Vec<&str>> {
     Some(parts)
 }
 
+fn community_skip(component: &str) -> bool {
+    let lower = component.to_ascii_lowercase();
+    SKIPPED.contains(&lower.as_str()) || (lower.starts_with(".env.") && lower != ".env.example")
+}
+
+/// Do not rely on the current OS's path rules when copying a community repository.
+fn community_path(path: &[u8]) -> Result<Vec<String>, Error> {
+    let path = std::str::from_utf8(path).map_err(|_| refused("an archive path is not UTF-8"))?;
+    let path = path.strip_suffix('/').unwrap_or(path);
+    if path.len() > 4096 {
+        return Err(refused("a repository path is longer than 4096 bytes"));
+    }
+    let parts = relative_parts(path).ok_or_else(|| refused("an archive path leaves its folder"))?;
+    if parts.iter().any(|part| !portable_component(part)) {
+        return Err(refused("an archive path is not portable"));
+    }
+    Ok(parts.into_iter().map(str::to_owned).collect())
+}
+
+fn portable_component(part: &str) -> bool {
+    let stem = part.split('.').next().unwrap_or(part).trim_end();
+    let stem = stem.to_ascii_uppercase();
+    !matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) && !stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"))
+        .is_some_and(|digit| {
+            matches!(
+                digit,
+                "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
+        })
+        && part.len() <= 255
+        && !part.ends_with(['.', ' '])
+        && !part.contains(['\\', ':', '"', '*', '?', '<', '>', '|'])
+        && !part.chars().any(char::is_control)
+}
+
 /// Copies a template folder of a directory source, skipping [`SKIPPED`] and refusing links.
-fn copy_tree(from: &Path, to: &Path, relative: &Path, limits: &mut Limits) -> Result<(), Error> {
+fn copy_tree(
+    from: &Path,
+    to: &Path,
+    relative: &Path,
+    limits: &mut Limits,
+    community: bool,
+) -> Result<(), Error> {
     let entries =
         std::fs::read_dir(from.join(relative)).map_err(|error| Error::io("the source", &error))?;
     for entry in entries {
+        crate::interrupt::check_template_staging()?;
         let entry = entry.map_err(|error| Error::io("the source", &error))?;
         let name = entry.file_name();
-        if SKIPPED.iter().any(|skipped| name == *skipped) {
-            continue;
-        }
         let path = relative.join(&name);
         let kind = entry
             .file_type()
             .map_err(|error| Error::io("the source", &error))?;
+        if community {
+            let mut parts = Vec::new();
+            for component in path.components() {
+                let part = component
+                    .as_os_str()
+                    .to_str()
+                    .filter(|part| portable_component(part))
+                    .ok_or_else(|| refused("a repository path is not portable"))?;
+                parts.push(part.to_owned());
+            }
+            if !kind.is_dir() && !kind.is_file() {
+                return Err(refused(format!(
+                    "{} is a link or a special file",
+                    parts.join("/")
+                )));
+            }
+            if parts.last().is_some_and(|part| community_skip(part)) {
+                continue;
+            }
+            if parts.len() > MAX_REPOSITORY_DEPTH || parts.join("/").len() > 4096 {
+                return Err(refused("a repository path is too deep or too long"));
+            }
+            limits.add_directories(&parts, kind.is_dir())?;
+        } else if SKIPPED.iter().any(|skipped| name == *skipped) {
+            continue;
+        }
         if kind.is_dir() {
             std::fs::create_dir_all(to.join(&path))
                 .map_err(|error| Error::io("the template", &error))?;
-            copy_tree(from, to, &path, limits)?;
+            copy_tree(from, to, &path, limits, community)?;
         } else if kind.is_file() {
             let bytes =
                 std::fs::read(entry.path()).map_err(|error| Error::io("the source", &error))?;
@@ -638,32 +1062,50 @@ fn copy_tree(from: &Path, to: &Path, relative: &Path, limits: &mut Limits) -> Re
 
 /// Unpacks the template's folder of a gzip-compressed tar archive whose entries lie under one
 /// top-level folder (spec/service.md §2.1). The rest of the archive is skipped unread.
-fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> Result<(), Error> {
-    let wanted = relative_parts(&template.path).ok_or_else(|| missing(template))?;
+fn unpack(
+    bytes: &[u8],
+    template: TemplateLocation<'_>,
+    to: &Path,
+    limits: &mut Limits,
+) -> Result<(), Error> {
+    let community = template.subfolder.is_none();
+    let wanted = match template.subfolder {
+        Some(path) => relative_parts(path).ok_or_else(|| missing(template))?,
+        None => Vec::new(),
+    };
     let unreadable = |_| {
         Error::new(
             ErrorKind::Io,
             "the template archive is not a readable .tar.gz",
         )
     };
-    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
+    let scan_limit = if community {
+        MAX_REPOSITORY_SCAN + 1
+    } else {
+        u64::MAX
+    };
+    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(bytes).take(scan_limit));
     let mut top: Option<String> = None;
     let mut found = false;
     for entry in archive.entries().map_err(unreadable)? {
+        crate::interrupt::check_template_staging()?;
         let mut entry = entry.map_err(unreadable)?;
         let kind = entry.header().entry_type();
         if kind.is_pax_global_extensions() {
             continue;
         }
-        let path = entry.path().map_err(unreadable)?.into_owned();
-        let mut parts = Vec::new();
-        for component in path.components() {
-            match component {
-                Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
-                Component::CurDir => {}
-                _ => parts.push(String::from("..")),
-            }
-        }
+        let parts = if community {
+            community_path(&entry.path_bytes())?
+        } else {
+            let path = entry.path().map_err(unreadable)?;
+            path.components()
+                .filter_map(|component| match component {
+                    Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+                    Component::CurDir => None,
+                    _ => Some(String::from("..")),
+                })
+                .collect()
+        };
         let Some(first) = parts.first() else { continue };
         match &top {
             None => top = Some(first.clone()),
@@ -679,10 +1121,28 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
         found = true;
         let inside = &rest[wanted.len()..];
         if inside.is_empty() {
+            if community && !kind.is_dir() {
+                return Err(refused("the repository archive root is not a directory"));
+            }
             continue;
         }
-        if inside.iter().any(|part| part == "..") {
+        if first == ".." || inside.iter().any(|part| part == "..") {
             return Err(refused(format!("{} leaves its folder", inside.join("/"))));
+        }
+        if community {
+            if !kind.is_dir() && !kind.is_file() {
+                return Err(refused(format!(
+                    "{} is a link or a special file",
+                    inside.join("/")
+                )));
+            }
+            if inside.iter().any(|part| community_skip(part)) {
+                continue;
+            }
+            if inside.len() > MAX_REPOSITORY_DEPTH {
+                return Err(refused("a repository path is too deep"));
+            }
+            limits.add_directories(inside, kind.is_dir())?;
         }
         let target = inside
             .iter()
@@ -690,7 +1150,11 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
         if kind.is_dir() {
             std::fs::create_dir_all(&target).map_err(|error| Error::io("the template", &error))?;
         } else if kind.is_file() || kind == tar::EntryType::Continuous {
-            let size = entry.header().size().map_err(unreadable)?;
+            let size = if community {
+                entry.size()
+            } else {
+                entry.header().size().map_err(unreadable)?
+            };
             limits.add(size)?;
             let mut contents = Vec::with_capacity(size.min(MAX_UNPACKED) as usize);
             entry
@@ -706,6 +1170,21 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
             )));
         }
     }
+    // The tar iterator can stop before the gzip decoder has checked its footer.
+    let mut decoded = archive.into_inner();
+    let mut tail = [0; 8192];
+    loop {
+        crate::interrupt::check_template_staging()?;
+        if community && decoded.limit() == 0 {
+            return Err(refused(format!(
+                "the decoded archive exceeds {} MiB",
+                MAX_REPOSITORY_SCAN / 1024 / 1024
+            )));
+        }
+        if decoded.read(&mut tail).map_err(unreadable)? == 0 {
+            break;
+        }
+    }
     if !found {
         return Err(missing(template));
     }
@@ -714,12 +1193,12 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
 
 /// Fetches an archive once (spec/service.md §2.1): the download lane, no credential, no redirect,
 /// no retry; anything but 200 is refused. `GRIDA_FX_NETWORK=off` refuses it before it is sent.
-fn download(url: &str) -> Result<Vec<u8>, Error> {
+fn download(url: &str, github: bool) -> Result<Vec<u8>, Error> {
     let network = grida_fx_providers::live::Network::from_env(&|name| std::env::var(name).ok());
     if network == grida_fx_providers::live::Network::Off {
         return Err(Error::new(
             ErrorKind::Io,
-            "init --template downloads its template, and the network is off (GRIDA_FX_NETWORK=off)",
+            "the template requires a download, and the network is off (GRIDA_FX_NETWORK=off)",
         ));
     }
     let transport = HttpTransport::new(HttpConfig::default()).map_err(Error::internal)?;
@@ -744,11 +1223,15 @@ fn download(url: &str) -> Result<Vec<u8>, Error> {
         )
     })?;
     if response.status != 200 {
+        let suggestion = if github {
+            "check that the GitHub repository is public and the tag or commit exists"
+        } else {
+            "this FX version's templates may not be published yet"
+        };
         return Err(Error::new(
             ErrorKind::Io,
             format!(
-                "the template download returned HTTP {}; this FX version's templates may not be \
-                 published yet",
+                "the template download returned HTTP {}; {suggestion}",
                 response.status
             ),
         ));
@@ -800,5 +1283,37 @@ mod tests {
         assert_eq!(relative_parts("/examples"), None);
         assert_eq!(relative_parts("examples/../x"), None);
         assert_eq!(relative_parts("examples//x"), None);
+    }
+
+    #[test]
+    fn community_directories_refuse_case_collisions_in_implied_parents() {
+        let mut limits = Limits::default();
+        let first = ["assets", "Icons", "main.svg"].map(str::to_owned);
+        let second = ["assets", "icons", "preview.svg"].map(str::to_owned);
+        limits.add_directories(&first, false).unwrap();
+        limits.add_directories(&first[..2], true).unwrap();
+        let error = limits.add_directories(&second, false).unwrap_err();
+        assert!(
+            error
+                .message
+                .contains("assets/icons differs only in case from assets/Icons")
+        );
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn publication_does_not_replace_a_directory_that_appeared_after_preflight() {
+        let root = tempfile::tempdir().unwrap();
+        let staged = root.path().join("staged");
+        let target = root.path().join("target");
+        std::fs::create_dir(&staged).unwrap();
+        std::fs::write(staged.join("fx.yaml"), "fx: project/v1\n").unwrap();
+        std::fs::create_dir(&target).unwrap();
+        assert_eq!(
+            publish_directory(&staged, &target).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert!(staged.join("fx.yaml").is_file());
+        assert!(std::fs::read_dir(&target).unwrap().next().is_none());
     }
 }

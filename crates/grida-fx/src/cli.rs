@@ -62,6 +62,8 @@ pub struct Cli {
 pub enum Verb {
     /// initialize a project without starting services or executing workflows
     Init(InitArgs),
+    /// install an editable template in a new project folder
+    Add(AddArgs),
     /// start the project FX service; workflow execution remains independent
     Start(StartArgs),
     /// show the project service status and verified URL
@@ -130,6 +132,24 @@ pub struct InitArgs {
     pub list_templates: bool,
     /// read templates from a checkout, a .tar.gz or its URL instead of the release (testing)
     #[arg(long, hide = true, value_name = "SOURCE", requires = "template")]
+    pub template_source: Option<String>,
+    /// print the result as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Install a named template as its own project.
+#[derive(Debug, Args)]
+pub struct AddArgs {
+    /// indexed template name or a public GitHub OWNER/REPO@REF
+    pub name: String,
+    /// new project folder (default: the template or repository name)
+    pub destination: Option<String>,
+    /// select a GitHub starter workflow by file name without its extension
+    #[arg(long, value_name = "NAME")]
+    pub workflow: Option<String>,
+    /// read templates from a checkout, a .tar.gz or its URL instead of the release (testing)
+    #[arg(long, hide = true, value_name = "SOURCE")]
     pub template_source: Option<String>,
     /// print the result as JSON
     #[arg(long)]
@@ -720,6 +740,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
     };
     match verb {
         Verb::Init(args) => verbs::init::init(&args),
+        Verb::Add(args) => verbs::init::add(&args),
         Verb::Start(args) => verbs::service::start(&args),
         Verb::Status(args) => verbs::service::status(&args),
         Verb::Stop(args) => verbs::service::stop(&args),

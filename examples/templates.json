@@ -4,31 +4,71 @@
       "name": "hello",
       "description": "Badges drawn by your own Python nodes, checked and laid out on a sheet: offline, no provider",
       "provider": "none",
-      "path": "examples/hello"
+      "path": "examples/hello",
+      "starter": {
+        "workflow_entry": "workflows/hello.yaml",
+        "inputs_file": "inputs/badges.yaml",
+        "prerequisites": ["Python with grida and Pillow"]
+      }
     },
     {
       "name": "hello-ts",
       "description": "Badges drawn by your own TypeScript nodes, checked and laid out on a sheet: offline, no provider",
       "provider": "none",
-      "path": "examples/hello-ts"
+      "path": "examples/hello-ts",
+      "starter": {
+        "workflow_entry": "workflows/hello.yaml",
+        "inputs_file": "inputs/badges.yaml",
+        "prerequisites": ["Node.js 24 or later and the dependencies in package.json"]
+      }
     },
     {
       "name": "image-recolor",
       "description": "Recolor a picture with code, and watch the run live: offline, no provider",
       "provider": "none",
-      "path": "examples/image-recolor"
+      "path": "examples/image-recolor",
+      "starter": {
+        "workflow_entry": "workflows/image-recolor.yaml",
+        "inputs_file": "inputs/example.yaml",
+        "required_inputs": ["inputs/source.png"],
+        "prerequisites": [
+          "Python with grida and Pillow",
+          "Generate the sample image with make_input.py as described in README.md"
+        ]
+      }
     },
     {
       "name": "pet",
       "description": "An animated sprite sheet of a pet, drawn on your own Codex at no cost to FX",
       "provider": "codex",
-      "path": "examples/pet"
+      "path": "examples/pet",
+      "starter": {
+        "workflow_entry": "workflows/pet.yaml",
+        "inputs_file": "inputs/pebble.yaml",
+        "prerequisites": [
+          "Python 3.11 or later with the dependencies in pyproject.toml",
+          "Signed-in Codex for live image generation"
+        ]
+      }
     },
     {
       "name": "concept-gallery",
       "description": "Propose a world, review it, and draw one reviewed image per entity on Grida Gateway",
       "provider": "gg",
-      "path": "examples/concept-gallery"
+      "path": "examples/concept-gallery",
+      "starter": {
+        "workflow_entry": "workflows/concept-gallery.yaml",
+        "inputs_file": "inputs/tidebell.yaml",
+        "required_inputs": [
+          "inputs/tidebell/synopsis.md",
+          "inputs/tidebell/direction.md",
+          "inputs/tidebell/poster.png"
+        ],
+        "prerequisites": [
+          "Python with grida for custom nodes",
+          "Grida Gateway credentials and an approved spending cap for live runs"
+        ]
+      }
     }
   ]
 }

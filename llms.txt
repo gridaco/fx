@@ -5,7 +5,7 @@
 > plans its price, runs only what changed, caches every result by content, reserves every paid call
 > against a ceiling, and records how each result was made. The command is `grida fx`.
 
-Version: 0.9.0
+Version: 0.10.0
 
 This file is the reference for people and coding agents using FX: what exists, how to write it,
 and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
@@ -93,8 +93,45 @@ grida fx plan icon -- --name "copper lantern"
 
 `init` writes `fx.yaml`, `README.md`, `AGENTS.md`, the FX agent skills in `.agents/skills/`,
 `.gitignore`, `.env.example` and `workflows/icon.yaml`. `grida fx init --list-templates` lists
-templates; `--template NAME` picks one. In a folder that already has an `fx.yaml` it only checks it;
-any other non-empty folder is refused (write `fx.yaml` yourself to adopt an existing repository).
+templates, and `--template NAME` picks one for a new or empty folder. In a folder that already
+has an `fx.yaml`, plain `init` just checks it. `init` refuses other non-empty folders. To adopt
+one as an FX project, write `fx.yaml` yourself.
+
+`grida fx add NAME [destination]` creates an editable copy of an example in a new folder.
+The default destination is `./NAME`. Its immediate parent must exist. An occupied destination
+exits 2. The new folder has its own `fx.yaml` and can sit inside another project. Run commands
+from the new folder to use its project settings. FX reads the authored template from the
+matching release archive for its own examples. `GRIDA_FX_NETWORK=off` prevents template downloads.
+If FX accepts an interrupt before publishing the project folder, it cleans up staging and exits 130.
+A second Ctrl-C during staging cancellation can force exit and leave temporary files.
+
+Use `grida fx init --list-templates --json` to discover FX's own templates without a download. Entries
+with a `workflow_entry` can be added. On success, `add --json` emits `fx-project-init-v1` with the
+absolute `project_root`, `created: true`, `files_created`, `template`, `workflow_entry` and
+optional `inputs_file`.
+The entry and preset paths are relative to the new root. `missing_inputs` lists declared
+input file paths the user still needs to supply, and `prerequisites` lists requirements for the
+entry. FX checks the copied project configuration and advertised files before publishing.
+Dependency installation, provider access and execution are separate from setup. Check runtime
+readiness with `grida fx doctor <target>` after setting up the prerequisites.
+
+`grida fx add pet fox-pet` installs `workflows/pet.yaml` with the text-only `inputs/pebble.yaml`
+preset. Edit the preset in `fox-pet`. Follow its README to set up Python and preview with the
+stand-in or draw live with signed-in Codex.
+
+`grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--json]` copies a public GitHub
+repository with `fx.yaml` at its root. Give a tag or full 40-character commit SHA. For example,
+`grida fx add acme/studio@v1.2.0 --workflow posters` creates `./studio` and selects the workflow
+whose filename stem is `posters`. `template.name` is the full reference and `template.source`
+is `github`.
+
+A root `fx-template.json` can declare the default starter. Its required `workflow_entry` names
+the YAML workflow, and optional `inputs_file`, `required_inputs` and `prerequisites` describe the
+preset, input paths to check, and requirements. Paths are project-relative. If no starter is
+declared, FX checks direct children of `workflows/` and `fx/` for `.yaml` and `.yml` files
+declaring `fx: workflow/v1`. It selects the sole candidate or requires `--workflow NAME` to identify
+a unique filename stem. The flag also selects a workflow when the project declares a default.
+If you select the declared workflow, the metadata applies.
 
 ```
 my-assets/
@@ -428,14 +465,14 @@ appears as a `models` diagnostic after the provider report; other diagnostics co
   API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
   exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
   whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
-- **Keys.** Published FX 0.9.0 uses a nonblank process environment value first, then the project's
+- **Keys.** FX uses a nonblank process environment value first, then the project's
   `.env` for declared key and base URL names. Set `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`. Keys stay
   out of `fx.yaml` and workflows. Paid capability calls require `--live`. A read-only metadata
   lookup for a missing selected OpenRouter image binding may use its key. GG metadata is public.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
-- **Saved Grida keys.** FX builds with saved-key support check Grida's store on macOS and Linux
+- **Saved Grida keys.** FX 0.10.0 and later check Grida's store on macOS and Linux
   when both the environment and `.env` lack an eligible provider's key. The provider IDs are
   `gg`, `openrouter`, `fal`, `tripo` and `elevenlabs`. The store is `providers/credentials.toml`
   under the process `GRIDA_HOME` or `$HOME/.grida`. The home must be an absolute normalized
@@ -754,6 +791,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
 | `grida fx start [--background] [--port N] [--open]`, `status [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
 | `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
+| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--json]` | copy an editable template into a fresh project folder |
 
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
@@ -1212,7 +1250,7 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.9.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.10.0" } }
 ```
 
 ```ts
