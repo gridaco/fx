@@ -3,7 +3,7 @@
 #![cfg(unix)]
 
 use grida_fx_providers::testing::write_program;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -123,6 +123,9 @@ temporary.replace(root / "opened.json")
             .local_addr()
             .unwrap()
             .port();
+        self.start_on(port)
+    }
+    fn start_on(&self, port: u16) -> Value {
         json_success(
             self.command()
                 .args([
@@ -524,4 +527,95 @@ fn a_slow_artifact_reader_cannot_keep_the_service_alive_after_stop() {
     );
     assert_eq!(restarted["url"], service["url"]);
     assert_eq!(get_json(&format!("{url}api/view"))["state"], "succeeded");
+}
+
+#[test]
+fn a_registered_plan_survives_a_new_service_address_without_replanning_or_opening() {
+    let Some(project) = Project::new() else {
+        return;
+    };
+    let register = || {
+        json_success(
+            project
+                .command()
+                .args(["plan", "workflow.yaml", "--register", "--check", "--json"])
+                .output()
+                .unwrap(),
+        )
+    };
+    let first = register();
+    assert_eq!(first["plan_ok"], true);
+    assert_eq!(first, register());
+    assert!(!project.root().join("opened.json").exists());
+    let route = first["route"].as_str().unwrap();
+    let service = project.start();
+    let base = service["url"].as_str().unwrap().trim_end_matches('/');
+    let graph = get_json(&format!("{base}{route}api/view"));
+    assert_eq!(graph["kind"], "fx-graph-v1");
+    assert!(graph["steps"].as_object().unwrap().contains_key("wait"));
+    let catalog = get_json(&format!("{base}/api/catalog"));
+    let entry_id = &first["reference"]["entry_id"];
+    let created = catalog["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| &entry["id"] == entry_id)
+        .unwrap()["created_at"]
+        .clone();
+    let alternate_port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    project.stop();
+
+    let path = project.root().join("workflow.yaml");
+    let revised = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("title: Service test", "title: Revised workflow");
+    std::fs::write(&path, revised).unwrap();
+    assert_ne!(first["reference"], register()["reference"]);
+    let source_reference = json!({
+        "subject": {"kind": "plan", "reference": first["reference"]},
+        "target": {"kind": "source", "source": "workflow.yaml"},
+    });
+    let resolved = json_success(
+        project
+            .command()
+            .args([
+                "files",
+                "resolve",
+                "--service-entry",
+                "--project",
+                ".",
+                "--reference",
+                &source_reference.to_string(),
+                "--json",
+            ])
+            .output()
+            .unwrap(),
+    );
+    assert!(
+        resolved["local_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("workflow.yaml")
+    );
+    std::fs::remove_file(path).unwrap();
+    let restarted = project.start_on(alternate_port);
+    assert_ne!(restarted["url"], service["url"]);
+    assert_ne!(restarted["instance_id"], service["instance_id"]);
+    assert_eq!(restarted["project_id"], first["reference"]["project_id"]);
+    let base = restarted["url"].as_str().unwrap().trim_end_matches('/');
+    let restored = get_json(&format!("{base}{route}api/view"));
+    assert_eq!(restored, graph);
+    let catalog = get_json(&format!("{base}/api/catalog"));
+    let entry = catalog["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| &entry["id"] == entry_id)
+        .unwrap();
+    assert_eq!(entry["created_at"], created);
+    assert!(!project.root().join("opened.json").exists());
 }

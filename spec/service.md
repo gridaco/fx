@@ -17,11 +17,11 @@ discussion is shorthand, not a newly installed executable alias.
 | `init [DIRECTORY] [--template NAME] [--json]` | Start a new project from the built-in starter or a named template, or validate an existing `fx.yaml`. |
 | `init --list-templates [--json]` | List the templates `init` can start from. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
-| `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
+| `status [--project DIRECTORY \| --project-root DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
 | `logs [--project DIRECTORY] [--lines N]` | Print a bounded tail of the service's local log. |
 | `run TARGET [--open] [--standalone]` | Execute; announce a usable run URL when inspection is available. |
-| `plan TARGET [--open] [--standalone]` | Plan without run-phase execution; optionally inspect the materialized graph. |
+| `plan TARGET [--open \| --standalone \| --register]` | Plan without run-phase execution; optionally inspect or register the materialized graph. |
 | `inspect RUN [--open] [--standalone]` | Inspect an existing record, optionally in the browser. |
 
 `view` remains a hidden compatibility command for independent foreground viewing
@@ -38,6 +38,11 @@ resolved starting directory with documented defaults if there is no project
 file. The planning project owns the run catalog, not an imported workflow's home.
 `init` is recommended onboarding, not a prerequisite for execution or serving.
 Service commands can select their discovery directory with `--project`.
+`status --project-root DIRECTORY` instead uses the exact canonical local
+folder without consulting its `fx.yaml`, searching ancestors or creating
+service state. A valid folder with no service state reports `stopped` and
+its own project identity. An unavailable service state reports `unavailable`.
+An invalid directory remains a command error.
 
 The owning project's optional `viewer.display` settings define canvas defaults for its
 plans and runs ([viewer.md](viewer.md#project-display-settings)). They are read for viewing,
@@ -121,6 +126,21 @@ uses a compatible running service if present. It does not implicitly start a
 background process. If the service is absent, execution still proceeds; `--open`
 reports how to start the service. `plan --open` and `inspect --open` also require
 the selected project's service and do not start it implicitly.
+
+`plan TARGET --register` saves the fully materialized, immutable plan in the
+resolved planning project's catalog. Registration needs no listener or readiness
+probe and starts no service or browser. With `--json`, stdout is a single
+[`fx-plan-registration-v1`](schemas/fx-plan-registration-v1.schema.json) receipt
+with `reference`, `route`, and `plan_ok`. The reference is the viewer's portable
+`service_entry` for this plan. The root-relative route remains usable after the
+service restarts on a different port. A caller can join it to the verified URL
+from `status --json` or `start --background --json` for the matching `project_id`.
+`plan_ok` reports whether the saved plan has planning problems. A materialized
+plan with problems still registers for inspection. The normal `--check`,
+`--require-estimates`, and `--expect-cached` exit conditions still apply. A
+fatal planning or registration error exits 2 without a receipt. `--register`
+conflicts with `--open` and `--standalone`. Ordinary `plan --json` still
+returns the graph and writes no catalog entry.
 
 `--standalone` explicitly selects the independent foreground inspection model,
 including inside a project. It changes serving lifetime, not workflow resolution,

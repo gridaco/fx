@@ -739,7 +739,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 
 | Command | |
 |---|---|
-| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
+| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open \| --register]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
 | `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
 | `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary; a workflow id reads its newest run |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
@@ -748,11 +748,11 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx runs list [--workflow ID] [--json]` / `grida fx runs remove <run>… [--yes]` | list runs / remove runs (preview without `--yes`) |
 | `grida fx cache prune [--yes]` | remove what no remaining run names |
 | `grida fx export <run> --out DIR [--include-values] [--include-diagnostics] [--json]` | a portable copy of a finished run |
-| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON, never author code |
+| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON. To resolve a captured service entry, replace `<saved>` with `--service-entry` and supply the exact `--project DIR` |
 | `grida fx jobs [--forget KEY]` | long provider jobs in the cache |
 | `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
-| `grida fx start [--background] [--port N] [--open]`, `status [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
+| `grida fx start [--background] [--port N] [--open]`, `status [--project-root DIR] [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
 | `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
 
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
@@ -846,6 +846,12 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
+- **Register a plan for a host.** `grida fx plan TARGET --register --json` saves the
+  materialized plan and returns `fx-plan-registration-v1` with `reference`,
+  `route`, and `plan_ok`, without starting a service or opening a browser. Obtain
+  the current verified URL through `status --project-root DIR --json` or
+  `start --background --json` and use the receipt's route for the same project.
+  An exact status read does not discover ancestors or create service state.
 - **Viewer context and presentation.** The engine-shipped page exposes
   `window.fx_viewer.getContext()`, `.subscribe(listener)` (returns unsubscribe), and
   `.present(action)` to browser automation in that page. Context identifies the

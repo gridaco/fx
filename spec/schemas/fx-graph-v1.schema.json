@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-graph-v1",
   "title": "FX expanded graph (fx-graph-v1)",
-  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md \u00a78), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run. A plan a viewer serves (`plan --open`, `plan --standalone`, `view` of a workflow) adds `steps` and `takes_file`. Optional ports and bindings preserve named connection metadata for readers without changing identity.",
+  "description": "Every step instance of a workflow with its type, values, routes, wiring, identity, state and price, and each node type's identity and source digests (`types`). `grida-fx expand` prints it, with `problems`; a run folder keeps it as plan.json (store.md \u00a78), with `plan`, `steps`, `inputs`, `view_origins` and `takes_file`, and `stand_in` for a stand-in run. A plan a viewer serves (`plan --open`, `plan --standalone`, `plan --register`, `view` of a workflow) adds `steps` and `takes_file`. Optional ports and bindings preserve named connection metadata for readers without changing identity.",
   "type": "object",
   "required": [
     "kind",

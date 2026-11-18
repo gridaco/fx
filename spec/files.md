@@ -70,6 +70,17 @@ accepts a captured external-file reference and returns:
 }
 ```
 
+If the captured subject contains a `service_entry` reference, a native caller
+can resolve it using
+`grida-fx files resolve --service-entry --project DIRECTORY --reference JSON --json`
+with optional `--source-root DIRECTORY`. This form replaces the positional
+`TARGET` and requires the caller's exact project directory. The engine checks
+that the reference's project, entry kind and ID match the registered evidence.
+It reads only the selected catalog entry and needs no running service. It
+never discovers, creates, or changes catalog entries, or follows an entry to
+a replacement run. The reference is an evidence selector. The caller supplies
+an authorized project binding and decides whether to open the resulting file.
+
 `target` is the validated recorded target. `local_path` is an absolute native
 filesystem path only when an available local placement can be resolved.
 `source_match` is `match`, `changed`, or `unknown` for source files, and `null`

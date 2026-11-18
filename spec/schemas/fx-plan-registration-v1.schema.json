@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-plan-registration-v1",
+  "title": "Registered materialized FX plan",
+  "type": "object",
+  "required": ["kind", "reference", "route", "plan_ok"],
+  "properties": {
+    "kind": { "const": "fx-plan-registration-v1" },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "project_id", "entry_kind", "entry_id"],
+      "properties": {
+        "kind": { "const": "service_entry" },
+        "project_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "entry_kind": { "const": "plan" },
+        "entry_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "route": { "type": "string", "pattern": "^/p/[a-f0-9]{64}/plans/[a-f0-9]{64}/$" },
+    "plan_ok": { "type": "boolean" }
+  }
+}

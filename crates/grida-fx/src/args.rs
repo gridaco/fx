@@ -3,12 +3,12 @@
 //!
 //! `split_plan_args` walks the arguments after the verb: the verb's own options (`--inputs`,
 //! `--routes`, `--arg`, `--max-usd` with a value, as `--x v` or `--x=v`; `--check`, `--json`,
-//! `--expect-cached`; `-h`/`--help`) and the first positional (the target) stay for clap;
+//! `--expect-cached`, `--register`; `-h`/`--help`) and the first positional (the target) stay for clap;
 //! everything else goes to `rest`, in order, for `grida_fx_core::inputs::flags`. No prefix
 //! abbreviation (FX decision). `--` ends CLI option parsing: everything after it is an
 //! authored input, including flags otherwise reserved by the verb.
 //!
-//! `--check`, `--json` and `--expect-cached` are options of `plan` only:
+//! `--check`, `--json`, `--expect-cached` and `--register` are options of `plan` only:
 //! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
 //! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver`, `--name`,
 //! `--resume` and `--run` with a
@@ -33,7 +33,7 @@ const VALUE_OPTIONS: [&str; 5] = [
     "--resolved-models",
 ];
 /// Flags of `plan` alone.
-const PLAN_FLAGS: [&str; 7] = [
+const PLAN_FLAGS: [&str; 8] = [
     "--require-estimates",
     "--prepared",
     "--check",
@@ -41,6 +41,7 @@ const PLAN_FLAGS: [&str; 7] = [
     "--expect-cached",
     "--open",
     "--standalone",
+    "--register",
 ];
 /// Options of `run` alone that take a value.
 const RUN_VALUE_OPTIONS: [&str; 6] = [

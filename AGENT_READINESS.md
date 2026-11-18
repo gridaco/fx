@@ -110,6 +110,7 @@ narrower target rules.
 | Observe: `observe <run> --snapshot`, `observe <run> --after <cursor>`, `project <run>`, `inspect <run> --json` | Consistent snapshot, bounded event batches, state projection or summary | Read recorded data without executing workflow code. A step queued for its route's slot is `waiting` (with `waiting_for`), not `running`. Use a precise folder or `inspect <workflow-id>/<name>`; `inspect <workflow-id>` chooses the newest-created run, including failures, and refuses ambiguous recorded sources. Keep the emitted folder for observation commands. |
 | Control: `inspect RUN --control --json`, `cancel RUN [--invocation ID] [--wait] [--timeout 30s] --json` | Selected invocation, verified availability, acceptance or local completion | Exact folder or WORKFLOW_ID/NAME only. No author code, service or provider access. Wait never forces; external completion stays unverified. Python inspect_control/cancel and JavaScript inspectControl/cancel preserve the same structured result. |
 | Verify: `inspect <run> --verify --json` | Recorded summary with placed-file verification | Checks the recorded bytes, not artistic quality, external side effects, or the accuracy of a provider bill. |
+| Register a plan: `plan <target> --register --json` | Stable catalog reference and relative route for a fully materialized plan | Creates a local entry while the service is stopped. No readiness probe or browser launch. Same evidence keeps the same entry. Use `status --project-root DIRECTORY --json` to check the service at an exact project binding. |
 | Open browser: `plan <target> --open`, `inspect <run> --open` | A selected plan/run page in the running project service | Explicit project startup required. Source targets plan once; saved runs read records. `--standalone` hosts independently until interrupted; projectless browser inspection does this by default. Run pages follow recorded events and resumes; plans stay static. `view` remains hidden compatibility syntax, including saved-plan files. |
 | Resume: `run <target> ... --resume NAME`, or repeat `--run FOLDER` | Another invocation in the existing folder | A named resume requires an existing name; repeat current inputs/routes/takes/builder arguments explicitly. Requires the same plan digest and stand-in mode, and no other writer. A changed plan is refused rather than silently replacing history. Recorded spend and original creation time carry forward; resume does not reset the budget ledger or promote the record as newly created. |
 | Choose alternatives: `reroll <run> <step-path>`, `pick <run> <step-path> <take>` | Takes-file mutation and a `next` line | Affect a later plan/run, not the active scheduler; both refuse stand-in runs. `next` is the command that repeats the run, rebuilt from its latest `run_started` `repeat` (target, inputs files, route tables, `--max-usd`, and `--live` only when the run was live); a run given input flags, `--arg`, a file outside the project, or started by an SDK gets advice to run it again instead. Running that command can spend: it needs the same approval as the original run. Reroll's `--live` is accepted and ignored. Picking may still require generation of the selected take or downstream work. CLI-only: SDK callers repeat a run by calling `run` again with the same request. |
@@ -687,6 +688,12 @@ complete-target matching and ambiguous digest omissions; a label alone cannot
 establish a source file's owning root. Host menus, OS-specific opening,
 historical source recovery and publishing a component SDK remain outside this
 delivery.
+
+Plan registration, exact service status and pathless service-entry file
+resolution are CLI jobs. The SDKs still resolve files when given an exact native
+run folder or saved graph. CLI tests cover plan retention across an address
+change and file resolution from exact recorded evidence while the service is
+stopped. The portable viewer protocol and browser paths stay unchanged.
 
 ## Gaps that should guide design
 

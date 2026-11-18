@@ -17,7 +17,7 @@
 //! them. `expand` and `plan --json` print the graph alone.
 
 use crate::cli::PlanArgs;
-use crate::print::{print_json, print_line};
+use crate::print::{labelled, print_json, print_line};
 use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::money::Usd;
@@ -29,7 +29,7 @@ use std::path::PathBuf;
 /// Which planning verb.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanVerb {
-    Plan,
+    Plan { register: bool },
     Expand,
     Identity,
     Price,
@@ -40,8 +40,21 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
     let (plan, planner, resolved_models) = planned(args)?;
     let refused = u8::from(!plan.ok());
     let status = match verb {
-        PlanVerb::Plan => {
-            if args.json {
+        PlanVerb::Plan { register } => {
+            if register {
+                let graph = materialized(&plan, &planner);
+                let receipt =
+                    super::service::register_plan_receipt(&planner.project, &graph, plan.ok())?;
+                if args.json {
+                    print_json(&receipt);
+                } else {
+                    print_line(&render::render(&plan, &planner));
+                    print_line(&labelled(
+                        "registered",
+                        receipt["route"].as_str().unwrap_or_default(),
+                    ));
+                }
+            } else if args.json {
                 let graph = output::graph_document(&plan, &planner);
                 if args.prepared {
                     print_json(
@@ -62,7 +75,9 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             if args.expect_cached
                 && let Some(line) = not_cached(&plan)
             {
-                print_line(&line);
+                if !register || !args.json {
+                    print_line(&line);
+                }
                 status = 1;
             }
             status
@@ -80,7 +95,7 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             refused
         }
     };
-    if verb == PlanVerb::Plan && (args.open || args.standalone) {
+    if matches!(verb, PlanVerb::Plan { .. }) && (args.open || args.standalone) {
         let graph = materialized(&plan, &planner);
         let declarations = planner.project.declarations();
         if args.standalone || !planner.project.has_file {

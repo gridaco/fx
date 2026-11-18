@@ -126,23 +126,25 @@ impl Record {
 impl Catalog {
     /// Opens local state beneath the canonical project root. No workflow code is loaded.
     pub fn open(root: &Path, runs_dir: &Path) -> io::Result<Self> {
+        let mut catalog = Self::locate(root)?;
+        catalog.runs_dir = catalog.root.join(runs_dir);
+        private_dir(&catalog.root.join(".fx"), false)?;
+        private_dir(&catalog.state_dir, true)?;
+        private_ignore(&catalog.state_dir)?;
+        private_dir(&catalog.state_dir.join("entries"), true)?;
+        Ok(catalog)
+    }
+
+    /// Binds an exact project directory without creating local service state.
+    pub fn locate(root: &Path) -> io::Result<Self> {
         let root = root.canonicalize()?;
         if !root.is_dir() {
             return Err(invalid("The project root is not a directory."));
         }
-        let fx_dir = root.join(".fx");
-        private_dir(&fx_dir, false)?;
-        let state_dir = fx_dir.join("service");
-        private_dir(&state_dir, true)?;
-        private_ignore(&state_dir)?;
-        private_dir(&state_dir.join("entries"), true)?;
+        let state_dir = root.join(".fx/service");
         let project_id = digest(&json!(["fx-local-project-v1", root]));
         Ok(Self {
-            runs_dir: if runs_dir.is_absolute() {
-                runs_dir.to_path_buf()
-            } else {
-                root.join(runs_dir)
-            },
+            runs_dir: root.join("runs"),
             root,
             state_dir,
             project_id,
@@ -154,6 +156,15 @@ impl Catalog {
     }
     pub fn state_dir(&self) -> &Path {
         &self.state_dir
+    }
+
+    /// Reports whether confined service state already exists, without creating it.
+    pub fn has_state(&self) -> io::Result<bool> {
+        match self.check_state() {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
+        }
     }
 
     /// Registers an explicitly selected existing run. This operation is available only to local
@@ -277,23 +288,7 @@ impl Catalog {
         if !is_digest(id) {
             return Err(invalid("Unknown catalog entry."));
         }
-        let path = read::confined_file(&self.state_dir, &format!("entries/{id}.json"))?;
-        let file = File::open(path)?;
-        if file.metadata()?.len() > MAX_RECORD_BYTES {
-            return Err(invalid("The catalog entry is too large."));
-        }
-        let record: Record = serde_json::from_reader(file)
-            .map_err(|_| invalid("The catalog entry cannot be read."))?;
-        let expected = match &record {
-            Record::Run { root, identity, .. } => {
-                digest(&json!(["fx-local-run-v1", root, identity]))
-            }
-            Record::Plan { graph, .. } => digest(&json!(["fx-local-plan-v1", graph])),
-        };
-        if record.id() != id || expected != id {
-            return Err(invalid("The catalog entry identity differs."));
-        }
-        Ok(record)
+        read_entry(&self.state_dir.join("entries"), id)
     }
 
     fn entry(&self, record: &Record) -> Entry {
@@ -361,7 +356,7 @@ impl Catalog {
         timestamp(time)
     }
 
-    fn source(&self, id: &str, kind: &str) -> io::Result<Source> {
+    pub(crate) fn source(&self, id: &str, kind: &str) -> io::Result<Source> {
         match self.record(id)? {
             Record::Run { root, identity, .. } if kind == "runs" => {
                 checked_run(&root, &identity)?;
@@ -544,8 +539,7 @@ fn entries_dir(project_root: &Path) -> io::Result<Option<PathBuf>> {
 
 /// One entry, checked as [`Catalog::record`] checks it.
 fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
-    let path = read::confined_file(entries, &format!("{id}.json"))?;
-    let file = File::open(path)?;
+    let (file, _) = read::open_confined_file(entries, &format!("{id}.json"))?;
     if file.metadata()?.len() > MAX_RECORD_BYTES {
         return Err(invalid("The catalog entry is too large."));
     }

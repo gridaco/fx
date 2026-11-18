@@ -46,6 +46,13 @@ workflow processes. Restarting it restores access to retained run URLs. Closing 
 browser tab has no effect on service or execution. Service commands accept
 `--project DIRECTORY` when you are outside the project.
 
+To save a plan for later viewing without starting a service or opening a browser,
+run `grida fx plan TARGET --register --json`. Its receipt identifies the saved
+plan and its route. A host can check the exact project with
+`grida fx status --project-root DIRECTORY --json`. Use the route with the
+verified URL only when their project identities match. Restarting the service
+can change its address. The saved plan's route stays the same.
+
 ## Configure canvas display
 
 Set project-wide display defaults in `fx.yaml`:

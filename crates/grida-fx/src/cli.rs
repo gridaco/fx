@@ -65,13 +65,13 @@ pub enum Verb {
     /// start the project FX service; workflow execution remains independent
     Start(StartArgs),
     /// show the project service status and verified URL
-    Status(ServiceArgs),
+    Status(StatusArgs),
     /// stop the project service without stopping workflow runs
     Stop(ServiceArgs),
     /// read the latest project service log lines
     Logs(LogsArgs),
     /// expand, check and price a workflow; never spends
-    Plan(PlanArgs),
+    Plan(PlanCommandArgs),
     /// the expanded graph, as JSON
     Expand(PlanArgs),
     /// each instance's identity, as JSON
@@ -157,6 +157,19 @@ pub struct StartArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct StatusArgs {
+    /// directory in the project (default: here)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// exact local project directory, without ancestor discovery
+    #[arg(long, conflicts_with = "project", value_name = "DIRECTORY")]
+    pub project_root: Option<String>,
+    /// print the verified service status as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct ServiceArgs {
     /// directory in the project (default: here)
     #[arg(long, value_name = "DIRECTORY")]
@@ -174,6 +187,15 @@ pub struct LogsArgs {
     /// number of final lines, from 1 to 10000
     #[arg(long, default_value_t = 100)]
     pub lines: usize,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct PlanCommandArgs {
+    #[command(flatten)]
+    pub plan: PlanArgs,
+    /// plan: save the materialized plan to the project catalog without opening a browser
+    #[arg(long, conflicts_with_all = ["open", "standalone", "prepared"])]
+    pub register: bool,
 }
 
 /// The common options of the planning verbs, plus the verb-specific flags.
@@ -205,7 +227,7 @@ pub struct PlanArgs {
     /// plan: exit 1 when the plan has problems
     #[arg(long)]
     pub check: bool,
-    /// plan: print the graph as JSON
+    /// plan: print the graph or registration receipt as JSON
     #[arg(long)]
     pub json: bool,
     /// plan: exit 1 unless every step is cached
@@ -519,7 +541,11 @@ pub struct FilesListArgs {
 #[derive(Debug, Args, Clone)]
 pub struct FilesResolveArgs {
     /// an existing run folder or saved plan JSON file
-    pub target: String,
+    #[arg(required_unless_present = "service_entry")]
+    pub target: Option<String>,
+    /// resolve the captured service entry inside the exact project binding
+    #[arg(long, conflicts_with = "target", requires = "project")]
+    pub service_entry: bool,
     /// captured {subject,target} JSON reference
     #[arg(long, value_name = "JSON")]
     pub reference: String,
@@ -724,7 +750,13 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Status(args) => verbs::service::status(&args),
         Verb::Stop(args) => verbs::service::stop(&args),
         Verb::Logs(args) => verbs::service::logs(&args),
-        Verb::Plan(args) => planning(PlanVerb::Plan, args, rest),
+        Verb::Plan(args) => planning(
+            PlanVerb::Plan {
+                register: args.register,
+            },
+            args.plan,
+            rest,
+        ),
         Verb::Expand(args) => planning(PlanVerb::Expand, args, rest),
         Verb::Identity(args) => planning(PlanVerb::Identity, args, rest),
         Verb::Price(args) => planning(PlanVerb::Price, args, rest),
@@ -813,6 +845,7 @@ mod tests {
         else {
             panic!("not plan")
         };
+        let plan = plan.plan;
         assert_eq!(plan.max_usd.as_deref(), Some("-2"));
         assert!(plan.check);
         assert_eq!(plan.inputs, ["a.yaml", "b.yaml"]);

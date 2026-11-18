@@ -206,9 +206,15 @@ const detach = await client.handleExternalFile(async (reference) => {
 detach();
 ```
 
-Your native implementation can use the ordinary SDK's record access. Bind the
-viewer subject to the exact record your application opened; never resolve a
-click by looking up whichever run happens to be newest later.
+Bind the viewer subject to the exact record your application opened. For a
+captured service-entry subject, trusted native code can pass the complete
+reference to `grida fx files resolve --service-entry --project DIR --reference JSON --json`.
+Supply the authorized project directory. The command verifies the registered
+entry and works while its viewer is stopped. Keep the returned local path in
+native code and enforce your application's file-opening permissions.
+
+The Python and JavaScript SDKs can also resolve a reference using the exact
+record your application opened:
 
 ```js
 import { loadRun } from "@grida/fx";
