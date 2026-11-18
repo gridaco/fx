@@ -325,7 +325,9 @@ async fn plain(
     attempts: &Attempts<'_>,
     diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
 ) -> Outcome {
-    if let Err(outcome) = prepare(adapter.prepare(&attempts.call), attempts.cancel).await {
+    if let Some(outcome) =
+        preparation_failure(adapter.prepare(&attempts.call), attempts.cancel).await
+    {
         return outcome;
     }
     let route_id = attempts.call.route.id();
@@ -428,7 +430,9 @@ async fn submit(
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
-    if let Err(outcome) = prepare(adapter.prepare(&attempts.call), attempts.cancel).await {
+    if let Some(outcome) =
+        preparation_failure(adapter.prepare(&attempts.call), attempts.cancel).await
+    {
         return outcome;
     }
     let route_id = attempts.call.route.id();
@@ -563,7 +567,9 @@ async fn collect(
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
-    if let Err(outcome) = prepare(adapter.prepare_collect(&attempts.call), attempts.cancel).await {
+    if let Some(outcome) =
+        preparation_failure(adapter.prepare_collect(&attempts.call), attempts.cancel).await
+    {
         return match outcome {
             // The provider may still be running this job. Keep its submitted record.
             Outcome::Refused(reason) => Outcome::Failed(reason),
@@ -691,17 +697,15 @@ async fn collect_once(
 }
 
 /// Preparation does no provider I/O, so cancellation wins without entering an attempt.
-async fn prepare(
+async fn preparation_failure(
     preparation: Option<BoxFuture<'_, Result<(), String>>>,
     cancel: &Cancel,
-) -> Result<(), Outcome> {
-    let Some(preparation) = preparation else {
-        return Ok(());
-    };
+) -> Option<Outcome> {
+    let preparation = preparation?;
     tokio::select! {
         biased;
-        () = cancel.cancelled() => Err(Outcome::Cancelled),
-        result = preparation => result.map_err(Outcome::Refused),
+        () = cancel.cancelled() => Some(Outcome::Cancelled),
+        result = preparation => result.err().map(Outcome::Refused),
     }
 }
 
