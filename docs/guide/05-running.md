@@ -213,8 +213,9 @@ recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
 
 **Saved Grida keys.** On macOS and Linux, if neither the environment nor the project's `.env`
 supplies a key, FX can use a standalone GG, OpenRouter, fal, Tripo, or ElevenLabs key saved in
-Grida. Save the key in your Grida CLI where supported, for example with
-`grida ai providers configure fal`. FX reads the store under the process's `GRIDA_HOME` (an
+Grida. Use `grida ai providers configure` with the provider name, for example
+`grida ai providers configure gg` (Grida 0.5.7 or later for GG).
+FX reads the store under the process's `GRIDA_HOME` (an
 absolute normalized path), or `$HOME/.grida` by default. A custom base URL requires an explicit
 key. FX reads a saved key when it needs to make a live call, including during resume. Replaying
 a cached call, running offline, or using a stand-in needs no saved key. If FX cannot use the

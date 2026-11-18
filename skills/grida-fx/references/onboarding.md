@@ -75,8 +75,8 @@ yet, so give the user these steps rather than sending them to search:
    `media` (images, video and 3D). A key with only one scope refuses the other
    steps. A spending cap on the key is a good extra guard for a first run.
 4. Copy the key when it is shown; it is shown once. Set it as `GG_API_KEY` in the
-   environment, add `GG_API_KEY=…` to the project's `.env`, or save it through a
-   Grida CLI that supports standalone GG keys.
+   environment, add `GG_API_KEY=…` to the project's `.env`, or save it with
+   `grida ai providers configure gg` (Grida 0.5.7 or later).
 
 For questions about GG itself (key scopes, credits, spending caps, rate limits,
 how a charge is settled), read <https://gateway.grida.ai/llms.txt>. It is GG's

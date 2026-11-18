@@ -108,7 +108,7 @@ GG_API_KEY=…
 ```
 
 in the environment or your project's `.env` (keep it out of version control). On macOS and Linux,
-FX also accepts a standalone GG API key saved by a Grida CLI that supports it. FX books a GG
+you can also save it with `grida ai providers configure gg` (Grida 0.5.7 or later). FX books a GG
 call at what GG charged for it ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
 
 The key needs both scopes, `text` for text and agent steps and `media` for everything else.

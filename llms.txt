@@ -432,9 +432,9 @@ appears as a `models` diagnostic after the provider report; other diagnostics co
   declared key and base URL names), then the Grida store for eligible providers on macOS and
   Linux. FX reads saved `gg`, `openrouter`, `fal`, `tripo` and `elevenlabs` keys from
   `providers/credentials.toml` under the process `GRIDA_HOME` or `$HOME/.grida`. The home
-  must be an absolute normalized path. GG uses a standalone API key here. Ask the user to save
-  keys through Grida where supported. Set `GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip the store
-  or `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`.
+  must be an absolute normalized path. For a standalone GG key, ask the user to save it with
+  `grida ai providers configure gg` (Grida 0.5.7 or later).
+  Set `GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip the store or `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`.
   Custom base URLs and other providers use explicit keys. An unsafe or invalid store refuses a
   lookup that needs it with a safe diagnostic. `grida fx doctor` reports `present (grida)` for
   eligible saved keys and never prints the key.

@@ -71,8 +71,7 @@ fn image_call(capability: &str, request: Value) -> TestCall {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn stored_gg_is_loaded_on_demand_and_used_by_the_gateway_adapter() {
-    use grida_fx_providers::{Adapter, keys::KeyName, live::adapters};
-    use std::fs::{self, DirBuilder, OpenOptions};
+    use std::fs::{DirBuilder, OpenOptions};
     use std::io::Write;
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 
@@ -80,44 +79,181 @@ fn stored_gg_is_loaded_on_demand_and_used_by_the_gateway_adapter() {
     let home = directory.path().canonicalize().unwrap();
     let providers = home.join("providers");
     DirBuilder::new().mode(0o700).create(&providers).unwrap();
-    let credential_file = providers.join("credentials.toml");
-    let credentials = b"version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
-                        [providers.gg]\napi_key = 'synthetic-gg-store-key'\n";
-    OpenOptions::new()
+    let key = "synthetic-gg-store-key";
+    let mut credentials = OpenOptions::new()
         .create_new(true)
         .write(true)
         .mode(0o600)
-        .open(&credential_file)
-        .unwrap()
-        .write_all(credentials)
+        .open(providers.join("credentials.toml"))
         .unwrap();
+    writeln!(
+        credentials,
+        "version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+         [providers.gg]\napi_key = '{key}'"
+    )
+    .unwrap();
+    drop(credentials);
+
+    assert_stored_gg_call(&home, key);
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn assert_stored_gg_call(home: &std::path::Path, key: &str) {
+    use grida_fx_providers::{Adapter, keys::KeyName, live::adapters};
+    use std::fs;
+
+    let providers = home.join("providers");
+    let credential_file = providers.join("credentials.toml");
+    let credentials = fs::read(&credential_file).unwrap();
+    let lock = providers.join("profile.lock.sqlite");
+    let lock_existed = lock.exists();
     let transport = replay(vec![
         Expect::new(
             Method::Post,
             format!("{BASE}/images/generations"),
             Lane::Provider,
         )
-        .credential("authorization", "Bearer synthetic-gg-store-key")
+        .credential("authorization", &format!("Bearer {key}"))
         .body(ExpectBody::Any)
         .reply(picture_answer(&media::png(2, 2, Some(255)), "80")),
     ]);
-    let setup =
-        setup(transport.clone(), Keys::none()).with_stored_credentials(Ok(home), &KeyName::STORED);
+    let setup = setup(transport.clone(), Keys::none())
+        .with_stored_credentials(Ok(home.to_path_buf()), &KeyName::STORED);
     let adapters = adapters(&setup);
     let call = image_call("image.generate", json!({"prompt": "A kite."}));
     let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
         panic!("GG image route has no adapter");
     };
     let before_send = adapter.redactor().with("synthetic-upload-secret");
-    assert!(!providers.join("profile.lock.sqlite").exists());
+    assert_eq!(lock.exists(), lock_existed);
     assert!(matches!(block_on(adapter.send(&call)), Sent::Answered(_)));
     transport.assert_done();
     assert_eq!(
-        before_send.reason("synthetic-gg-store-key and synthetic-upload-secret"),
+        before_send.reason(&format!("{key} and synthetic-upload-secret")),
         "[redacted] and [redacted]"
     );
-    assert!(providers.join("profile.lock.sqlite").exists());
-    assert_eq!(fs::read(credential_file).unwrap(), credentials);
+    assert!(lock.exists());
+    assert!(
+        fs::read(credential_file).unwrap() == credentials,
+        "FX changed the credential file"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+#[ignore = "requires the Grida 0.5.7 npm launcher (GRIDA_TEST_CLI) and the FX engine (GRIDA_FX_BIN)"]
+fn public_grida_gg_store_drives_fx_adapter_and_is_removed() {
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::process::{Command, Stdio};
+
+    let tool = |name: &str| {
+        let path = PathBuf::from(env::var_os(name).unwrap_or_else(|| panic!("{name} is required")));
+        assert!(
+            path.is_absolute() && path.is_file(),
+            "{name} must name an absolute file"
+        );
+        path
+    };
+    let grida = tool("GRIDA_TEST_CLI");
+    let engine = tool("GRIDA_FX_BIN");
+    let path = env::var_os("PATH").expect("PATH must include Node.js");
+    let scratch = tempfile::tempdir().unwrap();
+    let home = scratch.path().canonicalize().unwrap();
+    fs::write(home.join("fx.yaml"), "fx: project/v1\n").unwrap();
+    let key = "sk-gg-v1-synthetic-fx-key";
+
+    let run = |args: &[&str], stdin: Option<&str>| {
+        let mut child = Command::new(&grida)
+            .args(args)
+            .current_dir(&home)
+            .env_clear()
+            .env("PATH", &path)
+            .env("HOME", &home)
+            .env("GRIDA_HOME", &home)
+            .env("GRIDA_NO_UPDATE_CHECK", "1")
+            .env("GRIDA_FX_BIN", &engine)
+            .env("GRIDA_FX_NETWORK", "off")
+            .env("GRIDA_FX_DISABLE_DOTENV", "1")
+            .stdin(if stdin.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        if let Some(text) = stdin {
+            let mut pipe = child.stdin.take().unwrap();
+            writeln!(pipe, "{text}").unwrap();
+        }
+        let output = child.wait_with_output().unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            !stdout.contains(key) && !stderr.contains(key),
+            "printed the synthetic key"
+        );
+        assert!(output.status.success(), "grida {args:?}: {stderr}");
+        stdout
+    };
+    let check_list = |source: Option<&str>| {
+        let response: Value =
+            serde_json::from_str(&run(&["ai", "providers", "list", "--json"], None)).unwrap();
+        let gg = response["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["provider"] == "gg")
+            .unwrap();
+        assert_eq!(gg["environment"], "GG_API_KEY");
+        assert_eq!(gg["configured"], source.is_some());
+        assert_eq!(gg["source"], json!(source));
+    };
+    let check_doctor = |diagnosis: &str| {
+        let output = run(&["fx", "doctor"], None);
+        assert!(
+            output.lines().any(|line| line == diagnosis),
+            "missing diagnosis: {diagnosis}"
+        );
+        assert!(
+            !output.contains(home.to_str().unwrap()),
+            "printed the Grida home"
+        );
+        println!("{diagnosis}");
+    };
+
+    // The pinned release validates standalone GG keys locally.
+    assert_eq!(run(&["--version"], None).trim(), "grida 0.5.7");
+    let configured: Value = serde_json::from_str(&run(
+        &[
+            "ai",
+            "providers",
+            "configure",
+            "gg",
+            "--key-stdin",
+            "--no-input",
+            "--json",
+        ],
+        Some(key),
+    ))
+    .unwrap();
+    assert_eq!(configured["provider"], "gg");
+    assert_eq!(configured["stored"], true);
+    assert_eq!(configured["verification"]["status"], "not_supported");
+    check_list(Some("file"));
+    check_doctor("key       GG_API_KEY present (grida)");
+    assert_stored_gg_call(&home, key);
+
+    let removed: Value =
+        serde_json::from_str(&run(&["ai", "providers", "remove", "gg", "--json"], None)).unwrap();
+    assert_eq!(removed["provider"], "gg");
+    assert_eq!(removed["stored"], false);
+    check_list(None);
+    check_doctor("key       GG_API_KEY missing");
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
