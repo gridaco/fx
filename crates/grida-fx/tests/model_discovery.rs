@@ -772,6 +772,45 @@ fn discovered_model_runs_settles_and_replays_its_paid_call_without_a_key() {
                 .iter()
                 .any(|event| event["event"] == "run_finished" && event["charged_usd"] == 0)
         );
+        if priced {
+            // Keep the paid-call cache, force the body to run again, and use the normal
+            // provider endpoint. Only a fresh exchange would need the invalid Grida home.
+            std::fs::remove_dir_all(root.path().join(".fx/cache/results")).unwrap();
+            let live_replay = Command::new(env!("CARGO_BIN_EXE_grida-fx"))
+                .current_dir(root.path())
+                .env_clear()
+                .env("HOME", root.path())
+                .env("GRIDA_HOME", "invalid-relative-home")
+                .env("GRIDA_FX_NETWORK", "on")
+                .args([
+                    "run",
+                    "workflow.yaml",
+                    "--resolved-models",
+                    "runs/live/resolved-models.json",
+                    "--run",
+                    "runs/live-replay",
+                    "--live",
+                    "--max-usd",
+                    "1",
+                    "--no-view",
+                ])
+                .output()
+                .unwrap();
+            assert_eq!(
+                live_replay.status.code(),
+                Some(0),
+                "stdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&live_replay.stdout),
+                String::from_utf8_lossy(&live_replay.stderr)
+            );
+            assert!(
+                events("runs/live-replay")
+                    .iter()
+                    .any(|event| event["event"] == "call"
+                        && event["cached"] == true
+                        && event["cost_usd"] == 0)
+            );
+        }
         // An existing run carries facts independently of the optional metadata cache.
         std::fs::remove_dir_all(root.path().join(".fx/models")).unwrap();
         let resumed = command_with_key(

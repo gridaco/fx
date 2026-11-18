@@ -41,7 +41,7 @@ impl FalClients {
     pub fn new(setup: &Setup) -> FalClients {
         FalClients {
             run: setup.client(KeyName::Fal),
-            queue: setup.client_at(KeyName::Fal, &setup.endpoints.fal_queue),
+            queue: setup.fal_queue_client(),
         }
     }
 }

@@ -89,6 +89,13 @@ The default classes are below. Each adapter's reference ([providers.md](provider
 
 A call MUST be refused before any byte leaves (`Refused`, $0, `capability_refused`) in this order. The first refusal wins.
 
+An eligible uncached call resolves a missing Grida credential before it enters a paid attempt.
+For these calls, the engine runs steps 1 and 2 as a preflight before looking up the saved key.
+If either check fails, the normal attempt reports the refusal as described below. A credential
+lookup refusal or cancellation leaves no attempt or new job submission
+([providers.md](providers.md) §1). The engine resolves credentials for collection before polling
+an existing submission.
+
 For an adapter FX ships, the engine makes steps 1 and 2 before the adapter sees the call: step 1 from the contract the adapter serves ([providers.md](providers.md) §2) and then the adapter's own judgement of its contract's other members, then step 2. For a project adapter (§9) it makes steps 1 to 3: step 1 from the adapter's identity, step 2, and step 3 from its declaration. It makes them inside the attempt, where the adapter's own refusal would come: after the call's place under the route's pacing, its hold and, for a long job, its `submitting` record ([protocol.md](protocol.md) §6.1 steps 6 and 7; [store.md](store.md) §5). So the events, the $0 settlement and the job record are the same whoever refuses, and the retry owner redacts the sentence as it redacts every reason (§7). The adapter makes the steps left: 3 to 5, or 4 and 5 for a project adapter, which judges any other member of its contract there. The engine makes neither step when it collects a long job (§6): the call's key already fixes its route's contract and its request.
 
 1. **The route's contract is not one this adapter serves.** The `adapter` and `adapter_behavior` in the route's contract MUST be the adapter's own ([providers.md](providers.md) §2) when present: `<route> is not a <capability> route this adapter serves`. `adapter_behavior` is compared as canonical JSON ([identity.md](identity.md) §2), so the string `"1"` and the number `1` differ. A member that is absent or `null` is not checked. A route read from a route table has them filled in where its contract left them out ([identity.md](identity.md) §7), so a route a project declares without a contract is served. The engine hands a call only to the adapter its contract's `adapter` names, or to the default (§1), so `adapter_behavior` is what keeps a table from pointing a model at a wire its adapter no longer sends. An adapter whose reference names other contract members then judges them, with the same sentence followed by `: <why>`.

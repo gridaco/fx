@@ -37,7 +37,8 @@
 //!      transport when `GRIDA_FX_NETWORK=off` (every exchange is refused before it leaves);
 //!   4. every provider's adapters on that setup (`live::adapters`), a family's for each provider
 //!      the planning project declares with one included, registered whether or not their key is
-//!      present: a call without its key is refused before sending;
+//!      present. After a cache miss, a built-in adapter may resolve a missing key from Grida's
+//!      store for its default endpoint. A call without its key is refused before sending;
 //!   5. the planning project's own adapters, which planning loaded
 //!      (`grida_fx_runtime::adapter_host::register`): for each declaration with one, an adapter
 //!      host, the node host program of the module's language found from the planning project
@@ -68,7 +69,7 @@ use grida_fx_core::project::Planner;
 use grida_fx_core::providers::Declaration;
 use grida_fx_core::routes::RouteTable;
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_providers::keys::{Environment, Secret};
+use grida_fx_providers::keys::{DISABLE_GRIDA_STORE, Environment, KeyName, Secret};
 use grida_fx_providers::live::{self, Network};
 use grida_fx_providers::{Adapters, Endpoints, Keys};
 use grida_fx_runtime::adapter_host::{self, Launch, ProcessLaunch};
@@ -78,6 +79,7 @@ use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
 use grida_fx_runtime::plantime::PlanTime;
 use grida_fx_runtime::stand_in::StandIn;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -106,10 +108,28 @@ pub fn engine_for(
     live: bool,
     stand_in: Option<Arc<StandIn>>,
     private: &[PathBuf],
+    settings: Option<ProviderSettings>,
 ) -> Result<Arc<Engine>, Error> {
-    engine_with_env(runtime, planner, live, stand_in, private, &|name: &str| {
-        std::env::var(name).ok()
-    })
+    engine_with_env(
+        runtime,
+        planner,
+        live,
+        stand_in,
+        private,
+        settings,
+        &process_env,
+    )
+}
+
+/// A supplied but non-Unicode credential home is invalid, not an absent override.
+pub(crate) fn process_env(name: &str) -> Option<String> {
+    match std::env::var(name) {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotUnicode(_)) if matches!(name, "GRIDA_HOME" | "HOME") => {
+            Some(String::new())
+        }
+        Err(_) => None,
+    }
 }
 
 /// The engine of `planner` (module doc); `env` reads an environment variable.
@@ -119,12 +139,13 @@ pub fn engine_with_env(
     live: bool,
     stand_in: Option<Arc<StandIn>>,
     private: &[PathBuf],
+    settings: Option<ProviderSettings>,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Arc<Engine>, Error> {
     // The transport is built inside the runtime, whatever it needs from it.
     let adapters = {
         let _entered = runtime.enter();
-        adapters_for(planner, live, env)?
+        adapters_for(planner, live, settings, env)?
     };
     let store = match &stand_in {
         Some(_) => stand_in_store(planner),
@@ -184,18 +205,43 @@ pub const STAND_IN_STORE: &str = "stand-in";
 pub fn adapters_for(
     planner: &Planner,
     live: bool,
+    settings: Option<ProviderSettings>,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<Adapters, Error> {
     if !live {
         return Ok(Adapters::new());
     }
-    let (environment, keys, endpoints) = provider_variables(&planner.project, env)?;
-    let setup = live::live_setup(keys, endpoints, Network::from_env(env)).map_err(|reason| {
-        Error::new(
-            ErrorKind::Internal,
-            format!("cannot start the provider transport: {reason}"),
-        )
-    })?;
+    let ProviderSettings {
+        environment,
+        keys,
+        endpoints,
+        openrouter_without_key,
+    } = match settings {
+        Some(settings) => settings,
+        None => provider_variables(&planner.project, env)?,
+    };
+    let network = Network::from_env(env);
+    let mut setup = live::live_setup(keys, endpoints, network)
+        .map_err(|reason| {
+            Error::new(
+                ErrorKind::Internal,
+                format!("cannot start the provider transport: {reason}"),
+            )
+        })?
+        .with_openrouter_without_key(openrouter_without_key);
+    if network == Network::On {
+        let eligible: Vec<_> = KeyName::STORED
+            .into_iter()
+            .filter(|name| {
+                setup.keys.get(*name).is_none() && store_eligible(env, &setup.endpoints, *name)
+            })
+            .collect();
+        if !eligible.is_empty()
+            && let Some(home) = store_home(env)
+        {
+            setup = setup.with_stored_credentials(home, &eligible);
+        }
+    }
     let mut adapters = live::adapters(&setup);
     let project = &planner.project;
     adapter_host::register(&mut adapters, &setup, |declaration, adapter| {
@@ -210,7 +256,8 @@ pub fn adapters_for(
             )
         });
         let spec = spec.map(|spec| spec.with_environment(withheld, given));
-        Arc::new(ProcessLaunch::new(spec)) as Arc<dyn Launch>
+        Arc::new(ProcessLaunch::new(spec).with_credential_guard(setup.redactor()))
+            as Arc<dyn Launch>
     });
     Ok(adapters)
 }
@@ -236,6 +283,15 @@ fn adapter_environment(
     (withheld, given)
 }
 
+/// Provider settings resolved for this invocation, shared by discovery and execution.
+#[derive(Debug)]
+pub(crate) struct ProviderSettings {
+    pub environment: Environment,
+    pub keys: Keys,
+    pub endpoints: Endpoints,
+    pub openrouter_without_key: BTreeMap<String, BTreeSet<String>>,
+}
+
 /// The variables, keys and endpoints of the planning project `project` (spec/providers.md §1):
 /// the variables its declarations name from `env`, then from its `.env` (unless `env` gives
 /// `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` or base-URL refusal is a usage error; its sentence
@@ -243,13 +299,89 @@ fn adapter_environment(
 pub fn provider_variables(
     project: &Project,
     env: &dyn Fn(&str) -> Option<String>,
-) -> Result<(Environment, Keys, Endpoints), Error> {
+) -> Result<ProviderSettings, Error> {
     let dotenv = dotenv_path(&project.root);
     let environment =
         Environment::read(env, Some(&dotenv), &project.declarations()).map_err(Error::usage)?;
     let keys = Keys::from_environment(&environment);
     let endpoints = Endpoints::from_environment(&environment, &keys).map_err(Error::usage)?;
-    Ok((environment, keys, endpoints))
+    Ok(ProviderSettings {
+        environment,
+        keys,
+        endpoints,
+        openrouter_without_key: BTreeMap::new(),
+    })
+}
+
+/// May this invocation use stored keys for this provider? A configured alternative
+/// endpoint has to use an explicit key, wherever its URL came from.
+pub(crate) fn store_eligible(
+    env: &dyn Fn(&str) -> Option<String>,
+    endpoints: &Endpoints,
+    name: KeyName,
+) -> bool {
+    cfg!(any(target_os = "macos", target_os = "linux"))
+        && KeyName::STORED.contains(&name)
+        && !env(DISABLE_GRIDA_STORE).is_some_and(|value| value.trim() == "1")
+        && endpoints.base(name.provider()) == Some(name.declaration().base_url.default.as_str())
+}
+
+fn store_home(env: &dyn Fn(&str) -> Option<String>) -> Option<Result<PathBuf, String>> {
+    if let Some(value) = env("GRIDA_HOME") {
+        return Some(Ok(PathBuf::from(value)));
+    }
+    env("HOME").map(|home| {
+        let home = PathBuf::from(home);
+        if !home.is_absolute() || home.parent().is_none() {
+            return Err("Grida provider credentials need an absolute home directory".into());
+        }
+        Ok(home.join(".grida"))
+    })
+}
+
+/// Check the store for the requested slots for doctor or online metadata discovery.
+pub(crate) fn stored_keys(
+    env: &dyn Fn(&str) -> Option<String>,
+    keys: &mut Keys,
+    environment: &Environment,
+    endpoints: &Endpoints,
+    providers: &[KeyName],
+) -> Result<(), String> {
+    let eligible: Vec<_> = providers
+        .iter()
+        .copied()
+        .filter(|&name| {
+            let declaration = name.declaration();
+            let configured = declaration
+                .base_url
+                .variable
+                .as_deref()
+                .and_then(|variable| environment.get(variable));
+            keys.get(name).is_none()
+                && store_eligible(env, endpoints, name)
+                // Doctor substitutes the default when a base URL is refused. Only
+                // read a stored key if an explicitly supplied URL is itself the default.
+                && configured.is_none_or(|value| {
+                    grida_fx_providers::wire::normalize_base_url(value, &declaration.label)
+                        .is_ok_and(|base| base == declaration.base_url.default)
+                })
+        })
+        .collect();
+    if eligible.is_empty() {
+        return Ok(());
+    }
+    let Some(home) = store_home(env) else {
+        return Ok(());
+    };
+    let selected: Vec<_> = eligible.iter().map(|name| name.provider()).collect();
+    let mut found = grida_fx_providers::grida_store::read(&home?, &selected)
+        .map_err(|error| error.to_string())?;
+    for name in eligible {
+        if let Some(secret) = found.remove(name.provider()) {
+            keys.insert_stored(name, secret);
+        }
+    }
+    Ok(())
 }
 
 /// The planning project's key file.
@@ -366,6 +498,86 @@ mod tests {
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn saved_credentials_fill_only_missing_keys_from_the_process_home() {
+        use grida_fx_providers::keys::KeySource;
+        use std::fs::{DirBuilder, OpenOptions};
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().canonicalize().unwrap();
+        let planner = planner_in(&root, "fx: project/v1\n");
+        let home = root.join(".grida");
+        std::fs::create_dir(&home).unwrap();
+        let providers = home.join("providers");
+        DirBuilder::new().mode(0o700).create(&providers).unwrap();
+        OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(providers.join("credentials.toml"))
+            .unwrap()
+            .write_all(
+                b"version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+                  [providers.gg]\napi_key = 'synthetic-saved-gg'\n\
+                  [providers.fal]\napi_key = 'synthetic-saved-fal'\n\
+                  [providers.tripo]\napi_key = 'synthetic-saved-tripo'\n",
+            )
+            .unwrap();
+        std::fs::write(
+            root.join(".env"),
+            "GG_API_KEY=synthetic-local-gg\nFAL_KEY=synthetic-local-fal\nGRIDA_HOME=/unused\n",
+        )
+        .unwrap();
+        let env = |name: &str| match name {
+            "HOME" => Some(root.to_str().unwrap().into()),
+            "GG_API_KEY" => Some("synthetic-explicit-gg".into()),
+            "FAL_KEY" => Some(" ".into()),
+            _ => None,
+        };
+        let ProviderSettings {
+            environment,
+            mut keys,
+            endpoints,
+            ..
+        } = provider_variables(&planner.project, &env).unwrap();
+        let lock = providers.join("profile.lock.sqlite");
+        stored_keys(
+            &|name| {
+                (name == DISABLE_GRIDA_STORE)
+                    .then(|| "1".into())
+                    .or_else(|| env(name))
+            },
+            &mut keys,
+            &environment,
+            &endpoints,
+            &KeyName::STORED,
+        )
+        .unwrap();
+        assert!(!lock.exists());
+
+        stored_keys(&env, &mut keys, &environment, &endpoints, &KeyName::STORED).unwrap();
+        for (name, value, source) in [
+            (
+                KeyName::GridaGateway,
+                "synthetic-explicit-gg",
+                KeySource::Environment,
+            ),
+            (KeyName::Fal, "synthetic-local-fal", KeySource::DotEnv),
+            (
+                KeyName::Tripo,
+                "synthetic-saved-tripo",
+                KeySource::GridaStore,
+            ),
+        ] {
+            assert_eq!(keys.get(name).map(Secret::expose), Some(value));
+            assert_eq!(keys.source(name), Some(source));
+        }
+        assert!(lock.exists());
+    }
+
     #[test]
     fn the_engine_keeps_the_planning_projects_cache_and_the_homes_hosts() {
         let folder = tempfile::tempdir().unwrap();
@@ -377,7 +589,7 @@ mod tests {
         );
         let runtime = runtime().unwrap();
         let engine =
-            engine_with_env(&runtime, &planner, true, None, &[], &offline_env(&[])).unwrap();
+            engine_with_env(&runtime, &planner, true, None, &[], None, &offline_env(&[])).unwrap();
         assert_eq!(engine.store.root(), root.join("shared/cache"));
         assert_eq!(engine.project_root, root);
         assert_eq!(engine.sources, ["lib"]);
@@ -395,7 +607,7 @@ mod tests {
         let spec = engine.hosts.pool(Language::Python).unwrap().spec();
         assert_eq!(spec.project_root, root);
         assert_eq!(spec.sources, ["lib"]);
-        let engine = engine_for(&runtime, &planner, false, None, &[]).unwrap();
+        let engine = engine_for(&runtime, &planner, false, None, &[], None).unwrap();
         assert!(!engine.live);
         assert!(engine.adapters.is_empty());
     }
@@ -412,7 +624,7 @@ mod tests {
             asked.set(asked.get() + 1);
             None
         };
-        let adapters = adapters_for(&planner, false, &counting).unwrap();
+        let adapters = adapters_for(&planner, false, None, &counting).unwrap();
         assert!(adapters.is_empty());
         assert_eq!(asked.get(), 0);
     }
@@ -475,10 +687,12 @@ mod tests {
         let plain = adapters_for(
             &planner_in(&root, "fx: project/v1\n"),
             true,
+            None,
             &offline_env(&[]),
         )
         .unwrap();
-        let adapters = adapters_for(&adapter_planner(&root), true, &offline_env(&[])).unwrap();
+        let adapters =
+            adapters_for(&adapter_planner(&root), true, None, &offline_env(&[])).unwrap();
         let served = adapters
             .serving(&grida_fx_providers::RouteRef::of(route))
             .unwrap();
@@ -506,7 +720,11 @@ mod tests {
         let env = |name: &str| {
             (name == "ACME_BASE_URL").then(|| "https://proxy.acme.test/v1".to_string())
         };
-        let (environment, _, endpoints) = provider_variables(&planner.project, &env).unwrap();
+        let ProviderSettings {
+            environment,
+            endpoints,
+            ..
+        } = provider_variables(&planner.project, &env).unwrap();
         assert_eq!(endpoints.base("acme"), Some("https://proxy.acme.test/v1"));
         let declarations = planner.project.declarations();
         let (withheld, given) =
@@ -541,16 +759,17 @@ mod tests {
         .unwrap();
         let network_off = |name: &str| (name == "GRIDA_FX_NETWORK").then(|| "off".to_string());
         // The file is read: a refusal is a usage error naming the variable, never the value.
-        let error = adapters_for(&planner, true, &network_off).unwrap_err();
+        let error = adapters_for(&planner, true, None, &network_off).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Usage);
         assert!(error.message.contains("FAL_KEY"), "{}", error.message);
         assert!(!error.message.contains(value), "{}", error.message);
         // GRIDA_FX_DISABLE_DOTENV=1 turns the file off.
-        let adapters = adapters_for(&planner, true, &offline_env(&[])).unwrap();
+        let adapters = adapters_for(&planner, true, None, &offline_env(&[])).unwrap();
         assert!(adapters.serves("video.generate", "fal"));
         // A good file gives its keys.
         std::fs::write(root.join(".env"), format!("FAL_KEY={value}\n")).unwrap();
-        let (_, keys, _) = provider_variables(&planner.project, &network_off).unwrap();
+        let ProviderSettings { keys, .. } =
+            provider_variables(&planner.project, &network_off).unwrap();
         assert_eq!(
             keys.source(grida_fx_providers::KeyName::Fal),
             Some(grida_fx_providers::keys::KeySource::DotEnv)
@@ -571,7 +790,7 @@ mod tests {
                 "https://proxy.example.test/fx-made-up-key-0b9d",
             ),
         ]);
-        let error = adapters_for(&planner, true, &env).unwrap_err();
+        let error = adapters_for(&planner, true, None, &env).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Usage);
         assert!(
             error.message.contains("OPENAI_BASE_URL"),
@@ -580,7 +799,7 @@ mod tests {
         );
         assert!(!error.message.contains(value), "{}", error.message);
         let env = offline_env(&[("OPENAI_BASE_URL", "ftp://proxy.example.test")]);
-        let error = adapters_for(&planner, true, &env).unwrap_err();
+        let error = adapters_for(&planner, true, None, &env).unwrap_err();
         assert_eq!(error.kind, ErrorKind::Usage);
         assert!(
             error.message.starts_with("OPENAI_BASE_URL"),
@@ -629,7 +848,7 @@ mod tests {
             )
         );
         let runtime = runtime().unwrap();
-        let engine = engine_with_env(&runtime, &planner, false, None, &[], &nothing).unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], None, &nothing).unwrap();
         assert_eq!(
             engine.hosts.pool(Language::TypeScript).err(),
             Some(
@@ -672,7 +891,7 @@ mod tests {
             spec.args,
             [package.join("dist/host-entry.js").into_os_string()]
         );
-        let engine = engine_with_env(&runtime, &planner, false, None, &[], &chosen).unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], None, &chosen).unwrap();
         let pool = engine.hosts.pool(Language::TypeScript).unwrap();
         assert_eq!(pool.spec(), &spec);
         assert_eq!(pool.spec().sources, ["acme_lib", "@acme/shapes"]);
@@ -726,7 +945,7 @@ mod tests {
             spec.args,
             [global.join("dist/host-entry.js").into_os_string()]
         );
-        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], None, &started).unwrap();
         assert_eq!(shown(&engine, &global), hidden);
         // The planning project's own @grida/fx comes before it.
         let planned = app.join("node_modules/@grida/fx");
@@ -739,7 +958,7 @@ mod tests {
             [planned.join("dist/host-entry.js").into_os_string()]
         );
         assert_eq!(spec.project_root, shared);
-        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], None, &started).unwrap();
         assert_eq!(
             engine.hosts.pool(Language::TypeScript).unwrap().spec(),
             &spec
@@ -752,7 +971,7 @@ mod tests {
         std::fs::write(own.join("dist/host-entry.js"), "").unwrap();
         let spec = home_spec(Language::TypeScript, &planner, &started).unwrap();
         assert_eq!(spec.args, [own.join("dist/host-entry.js").into_os_string()]);
-        let engine = engine_with_env(&runtime, &planner, false, None, &[], &started).unwrap();
+        let engine = engine_with_env(&runtime, &planner, false, None, &[], None, &started).unwrap();
         assert_eq!(
             shown(&engine, &own),
             "not defined by \"exports\" in node_modules/@grida/fx/package.json imported from \
@@ -771,7 +990,7 @@ mod tests {
             "fx: project/v1\nroutes:\n  image.generate: img-a@acme\n",
         );
         let runtime = runtime().unwrap();
-        let engine = engine_for(&runtime, &planner, false, None, &[]).unwrap();
+        let engine = engine_for(&runtime, &planner, false, None, &[], None).unwrap();
         let plan = plan(&engine, &mut planner, &mut FakeHost::new()).unwrap();
         assert!(plan.ok(), "{:?}", plan.problems);
         assert_eq!(plan.expansion.instances.len(), 1);

@@ -64,6 +64,11 @@ for key, image in result.outputs["images"].items():  # a keyed collection
 missing = result.deliver({"images": "out/{key}.png"})
 ```
 
+The engine checks the environment, then the project's `.env`. On macOS and Linux, builds with
+saved-key support also check Grida's store for eligible keys. Run `python -m grida.fx doctor`
+in the Python environment that runs the SDK to see which source its engine found. See
+[Provider keys](../spec/providers.md#1-keys-and-endpoints).
+
 Cost forecasts can be unknown: `planned.estimate()` returns `(None, None)` when unpriced
 calls prevent a complete total. `planned.forecast` exposes the known subtotal as
 `known_low_usd` / `known_high_usd` and its missing coverage as `unpriced_calls`.

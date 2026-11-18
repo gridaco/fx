@@ -21,8 +21,8 @@ compare it with `grida fx --version`.
 - **Plan first.** `grida fx plan <workflow>` never spends. Show the user its steps and estimate.
 - **Spending is the user's call.** Run `--live` only with the user's go and an agreed
   `--max-usd`. A run on their own Codex needs no ceiling but spends their plan: ask for it too.
-- **Keys are the user's.** Never read, print or commit `.env` or a key. Ask the user to create
-  keys and set them; check with `grida fx doctor`. What to ask for each provider:
+- **Keys are the user's.** Never open, print or commit `.env`, the Grida credential store or a key.
+  Ask the user to create keys and set them. Check with `grida fx doctor`. What to ask for each provider:
   `.agents/skills/grida-fx/references/onboarding.md`. Grida Gateway's API reference:
   <https://gateway.grida.ai/llms.txt>.
 - **Ask before changing routes.** A new route is a new cache key: earlier results do not carry over.

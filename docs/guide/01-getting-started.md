@@ -37,9 +37,12 @@ of them, so you can tell two installations apart. Setting them up, and source de
 Grida Gateway (`@gg`): text, agent turns, images, video, 3D models and rigs, billed to your
 organization's Grida AI credits, so there is no provider account to open for each model. Set it in
 the environment, or put it in a `.env` file in your project (`GG_API_KEY=…`, and keep the file
-out of version control); the environment wins. Keys never go in `fx.yaml` or a workflow, and FX
-never prints them: only a `--live` run uses them, and `grida fx doctor` says which ones it found,
-where, and which routes they make usable ([Running](05-running.md#keys-and-live-runs)).
+out of version control). FX builds with saved-key support can also use a standalone GG key saved
+in Grida as a fallback on macOS and Linux. Keys stay out of `fx.yaml` and workflows. Paid calls
+require `--live`. When preparing a selected GG or OpenRouter image model missing from the local
+catalog, FX may make a bounded, read-only metadata request. The OpenRouter lookup can use its key.
+`grida fx doctor` reports which keys it found, their sources, and which routes they make usable.
+See [Keys and live runs](05-running.md#keys-and-live-runs).
 
 Already have provider accounts? FX also reads each provider's own key under its usual name
 (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `FAL_KEY`, `TRIPO_API_KEY`, `ELEVENLABS_API_KEY`) for the

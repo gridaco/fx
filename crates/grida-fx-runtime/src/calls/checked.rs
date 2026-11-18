@@ -9,6 +9,7 @@
 //!   the attempt, after the route's slot, the hold and a long job's `submitting` record, so the
 //!   events, the $0 settlement and the job record are the same whoever refuses. The retry owner
 //!   redacts the sentence with the adapter's redactor, as every reason it reports.
+//!   A request that would be refused skips optional credential preparation.
 //! - **After the adapter's check**, the capability's every-route check
 //!   (`grida_fx_providers::checks::every_route_with`), with the adapter's redactor. Its refusal
 //!   fails the attempt as billed, as the adapter's check's would.
@@ -44,6 +45,11 @@ struct Checked<A: ?Sized> {
 }
 
 impl RequestAdapter for Checked<dyn RequestAdapter> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        validation(call, &self.identity, || self.inner.check_contract(call)).ok()?;
+        self.inner.prepare(call)
+    }
+
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.send(call),
@@ -77,6 +83,18 @@ impl RequestAdapter for Checked<dyn RequestAdapter> {
 }
 
 impl LongJob for Checked<dyn LongJob> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        validation(call, &self.identity, || self.inner.check_contract(call)).ok()?;
+        self.inner.prepare(call)
+    }
+
+    fn prepare_collect<'a>(
+        &'a self,
+        call: &'a CallRequest,
+    ) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.inner.prepare_collect(call)
+    }
+
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
         match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.submit(call),
@@ -136,4 +154,75 @@ fn validation(
     own().map_err(|reason| (DiagnosticSource::Adapter, reason))?;
     checks::request(&call.route.capability, &call.request)
         .map_err(|reason| (DiagnosticSource::Engine, reason))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grida_fx_providers::testing::{CallBuilder, block_on};
+    use serde_json::json;
+
+    struct Acme;
+
+    const IDENTITY: Identity = Identity {
+        adapter: "acme-image",
+        behavior: "1",
+    };
+
+    impl RequestAdapter for Acme {
+        fn prepare<'a>(&'a self, _: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+            panic!("preparation received an invalid request");
+        }
+
+        fn send<'a>(&'a self, _: &'a CallRequest) -> BoxFuture<'a, Sent> {
+            panic!("send received an invalid request");
+        }
+
+        fn identity(&self) -> Option<Identity> {
+            Some(IDENTITY)
+        }
+    }
+
+    impl LongJob for Acme {
+        fn prepare<'a>(&'a self, _: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+            panic!("preparation received an invalid job");
+        }
+
+        fn submit<'a>(&'a self, _: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+            panic!("submit received an invalid job");
+        }
+
+        fn collect<'a>(&'a self, _: &'a CallRequest, _: &'a Value) -> BoxFuture<'a, Collected> {
+            panic!("no job was submitted");
+        }
+
+        fn identity(&self) -> Option<Identity> {
+            Some(IDENTITY)
+        }
+    }
+
+    #[test]
+    fn a_bad_contract_is_refused_without_invoking_preparation() {
+        let call = CallBuilder::new("image.generate", "img-a@acme")
+            .contract(json!({"adapter": IDENTITY.adapter, "adapter_behavior": 2}))
+            .request(json!({"prompt": "a kite"}))
+            .build();
+        let Adapter::Request(request) = checked(Adapter::Request(Arc::new(Acme))) else {
+            unreachable!("the wrapped adapter is a request");
+        };
+        assert!(request.prepare(&call).is_none());
+        assert!(matches!(
+            block_on(request.send(&call)).into_report().0,
+            Sent::Refused { .. }
+        ));
+
+        let Adapter::Job(job) = checked(Adapter::Job(Arc::new(Acme))) else {
+            unreachable!("the wrapped adapter is a job");
+        };
+        assert!(job.prepare(&call).is_none());
+        assert!(matches!(
+            block_on(job.submit(&call)).into_report().0,
+            Submitted::Refused { .. }
+        ));
+    }
 }

@@ -1,0 +1,6 @@
+version = 1
+migration = { state = 'unstarted', removed = [] }
+
+[providers.acme]
+api_key = 'fx-fixture-key'
+issued_by = 'acme'

@@ -25,10 +25,10 @@
 //! 3. whitespace collapsed to single spaces, trimmed, and the result cut to
 //!    [`MAX_REASON_CHARS`] characters, ending in `…` when cut.
 
-use crate::keys::Secret;
+use crate::keys::{Secret, StoredCredentials};
 use regex::Regex;
 use std::borrow::Cow;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 /// The longest reason, in characters.
 pub const MAX_REASON_CHARS: usize = 500;
@@ -37,9 +37,17 @@ pub const MAX_REASON_CHARS: usize = 500;
 pub const REDACTED: &str = "[redacted]";
 
 /// Redacts reasons (module doc).
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 pub struct Redactor {
     secrets: Vec<Secret>,
+    resolved_stored: Vec<Secret>,
+    stored: Option<Arc<StoredCredentials>>,
+}
+
+impl std::fmt::Debug for Redactor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Redactor").finish_non_exhaustive()
+    }
 }
 
 impl Redactor {
@@ -49,20 +57,46 @@ impl Redactor {
             .filter(|s| !s.expose().is_empty())
             .collect();
         secrets.sort_by_key(|s| std::cmp::Reverse(s.expose().len()));
-        Redactor { secrets }
+        Redactor {
+            secrets,
+            resolved_stored: Vec::new(),
+            stored: None,
+        }
+    }
+
+    pub(crate) fn with_stored(
+        mut self,
+        resolved: Vec<Secret>,
+        stored: Option<Arc<StoredCredentials>>,
+    ) -> Redactor {
+        self.resolved_stored = resolved;
+        self.stored = stored;
+        self
     }
 
     /// The same redactor with one more secret (a signed URL, an upload token).
     pub fn with(&self, extra: &str) -> Redactor {
         let mut secrets = self.secrets.clone();
         secrets.push(Secret::new(extra));
-        Redactor::new(secrets)
+        Redactor::new(secrets).with_stored(self.resolved_stored.clone(), self.stored.clone())
     }
 
     /// Steps 1 and 2 of the module doc.
     pub fn redact(&self, text: &str) -> String {
         let mut out = text.to_string();
-        for secret in &self.secrets {
+        let mut stored = self.stored.iter().flat_map(|stored| stored.secrets());
+        let mut combined;
+        let secrets: &[Secret] = match stored.next() {
+            Some(first) => {
+                combined = self.secrets.clone();
+                combined.push(first.clone());
+                combined.extend(stored.cloned());
+                combined.sort_by_key(|secret| std::cmp::Reverse(secret.expose().len()));
+                &combined
+            }
+            _ => &self.secrets,
+        };
+        for secret in secrets {
             out = out.replace(secret.expose(), REDACTED);
         }
         for (pattern, replacement) in PATTERNS.iter() {
@@ -75,6 +109,21 @@ impl Redactor {
             }
         }
         out
+    }
+
+    /// Whether `text` contains a Grida store key already resolved in this invocation.
+    pub fn contains_stored_secret(&self, text: &str) -> bool {
+        self.resolved_stored
+            .iter()
+            .chain(self.stored.iter().flat_map(|stored| stored.secrets()))
+            .any(|secret| !secret.expose().is_empty() && text.contains(secret.expose()))
+    }
+
+    pub(crate) fn contains_secret(&self, text: &str) -> bool {
+        self.secrets
+            .iter()
+            .any(|secret| text.contains(secret.expose()))
+            || self.contains_stored_secret(text)
     }
 
     /// Steps 1 to 3: the sentence an adapter may report.

@@ -925,6 +925,84 @@ async fn a_send_without_its_key_is_refused_before_the_host_is_asked() {
     assert_eq!(rig.launches.load(Ordering::SeqCst), 0);
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[tokio::test]
+async fn a_project_base_holding_a_loaded_key_is_refused_before_the_host_starts() {
+    use grida_fx_providers::{Endpoints, KeyName, Secret, live, testing::CallBuilder};
+    use grida_fx_runtime::adapter_host::ProcessLaunch;
+    use grida_fx_runtime::host::{connection::NoIncoming, process::HostSpec};
+    use std::fs::{DirBuilder, OpenOptions};
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+    let (_dir, root) = project();
+    let mut declarations = declarations(&root).declared().to_vec();
+    declarations[0].base_url.variable = Some("ACME_BASE_URL".into());
+    let declarations = Declarations::with(&declarations);
+    let environment = Environment::declared(
+        &[
+            ("ACME_API_KEY", KEY),
+            ("ACME_BASE_URL", "https://api.acme.test/test-gg-key"),
+        ],
+        &declarations,
+    );
+    let home = tempfile::tempdir().unwrap();
+    let providers = home.path().join("providers");
+    DirBuilder::new().mode(0o700).create(&providers).unwrap();
+    writeln!(
+        OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(providers.join("credentials.toml"))
+            .unwrap(),
+        "version = 1\nmigration = {{ state = 'unstarted', removed = [] }}\n\
+         providers.gg.api_key = 'test-gg-key'"
+    )
+    .unwrap();
+    let mut setup = Setup::new(
+        Arc::new(Offline),
+        Keys::from_environment(&environment),
+        Arc::new(FakeClock::new()),
+    );
+    setup.endpoints = Endpoints::from_environment(&environment, &setup.keys).unwrap();
+    let setup = setup.with_stored_credentials(
+        Ok(home.path().canonicalize().unwrap()),
+        &[KeyName::GridaGateway],
+    );
+    let spec = HostSpec::python(root.join("missing"), "missing", &root, Vec::new())
+        .unchecked()
+        .with_environment(
+            Vec::new(),
+            vec![("ACME_API_KEY".into(), Secret::new("test-gg-key"))],
+        );
+    let process = ProcessLaunch::new(Ok(spec)).with_credential_guard(setup.redactor());
+    let mut adapters = live::adapters(&setup);
+    let gg = CallBuilder::new("image.generate", "img-a@gg").build();
+    let Some(Adapter::Request(adapter)) = adapters.serving(&gg.route) else {
+        panic!("a GG image adapter");
+    };
+    adapter.prepare(&gg).unwrap().await.unwrap();
+    let launch = process
+        .launch(Arc::new(NoIncoming), Arc::new(AtomicBool::new(true)))
+        .await;
+    assert!(matches!(launch, Err(reason) if reason == "ACME_API_KEY holds a credential"));
+
+    adapter_host::register(&mut adapters, &setup, |_, _| {
+        Arc::new(adapter_host::NoLaunch("unexpected host launch".into()))
+    });
+    let call = call("structured.generate", "acme");
+    let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
+        panic!("a project request adapter");
+    };
+    assert_eq!(
+        adapter.send(&call).await,
+        Sent::Refused {
+            reason: "ACME_BASE_URL holds a credential".into()
+        },
+    );
+}
+
 // ---------------------------------------------------------------------------------------------
 // Cancellation
 

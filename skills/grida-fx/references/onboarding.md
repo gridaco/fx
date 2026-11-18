@@ -57,9 +57,12 @@ a new cache key, so earlier results do not carry over.
 ## 3. Ask the user to connect a provider
 
 Never ask the user to paste a key into the conversation, and never read, print or
-write a key yourself. The user puts it in their shell environment or in the
-project's `.env` (`NAME=value`, one per line); FX reads both, and the environment
-wins.
+write a key yourself. Ask them to set it in the shell environment, project `.env`
+(`NAME=value`, one per line), or Grida's credential store for an eligible key on
+macOS or Linux. Suggest the store only if their installed FX engine supports
+saved keys. FX checks the environment, then `.env`, then the store when eligible.
+Use the environment or `.env` with the published FX 0.9.0 engine or with a custom
+provider base URL.
 
 ### Grida Gateway
 
@@ -73,7 +76,10 @@ yet, so give the user these steps rather than sending them to search:
    `media` (images, video and 3D). A key with only one scope refuses the other
    steps. A spending cap on the key is a good extra guard for a first run.
 4. Copy the key when it is shown; it is shown once. Set it as `GG_API_KEY` in the
-   environment, or add the line `GG_API_KEY=…` to the project's `.env`.
+   environment or add `GG_API_KEY=…` to the project's `.env`. Grida 0.5.7 added
+   `grida ai providers configure gg`. Use that command for FX when the Grida
+   installation also carries an FX engine with saved-key support. Grida 0.5.7
+   bundles FX 0.9.0, so use the environment or `.env` with that installation.
 
 For questions about GG itself (key scopes, credits, spending caps, rate limits,
 how a charge is settled), read <https://gateway.grida.ai/llms.txt>. It is GG's
@@ -151,8 +157,9 @@ grida fx doctor
 grida fx doctor workflows/example.yaml
 ```
 
-Each `key` line says `present` (with its source, `environment` or `.env`) or
-`missing`, never the value. Each `route` line says whether a live run could serve
+Each `key` line says `present` with its source or `missing`. FX reports
+`environment` or `.env`, and builds with saved-key support can report `grida`.
+FX keeps the value private. Each `route` line says whether a live run could serve
 it; with a workflow, `doctor` exits 1 when a route the workflow uses is not
 servable. `not installed (codex)` means FX found no Codex: put `codex` on `PATH`
 or set `GRIDA_FX_TOOL_CODEX`. `too old (codex …)` means the Codex its `program`

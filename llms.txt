@@ -44,8 +44,9 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
 - **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
   agreed ceiling (`--max-usd`). A run on the user's own Codex or Grok Build needs no ceiling but
   spends their subscription: ask for that too.
-- **Keys are the user's.** Never read, print, write or commit `.env` or a key. Ask the user to set
-  keys; check what FX found with `grida fx doctor`. FX never writes provider credentials.
+- **Keys are the user's.** Never read, print, write or commit `.env`, Grida's credential file, or
+  a key. Ask the user to set keys; check what FX found with `grida fx doctor`. Grida manages
+  saved provider keys.
 - **Discover, don't guess.** `grida fx nodes`, `grida fx nodes <type>`, `grida fx schema <target>`
   and `grida fx --help` list what this installation has.
 - **Ask before changing a route.** The route is part of a step's identity: a new route draws anew
@@ -427,13 +428,25 @@ appears as a `models` diagnostic after the provider report; other diagnostics co
   API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
   exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
   whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
-- **Keys** come from the environment, else the project's `.env` (only the key and base URL names
-  of FX's providers and of those `fx.yaml` declares are read). Keys never go in `fx.yaml` or a
-  workflow. Without `--live` no paid capability call is sent; a read-only missing-model
-  lookup may use the selected provider's key before planning.
+- **Keys.** Published FX 0.9.0 uses a nonblank process environment value first, then the project's
+  `.env` for declared key and base URL names. Set `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`. Keys stay
+  out of `fx.yaml` and workflows. Paid capability calls require `--live`. A read-only metadata
+  lookup for a missing selected OpenRouter image binding may use its key. GG metadata is public.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
+- **Saved Grida keys.** FX builds with saved-key support check Grida's store on macOS and Linux
+  when both the environment and `.env` lack an eligible provider's key. The provider IDs are
+  `gg`, `openrouter`, `fal`, `tripo` and `elevenlabs`. The store is `providers/credentials.toml`
+  under the process `GRIDA_HOME` or `$HOME/.grida`. The home must be an absolute normalized
+  path. Grida 0.5.7 introduced `grida ai providers configure gg` and bundles FX 0.9.0. Ask the
+  user to save a standalone GG key for FX only if their installed engine supports saved keys.
+  Custom base URLs and other providers use the environment or `.env` for keys. An unsafe or
+  invalid store refuses a lookup that needs it with a safe diagnostic. `grida fx doctor` reports
+  `present (grida)` for eligible saved keys and keeps the value private. Offline plans and
+  execution and stand-in calls skip the store. An online lookup for a missing selected
+  OpenRouter image binding can use its saved key. `GRIDA_FX_DISABLE_GRIDA_STORE=1` skips the store
+  independently of `.env`.
 - **Provider result downloads:** Tripo mesh and rig results and fal image and background-removal
   results are downloaded from the HTTPS URL their provider returns, with a DNS hostname rather
   than an IP literal, port 443, no userinfo and no fragment. FX keeps no provider CDN catalog.
@@ -954,7 +967,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send
   (FX's adapters, and a project adapter's `fetch`) before sending; a project adapter's own HTTP
   client is not stopped, and must check the switch itself. `GRIDA_FX_DISABLE_DOTENV=1` ignores
-  `.env`.
+  `.env`. With saved-key support, offline planning and execution skip the Grida store. To skip
+  it during key diagnostics too, set `GRIDA_FX_DISABLE_GRIDA_STORE=1`.
 
 ### From Python and JavaScript
 
@@ -1737,7 +1751,8 @@ changed-file/field/operation identities and redacted provider errors, tested thr
 | `inputs: 'name' is a required property` | give the input: `-- --name …` or `--inputs file.yaml` |
 | `… is a paid call; run with --live` | the step needs a provider: ask the user, then `--live` with a ceiling |
 | `refused: a live run needs a ceiling: …` | add `--max-usd N` (agreed with the user) or a `budget:` |
-| `… was refused: GG_API_KEY is not set` (or a declared provider's variable) | the user sets the key (environment or `.env`); check with `grida fx doctor` |
+| `… was refused: GG_API_KEY is not set` (or a declared provider's variable) | ask the user to set the key in the environment or `.env`. With saved-key support, they can save an eligible key using Grida. Check with `grida fx doctor`. |
+| `Grida provider credentials: <code>` (FX builds with saved-key support) | For `store_busy`, retry after the holder finishes. For a store or home error, check the Grida home and store with Grida. An explicit key bypasses the store for its provider. To diagnose without touching the store, set `GRIDA_FX_DISABLE_GRIDA_STORE=1`. |
 | `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
 | `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`, or an `adapter` that declares the capability), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family or the capability, or fix or drop `contract.adapter` |
 | `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |

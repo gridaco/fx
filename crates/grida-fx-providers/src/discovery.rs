@@ -29,6 +29,16 @@ pub async fn resolve(
     model: &str,
     provider: &str,
 ) -> Result<Value, String> {
+    validate_selection(capability, model, provider)?;
+    match provider {
+        "gg" => gg(setup, capability, model).await,
+        "openrouter" => openrouter(setup, capability, model).await,
+        _ => unreachable!(),
+    }
+}
+
+/// Check a selected binding before preparing provider settings or a transport.
+pub fn validate_selection(capability: &str, model: &str, provider: &str) -> Result<(), String> {
     if !matches!(capability, "image.generate" | "image.edit")
         || !matches!(provider, "gg" | "openrouter")
     {
@@ -45,11 +55,10 @@ pub async fn resolve(
                 .into(),
         );
     }
-    match provider {
-        "gg" => gg(setup, capability, model).await,
-        "openrouter" => openrouter(setup, capability, model).await,
-        _ => unreachable!(),
+    if provider == "openrouter" {
+        openrouter_id(model)?;
     }
+    Ok(())
 }
 
 fn unavailable(provider: &str) -> String {
@@ -373,12 +382,17 @@ fn accepts(bundle: &Value, schema: &Value, value: Value) -> bool {
     crate::checks::schema_validator(&schema).is_ok_and(|validator| validator.is_valid(&value))
 }
 
-async fn openrouter(setup: &Setup, capability: &str, model: &str) -> Result<Value, String> {
-    let client = setup.client(KeyName::OpenRouter);
-    let (author, slug) = model
+fn openrouter_id(model: &str) -> Result<(&str, &str), String> {
+    let segment = |value: &str| !matches!(value, "" | "." | "..");
+    model
         .split_once('/')
-        .filter(|(author, slug)| !author.is_empty() && !slug.is_empty())
-        .ok_or_else(|| invalid("openrouter"))?;
+        .filter(|(author, slug)| segment(author) && segment(slug) && !slug.contains('/'))
+        .ok_or_else(|| invalid("openrouter"))
+}
+
+async fn openrouter(setup: &Setup, capability: &str, model: &str) -> Result<Value, String> {
+    let (author, slug) = openrouter_id(model)?;
+    let client = setup.client(KeyName::OpenRouter);
     let mut url = url::Url::parse(&client.base).map_err(|_| invalid("openrouter"))?;
     url.path_segments_mut()
         .map_err(|_| invalid("openrouter"))?

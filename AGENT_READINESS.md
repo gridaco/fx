@@ -432,11 +432,22 @@ promise through documentation alone.
 | AR-24 | "Open this viewer file in my application's own tab." | Implemented in FX 0.9.0 for [#134](https://github.com/gridaco/fx/issues/134): [external file activation](spec/viewer.md) and [native file discovery/resolution](spec/files.md). | Capture the exact subject/file at activation, resolve its local copy privately, and let the host choose its presentation. Standalone asset links retain browser behavior. Source opening uses an explicit workspace binding and never imports user code; changed source remains editable. One handler owns each activation; wrong peers, stale subjects, missing files and unconfirmed outcomes cannot silently open a different file or trigger another opening. |
 | AR-25 | "Explain this workflow on its canvas so another person can use the template." | Implemented in FX 0.9.0 for [#80](https://github.com/gridaco/fx/issues/80): [workflow notes](spec/notes.md), inline or local files, Markdown or literal text, root/group SDK authoring. | Capture static documentation without expression evaluation; show readable cards and full details in plans, runs and shared exports. Note-only edits retain plan identity, resume retains the original snapshot, and unavailable documentation does not fail executable work. Scope, source provenance, disclosure and opt-in viewer focus remain explicit. |
 | AR-26 | "Understand the prompt, reference, shared settings and result at a glance." | Implemented in FX 0.9.0 for [#81](https://github.com/gridaco/fx/issues/81): [recorded values](spec/values.md), effective parameter summaries, scoped value cards and opt-in focus. | Planning exposes declared defaults from built-in/custom SDK nodes; lazy expressions retain contextual occurrences. Inspection uses recorded evidence and captured original input bytes, never regeneration or guessed file-shaped JSON. Pending/null/absent/unavailable/withheld remain distinct; exports and host actions preserve existing disclosure and authority. |
+| AR-27 | "Use the provider key I already saved with Grida." | [Credential store fallback](spec/providers.md#1-keys-and-endpoints) for [#45](https://github.com/gridaco/fx/issues/45), shared by CLI and SDK engine invocations. Grida 0.5.7 added standalone GG key management. | In an isolated home, save and remove a synthetic GG key through the public Grida CLI, verify FX's redacted diagnosis, and exercise its GG adapter through a fake transport. Exercise precedence, cache replay, offline and stand-in paths, custom endpoint isolation, and v1 lock and malformed file handling on supported platforms. |
 
 AR-25 uses the [notes fixture](fixtures/viewer/README.md#try-workflow-notes),
 [engine acceptance](tools/check_notes.py), browser acceptance and builder/core/viewer tests.
 It covers literal expressions, file snapshots, missing files, renamed associations,
 repeated/imported scopes, native source resolution and disclosed/withheld exports.
+
+AR-27's [fixtures for the pinned v1 protocol](crates/grida-fx-providers/tests/fixtures/grida-provider-v1/)
+and [GG adapter tests](crates/grida-fx-providers/tests/gg.rs) use synthetic keys.
+The [cross-repository check](tools/check_grida_store.py) passed on macOS with Grida's
+fixture writer. FX reported `store_busy` while Grida held the shared lock, `GG_API_KEY present (grida)`
+after release, and reported `GG_API_KEY missing` after removal. The
+[public CLI acceptance check](CONTRIBUTING.md#verify-your-changes) passed on macOS
+against npm `grida@0.5.7` ([gridaco/grida#1152](https://github.com/gridaco/grida/pull/1152)).
+It exercised the installed configure, list, and remove commands using the same saved key
+for the FX diagnosis and the fake GG exchange.
 
 For AR-23, [provider replay tests](crates/grida-fx-providers/tests/discovery.rs) hold discovery
 to published metadata shapes, supported image controls and supported flat-rate conversion. The
@@ -699,11 +710,11 @@ delivery.
   existing authorized scope; when an operation changes that scope, make its
   effects concrete before asking for a decision. Agents must not expose secrets
   or implement their own provider retry loop to work around a missing tool.
-- **Provider credentials:** keys come from the environment or the project's `.env` only. Recommend
-  Grida Gateway's one key (`GG_API_KEY`) for a new project; keep the routes a user already chose.
-  Reading the provider credentials the `grida` command manages, which `grida` alone writes, is
-  **proposed** ([gridaco/fx#45](https://github.com/gridaco/fx/issues/45)). Agents configure keys
-  with `grida`, never through an FX command.
+- **Provider credentials:** recommend Grida Gateway's standalone key (`GG_API_KEY`) for a new
+  project and keep the routes a user already chose. Let `grida fx doctor` report the key's
+  availability and its source. Ask the user to set an explicit key or manage the saved key
+  using Grida where supported. The SDKs use the same engine resolution and expose no operation
+  for credential management. GG account sessions and invocation grants are outside AR-27.
 - **Known correctness limits:** [ISSUES.md](ISSUES.md) tracks missing provider usage
   and an unexplained image-cost discrepancy. Do not claim complete cost explanation
   while those remain open. Unversioned node identities name their export in source

@@ -121,11 +121,21 @@ pub struct Launched {
 /// `Err` is why there is none.
 pub struct ProcessLaunch {
     spec: Result<HostSpec, String>,
+    credential_guard: Option<Redactor>,
 }
 
 impl ProcessLaunch {
     pub fn new(spec: Result<HostSpec, String>) -> ProcessLaunch {
-        ProcessLaunch { spec }
+        ProcessLaunch {
+            spec,
+            credential_guard: None,
+        }
+    }
+
+    /// Refuse to pass already-resolved Grida store keys to the host through its environment.
+    pub fn with_credential_guard(mut self, redactor: Redactor) -> ProcessLaunch {
+        self.credential_guard = Some(redactor);
+        self
     }
 }
 
@@ -137,7 +147,13 @@ impl Launch for ProcessLaunch {
     ) -> BoxFuture<'_, Result<Launched, String>> {
         Box::pin(async move {
             let spec = self.spec.as_ref().map_err(String::clone)?;
-            let process = HostProcess::start_accountable(spec, incoming, cleanup_verified).await?;
+            let process = HostProcess::start_accountable(
+                spec,
+                incoming,
+                cleanup_verified,
+                self.credential_guard.as_ref(),
+            )
+            .await?;
             Ok(Launched {
                 connection: process.connection().clone(),
                 process: Some(process),
@@ -316,6 +332,7 @@ impl AdapterHost {
 
     /// Starts a host and loads the adapter; the refusal of every call when it cannot serve.
     async fn start(&self) -> Result<Arc<Running>, String> {
+        self.client.checked_base()?;
         let incoming = Arc::new(Fetches {
             calls: Arc::clone(&self.calls),
             client: self.client.clone(),
@@ -422,6 +439,9 @@ impl AdapterHost {
 
     /// Asks the host `method` for `call` (module doc).
     async fn ask(&self, method: &'static str, call: &CallRequest, handle: Option<&Value>) -> Asked {
+        if let Err(reason) = self.client.checked_base() {
+            return Asked::Refused(reason);
+        }
         let running = match self.running().await {
             Ok(running) => running,
             Err(reason) => return Asked::Refused(reason),
@@ -510,7 +530,7 @@ impl AdapterHost {
                 provider: call.route.provider.clone(),
                 contract: object(&call.route.contract),
             },
-            base_url: self.client.base.clone(),
+            base_url: self.client.checked_base()?.to_string(),
             request: object(&call.request),
             files,
             take: call.take.iter().map(|&take| u64::from(take)).collect(),

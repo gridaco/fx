@@ -151,9 +151,10 @@ the user's own Codex plan: get the user's go for it as for any live run, and do
 not switch a step to Codex, or away from it, without asking.
 Use `grida fx doctor workflows/example.yaml` to diagnose prerequisites: its
 first `uses` lines say whether each route the workflow's paid steps use is
-servable, and it exits 1 when one is not. Let FX load credentials. Do not read or print `.env` or secret values, or embed them in
-workflow files. Never add provider retries outside FX or bypass the ceiling with
-direct provider calls.
+servable, and it exits 1 when one is not. Let FX load credentials. Use its key
+diagnostics instead of opening `.env` or the Grida credential store. Keep
+secrets out of workflow files. Never add provider retries outside FX or bypass
+the ceiling with direct provider calls.
 
 Routes are `model@provider` choices for capabilities. Use the installed node
 catalog and current provider documentation when choosing them. Prefer the

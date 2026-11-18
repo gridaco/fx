@@ -37,11 +37,16 @@ use grida_fx_core::providers::{Declaration, Declarations};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock};
+use tokio::sync::OnceCell;
 
 /// The variable that turns the `.env` file off (credential-free gates set it).
 pub const DISABLE_DOTENV: &str = "GRIDA_FX_DISABLE_DOTENV";
+
+/// Process-only opt-out for the user-wide Grida store.
+pub const DISABLE_GRIDA_STORE: &str = "GRIDA_FX_DISABLE_GRIDA_STORE";
 
 /// A key's value. Prints as `[redacted]`; compared by value.
 #[derive(Clone, PartialEq, Eq)]
@@ -87,6 +92,15 @@ impl KeyName {
     pub const ALL: [KeyName; 6] = [
         KeyName::GridaGateway,
         KeyName::OpenAi,
+        KeyName::OpenRouter,
+        KeyName::Fal,
+        KeyName::Tripo,
+        KeyName::ElevenLabs,
+    ];
+
+    /// Built-in provider IDs that can use an API key from Grida's v1 store.
+    pub const STORED: [KeyName; 5] = [
+        KeyName::GridaGateway,
         KeyName::OpenRouter,
         KeyName::Fal,
         KeyName::Tripo,
@@ -142,6 +156,73 @@ pub fn not_set(variable: &str) -> String {
 pub enum KeySource {
     Environment,
     DotEnv,
+    GridaStore,
+}
+
+/// Invocation-local fallback for the built-in clients that lack an explicit key.
+/// Constructing or looking at this object never opens the store. A live adapter
+/// calls `prepare` on a cache miss, before it can ask a client for a key.
+pub(crate) struct StoredCredentials {
+    home: Result<PathBuf, String>,
+    keys: BTreeMap<KeyName, OnceCell<Secret>>,
+}
+
+/// A blocking read already running on Tokio's pool cannot be aborted by dropping its handle.
+/// Wake it out of the lock wait when the cancellable preparation future is dropped.
+struct CancelStoreReadOnDrop(Arc<AtomicBool>);
+
+impl Drop for CancelStoreReadOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+impl StoredCredentials {
+    pub(crate) fn new(home: Result<PathBuf, String>, providers: &[KeyName]) -> Self {
+        Self {
+            home,
+            keys: providers
+                .iter()
+                .map(|key| (*key, OnceCell::new()))
+                .collect(),
+        }
+    }
+
+    pub(crate) fn eligible(&self, provider: &str) -> bool {
+        KeyName::of_provider(provider).is_some_and(|key| self.keys.contains_key(&key))
+    }
+
+    pub(crate) fn key(&self, provider: &str) -> Option<&Secret> {
+        self.keys.get(&KeyName::of_provider(provider)?)?.get()
+    }
+
+    pub(crate) fn secrets(&self) -> impl Iterator<Item = &Secret> {
+        self.keys.values().filter_map(OnceCell::get)
+    }
+
+    pub(crate) async fn prepare(&self, provider: &str) -> Result<(), String> {
+        let Some(key) = KeyName::of_provider(provider) else {
+            return Ok(());
+        };
+        let Some(cell) = self.keys.get(&key) else {
+            return Ok(());
+        };
+        cell.get_or_try_init(|| async {
+            let home = self.home.as_ref().map_err(Clone::clone)?.clone();
+            let cancelled = Arc::new(AtomicBool::new(false));
+            let _cancel_on_drop = CancelStoreReadOnDrop(Arc::clone(&cancelled));
+            tokio::task::spawn_blocking(move || {
+                crate::grida_store::read_cancellable(&home, &[key.provider()], &cancelled)
+                    .map_err(|error| error.to_string())?
+                    .remove(key.provider())
+                    .ok_or_else(|| key.missing())
+            })
+            .await
+            .unwrap_or_else(|_| Err("Grida provider credentials: storage_failed".into()))
+        })
+        .await
+        .map(|_| ())
+    }
 }
 
 /// The declared variables of one invocation, after precedence (module doc), and the declarations
@@ -290,6 +371,19 @@ impl Keys {
         }
     }
 
+    /// Fill a missing built-in key without trimming it or changing the explicit sources.
+    pub fn insert_stored(&mut self, name: KeyName, secret: Secret) {
+        if self.get(name).is_none() {
+            self.found
+                .push((name.provider().into(), secret, KeySource::GridaStore));
+            self.found.sort_by_key(|(name, _, _)| {
+                self.declarations
+                    .iter()
+                    .position(|declaration| &declaration.name == name)
+            });
+        }
+    }
+
     pub fn get(&self, name: KeyName) -> Option<&Secret> {
         self.of(name.provider())
     }
@@ -324,6 +418,12 @@ impl Keys {
             .iter()
             .map(|(_, secret, _)| secret.clone())
             .collect()
+    }
+
+    pub(crate) fn stored_secrets(&self) -> impl Iterator<Item = &Secret> {
+        self.found
+            .iter()
+            .filter_map(|(_, secret, source)| (*source == KeySource::GridaStore).then_some(secret))
     }
 
     /// The declarations the keys were read for.
@@ -500,6 +600,55 @@ fn same_file(_: &std::fs::Metadata, _: &std::fs::Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn a_provider_observes_its_first_present_key_after_absence_or_failure() {
+        use crate::testing::block_on;
+        use std::fs::{DirBuilder, OpenOptions};
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let directory = tempfile::tempdir().unwrap();
+        let home = directory.path().canonicalize().unwrap();
+        let providers = home.join("providers");
+        DirBuilder::new().mode(0o700).create(&providers).unwrap();
+        let write = |contents: &str| {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(providers.join("credentials.toml"))
+                .unwrap()
+                .write_all(contents.as_bytes())
+                .unwrap();
+        };
+        let header = "version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n";
+        let stored = StoredCredentials::new(Ok(home), &KeyName::STORED);
+        write(&format!(
+            "{header}[providers.gg]\napi_key = 'test-gg-key'\n"
+        ));
+        assert_eq!(block_on(stored.prepare("gg")), Ok(()));
+        assert_eq!(block_on(stored.prepare("fal")), Err(KeyName::Fal.missing()));
+        write("invalid credential file");
+        assert!(
+            block_on(stored.prepare("tripo"))
+                .unwrap_err()
+                .contains("invalid_store")
+        );
+        write(&format!(
+            "{header}[providers.gg]\napi_key = 'test-new-gg-key'\n\
+             [providers.fal]\napi_key = 'test-fal-key'\n\
+             [providers.tripo]\napi_key = 'test-tripo-key'\n"
+        ));
+        assert_eq!(block_on(stored.prepare("gg")), Ok(()));
+        assert_eq!(block_on(stored.prepare("fal")), Ok(()));
+        assert_eq!(block_on(stored.prepare("tripo")), Ok(()));
+        assert_eq!(stored.key("gg"), Some(&Secret::new("test-gg-key")));
+        assert_eq!(stored.key("fal"), Some(&Secret::new("test-fal-key")));
+        assert_eq!(stored.key("tripo"), Some(&Secret::new("test-tripo-key")));
+    }
 
     #[test]
     fn secrets_never_print() {

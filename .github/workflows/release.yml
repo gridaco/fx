@@ -30,6 +30,7 @@ env:
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
   GRIDA_FX_NETWORK: "off"
+  GRIDA_FX_DISABLE_GRIDA_STORE: "1"
 
 jobs:
   versions:

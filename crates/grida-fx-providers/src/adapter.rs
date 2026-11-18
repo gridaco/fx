@@ -508,6 +508,12 @@ fn intern(text: &str) -> &'static str {
 
 /// An adapter for calls answered within one request.
 pub trait RequestAdapter: Send + Sync {
+    /// Optional preparation that cannot send a provider request. The engine awaits this once
+    /// for an uncached call, before reserving its budget, and may cancel it without a charge.
+    fn prepare<'a>(&'a self, _call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        None
+    }
+
     /// Sends the request once. Never retries.
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent>;
 
@@ -551,6 +557,20 @@ pub trait RequestAdapter: Send + Sync {
 
 /// An adapter for long provider jobs (a video, a rig): submitted once, collected by handle.
 pub trait LongJob: Send + Sync {
+    /// As [`RequestAdapter::prepare`], before reserving budget or recording `submitting`.
+    fn prepare<'a>(&'a self, _call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        None
+    }
+
+    /// Preparation before collecting a job from an earlier invocation. Failure leaves the
+    /// submitted job available for a later attempt.
+    fn prepare_collect<'a>(
+        &'a self,
+        call: &'a CallRequest,
+    ) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.prepare(call)
+    }
+
     /// Submits the job once. Never retries.
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted>;
 

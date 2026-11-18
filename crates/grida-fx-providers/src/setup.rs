@@ -7,11 +7,14 @@
 //! spec/adapters.md §4), and `grida-fx doctor` reports the route as not servable.
 
 use crate::clock::Clock;
-use crate::keys::{Environment, KeyName, Keys, Secret};
+use crate::keys::{Environment, KeyName, KeySource, Keys, Secret, StoredCredentials};
 use crate::redact::Redactor;
-use crate::transport::{Credential, HttpRequest, HttpResponse, Transport, TransportError};
+use crate::transport::{
+    Credential, HttpRequest, HttpResponse, Transport, TransportError, TransportErrorKind,
+};
 use grida_fx_core::providers::{Declaration, Declarations};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// fal's queue host: not configurable, so not a declared base URL (spec/providers.md §1).
@@ -19,11 +22,34 @@ pub const FAL_QUEUE: &str = "https://queue.fal.run";
 
 /// Each declared provider's API base, normalized ([`crate::wire::normalize_base_url`]): no
 /// trailing `/`. fal's is its synchronous host (`FAL_BASE_URL`); its queue host is apart.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Endpoints {
     bases: BTreeMap<String, String>,
+    configured: BTreeMap<String, ConfiguredBase>,
     /// fal's queue host ([`FAL_QUEUE`]).
     pub fal_queue: String,
+}
+
+impl PartialEq for Endpoints {
+    fn eq(&self, other: &Self) -> bool {
+        self.bases == other.bases && self.fal_queue == other.fal_queue
+    }
+}
+
+impl Eq for Endpoints {}
+
+impl std::fmt::Debug for Endpoints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Endpoints")
+            .field("providers", &self.bases.keys())
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
+struct ConfiguredBase {
+    name: String,
+    raw: Secret,
 }
 
 impl Default for Endpoints {
@@ -41,6 +67,19 @@ impl Endpoints {
                 .iter()
                 .map(|d| (d.name.clone(), d.base_url.default.clone()))
                 .collect(),
+            configured: declarations
+                .declared()
+                .iter()
+                .map(|d| {
+                    (
+                        d.name.clone(),
+                        ConfiguredBase {
+                            name: format!("providers.{}.base_url.default", d.name),
+                            raw: Secret::new(&d.base_url.default),
+                        },
+                    )
+                })
+                .collect(),
             fal_queue: FAL_QUEUE.into(),
         }
     }
@@ -49,8 +88,9 @@ impl Endpoints {
     /// environment gives normalized ([`crate::wire::normalize_base_url`]) and put in its place, in
     /// the declarations' order. A value that does not normalize is refused with
     /// `<VARIABLE>: <sentence>`; a value containing any key's value is refused with
-    /// `<VARIABLE> holds a credential` (never showing either value). The first refusal is the
-    /// error.
+    /// `<VARIABLE> holds a credential` (never showing either value). An effective project
+    /// default containing a key is refused with `providers.<name>.base_url.default holds a
+    /// credential`. The first refusal is the error.
     pub fn from_environment(environment: &Environment, keys: &Keys) -> Result<Endpoints, String> {
         let (endpoints, mut refused) = Endpoints::each_from_environment(environment, keys);
         if refused.is_empty() {
@@ -70,25 +110,40 @@ impl Endpoints {
         let mut endpoints = Endpoints::of(declarations);
         let mut refused = Vec::new();
         let secrets = keys.secrets();
-        for declaration in declarations.iter() {
-            let Some(variable) = &declaration.base_url.variable else {
-                continue;
-            };
-            let Some(value) = environment.get(variable) else {
-                continue;
-            };
-            if secrets
+        let contains_credential = |url: &str| {
+            secrets
                 .iter()
-                .any(|secret| !secret.expose().is_empty() && value.contains(secret.expose()))
+                .any(|secret| !secret.expose().is_empty() && url.contains(secret.expose()))
+        };
+        for declaration in declarations.iter() {
+            if let Some(variable) = &declaration.base_url.variable
+                && let Some(value) = environment.get(variable)
             {
-                refused.push(format!("{variable} holds a credential"));
-                continue;
-            }
-            match crate::wire::normalize_base_url(value, &declaration.label) {
-                Ok(base) => {
-                    endpoints.bases.insert(declaration.name.clone(), base);
+                let holds_credential = || format!("{variable} holds a credential");
+                if contains_credential(value) {
+                    refused.push(holds_credential());
+                } else {
+                    match crate::wire::normalize_base_url(value, &declaration.label) {
+                        Ok(base) if contains_credential(&base) => refused.push(holds_credential()),
+                        Ok(base) => {
+                            endpoints.bases.insert(declaration.name.clone(), base);
+                            endpoints.configured.insert(
+                                declaration.name.clone(),
+                                ConfiguredBase {
+                                    name: variable.clone(),
+                                    raw: Secret::new(value),
+                                },
+                            );
+                            continue;
+                        }
+                        Err(sentence) => refused.push(format!("{variable}: {sentence}")),
+                    }
                 }
-                Err(sentence) => refused.push(format!("{variable}: {sentence}")),
+            }
+            if let Some(default) = endpoints.configured.get(&declaration.name)
+                && contains_credential(default.raw.expose())
+            {
+                refused.push(format!("{} holds a credential", default.name));
             }
         }
         (endpoints, refused)
@@ -103,6 +158,7 @@ impl Endpoints {
     /// server this way).
     pub fn with_base(mut self, provider: &str, base: &str) -> Endpoints {
         self.bases.insert(provider.into(), base.into());
+        self.configured.remove(provider);
         self
     }
 }
@@ -121,6 +177,8 @@ pub struct Setup {
     /// The user's Grok Build program, or why there is none (the refusal of every Grok call). Only
     /// [`crate::live::live_setup`] looks for one.
     pub grok: Result<std::path::PathBuf, String>,
+    pub(crate) stored: Option<Arc<StoredCredentials>>,
+    pub(crate) openrouter_without_key: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Setup {
@@ -135,12 +193,49 @@ impl Setup {
             clock,
             codex: Err(crate::codex::NOT_INSTALLED.into()),
             grok: Err(crate::grok::NOT_INSTALLED.into()),
+            stored: None,
+            openrouter_without_key: BTreeMap::new(),
         }
+    }
+
+    /// OpenRouter image bindings whose metadata was resolved without a provider key, grouped by
+    /// capability and model.
+    pub fn with_openrouter_without_key(
+        mut self,
+        bindings: BTreeMap<String, BTreeSet<String>>,
+    ) -> Setup {
+        self.openrouter_without_key = bindings;
+        self
+    }
+
+    /// Enable deferred fallback for eligible built-in providers in a live invocation.
+    pub fn with_stored_credentials(
+        mut self,
+        home: Result<PathBuf, String>,
+        providers: &[KeyName],
+    ) -> Setup {
+        let eligible: Vec<_> = providers
+            .iter()
+            .copied()
+            .filter(|name| {
+                KeyName::STORED.contains(name)
+                    && self.keys.get(*name).is_none()
+                    && self.endpoints.base(name.provider())
+                        == Some(name.declaration().base_url.default.as_str())
+            })
+            .collect();
+        if !eligible.is_empty() {
+            self.stored = Some(Arc::new(StoredCredentials::new(home, &eligible)));
+        }
+        self
     }
 
     /// A redactor over every key of the invocation.
     pub fn redactor(&self) -> Redactor {
-        Redactor::new(self.keys.secrets())
+        Redactor::new(self.keys.secrets()).with_stored(
+            self.keys.stored_secrets().cloned().collect(),
+            self.stored.clone(),
+        )
     }
 
     /// The declarations of the invocation: FX's, then the planning project's.
@@ -157,34 +252,77 @@ impl Setup {
     /// The client of one of FX's own providers at its base URL: its key (if any), its
     /// declaration and the shared transport.
     pub fn client(&self, key: KeyName) -> Client {
-        let declaration = key.declaration();
-        let base = self.endpoints.base(key.provider());
-        let base = base.unwrap_or(&declaration.base_url.default).to_string();
-        self.client_for(declaration, &base)
+        self.declared_client(key.declaration())
     }
 
     /// The client of one of FX's own providers at `base` (fal's queue host).
     pub fn client_at(&self, key: KeyName, base: &str) -> Client {
-        self.client_for(key.declaration(), base)
+        let declaration = key.declaration();
+        let trusted_base = if key == KeyName::Fal && base.trim_end_matches('/') == FAL_QUEUE {
+            FAL_QUEUE
+        } else {
+            &declaration.base_url.default
+        };
+        self.client_for(declaration, base, Some(trusted_base), None)
+    }
+
+    pub(crate) fn fal_queue_client(&self) -> Client {
+        self.client_for(
+            KeyName::Fal.declaration(),
+            &self.endpoints.fal_queue,
+            Some(FAL_QUEUE),
+            None,
+        )
     }
 
     /// The client of a provider the planning project declares, at its base URL: its key (if it
     /// is declared with one and the key is set), its declaration and the shared transport.
     pub fn declared_client(&self, declaration: &Declaration) -> Client {
         let base = self.endpoints.base(&declaration.name);
-        let base = base.unwrap_or(&declaration.base_url.default).to_string();
-        self.client_for(declaration, &base)
+        let trusted_base = KeyName::of_provider(&declaration.name)
+            .map(|key| key.declaration().base_url.default.as_str());
+        self.client_for(
+            declaration,
+            base.unwrap_or(&declaration.base_url.default),
+            trusted_base,
+            self.endpoints.configured.get(&declaration.name).cloned(),
+        )
     }
 
-    fn client_for(&self, declaration: &Declaration, base: &str) -> Client {
+    fn client_for(
+        &self,
+        declaration: &Declaration,
+        base: &str,
+        trusted_base: Option<&str>,
+        configured: Option<ConfiguredBase>,
+    ) -> Client {
+        let base = base.trim_end_matches('/');
+        let store_allowed = trusted_base == Some(base)
+            && KeyName::of_provider(&declaration.name)
+                .is_some_and(|key| KeyName::STORED.contains(&key));
+        let stored = self
+            .stored
+            .as_ref()
+            .filter(|stored| store_allowed && stored.eligible(&declaration.name))
+            .cloned();
+        let key = self
+            .keys
+            .of(&declaration.name)
+            .filter(|_| {
+                store_allowed
+                    || self.keys.source_of(&declaration.name) != Some(KeySource::GridaStore)
+            })
+            .cloned();
         Client {
             transport: Arc::clone(&self.transport),
             provider: declaration.name.clone(),
             declared: declaration.credential.clone(),
-            key: self.keys.of(&declaration.name).cloned(),
-            base: base.trim_end_matches('/').to_string(),
+            key,
+            base: base.to_string(),
             download_hosts: declaration.download_hosts.clone(),
             redactor: self.redactor(),
+            configured,
+            stored,
         }
     }
 }
@@ -214,17 +352,46 @@ pub struct Client {
     /// The hosts its results may be downloaded from ([`crate::wire::download_url`]).
     pub download_hosts: Vec<String>,
     pub redactor: Redactor,
+    configured: Option<ConfiguredBase>,
+    stored: Option<Arc<StoredCredentials>>,
 }
 
 impl Client {
+    pub(crate) fn needs_preparation(&self) -> bool {
+        self.stored.is_some() || self.configured.is_some()
+    }
+
+    pub(crate) async fn prepare(&self) -> Result<(), String> {
+        if let Some(stored) = &self.stored {
+            stored.prepare(&self.provider).await?;
+        }
+        self.checked_base().map(|_| ())
+    }
+
+    /// The base URL, or a refusal if a known key matches its configured value.
+    pub fn checked_base(&self) -> Result<&str, String> {
+        if let Some(configured) = &self.configured
+            && (self.redactor.contains_secret(configured.raw.expose())
+                || self.redactor.contains_secret(&self.base))
+        {
+            return Err(format!("{} holds a credential", configured.name));
+        }
+        Ok(&self.base)
+    }
+
     /// The credential for the provider's API, sent as its declaration says, or the refusal
     /// sentence `<VARIABLE> is not set`.
     pub fn credential(&self) -> Result<Credential, String> {
         let Some(declared) = &self.declared else {
             return Err(format!("{} is declared without a key", self.provider));
         };
-        match &self.key {
-            Some(secret) if !secret.expose().trim().is_empty() => Ok(Credential {
+        let key = self
+            .key
+            .as_ref()
+            .filter(|secret| !secret.expose().trim().is_empty())
+            .or_else(|| self.stored.as_ref()?.key(&self.provider));
+        match key {
+            Some(secret) => Ok(Credential {
                 header: declared.header.clone(),
                 prefix: declared.prefix(),
                 secret: secret.clone(),
@@ -254,6 +421,8 @@ impl Client {
 
     /// One exchange through the shared transport.
     pub async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+        self.checked_base()
+            .map_err(|reason| TransportError::not_sent(TransportErrorKind::Refused, reason))?;
         self.transport.send(request).await
     }
 
@@ -268,7 +437,6 @@ impl std::fmt::Debug for Client {
         f.debug_struct("Client")
             .field("provider", &self.provider)
             .field("key", &self.key)
-            .field("base", &self.base)
             .finish_non_exhaustive()
     }
 }
@@ -297,6 +465,94 @@ mod tests {
         let blank = setup(Keys::from_pairs(&[(KeyName::Tripo, "  ")])).client(KeyName::Tripo);
         assert_eq!(blank.credential().unwrap_err(), "TRIPO_API_KEY is not set");
         assert_eq!(blank.base, "https://openapi.tripo3d.ai/v3");
+    }
+
+    #[test]
+    fn an_eager_store_key_authenticates_only_at_the_built_in_base() {
+        let mut keys = Keys::none();
+        keys.insert_stored(KeyName::OpenRouter, Secret::new("test-saved-key"));
+        let origin = setup(keys.clone()).client(KeyName::OpenRouter);
+        assert_eq!(
+            origin.credential().unwrap().header_value(),
+            "Bearer test-saved-key"
+        );
+
+        let proxy = "https://proxy.example.test/v1";
+        let mut saved = setup(keys);
+        saved.endpoints = saved.endpoints.with_base("openrouter", proxy);
+        let saved = saved.client(KeyName::OpenRouter);
+        assert_eq!(saved.base, proxy);
+        assert_eq!(
+            saved.credential().unwrap_err(),
+            KeyName::OpenRouter.missing()
+        );
+
+        let mut explicit = setup(Keys::from_pairs(&[(
+            KeyName::OpenRouter,
+            "test-explicit-key",
+        )]));
+        explicit.endpoints = explicit.endpoints.with_base("openrouter", proxy);
+        assert_eq!(
+            explicit
+                .client(KeyName::OpenRouter)
+                .credential()
+                .unwrap()
+                .header_value(),
+            "Bearer test-explicit-key"
+        );
+    }
+
+    #[test]
+    fn a_project_default_base_refuses_explicit_and_resolved_store_keys() {
+        use crate::testing::block_on;
+        use crate::transport::{Lane, Method};
+        use grida_fx_core::providers::BaseUrl;
+
+        let declarations = Declarations::with(&[Declaration {
+            name: "acme".into(),
+            label: "acme".into(),
+            credential: None,
+            base_url: BaseUrl {
+                variable: Some("ACME_BASE_URL".into()),
+                default: "https://api.acme.test/test-gg-key".into(),
+            },
+            download_hosts: Vec::new(),
+            family: Some("openai-compatible".into()),
+            adapter: None,
+        }]);
+        let acme = declarations.get("acme").unwrap();
+        let environment = |pairs: &[(&str, &str)]| Environment::declared(pairs, &declarations);
+        let empty = environment(&[]);
+        let mut saved = Keys::from_environment(&empty);
+        saved.insert_stored(KeyName::GridaGateway, Secret::new("test-gg-key"));
+        let explicit = Keys::from_environment(&environment(&[("GG_API_KEY", "test-gg-key")]));
+        let safe = environment(&[("ACME_BASE_URL", "https://api.acme.test/v1")]);
+        let reason = "providers.acme.base_url.default holds a credential";
+        for keys in [explicit, saved] {
+            assert_eq!(
+                Endpoints::from_environment(&empty, &keys).unwrap_err(),
+                reason
+            );
+            assert_eq!(
+                Endpoints::from_environment(&safe, &keys)
+                    .unwrap()
+                    .base("acme"),
+                Some("https://api.acme.test/v1")
+            );
+            let client = setup(keys).declared_client(acme);
+            let request = HttpRequest::new(Method::Post, client.url("chat"), Lane::Provider);
+            let refusal = block_on(client.send(request)).unwrap_err();
+            assert_eq!(refusal.kind, TransportErrorKind::Refused);
+            assert_eq!(refusal.reason, reason);
+        }
+        let unavailable = setup(Keys::from_environment(&empty)).with_stored_credentials(
+            Err("test store unavailable".into()),
+            &[KeyName::GridaGateway],
+        );
+        assert_eq!(
+            block_on(unavailable.declared_client(acme).prepare()),
+            Ok(())
+        );
     }
 
     #[test]

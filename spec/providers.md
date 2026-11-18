@@ -48,17 +48,80 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
   - a default base URL that does not normalize: `providers.<name>.base_url.default: <name> base_url must …`, with the base-URL sentences below.
 
   The variables Codex and Grok Build are started without beside the declared ones (`CODEX_API_KEY`, `XAI_API_KEY`, …; [Codex](../crates/grida-fx-providers/src/codex/README.md), [Grok Build](../crates/grida-fx-providers/src/grok/README.md)) are not read by FX, so a declaration may read them.
-- **Only the declared variables are read:** the eleven of the built-in declarations, then each declaration's key and base-URL variable. A variable comes from the process environment when it is set and not blank (trimmed). Otherwise it comes from the planning project's `.env` file, if there is one. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
+- **Credential source order.** FX resolves each provider's key independently. The first available
+  value in this order wins.
+
+  1. A nonblank value from the process environment.
+  2. A nonblank value from the planning project's `.env` file, when enabled.
+  3. The matching entry in Grida's credential store, when enabled and eligible (below).
+
+  For precedence, FX trims values from the environment and the parsed `.env` and skips blanks.
+  Different providers in the same run may obtain keys from different sources. For example,
+  `.env` can supply `FAL_KEY` while Grida supplies `GG_API_KEY`. Only absence advances the cascade.
+  Authentication failures are reported against the chosen credential without trying a
+  lower-priority key.
+- **File source controls.** Set `GRIDA_FX_DISABLE_DOTENV=1` in the process to skip the project's
+  `.env`, or `GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip the store. Set both to use only process
+  environment keys. Each opt-out leaves the remaining sources in the same order. The same
+  process settings apply through the CLI and SDKs.
+- **Only the declared variables are read:** the eleven of the built-in declarations, then each
+  project declaration's key and base-URL variable. Base URLs use the process environment and
+  `.env` in the same order.
 - **The `.env` file is optional**, and it is read for the declared names only. Lines that name other variables are skipped without reading their values. It is refused when it is a symlink or not a regular file (`.env must be a regular file`), cannot be read (`.env could not be read`), or is not UTF-8 (`.env must be valid UTF-8`). Blank lines and `#` comments are skipped.
   - An assignment is `[export] NAME = value`. A line that starts with a declared name and is not an assignment is refused: `.env contains malformed assignment for <NAME> on line <n>`.
   - A declared name may appear only once: `.env contains duplicate key: <NAME>`.
   - A value may be unquoted (a trailing ` #` comment is removed, and a quote inside it is refused), `'single quoted'` (literal), or `"double quoted"` (a JSON string literal: `.env contains malformed quoted value for <NAME> on line <n>`). An empty value is refused: `.env contains an empty value for <NAME>`. A control character in the decoded value is refused: `.env contains an unsafe value for <NAME>`.
   - Every refusal names the variable and the line, never the value.
-- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host, no userinfo, no query, no fragment and a valid port, and `http` is allowed only for a loopback host. The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`, `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`, `<Provider>` being `Grida Gateway`, `OpenAI`, `OpenRouter`, `fal` or `ElevenLabs` for a built-in, and the name for a declared provider. A base URL that contains a key's value is refused: `<VARIABLE> holds a credential`. A base URL is configuration: it is not part of a route's fingerprint.
+  - Whenever FX loads provider settings with `.env` enabled, it validates the file even if
+    process values take precedence for all declared variables.
+- **Grida's provider credential store** is a fallback on macOS and Linux when neither the process
+  environment nor the project's `.env` supplies the key. FX reads the
+  [v1 file protocol](https://github.com/gridaco/grida/blob/273961f8f050e4c9fd3df8714f1fe409484d5b00/packages/grida-auth/PROVIDER-CREDENTIALS-V1.md)
+  and uses original synthetic fixtures based on its
+  [compatibility fixtures](https://github.com/gridaco/grida/tree/273961f8f050e4c9fd3df8714f1fe409484d5b00/packages/grida-auth/fixtures/providers-v1),
+  both pinned to Grida commit `273961f8f050e4c9fd3df8714f1fe409484d5b00`.
+  - The engine reads `<Grida home>/providers/credentials.toml`. The home is the process
+    `GRIDA_HOME` or, if unset, `$HOME/.grida`. If both variables are unset, the store is absent.
+    The home must be an absolute normalized path and pass the protocol's ownership, mode, alias
+    and ACL checks. An invalid explicit home refuses the lookup. The process alone selects the
+    home and whether this source is enabled.
+  - The store IDs are `gg` for `GG_API_KEY`, `openrouter` for `OPENROUTER_API_KEY`,
+    `fal` for `FAL_KEY`, `tripo` for `TRIPO_API_KEY`, and `elevenlabs` for
+    `ELEVENLABS_API_KEY`. The `gg` entry is a standalone Gateway API key. Account sessions and
+    invocation grants are separate. OpenAI and project providers use their existing key sources.
+  - The effective base URL must equal the provider's normalized default in the table above.
+    This also applies to fal jobs on its fixed queue host. A custom base URL uses an explicit
+    key from the environment or `.env`.
+  - An uncached live call looks up a missing key for its provider before it reserves budget or
+    records a job submission. Cancellation while waiting for this lookup leaves no charge or
+    uncertain submission. A resumed run uses the same rules for new calls and resolves the key
+    before polling an existing submission. A found key is retained for that provider during the
+    invocation. A missing entry or refused lookup can be checked again by later calls.
+    Offline preparation and execution and stand-in calls skip the store. Online OpenRouter
+    discovery may use its stored key for a valid, missing selected binding. A binding prepared
+    without a key can replay cached paid results and requires a new plan for an uncached call
+    ([model-selection.md](model-selection.md) §3).
+  - A missing home, store or entry supplies no key. Invalid, inaccessible, unsafe,
+    unsupported-version, or migration-pending storage, or a lock that cannot be acquired,
+    refuses the lookup with a reason that omits secret values and local paths. The reader uses
+    the protocol's shared lock and orphan-file housekeeping. Grida owns credential records,
+    permissions and migration state. Stored secrets stay in the engine and are never injected
+    into child process environments or written to portable records.
+- **A base URL** is trimmed and loses a trailing `/`. It must be an `http(s)` URL with a host,
+  no userinfo, no query, no fragment and a valid port. `http` is allowed only for a loopback host.
+  The refusals are `<Provider> base_url must be an HTTP(S) URL without credentials, query, or fragment`,
+  `… must use a valid network port` and `… must use HTTPS unless it targets a loopback host`,
+  `<Provider>` being `Grida Gateway`, `OpenAI`, `OpenRouter`, `fal` or `ElevenLabs` for a built-in,
+  and the name for a declared provider. Before use, FX refuses a configured base URL if any part
+  of it, including its host or path, contains the value of an explicit key or a saved key already
+  resolved in this invocation. The refusal is `<VARIABLE> holds a credential` for a variable
+  override or `providers.<name>.base_url.default holds a credential` for a project default.
+  A custom destination with an explicit key does not itself trigger a Grida store lookup. A base
+  URL is connection configuration and stays outside route fingerprints.
 - **A built-in adapter downloads a result at the URL its provider returned.** FX owns credential isolation, bounded downloads and output checks; the provider owns the choice of download host. FX's fal image and background-removal adapters and its Tripo adapters accept `https` URLs with a DNS hostname rather than an IP literal, no userinfo, no port but 443 and no fragment, without a provider-host catalog ([fal](../crates/grida-fx-providers/src/fal/README.md), [Tripo](../crates/grida-fx-providers/src/tripo/README.md)). Their empty `download_hosts` entries do not deny these built-in downloads. GG's adapters and fal's video adapter keep their existing acceptance of any `https` URL ([GG](../crates/grida-fx-providers/src/gg/README.md)). Every download is credential-free, refuses redirects and has its adapter's response cap ([adapters.md](adapters.md) §2, §7).
 - **A project adapter's `fetch` downloads only from its declaration's `download_hosts`.** The URL is `https`, its host a name (not an address) that matches an entry or lies below a `*.` entry's domain, compared in lower case without a trailing `.`, with no userinfo, no port but 443 and no fragment. An empty list denies every download through `fetch` ([adapters.md](adapters.md) §9).
 - **Codex, Grok Build, the background service and the browser opener never inherit a declared variable.** Codex and Grok Build (§2), the background service `grida-fx start --background` starts, and the program that opens a browser start without every declared variable of the project the command works in: the planning project, the project `start` serves, or for `inspect` the project of the directory FX runs in. `view --run` and `view --plan` read no project, so their browser opener takes the declarations of the project of the directory FX runs in, or the built-in ones alone when that `fx.yaml` cannot be read. A node host ([protocol.md](protocol.md) §1), and so every program user code starts, inherits FX's environment as before: a declared variable set there reaches it, and one read only from `.env` does not. An adapter host ([adapters.md](adapters.md) §9) starts without every declared variable but its own declaration's, which it gets as FX read them, from the environment or `.env`.
-- **Key values are never printed,** and every key's value, a declared provider's too, is redacted from the reasons an adapter gives ([adapters.md](adapters.md) §7). `grida-fx doctor` says which keys are present and where each came from (environment or `.env`), never a value: a `key` line for each built-in declaration, and for each of the project's declarations `provider  <name> <host> <VARIABLE> present (environment)` (or `present (.env)`, or `missing`), or `provider  <name> <host> needs no key` for one declared without a credential, `<host>` being its base URL's host, with its port when the URL names one, or its default's when its variable is refused. For each declaration with an `adapter`, doctor loads it as planning does ([adapters.md](adapters.md) §9) and prints `adapter   <name> <path>#<attribute> version <v>: <capability> (request), <capability> (job)` (`unversioned:` for one without a version), or `adapter   <name> <path>#<attribute> cannot load: <sentence>`, which makes it exit 1; the routes of a capability the adapter declares are then judged as served by it.
+- **Key values are never printed,** and every key's value, a declared provider's too, is redacted from the reasons an adapter gives ([adapters.md](adapters.md) §7). `grida-fx doctor` says which keys are present and where each came from: `present (environment)`, `present (.env)`, or `present (grida)`. It explicitly checks eligible missing keys in the store to diagnose live availability. For a missing eligible key it points to Grida's provider configuration. A refused store lookup is diagnosed without keys or local paths and makes doctor exit 1. Doctor prints a `key` line for each built-in declaration, and for each of the project's declarations `provider  <name> <host> <VARIABLE> present (environment)` (or `present (.env)`, or `missing`), or `provider  <name> <host> needs no key` for one declared without a credential, `<host>` being its base URL's host, with its port when the URL names one, or its default's when its variable is refused. For each declaration with an `adapter`, doctor loads it as planning does ([adapters.md](adapters.md) §9) and prints `adapter   <name> <path>#<attribute> version <v>: <capability> (request), <capability> (job)` (`unversioned:` for one without a version), or `adapter   <name> <path>#<attribute> cannot load: <sentence>`, which makes it exit 1; the routes of a capability the adapter declares are then judged as served by it.
 
 ## 2. The built-in adapters
 

@@ -236,7 +236,8 @@ def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
     """A minimal environment: nothing of the caller's leaks in but PATH and `passed`.
 
     No provider key, tool override, FX cache location or locale can change what a case prints,
-    and a case that runs `--live` reaches no provider: the network is off and no `.env` is read
+    and a case that runs `--live` reaches no provider: the network is off and both `.env` and
+    the Grida store are disabled
     (spec/adapters.md section 2; spec/providers.md section 1). A step's `env` adds to this, never
     over it (check_step_env): a made-up key for a provider the case declares.
     """
@@ -250,6 +251,7 @@ def step_environment(home: Path, passed: dict[str, str]) -> dict[str, str]:
         "PYTHONDONTWRITEBYTECODE": "1",
         "GRIDA_FX_NETWORK": "off",
         "GRIDA_FX_DISABLE_DOTENV": "1",
+        "GRIDA_FX_DISABLE_GRIDA_STORE": "1",
         **passed,
     }
 

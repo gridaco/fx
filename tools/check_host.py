@@ -56,7 +56,9 @@ def environment() -> dict[str, str]:
     env = dict(os.environ)
     for name in (*PROVIDER_KEYS, "GRIDA_FX_BIN", "GRIDA_FX_INVOKER", "PYTHONPATH", "PYTHONHOME"):
         env.pop(name, None)
-    env.update(GRIDA_FX_DISABLE_DOTENV="1", GRIDA_FX_NETWORK="off")
+    env.update(
+        GRIDA_FX_DISABLE_DOTENV="1", GRIDA_FX_DISABLE_GRIDA_STORE="1", GRIDA_FX_NETWORK="off"
+    )
     return env
 
 

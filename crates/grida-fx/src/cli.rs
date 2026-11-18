@@ -14,8 +14,9 @@
 //! after their own options; [`crate::args::split_plan_args`] separates the two before clap sees
 //! them.
 //!
-//! `run --live` reads the provider keys from the environment or the planning project's `.env`
-//! (spec/providers.md §1; [`crate::engine::adapters_for`]); `doctor` says which are present.
+//! `run --live` reads provider keys from the environment, the planning project's `.env`, or
+//! Grida's credential store for eligible providers (spec/providers.md §1;
+//! [`crate::engine::adapters_for`]); `doctor` says which are present and where they came from.
 //!
 //! As with Python's argparse, a repeated option takes its last value (`--max-usd 1
 //! --max-usd 2` is a ceiling of $2; `--check --check` is `--check`); repeatable options

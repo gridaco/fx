@@ -84,6 +84,16 @@ It asks only the provider already selected by the qualified selector or provider
 It does not search for another provider, change the authored model ID, upgrade to a newer
 model or make a paid fallback call.
 
+The OpenRouter resolver requires a native `author/model` identifier before loading provider
+settings or consulting Grida's store. When `doctor` looks up metadata, it uses the same
+provider settings and credentials it diagnosed for that invocation. A run that looks up a
+binding reuses the resolved provider settings, including any saved key that scoped the lookup,
+for execution in the same invocation. Provider settings stay in memory. Only model facts
+are saved with a prepared plan or run for use in another invocation.
+An OpenRouter binding prepared without a key can replay a cached paid result. An uncached
+call on that binding requires a new plan with a key. Other bindings keep their normal
+credential lookup.
+
 Authored route tables remain authoritative. Discovery MUST NOT replace an admitted binding,
 repair an ambiguous binding, or weaken a route's authored feature, input, contract or price
 checks. An explicit `--routes` invocation disables automatic discovery, retaining that
@@ -113,8 +123,10 @@ Lookups are read-only provider GET requests over the engine's transport, each li
 no assets, create no provider jobs and incur no generation charge. They may use only the
 selected provider's declared credential, with the same base-URL origin confinement and
 redaction as other provider requests ([providers.md](providers.md) §1,
-[adapters.md](adapters.md) §2). They do not follow redirects or retry. With
-`GRIDA_FX_NETWORK=off`, no lookup request is sent. A lookup failure does not change the
+[adapters.md](adapters.md) §2). GG metadata is public. An eligible online OpenRouter lookup
+may read its Grida store key if no explicit key is available. They do not follow redirects or
+retry. With `GRIDA_FX_NETWORK=off`, no lookup request is sent and the Grida store is skipped.
+A lookup failure does not change the
 provider or silently admit unsupported facts; without sufficient locally available metadata
 or an authored route, resolution is refused with the missing requirement.
 

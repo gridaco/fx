@@ -1,0 +1,5 @@
+version = 1
+migration = { state = 'complete', removed = [] }
+
+[providers]
+acme = { api_key = "  fx-\"key\"\\path-\u03BB-\U0001F9EA  " }

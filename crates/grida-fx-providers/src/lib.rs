@@ -66,6 +66,7 @@ pub mod elevenlabs;
 pub mod fake;
 pub mod fal;
 pub mod gg;
+pub mod grida_store;
 pub mod grok;
 pub mod installed;
 pub mod keys;

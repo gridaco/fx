@@ -1,0 +1,6 @@
+version = 1
+providers.acme.api_key = 'fx-fixture-import-pending'
+
+[migration]
+removed = []
+state = 'pending'

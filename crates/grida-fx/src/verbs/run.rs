@@ -149,11 +149,12 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     } else {
         None
     };
-    let resolved_models = crate::models::prepare(
+    let prepared = crate::models::prepare(
         &mut planner,
         &mut host,
         snapshot.as_ref(),
         !args.routes.is_empty(),
+        args.stand_in.is_none(),
     )?;
     let declared: Vec<&str> = planner
         .workflow
@@ -185,6 +186,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         args.live,
         stand_in.clone(),
         &private,
+        prepared.settings,
     ) {
         Ok(engine) => engine,
         Err(error) => {
@@ -201,7 +203,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         &mut host,
         yes_up_to,
         &deliveries,
-        resolved_models,
+        prepared.facts,
     );
     crate::engine::shutdown(&runtime, &engine);
     ran

@@ -207,6 +207,24 @@ helper defaults to the release profile. Use the Python and JavaScript checks in
 AGENTS.md when changing either SDK. Changes to public schemas, identities, or
 protocol behavior update their specification and conformance evidence together.
 
+For changes to the shared provider credential store, use the
+[Grida compatibility check](tools/check_grida_store.py) with the fixture-only writer
+built at the [pinned Grida revision](spec/providers.md#1-keys-and-endpoints). It
+verifies Grida writes and removes a synthetic GG key and FX respects the shared
+SQLite lock and reports the key's source.
+
+To verify the public commands in [AR-27](AGENT_READINESS.md#engineering-acceptance-scenarios),
+use the installed `grida@0.5.7` npm launcher and this checkout's engine.
+The test saves and removes a synthetic key through Grida in a temporary home and
+uses a fake transport for the GG request.
+
+```sh
+cargo build --locked --bin grida-fx
+GRIDA_TEST_CLI=/absolute/path/to/grida GRIDA_FX_BIN="$PWD/target/debug/grida-fx" \
+  cargo test --locked -p grida-fx-providers --test gg \
+  public_grida_gg_store_drives_fx_adapter_and_is_removed -- --ignored --exact --nocapture
+```
+
 The built-in route table is checked against a pinned release of
 [Grida Models](https://github.com/gridaco/models) (spec/providers.md §3), whose
 projection is `crates/grida-fx-providers/routes/models.json`. A new built-in route

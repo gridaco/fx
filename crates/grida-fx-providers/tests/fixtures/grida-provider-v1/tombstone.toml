@@ -1,0 +1,6 @@
+version = 1
+providers = {}
+
+[migration]
+removed = ['acme']
+state = 'unstarted'

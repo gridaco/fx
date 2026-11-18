@@ -61,11 +61,10 @@ fn declarations() -> Declarations {
 fn setup_with(transport: Arc<dyn Transport>, pairs: &[(&str, &str)]) -> Setup {
     let environment = Environment::declared(pairs, &declarations());
     let keys = Keys::from_environment(&environment);
-    let endpoints = Endpoints::from_environment(&environment, &keys).expect("valid base URLs");
-    Setup {
-        endpoints,
-        ..setup(transport, keys)
-    }
+    let mut setup = setup(transport, keys);
+    setup.endpoints =
+        Endpoints::from_environment(&environment, &setup.keys).expect("valid base URLs");
+    setup
 }
 
 /// The adapters a live invocation registers over `transport`, with `acme`'s key.
