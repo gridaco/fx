@@ -258,15 +258,18 @@ fn canonicalize_installation(
             other => resolved.push(other.as_os_str()),
         }
     }
-    // Preserve trailing-separator behavior from the local filesystem's canonicalizer.
-    if path
-        .as_os_str()
-        .as_encoded_bytes()
-        .last()
-        .is_some_and(|byte| std::path::is_separator(char::from(*byte)))
-    {
+    // The component iterator strips terminal separators and dots. Ask the local
+    // canonicalizer to check the original directory requirement in the staged tree.
+    let is_separator = |byte| std::path::is_separator(char::from(byte));
+    let suffix = match path.as_os_str().as_encoded_bytes() {
+        [.., separator] if is_separator(*separator) => Some(""),
+        [.., separator, b'.'] if is_separator(*separator) => Some("."),
+        _ => None,
+    };
+    if let Some(suffix) = suffix {
         let mut with_separator = on_disk(&resolved).into_os_string();
         with_separator.push(std::path::MAIN_SEPARATOR_STR);
+        with_separator.push(suffix);
         Path::new(&with_separator).canonicalize().ok()?;
     }
     Some(resolved)
@@ -665,25 +668,34 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn a_staged_regular_file_does_not_resolve_through_a_directory_link() {
-        let workspace = tempfile::tempdir().unwrap();
-        let root = workspace.path().canonicalize().unwrap();
-        let staging = root.join("staged");
-        let destination = root.join("fox");
-        let external = root.join("external");
-        std::fs::create_dir(&staging).unwrap();
-        std::fs::create_dir(&external).unwrap();
-        std::fs::write(
-            staging.join("fx.yaml"),
-            "fx: project/v1\nworkflows: [\"../external/alias/..\"]\n",
-        )
-        .unwrap();
-        std::os::unix::fs::symlink("../fox/fx.yaml/", external.join("alias")).unwrap();
+    fn staged_links_keep_terminal_directory_requirements() {
+        for (target, search) in [
+            ("../fox/fx.yaml/", "../external/alias/.."),
+            ("../fox/fx.yaml/.", "../external/alias/.."),
+            ("../fox/workflows/.", "../external/alias"),
+        ] {
+            let workspace = tempfile::tempdir().unwrap();
+            let root = workspace.path().canonicalize().unwrap();
+            let staging = root.join("staged");
+            let destination = root.join("fox");
+            let external = root.join("external");
+            std::fs::create_dir_all(staging.join("workflows")).unwrap();
+            std::fs::create_dir(&external).unwrap();
+            std::fs::write(
+                staging.join("fx.yaml"),
+                format!("fx: project/v1\nworkflows: [\"{search}\"]\n"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(target, external.join("alias")).unwrap();
 
-        let before = Project::validate_installation(&staging, &destination);
-        std::fs::rename(&staging, &destination).unwrap();
-        let after = Project::find(&destination).map(|_| ());
-        assert_eq!(before, after);
+            let before = Project::validate_installation(&staging, &destination);
+            std::fs::rename(&staging, &destination).unwrap();
+            let after = Project::find(&destination).map(|_| ());
+            if target == "../fox/workflows/." {
+                assert!(after.is_ok());
+            }
+            assert_eq!(before, after, "{target}");
+        }
     }
 
     /// Budgets are read as money (they need [`crate::money`]).
