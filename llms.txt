@@ -102,6 +102,7 @@ The default destination is `./NAME`. Its immediate parent must exist. An occupie
 exits 2. The new folder has its own `fx.yaml` and can sit inside another project. Run commands
 from the new folder to use its project settings. FX reads the authored template from the
 matching release archive. `GRIDA_FX_NETWORK=off` prevents that download.
+If FX accepts an interrupt before publishing the project folder, it cleans up staging and exits 130.
 
 Use `grida fx init --list-templates --json` to discover the templates without a download. Entries
 with a `workflow_entry` can be added. On success, `add --json` emits `fx-project-init-v1` with the

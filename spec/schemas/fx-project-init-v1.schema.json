@@ -13,6 +13,20 @@
   "dependentRequired": {
     "workflow_entry": ["template", "missing_inputs", "prerequisites"]
   },
+  "if": {
+    "required": ["workflow_entry"]
+  },
+  "then": {
+    "properties": {
+      "created": { "const": true },
+      "template": {
+        "type": "object",
+        "properties": {
+          "source": { "enum": ["release", "local"] }
+        }
+      }
+    }
+  },
   "$defs": {
     "project_file": {
       "type": "string",

@@ -36,10 +36,10 @@ Each example folder stands on its own: copy it anywhere and it still works. Its 
 guide and other repository pages are absolute URLs, and everything else it uses is inside it.
 
 `npm install -g grida` installs `grida fx`. For examples in the installed template index,
-`grida fx add pet` is a way to copy one into a fresh folder. Discover names with
-`grida fx init --list-templates`. Follow
-[Start from a template](../docs/guide/01-getting-started.md#start-from-a-template) for destinations
-and setup.
+`grida fx add pet` copies one into a fresh folder. Run `grida fx init --list-templates --json`
+and look for entries with `workflow_entry`. Use `grida fx init --template starter` for the built-in
+starter. Follow [Start from a template](../docs/guide/01-getting-started.md#start-from-a-template)
+for destinations and setup.
 
 Python-node projects also need the Python SDK and their own processing libraries. Follow the
 copied example's README:

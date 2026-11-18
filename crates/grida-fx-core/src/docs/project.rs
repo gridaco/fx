@@ -123,6 +123,12 @@ pub struct Project {
 }
 
 impl Project {
+    /// Validates a staged project file against the location where its folder will be installed.
+    pub fn validate_installation(staging: &Path, destination: &Path) -> Result<()> {
+        let document = read_project(&staging.join(PROJECT_FILE), PROJECT_FILE)?;
+        refuse_holding_folders(destination, &document, PROJECT_FILE)
+    }
+
     /// Finds the project of `start` (module doc).
     pub fn find(start: &Path) -> Result<Project> {
         let mut here = crate::inputs::bind::resolve(start);

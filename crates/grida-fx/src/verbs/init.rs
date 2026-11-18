@@ -310,40 +310,51 @@ pub fn add(args: &AddArgs) -> Result<u8, Error> {
     }
 
     let source = Source::of(args.template_source.as_deref())?;
-    let staging = tempfile::Builder::new()
-        .prefix(".fx-add-")
-        .tempdir_in(&parent)
-        .map_err(|error| Error::io("the destination parent", &error))?;
-    let project = staging.path().join("project");
-    std::fs::create_dir(&project).map_err(|error| Error::io("the template folder", &error))?;
-    let files = prepare_template(&project, template, &source)?;
-    Project::find(&project)?;
-    load_workflow(
-        &project.join(&starter.workflow_entry),
-        &starter.workflow_entry,
-        &starter.workflow_entry,
-    )?;
-    if let Some(inputs) = &starter.inputs_file
-        && !project.join(inputs).is_file()
-    {
-        return Err(refused(format!(
-            "the starter input preset {inputs} is missing"
-        )));
-    }
-    let missing: Vec<&str> = starter
-        .required_inputs
-        .iter()
-        .filter(|path| !project.join(path).is_file())
-        .map(String::as_str)
-        .collect();
-    // The early check is for prompt feedback. The publication itself must also reject a collision.
-    publish_directory(&project, &target).map_err(|error| {
-        if error.kind() == io::ErrorKind::AlreadyExists {
-            destination_exists(requested)
-        } else {
-            Error::io("the destination", &error)
+    let contents = source.acquire(template, &parent)?;
+    let installed = crate::interrupt::with_template_staging(|| {
+        let staging = tempfile::Builder::new()
+            .prefix(".fx-add-")
+            .tempdir_in(&parent)
+            .map_err(|error| Error::io("the destination parent", &error))?;
+        let project = staging.path().join("project");
+        std::fs::create_dir(&project).map_err(|error| Error::io("the template folder", &error))?;
+        let files = prepare_template(&project, template, &contents)?;
+        Project::validate_installation(&project, &target)?;
+        load_workflow(
+            &project.join(&starter.workflow_entry),
+            &starter.workflow_entry,
+            &starter.workflow_entry,
+        )?;
+        if let Some(inputs) = &starter.inputs_file
+            && !project.join(inputs).is_file()
+        {
+            return Err(refused(format!(
+                "the starter input preset {inputs} is missing"
+            )));
         }
+        let missing: Vec<&str> = starter
+            .required_inputs
+            .iter()
+            .filter(|path| !project.join(path).is_file())
+            .map(String::as_str)
+            .collect();
+        // The early check is for prompt feedback. The publication itself must also reject a collision.
+        crate::interrupt::begin_template_publication()?;
+        publish_directory(&project, &target).map_err(|error| {
+            if matches!(
+                error.kind(),
+                io::ErrorKind::AlreadyExists | io::ErrorKind::DirectoryNotEmpty
+            ) {
+                destination_exists(requested)
+            } else {
+                Error::io("the destination", &error)
+            }
+        })?;
+        Ok((files, missing))
     })?;
+    let Some((files, missing)) = installed else {
+        return Ok(super::run::INTERRUPTED);
+    };
     if args.json {
         let mut result = init_result(&target, Some((&template.name, source.kind())), &files);
         starter.write_fields(&mut result);
@@ -600,6 +611,11 @@ enum Source {
     Directory(PathBuf),
 }
 
+enum TemplateContents {
+    Directory(PathBuf),
+    Archive(Vec<u8>),
+}
+
 impl Source {
     fn of(given: Option<&str>) -> Result<Source, Error> {
         let Some(given) = given else {
@@ -634,6 +650,39 @@ impl Source {
             _ => "local",
         }
     }
+
+    /// Acquire the archive before a temporary directory exists. A checkout is read in place,
+    /// so staging anywhere in the example would include staged files in its own source walk.
+    fn acquire(
+        &self,
+        template: &Template,
+        staging_parent: &Path,
+    ) -> Result<TemplateContents, Error> {
+        match self {
+            Self::Directory(directory) => {
+                let folder = directory.join(&template.path);
+                if !folder.is_dir() {
+                    return Err(missing(template));
+                }
+                let folder = folder
+                    .canonicalize()
+                    .map_err(|error| Error::io("the template source", &error))?;
+                let staging_parent = staging_parent
+                    .canonicalize()
+                    .map_err(|error| Error::io("the staging parent", &error))?;
+                if staging_parent.starts_with(&folder) {
+                    return Err(Error::usage(
+                        "the destination is inside the template source",
+                    ));
+                }
+                Ok(TemplateContents::Directory(folder))
+            }
+            Self::Archive(path) => std::fs::read(path)
+                .map(TemplateContents::Archive)
+                .map_err(|error| Error::io("the archive", &error)),
+            Self::Url(url) | Self::Release(url) => download(url).map(TemplateContents::Archive),
+        }
+    }
 }
 
 fn loopback(url: &url::Url) -> bool {
@@ -654,12 +703,13 @@ fn write_template(
     given: Option<&str>,
 ) -> Result<(Vec<String>, &'static str), Error> {
     let source = Source::of(given)?;
+    let contents = source.acquire(template, root)?;
     let staging = tempfile::Builder::new()
         .prefix(".fx-init-")
         .tempdir_in(root)
         .map_err(|error| Error::io("project directory", &error))?;
     let unpacked = staging.path();
-    let files = prepare_template(unpacked, template, &source)?;
+    let files = prepare_template(unpacked, template, &contents)?;
     for entry in std::fs::read_dir(unpacked).map_err(|error| Error::io("the template", &error))? {
         let entry = entry.map_err(|error| Error::io("the template", &error))?;
         std::fs::rename(entry.path(), root.join(entry.file_name()))
@@ -672,25 +722,14 @@ fn write_template(
 fn prepare_template(
     unpacked: &Path,
     template: &Template,
-    source: &Source,
+    contents: &TemplateContents,
 ) -> Result<Vec<String>, Error> {
     let mut limits = Limits::default();
-    match source {
-        Source::Directory(directory) => {
-            let folder = directory.join(&template.path);
-            if !folder.is_dir() {
-                return Err(missing(template));
-            }
-            copy_tree(&folder, unpacked, Path::new(""), &mut limits)?;
+    match contents {
+        TemplateContents::Directory(folder) => {
+            copy_tree(folder, unpacked, Path::new(""), &mut limits)?;
         }
-        Source::Archive(path) => {
-            let bytes = std::fs::read(path).map_err(|error| Error::io("the archive", &error))?;
-            unpack(&bytes, template, unpacked, &mut limits)?;
-        }
-        Source::Url(url) | Source::Release(url) => {
-            let bytes = download(url)?;
-            unpack(&bytes, template, unpacked, &mut limits)?;
-        }
+        TemplateContents::Archive(bytes) => unpack(bytes, template, unpacked, &mut limits)?,
     }
     if !unpacked.join("fx.yaml").is_file() {
         return Err(Error::new(
@@ -831,6 +870,7 @@ fn copy_tree(from: &Path, to: &Path, relative: &Path, limits: &mut Limits) -> Re
     let entries =
         std::fs::read_dir(from.join(relative)).map_err(|error| Error::io("the source", &error))?;
     for entry in entries {
+        crate::interrupt::check_template_staging()?;
         let entry = entry.map_err(|error| Error::io("the source", &error))?;
         let name = entry.file_name();
         if SKIPPED.iter().any(|skipped| name == *skipped) {
@@ -873,6 +913,7 @@ fn unpack(bytes: &[u8], template: &Template, to: &Path, limits: &mut Limits) -> 
     let mut top: Option<String> = None;
     let mut found = false;
     for entry in archive.entries().map_err(unreadable)? {
+        crate::interrupt::check_template_staging()?;
         let mut entry = entry.map_err(unreadable)?;
         let kind = entry.header().entry_type();
         if kind.is_pax_global_extensions() {

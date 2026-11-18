@@ -12,6 +12,9 @@
 //!   win first and preserve the actual terminal outcome. Repeated SIGTERM stays
 //!   cooperative. A second explicit SIGINT is emergency force, with cleanup unverified.
 //!   There is no elapsed-time escalation while the runner owns cleanup.
+//! - while `add` holds a staged template, an interruption accepted before publication stops
+//!   setup after dropping staging. Once publication starts, FX finishes the rename and staging
+//!   cleanup before resuming immediate-exit handling.
 //! - at any other time (planning, `at: plan` steps, every other verb) the command ends at once:
 //!   the process group of every node host it started is killed
 //!   ([`grida_fx_runtime::host::end_every_host_now`]) and it exits 130. Nothing is written: planning
@@ -25,7 +28,8 @@
 //! ([`grida_fx_runtime::stderr::write_within`]): an interrupted command always ends.
 
 use crate::verbs::run::INTERRUPTED;
-use std::sync::atomic::{AtomicBool, Ordering};
+use grida_fx_core::Error;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -35,6 +39,12 @@ static RUNNER_EXPECTED: AtomicBool = AtomicBool::new(false);
 static RUNNER_OWNS: AtomicBool = AtomicBool::new(false);
 /// One explicit SIGINT has arrived; a second grants emergency force authority.
 static SIGINT_SEEN: AtomicBool = AtomicBool::new(false);
+const IDLE: u8 = 0;
+const EXITING: u8 = 1;
+const STAGING: u8 = 2;
+const CANCELLED: u8 = 3;
+const PUBLISHING: u8 = 4;
+static INSTALL: AtomicU8 = AtomicU8::new(IDLE);
 /// Held by an end at once from its start until it exits the process, and by the command's own
 /// return ([`ending`]): a command that finishes while it is forced to end waits for that end,
 /// so the forced exit's message is never cut short by the command's own exit.
@@ -70,6 +80,45 @@ pub fn runner_ended() {
     RUNNER_OWNS.store(false, Ordering::SeqCst);
 }
 
+/// Defers forced exit while the installer owns a temporary directory. The closure drops the
+/// directory before its caller can return 130 or another signal can take the immediate exit.
+pub fn with_template_staging<T>(
+    stage: impl FnOnce() -> Result<T, Error>,
+) -> Result<Option<T>, Error> {
+    if INSTALL
+        .compare_exchange(IDLE, STAGING, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Ok(None);
+    }
+    let outcome = stage();
+    if INSTALL.swap(IDLE, Ordering::SeqCst) == CANCELLED {
+        Ok(None)
+    } else {
+        outcome.map(Some)
+    }
+}
+
+/// Checks for cancellation between entries while materializing a template.
+pub fn check_template_staging() -> Result<(), Error> {
+    if INSTALL.load(Ordering::SeqCst) == CANCELLED {
+        return Err(Error::usage("template installation interrupted"));
+    }
+    Ok(())
+}
+
+/// Claims publication. A signal that already cancelled staging wins; later signals leave the
+/// atomic rename and staging cleanup to the installer.
+pub fn begin_template_publication() -> Result<(), Error> {
+    if INSTALL
+        .compare_exchange(STAGING, PUBLISHING, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err(Error::usage("template installation interrupted"));
+    }
+    Ok(())
+}
+
 /// How long the forced exit's message may wait for the command's stderr to take it.
 const LAST_WORD_WAIT: Duration = Duration::from_millis(500);
 
@@ -98,7 +147,16 @@ pub fn ending() -> MutexGuard<'static, ()> {
 /// One interruption (module doc). `terminate`: it was a SIGTERM.
 fn interrupted(terminate: bool) {
     if !RUNNER_OWNS.load(Ordering::SeqCst) {
-        end_now(None);
+        let previous =
+            INSTALL.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |state| match state {
+                IDLE => Some(EXITING),
+                STAGING => Some(CANCELLED),
+                _ => None,
+            });
+        if previous == Ok(IDLE) {
+            end_now(None);
+        }
+        return;
     }
     if !terminate && SIGINT_SEEN.swap(true, Ordering::SeqCst) {
         end_now(Some(
@@ -146,4 +204,25 @@ fn listen(ready: std::sync::mpsc::SyncSender<()>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interrupted_template_staging_cleans_up_before_returning() {
+        let root = tempfile::tempdir().unwrap();
+        let outcome = with_template_staging(|| {
+            let staging = tempfile::tempdir_in(root.path()).unwrap();
+            std::fs::write(staging.path().join("fx.yaml"), "fx: project/v1\n").unwrap();
+            interrupted(false);
+            assert!(staging.path().is_dir());
+            assert!(check_template_staging().is_err());
+            begin_template_publication()
+        })
+        .unwrap();
+        assert!(outcome.is_none());
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+    }
 }

@@ -23,6 +23,7 @@ like the release's (one top-level folder, tracked files as they are in the worki
 on loopback. Each check runs on exactly what a user gets. For ``add``, also verify the receipt
 and that its advertised starter plans once fixtures supply any declared inputs.
 ``templates`` checks that every template has a check and ships in the release archive.
+The checker associates one template with each example folder and refuses an ambiguous index.
 
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
 """
@@ -47,9 +48,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageOps
+
 import grida.fx as fx
 from grida.fx import RunResult, _api
-from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
@@ -589,7 +591,16 @@ def self_contained() -> list[str]:
 def templates() -> dict[str, dict[str, Any]]:
     """The templates the engine offers, by example folder name."""
     index = json.loads((EXAMPLES / "templates.json").read_text(encoding="utf-8"))
-    return {Path(entry["path"]).name: entry for entry in index["templates"]}
+    offered: dict[str, dict[str, Any]] = {}
+    for entry in index["templates"]:
+        folder = Path(entry["path"]).name
+        if folder in offered:
+            raise Failed(
+                f"templates {offered[folder]['name']} and {entry['name']} share examples/{folder}. "
+                "The example checker tests one template per folder."
+            )
+        offered[folder] = entry
+    return offered
 
 
 def template_problems(offered: dict[str, dict[str, Any]]) -> list[str]:
@@ -695,7 +706,11 @@ def main(names: list[str]) -> int:
         return 2
     offline()
     failures = 0
-    offered = templates()
+    try:
+        offered = templates()
+    except Failed as failure:
+        print(f"FAIL templates: {failure}")
+        return 1
     if not names or "templates" in names:
         problems = template_problems(offered)
         if problems:
@@ -742,9 +757,14 @@ def main(names: list[str]) -> int:
                     typescript(home, check_types=example not in typed)
                     typed.add(example)
                 detail = check(home)
-                if "workflow_entry" in outcome and all(
-                    (home / file).is_file() for file in outcome["missing_inputs"]
-                ):
+                if "workflow_entry" in outcome:
+                    missing = [
+                        file for file in outcome["missing_inputs"] if not (home / file).is_file()
+                    ]
+                    expect(
+                        not missing,
+                        f"starter inputs missing after fixture setup: {', '.join(missing)}",
+                    )
                     inputs = outcome.get("inputs_file")
                     planned(outcome["workflow_entry"], home, input_files=[inputs] if inputs else [])
                 print(f"ok   {name}: {detail}")

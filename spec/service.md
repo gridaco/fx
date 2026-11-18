@@ -132,13 +132,16 @@ The parent may contain an FX project. The installed copy owns its own `fx.yaml`
 and project settings. `add` never merges into the parent.
 
 `add` shares the release source, network rules, extraction limits, agent files,
-and hidden test source with `init`. It stages the source beside the destination,
-validates the staged `fx.yaml` and the declared YAML workflow entry, and verifies
+and hidden test source with `init`. It downloads the archive before staging the
+source beside the destination. For a checkout source, the destination must be
+outside the selected example folder. FX validates the staged `fx.yaml` against the
+final project root and validates the declared YAML workflow entry. It verifies
 the bundled preset file when one is declared. Missing declared user-supplied inputs
 are reported on success. Prerequisites are declarations. The installer does not
 probe them, launch code, install dependencies, load credentials, or consult
 providers. It publishes the finished directory with one exclusive rename. If
 two installs target the same path, at most one publishes and the other fails.
+If FX accepts an interrupt before publication, it removes staging and exits 130.
 Template inputs in the source tree are copied as files. Canonical runs and
 downloads of separately hosted input or output files are outside this operation.
 

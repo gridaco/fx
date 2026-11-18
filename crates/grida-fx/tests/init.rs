@@ -52,10 +52,14 @@ fn refused(output: &Output, says: &str) {
     assert!(stderr.contains(says), "{stderr}");
 }
 
-fn conforms(schema: &str, document: &Value) {
+fn validator(schema: &str) -> jsonschema::Validator {
     let path = repository().join(format!("spec/schemas/{schema}.schema.json"));
     let schema: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let validator = jsonschema::validator_for(&schema).unwrap();
+    jsonschema::validator_for(&schema).unwrap()
+}
+
+fn conforms(schema: &str, document: &Value) {
+    let validator = validator(schema);
     let problems: Vec<String> = validator
         .iter_errors(document)
         .map(|error| format!("{error} at {}", error.instance_path()))
@@ -72,7 +76,11 @@ fn files(folder: &Path) -> Vec<String> {
             if entry.file_type().unwrap().is_dir() {
                 walk(folder, &path, found);
             } else {
-                found.push(path.to_str().unwrap().to_string());
+                let parts: Vec<&str> = path
+                    .components()
+                    .map(|part| part.as_os_str().to_str().unwrap())
+                    .collect();
+                found.push(parts.join("/"));
             }
         }
     }
@@ -406,6 +414,16 @@ fn add_installs_pet_as_its_own_project_and_preserves_local_edits() {
     ];
     let result = success(execute(root.path(), &args));
     conforms("fx-project-init-v1", &result);
+    let validator = validator("fx-project-init-v1");
+    for (field, invalid) in [
+        ("created", json!(false)),
+        ("template", Value::Null),
+        ("template", json!({"name": "pet", "source": "built_in"})),
+    ] {
+        let mut broken = result.clone();
+        broken[field] = invalid;
+        assert!(!validator.is_valid(&broken), "accepted {broken:#}");
+    }
     let project = root.path().join("pet").canonicalize().unwrap();
     assert_eq!(result["project_root"], json!(project));
     assert_eq!(
@@ -484,6 +502,49 @@ fn add_rejects_a_broken_starter_before_publishing() {
         "destination parent",
     );
     assert!(!root.path().join("absent").exists());
+}
+
+#[test]
+fn add_refuses_workflow_search_that_would_cover_the_installed_project() {
+    let root = tempfile::tempdir().unwrap();
+    let target = root.path().canonicalize().unwrap().join("fox-pet");
+    let config = format!("fx: project/v1\nworkflows: [{}]\n", json!(target));
+    write_test_archive(
+        root.path(),
+        &[
+            Item::File("fx-9.9.9/examples/pet/fx.yaml", config.as_bytes()),
+            PET[1],
+            PET[2],
+        ],
+    );
+    let outcome = execute(
+        root.path(),
+        &[
+            "add",
+            "pet",
+            "fox-pet",
+            "--template-source",
+            "release.tar.gz",
+        ],
+    );
+    refused(&outcome, "is the project or holds it");
+    assert!(!target.exists());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn add_refuses_to_stage_inside_its_checkout_source() {
+    let root = tempfile::tempdir().unwrap();
+    let example = root.path().join("examples/pet");
+    std::fs::create_dir_all(&example).unwrap();
+    let link = root.path().join("example-link");
+    std::os::unix::fs::symlink(&example, &link).unwrap();
+    let outcome = execute(
+        root.path(),
+        &["add", "pet", "example-link/fox", "--template-source", "."],
+    );
+    refused(&outcome, "destination is inside the template source");
+    assert!(std::fs::read_dir(example).unwrap().next().is_none());
 }
 
 #[test]
