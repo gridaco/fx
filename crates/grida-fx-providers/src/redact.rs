@@ -77,11 +77,13 @@ impl Redactor {
     /// Steps 1 and 2 of the module doc.
     pub fn redact(&self, text: &str) -> String {
         let mut out = text.to_string();
+        let mut stored = self.stored.iter().flat_map(|stored| stored.secrets());
         let mut combined;
-        let secrets: &[Secret] = match self.stored.as_ref().and_then(|stored| stored.loaded()) {
-            Some(stored) if !stored.is_empty() => {
+        let secrets: &[Secret] = match stored.next() {
+            Some(first) => {
                 combined = self.secrets.clone();
-                combined.extend(stored.values().cloned());
+                combined.push(first.clone());
+                combined.extend(stored.cloned());
                 combined.sort_by_key(|secret| std::cmp::Reverse(secret.expose().len()));
                 &combined
             }
@@ -100,6 +102,13 @@ impl Redactor {
             }
         }
         out
+    }
+
+    pub(crate) fn contains_stored_secret(&self, text: &str) -> bool {
+        self.stored
+            .iter()
+            .flat_map(|stored| stored.secrets())
+            .any(|secret| text.contains(secret.expose()))
     }
 
     /// Steps 1 to 3: the sentence an adapter may report.

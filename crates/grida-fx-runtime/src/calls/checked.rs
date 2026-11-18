@@ -9,6 +9,7 @@
 //!   the attempt, after the route's slot, the hold and a long job's `submitting` record, so the
 //!   events, the $0 settlement and the job record are the same whoever refuses. The retry owner
 //!   redacts the sentence with the adapter's redactor, as every reason it reports.
+//!   A request that would be refused skips optional credential preparation.
 //! - **After the adapter's check**, the capability's every-route check
 //!   (`grida_fx_providers::checks::every_route_with`), with the adapter's redactor. Its refusal
 //!   fails the attempt as billed, as the adapter's check's would.
@@ -44,6 +45,12 @@ struct Checked<A: ?Sized> {
 }
 
 impl RequestAdapter for Checked<dyn RequestAdapter> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.inner.prepare(call).filter(|_| {
+            validation(call, &self.identity, || self.inner.check_contract(call)).is_ok()
+        })
+    }
+
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.send(call),
@@ -77,6 +84,19 @@ impl RequestAdapter for Checked<dyn RequestAdapter> {
 }
 
 impl LongJob for Checked<dyn LongJob> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.inner.prepare(call).filter(|_| {
+            validation(call, &self.identity, || self.inner.check_contract(call)).is_ok()
+        })
+    }
+
+    fn prepare_collect<'a>(
+        &'a self,
+        call: &'a CallRequest,
+    ) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.inner.prepare_collect(call)
+    }
+
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
         match validation(call, &self.identity, || self.inner.check_contract(call)) {
             Ok(()) => self.inner.submit(call),

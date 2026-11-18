@@ -84,6 +84,10 @@ It asks only the provider already selected by the qualified selector or provider
 It does not search for another provider, change the authored model ID, upgrade to a newer
 model or make a paid fallback call.
 
+The OpenRouter resolver requires a native `author/model` identifier before loading provider
+settings or consulting Grida's store. When `doctor` looks up metadata, it uses the same
+provider settings and credentials it diagnosed for that invocation.
+
 Authored route tables remain authoritative. Discovery MUST NOT replace an admitted binding,
 repair an ambiguous binding, or weaken a route's authored feature, input, contract or price
 checks. An explicit `--routes` invocation disables automatic discovery, retaining that

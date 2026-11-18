@@ -9,7 +9,9 @@
 use crate::clock::Clock;
 use crate::keys::{Environment, KeyName, Keys, Secret, StoredCredentials};
 use crate::redact::Redactor;
-use crate::transport::{Credential, HttpRequest, HttpResponse, Transport, TransportError};
+use crate::transport::{
+    Credential, HttpRequest, HttpResponse, Transport, TransportError, TransportErrorKind,
+};
 use grida_fx_core::providers::{Declaration, Declarations};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -20,11 +22,34 @@ pub const FAL_QUEUE: &str = "https://queue.fal.run";
 
 /// Each declared provider's API base, normalized ([`crate::wire::normalize_base_url`]): no
 /// trailing `/`. fal's is its synchronous host (`FAL_BASE_URL`); its queue host is apart.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Endpoints {
     bases: BTreeMap<String, String>,
+    configured: BTreeMap<String, ConfiguredBase>,
     /// fal's queue host ([`FAL_QUEUE`]).
     pub fal_queue: String,
+}
+
+impl PartialEq for Endpoints {
+    fn eq(&self, other: &Self) -> bool {
+        self.bases == other.bases && self.fal_queue == other.fal_queue
+    }
+}
+
+impl Eq for Endpoints {}
+
+impl std::fmt::Debug for Endpoints {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Endpoints")
+            .field("providers", &self.bases.keys())
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
+struct ConfiguredBase {
+    variable: String,
+    raw: Secret,
 }
 
 impl Default for Endpoints {
@@ -42,6 +67,7 @@ impl Endpoints {
                 .iter()
                 .map(|d| (d.name.clone(), d.base_url.default.clone()))
                 .collect(),
+            configured: BTreeMap::new(),
             fal_queue: FAL_QUEUE.into(),
         }
     }
@@ -87,7 +113,21 @@ impl Endpoints {
             }
             match crate::wire::normalize_base_url(value, &declaration.label) {
                 Ok(base) => {
+                    if secrets
+                        .iter()
+                        .any(|secret| !secret.expose().is_empty() && base.contains(secret.expose()))
+                    {
+                        refused.push(format!("{variable} holds a credential"));
+                        continue;
+                    }
                     endpoints.bases.insert(declaration.name.clone(), base);
+                    endpoints.configured.insert(
+                        declaration.name.clone(),
+                        ConfiguredBase {
+                            variable: variable.clone(),
+                            raw: Secret::new(value),
+                        },
+                    );
                 }
                 Err(sentence) => refused.push(format!("{variable}: {sentence}")),
             }
@@ -104,6 +144,7 @@ impl Endpoints {
     /// server this way).
     pub fn with_base(mut self, provider: &str, base: &str) -> Endpoints {
         self.bases.insert(provider.into(), base.into());
+        self.configured.remove(provider);
         self
     }
 }
@@ -182,35 +223,53 @@ impl Setup {
     /// The client of one of FX's own providers at its base URL: its key (if any), its
     /// declaration and the shared transport.
     pub fn client(&self, key: KeyName) -> Client {
-        let declaration = key.declaration();
-        let base = self.endpoints.base(key.provider());
-        let base = base.unwrap_or(&declaration.base_url.default).to_string();
-        self.client_for(declaration, &base)
+        self.declared_client(key.declaration())
     }
 
     /// The client of one of FX's own providers at `base` (fal's queue host).
     pub fn client_at(&self, key: KeyName, base: &str) -> Client {
-        self.client_for(key.declaration(), base)
+        let declaration = key.declaration();
+        let trusted_base = if key == KeyName::Fal && base.trim_end_matches('/') == FAL_QUEUE {
+            FAL_QUEUE
+        } else {
+            &declaration.base_url.default
+        };
+        self.client_for(declaration, base, trusted_base, None)
+    }
+
+    pub(crate) fn fal_queue_client(&self) -> Client {
+        self.client_for(
+            KeyName::Fal.declaration(),
+            &self.endpoints.fal_queue,
+            FAL_QUEUE,
+            None,
+        )
     }
 
     /// The client of a provider the planning project declares, at its base URL: its key (if it
     /// is declared with one and the key is set), its declaration and the shared transport.
     pub fn declared_client(&self, declaration: &Declaration) -> Client {
         let base = self.endpoints.base(&declaration.name);
-        let base = base.unwrap_or(&declaration.base_url.default).to_string();
-        self.client_for(declaration, &base)
+        self.client_for(
+            declaration,
+            base.unwrap_or(&declaration.base_url.default),
+            &declaration.base_url.default,
+            self.endpoints.configured.get(&declaration.name).cloned(),
+        )
     }
 
-    fn client_for(&self, declaration: &Declaration, base: &str) -> Client {
+    fn client_for(
+        &self,
+        declaration: &Declaration,
+        base: &str,
+        trusted_base: &str,
+        configured: Option<ConfiguredBase>,
+    ) -> Client {
         let base = base.trim_end_matches('/');
         let stored = self
             .stored
             .as_ref()
-            .filter(|stored| {
-                stored.eligible(&declaration.name)
-                    && (base == declaration.base_url.default
-                        || (declaration.name == "fal" && base == FAL_QUEUE))
-            })
+            .filter(|stored| stored.eligible(&declaration.name) && base == trusted_base)
             .cloned();
         Client {
             transport: Arc::clone(&self.transport),
@@ -220,6 +279,7 @@ impl Setup {
             base: base.to_string(),
             download_hosts: declaration.download_hosts.clone(),
             redactor: self.redactor(),
+            configured,
             stored,
         }
     }
@@ -250,10 +310,35 @@ pub struct Client {
     /// The hosts its results may be downloaded from ([`crate::wire::download_url`]).
     pub download_hosts: Vec<String>,
     pub redactor: Redactor,
+    configured: Option<ConfiguredBase>,
     stored: Option<Arc<StoredCredentials>>,
 }
 
 impl Client {
+    pub(crate) fn needs_preparation(&self) -> bool {
+        self.stored.is_some() || self.configured.is_some()
+    }
+
+    pub(crate) async fn prepare(&self) -> Result<(), String> {
+        if let Some(stored) = &self.stored {
+            stored.prepare(&self.provider).await?;
+        }
+        self.checked_base().map(|_| ())
+    }
+
+    /// The base URL, or a refusal if a key loaded since setup matches its configured value.
+    pub fn checked_base(&self) -> Result<&str, String> {
+        if let Some(configured) = &self.configured
+            && (self
+                .redactor
+                .contains_stored_secret(configured.raw.expose())
+                || self.redactor.contains_stored_secret(&self.base))
+        {
+            return Err(format!("{} holds a credential", configured.variable));
+        }
+        Ok(&self.base)
+    }
+
     /// The credential for the provider's API, sent as its declaration says, or the refusal
     /// sentence `<VARIABLE> is not set`.
     pub fn credential(&self) -> Result<Credential, String> {
@@ -264,7 +349,7 @@ impl Client {
             .key
             .as_ref()
             .filter(|secret| !secret.expose().trim().is_empty())
-            .or_else(|| self.stored.as_ref()?.loaded()?.get(&self.provider));
+            .or_else(|| self.stored.as_ref()?.key(&self.provider));
         match key {
             Some(secret) => Ok(Credential {
                 header: declared.header.clone(),
@@ -296,6 +381,8 @@ impl Client {
 
     /// One exchange through the shared transport.
     pub async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+        self.checked_base()
+            .map_err(|reason| TransportError::not_sent(TransportErrorKind::Refused, reason))?;
         self.transport.send(request).await
     }
 
@@ -310,7 +397,6 @@ impl std::fmt::Debug for Client {
         f.debug_struct("Client")
             .field("provider", &self.provider)
             .field("key", &self.key)
-            .field("base", &self.base)
             .finish_non_exhaustive()
     }
 }

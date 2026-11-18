@@ -8,10 +8,13 @@ use grida_fx_core::routes::{RouteTable, parse_route_id};
 use grida_fx_core::value::{digest, parse_json};
 use grida_fx_core::{Error, ErrorKind};
 use grida_fx_providers::clock::SystemClock;
-use grida_fx_providers::keys::KeyName;
+use grida_fx_providers::discovery;
+use grida_fx_providers::keys::{KeyName, KeySource};
 use grida_fx_providers::live::Network;
 use grida_fx_providers::setup::Setup;
 use grida_fx_providers::transport::http::HttpTransport;
+use grida_fx_providers::transport::{Offline, Transport};
+use grida_fx_providers::{Endpoints, Keys};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
@@ -221,9 +224,23 @@ pub(crate) fn prepare(
         &used,
         snapshot,
         isolated,
-        allow_stored_keys,
-        &crate::engine::process_env,
+        MetadataCredentials::Environment {
+            env: &crate::engine::process_env,
+            allow_stored_keys,
+        },
     )
+}
+
+pub(crate) enum MetadataCredentials<'a> {
+    Environment {
+        env: &'a dyn Fn(&str) -> Option<String>,
+        allow_stored_keys: bool,
+    },
+    Diagnosed {
+        settings: Result<(&'a Keys, &'a Endpoints), &'a str>,
+        openrouter_store_error: Option<&'a str>,
+        network: Network,
+    },
 }
 
 pub(crate) fn prepare_used(
@@ -232,8 +249,32 @@ pub(crate) fn prepare_used(
     used: &crate::verbs::doctor::UsedRoutes,
     snapshot: Option<&Value>,
     isolated: bool,
-    allow_stored_keys: bool,
-    env: &dyn Fn(&str) -> Option<String>,
+    credentials: MetadataCredentials<'_>,
+) -> Result<Value, Error> {
+    prepare_with_transport(
+        project,
+        catalog,
+        used,
+        snapshot,
+        isolated,
+        credentials,
+        |network| match network {
+            Network::Off => Ok(Arc::new(Offline)),
+            Network::On => Ok(Arc::new(HttpTransport::new(Default::default()).map_err(
+                |_| Error::new(ErrorKind::Internal, "cannot start model metadata transport"),
+            )?)),
+        },
+    )
+}
+
+fn prepare_with_transport(
+    project: &Project,
+    catalog: &mut RouteTable,
+    used: &crate::verbs::doctor::UsedRoutes,
+    snapshot: Option<&Value>,
+    isolated: bool,
+    credentials: MetadataCredentials<'_>,
+    make_transport: impl Fn(Network) -> Result<Arc<dyn Transport>, Error>,
 ) -> Result<Value, Error> {
     if isolated {
         return Ok(empty());
@@ -244,9 +285,9 @@ pub(crate) fn prepare_used(
     let mut resolved = Vec::new();
     // Construct a metadata transport lazily: ordinary authored/shipped selections stay local.
     let mut setup = None;
-    let mut environment = None;
+    let mut store = None;
     let mut runtime = None;
-    let mut stored_openrouter_checked = false;
+    let mut online = false;
     for (capability, selection) in used.keys() {
         let Some(selection) = selection else { continue };
         if catalog
@@ -307,54 +348,66 @@ pub(crate) fn prepare_used(
                 .ok_or_else(|| {
                     "the prepared model facts do not include this binding; plan again".to_string()
                 })
+        } else if let Err(reason) = discovery::validate_selection(capability, &model, &provider) {
+            Err(reason)
         } else {
             if setup.is_none() {
                 let rt = crate::engine::runtime()?;
-                let (loaded, keys, endpoints) = crate::engine::provider_variables(project, env)?;
-                let entered = rt.enter();
-                let transport: Arc<dyn grida_fx_providers::transport::Transport> =
-                    match Network::from_env(env) {
-                        Network::Off => Arc::new(grida_fx_providers::transport::Offline),
-                        Network::On => {
-                            Arc::new(HttpTransport::new(Default::default()).map_err(|_| {
-                                Error::new(
-                                    ErrorKind::Internal,
-                                    "cannot start model metadata transport",
-                                )
-                            })?)
+                let (keys, endpoints, network) = match credentials {
+                    MetadataCredentials::Environment {
+                        env,
+                        allow_stored_keys,
+                    } => {
+                        let (loaded, keys, endpoints) =
+                            crate::engine::provider_variables(project, env)?;
+                        let network = Network::from_env(env);
+                        if allow_stored_keys && matches!(network, Network::On) {
+                            store = Some((env, loaded));
                         }
-                    };
+                        (keys, endpoints, network)
+                    }
+                    MetadataCredentials::Diagnosed {
+                        settings, network, ..
+                    } => {
+                        let (keys, endpoints) = settings.map_err(Error::usage)?;
+                        (keys.clone(), endpoints.clone(), network)
+                    }
+                };
+                online = matches!(network, Network::On);
+                let entered = rt.enter();
+                let transport = make_transport(network)?;
                 let mut metadata_setup = Setup::new(transport, keys, Arc::new(SystemClock::new()));
                 metadata_setup.endpoints = endpoints;
                 setup = Some(metadata_setup);
-                environment = Some(loaded);
                 drop(entered);
                 runtime = Some(rt);
             }
-            let network = !matches!(Network::from_env(env), Network::Off);
             let setup = setup.as_mut().expect("metadata setup");
             // Only account-dependent online metadata may select a stored key. Public GG
             // metadata and offline cached facts need no user-wide credential access.
-            if allow_stored_keys
-                && network
+            if online
                 && provider == "openrouter"
-                && !stored_openrouter_checked
+                && let MetadataCredentials::Diagnosed {
+                    openrouter_store_error: Some(reason),
+                    ..
+                } = credentials
+            {
+                return Err(Error::usage(reason));
+            }
+            if provider == "openrouter"
+                && let Some((env, environment)) = store.take()
             {
                 crate::engine::stored_keys(
                     env,
                     &mut setup.keys,
-                    environment.as_ref().expect("metadata environment"),
+                    &environment,
                     &setup.endpoints,
                     &[KeyName::OpenRouter],
                 )
                 .map_err(Error::usage)?;
-                stored_openrouter_checked = true;
                 // Stored secrets join the same endpoint-value checks as explicit keys.
-                setup.endpoints = grida_fx_providers::Endpoints::from_environment(
-                    environment.as_ref().expect("metadata environment"),
-                    &setup.keys,
-                )
-                .map_err(Error::usage)?;
+                setup.endpoints =
+                    Endpoints::from_environment(&environment, &setup.keys).map_err(Error::usage)?;
             }
             let rt = runtime.as_ref().expect("metadata runtime");
             let scope = digest(
@@ -363,6 +416,10 @@ pub(crate) fn prepare_used(
             let account = setup
                 .keys
                 .of(&provider)
+                .filter(|_| {
+                    setup.keys.source_of(&provider) != Some(KeySource::GridaStore)
+                        || (online && provider == "openrouter")
+                })
                 .map(|key| digest(&json!({"credential":key.expose()})));
             let cache = project
                 .root
@@ -370,16 +427,15 @@ pub(crate) fn prepare_used(
                 .join(format!("{scope}.json"));
             let cached = cached(&cache, capability, &id, account.as_deref());
             match cached {
-                Some((entry, at)) if !network || now().saturating_sub(at) < FRESH_SECONDS => {
+                Some((entry, at)) if !online || now().saturating_sub(at) < FRESH_SECONDS => {
                     Ok(entry)
                 }
                 old => {
-                    if !network {
+                    if !online {
                         Err("model facts are not available locally and networking is disabled; supply an authored route or resolve online once".into())
                     } else {
-                        let found = rt.block_on(grida_fx_providers::discovery::resolve(
-                            setup, capability, &model, &provider,
-                        ));
+                        let found =
+                            rt.block_on(discovery::resolve(setup, capability, &model, &provider));
                         match found {
                             Ok(entry) => {
                                 let doc = json!({"fx":"routes/v1","routes":[entry.clone()]});
@@ -467,14 +523,18 @@ mod tests {
     use super::*;
 
     fn used_openrouter() -> crate::verbs::doctor::UsedRoutes {
+        used_model("acme/img-a@openrouter", None)
+    }
+
+    fn used_model(selector: &str, provider: Option<&str>) -> crate::verbs::doctor::UsedRoutes {
         use grida_fx_core::routes::{RouteSelection, RoutingSource};
 
         [(
             (
                 "image.generate".into(),
                 Some(RouteSelection {
-                    selector: "acme/img-a@openrouter".into(),
-                    provider: None,
+                    selector: selector.into(),
+                    provider: provider.map(str::to_owned),
                     source: RoutingSource::Step,
                     provider_source: None,
                 }),
@@ -501,6 +561,10 @@ mod tests {
             .join(".fx/models")
             .join(format!("{scope}.json"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        if path.exists() {
+            // Metadata refresh publishes a read-only cache file.
+            std::fs::remove_file(&path).unwrap();
+        }
         std::fs::write(
             path,
             serde_json::to_vec(&json!({
@@ -529,8 +593,10 @@ mod tests {
                 &used,
                 None,
                 false,
-                true,
-                &no_environment
+                MetadataCredentials::Environment {
+                    env: &no_environment,
+                    allow_stored_keys: true,
+                },
             )
             .unwrap(),
             empty(),
@@ -542,8 +608,10 @@ mod tests {
                 &used,
                 Some(&snapshot),
                 false,
-                true,
-                &no_environment,
+                MetadataCredentials::Environment {
+                    env: &no_environment,
+                    allow_stored_keys: true,
+                },
             )
             .unwrap(),
             snapshot,
@@ -555,11 +623,40 @@ mod tests {
                 &used,
                 None,
                 true,
-                true,
-                &no_environment,
+                MetadataCredentials::Environment {
+                    env: &no_environment,
+                    allow_stored_keys: true,
+                },
             )
             .unwrap(),
             empty(),
+        );
+    }
+
+    #[test]
+    fn invalid_openrouter_selection_does_not_read_provider_settings() {
+        let root = tempfile::tempdir().unwrap();
+        let project = Project::find(root.path()).unwrap();
+        let mut catalog = RouteTable::default();
+        let used = used_model("img-a", Some("openrouter"));
+        let prepared = prepare_used(
+            &project,
+            &mut catalog,
+            &used,
+            None,
+            false,
+            MetadataCredentials::Environment {
+                env: &|name| panic!("unexpected environment read: {name}"),
+                allow_stored_keys: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(prepared, empty());
+        assert!(
+            catalog
+                .resolve_selector("image.generate", "img-a", Some("openrouter"))
+                .unwrap_err()
+                .contains("model metadata is invalid or incompatible")
         );
     }
 
@@ -581,8 +678,10 @@ mod tests {
                 &used_openrouter(),
                 None,
                 false,
-                allow_stored_keys,
-                &env,
+                MetadataCredentials::Environment {
+                    env: &env,
+                    allow_stored_keys,
+                },
             )
             .unwrap();
             assert_eq!(prepared["routes"], json!([entry()]));
@@ -606,8 +705,10 @@ mod tests {
             &used_openrouter(),
             None,
             false,
-            true,
-            &env,
+            MetadataCredentials::Environment {
+                env: &env,
+                allow_stored_keys: true,
+            },
         )
         .unwrap_err();
         assert_eq!(error.kind, ErrorKind::Usage);
@@ -617,7 +718,9 @@ mod tests {
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
-    fn stored_openrouter_key_scopes_online_cached_metadata_without_a_request() {
+    fn stored_openrouter_key_scopes_online_cached_metadata() {
+        use grida_fx_providers::transport::HttpResponse;
+        use grida_fx_providers::transport::replay::{Expect, ReplayTransport};
         use std::os::unix::fs::PermissionsExt;
 
         let root = tempfile::tempdir().unwrap();
@@ -645,19 +748,59 @@ mod tests {
             "GRIDA_FX_DISABLE_DOTENV" => Some("1".into()),
             _ => None,
         };
-        let prepared = prepare_used(
-            &project,
-            &mut RouteTable::default(),
-            &used_openrouter(),
-            None,
-            false,
-            true,
-            &env,
-        )
-        .unwrap();
+        let environment = || MetadataCredentials::Environment {
+            env: &env,
+            allow_stored_keys: true,
+        };
+        let prepare = |credentials, replay: Arc<ReplayTransport>| {
+            prepare_with_transport(
+                &project,
+                &mut RouteTable::default(),
+                &used_openrouter(),
+                None,
+                false,
+                credentials,
+                |_| Ok(replay.clone()),
+            )
+            .unwrap()
+        };
+        let hit = Arc::new(ReplayTransport::new(vec![]));
+        let prepared = prepare(environment(), hit.clone());
         assert_eq!(prepared["routes"], json!([entry()]));
-        assert!(!prepared.to_string().contains(&secret));
-        assert!(!prepared.to_string().contains(home.to_str().unwrap()));
+        assert!(hit.requests().is_empty());
+
+        let endpoints = Endpoints::default();
+        let mut keys = Keys::default();
+        keys.insert_stored(
+            KeyName::OpenRouter,
+            grida_fx_providers::keys::Secret::new(&secret),
+        );
+        for credentials in [
+            environment(),
+            MetadataCredentials::Diagnosed {
+                settings: Ok((&keys, &endpoints)),
+                openrouter_store_error: None,
+                network: Network::On,
+            },
+        ] {
+            write_cached_model(&project, "other-account");
+            let refresh = Arc::new(ReplayTransport::new(vec![
+                Expect::get("https://openrouter.ai/api/v1/images/models/acme/img-a/endpoints")
+                    .credential("authorization", &format!("Bearer {secret}"))
+                    .reply(HttpResponse::json(
+                        200,
+                        &json!({
+                            "id":"acme/img-a", "endpoints":[{"supported_parameters":{}}]
+                        }),
+                    )),
+            ]));
+            let prepared = prepare(credentials, refresh.clone());
+            refresh.assert_done();
+            assert_eq!(prepared["routes"][0]["route"], "acme/img-a@openrouter");
+            assert!(prepared["routes"][0].get("price").is_none());
+            assert!(!prepared.to_string().contains(&secret));
+            assert!(!prepared.to_string().contains(home.to_str().unwrap()));
+        }
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -693,8 +836,10 @@ mod tests {
             &used,
             None,
             false,
-            true,
-            &env,
+            MetadataCredentials::Environment {
+                env: &env,
+                allow_stored_keys: true,
+            },
         )
         .unwrap();
         assert_eq!(prepared["routes"].as_array().unwrap().len(), 2);
@@ -724,8 +869,10 @@ mod tests {
                     &used,
                     Some(&snapshot),
                     false,
-                    true,
-                    &|_| None,
+                    MetadataCredentials::Environment {
+                        env: &|_| None,
+                        allow_stored_keys: true,
+                    },
                 )
                 .unwrap();
                 assert_eq!(prepared["routes"].as_array().unwrap().len(), MAX_ENTRIES);
@@ -752,8 +899,10 @@ mod tests {
             &used,
             Some(&snapshot),
             false,
-            true,
-            &|_| None,
+            MetadataCredentials::Environment {
+                env: &|_| None,
+                allow_stored_keys: true,
+            },
         )
         .unwrap_err();
         assert!(error.message.contains("too many distinct model bindings"));

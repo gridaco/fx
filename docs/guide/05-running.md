@@ -211,16 +211,20 @@ symlink or anything but a plain file, text that is not UTF-8, a name given twice
 a quote out of place, or a control character in the value. Keys are never printed, logged or
 recorded. `GRIDA_FX_DISABLE_DOTENV=1` turns the file off.
 
-**Saved Grida keys.** On macOS and Linux, if neither the environment nor the project's `.env`
-supplies a key, FX can use a standalone GG, OpenRouter, fal, Tripo, or ElevenLabs key saved in
-Grida. Use `grida ai providers configure` with the provider name, for example
-`grida ai providers configure gg` (Grida 0.5.7 or later for GG).
-FX reads the store under the process's `GRIDA_HOME` (an
-absolute normalized path), or `$HOME/.grida` by default. A custom base URL requires an explicit
-key. FX reads a saved key when it needs to make a live call, including during resume. Replaying
-a cached call, running offline, or using a stand-in needs no saved key. If FX cannot use the
-store, the lookup stops with a diagnostic that omits secrets and the store path. Set
-`GRIDA_FX_DISABLE_GRIDA_STORE=1` to skip this source.
+**Saved Grida keys.** FX builds with saved-key support can read eligible GG, OpenRouter, fal,
+Tripo, and ElevenLabs keys saved in Grida on macOS and Linux. FX uses the store only for a
+provider whose key is absent from both the environment and the project's `.env`. Use
+`grida ai providers configure <provider>` to save a key. Grida 0.5.7 introduced
+`grida ai providers configure gg`. Use the environment or `.env` with the published FX 0.9.0
+engine, including the one bundled with Grida 0.5.7.
+
+FX reads the store under the process's `GRIDA_HOME` (an absolute normalized path), or
+`$HOME/.grida` by default. A custom base URL requires a key from the environment or `.env`.
+FX can read a saved key when it needs to make a live call, including during resume, or when it
+looks up a missing selected OpenRouter image binding online. Cache replays, offline planning
+and execution, and stand-in calls skip the store. If FX cannot use the store, the lookup stops
+with a diagnostic that omits secrets and the store path. Set `GRIDA_FX_DISABLE_GRIDA_STORE=1`
+to skip this source.
 
 **Trying `--live` without the network.** With `GRIDA_FX_NETWORK=off`, a live run builds its
 adapters as usual, but nothing FX sends leaves the machine: every request through FX's transport
@@ -241,7 +245,7 @@ and node types the workflow needs follow:
 engine    grida-fx 0.9.0
 python    .venv/bin/python (grida 0.9.0)
 node      /usr/local/bin/node (@grida/fx 0.9.0)
-key       GG_API_KEY present (grida)
+key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
 key       FAL_KEY present (environment)
@@ -257,6 +261,8 @@ route     mesh.rig tripo/rig-v1.0@gg servable
 route     mesh.rig v1.0-20240301@tripo no key (TRIPO_API_KEY)
 …
 ```
+
+With saved-key support, `present (grida)` means FX found the key in Grida's store.
 
 A `program` line names the Codex or Grok Build a live run would start, where FX found it
 (`GRIDA_FX_TOOL_CODEX`, `PATH` or `the ChatGPT app`; `GRIDA_FX_TOOL_GROK`, `PATH` or

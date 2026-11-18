@@ -3,6 +3,9 @@
 //! and report what happened (`grida_fx_providers::Sent`, `Submitted`, `Collected`); this module
 //! decides what follows, and reserves, records and settles every attempt.
 //!
+//! **Preparation.** On a cache miss, any adapter credential preparation completes cancellably
+//! before admission, a hold, or a `submitting` record. Existing jobs are prepared before polling.
+//!
 //! **Sends.** At most [`MAX_SENDS`] sends per call: every send of the request counts, whether it
 //! starts a new attempt or resends under the current one. Before each send the route's slot and
 //! pacing are taken ([`super::pacing::Admission::admit`]; `Pacing` in a run), and only then is a
@@ -322,6 +325,9 @@ async fn plain(
     attempts: &Attempts<'_>,
     diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
 ) -> Outcome {
+    if let Err(outcome) = prepare(adapter.prepare(&attempts.call), attempts.cancel).await {
+        return outcome;
+    }
     let route_id = attempts.call.route.id();
     let mut call = attempts.call.clone();
     let mut sends = 0;
@@ -422,6 +428,9 @@ async fn submit(
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
+    if let Err(outcome) = prepare(adapter.prepare(&attempts.call), attempts.cancel).await {
+        return outcome;
+    }
     let route_id = attempts.call.route.id();
     let mut call = attempts.call.clone();
     let mut sends = 0;
@@ -554,6 +563,13 @@ async fn collect(
     let Some(fields) = attempts.job.as_ref() else {
         return no_job_fields(&attempts.call);
     };
+    if let Err(outcome) = prepare(adapter.prepare_collect(&attempts.call), attempts.cancel).await {
+        return match outcome {
+            // The provider may still be running this job. Keep its submitted record.
+            Outcome::Refused(reason) => Outcome::Failed(reason),
+            other => other,
+        };
+    }
     let mut call = attempts.call.clone();
     call.attempt = call.attempt.max(1);
     match collect_once(adapter, attempts, &call, handle, diagnostic).await {
@@ -671,6 +687,21 @@ async fn collect_once(
         }
         Some(Collected::Ended { reason, cost }) => Collect::Ended { reason, cost },
         Some(Collected::Unreachable { reason }) => Collect::Unreachable(reason),
+    }
+}
+
+/// Preparation does no provider I/O, so cancellation wins without entering an attempt.
+async fn prepare(
+    preparation: Option<BoxFuture<'_, Result<(), String>>>,
+    cancel: &Cancel,
+) -> Result<(), Outcome> {
+    let Some(preparation) = preparation else {
+        return Ok(());
+    };
+    tokio::select! {
+        biased;
+        () = cancel.cancelled() => Err(Outcome::Cancelled),
+        result = preparation => result.map_err(Outcome::Refused),
     }
 }
 
@@ -1173,6 +1204,85 @@ mod tests {
             .build()
             .expect("a runtime")
             .block_on(future)
+    }
+
+    #[test]
+    fn cancellation_during_preparation_leaves_no_hold_or_job() {
+        struct Preparing(tokio::sync::Notify);
+
+        impl Preparing {
+            fn waiting(&self) -> Option<BoxFuture<'_, Result<(), String>>> {
+                Some(Box::pin(async {
+                    self.0.notify_one();
+                    std::future::pending().await
+                }))
+            }
+        }
+
+        impl RequestAdapter for Preparing {
+            fn prepare<'a>(
+                &'a self,
+                _: &'a CallRequest,
+            ) -> Option<BoxFuture<'a, Result<(), String>>> {
+                self.waiting()
+            }
+
+            fn send<'a>(&'a self, _: &'a CallRequest) -> BoxFuture<'a, Sent> {
+                panic!("send reached during preparation");
+            }
+        }
+
+        impl LongJob for Preparing {
+            fn prepare<'a>(
+                &'a self,
+                _: &'a CallRequest,
+            ) -> Option<BoxFuture<'a, Result<(), String>>> {
+                self.waiting()
+            }
+
+            fn submit<'a>(&'a self, _: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+                panic!("submit reached during preparation");
+            }
+
+            fn collect<'a>(&'a self, _: &'a CallRequest, _: &'a Value) -> BoxFuture<'a, Collected> {
+                panic!("collect reached during preparation");
+            }
+        }
+
+        struct NoJobRecords;
+
+        impl JobBook for NoJobRecords {
+            fn save_job(&self, _: &JobRecord) -> Result<(), StoreError> {
+                panic!("job saved during preparation");
+            }
+
+            fn remove_job(&self, _: &str) -> Result<(), StoreError> {
+                panic!("job removed during preparation");
+            }
+        }
+
+        for submit in [false, true] {
+            let rig = Rig::new();
+            let adapter = Preparing(tokio::sync::Notify::new());
+            let mut attempts = rig.attempts(submit.then(job), None);
+            attempts.hold_name = &|| panic!("reservation reached during preparation");
+            attempts.jobs = &NoJobRecords;
+            let outcome = block_on(async {
+                let send = async {
+                    if submit {
+                        submit_job(&adapter, &attempts).await
+                    } else {
+                        send_plain(&adapter, &attempts).await
+                    }
+                };
+                let cancel = async {
+                    adapter.0.notified().await;
+                    rig.cancel.cancel();
+                };
+                tokio::join!(send, cancel).0
+            });
+            assert_eq!(outcome, Outcome::Cancelled);
+        }
     }
 
     fn mp3_declared_as(kind: &str) -> Sent {

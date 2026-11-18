@@ -15,7 +15,7 @@ use crate::adapter::{
 };
 use crate::clock::SystemClock;
 use crate::installed::{Program, Version};
-use crate::keys::{Keys, StoredCredentials};
+use crate::keys::Keys;
 use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::{Endpoints, Setup};
@@ -104,45 +104,59 @@ pub fn adapters(setup: &Setup) -> Adapters {
     crate::grok::register(&mut registered, setup);
     crate::openai_compatible::register(&mut registered, setup);
     let redactor = setup.redactor();
+    let setup = Arc::new(setup.clone());
     registered.map(|adapter| match adapter {
         Adapter::Request(inner) => Adapter::Request(Arc::new(Redacting {
             inner: Arc::clone(inner),
             redactor: redactor.clone(),
-            stored: setup.stored.clone(),
+            setup: Arc::clone(&setup),
         })),
         Adapter::Job(inner) => Adapter::Job(Arc::new(Redacting {
             inner: Arc::clone(inner),
             redactor: redactor.clone(),
-            stored: setup.stored.clone(),
+            setup: Arc::clone(&setup),
         })),
     })
 }
 
-/// An adapter as registered, answering [`RequestAdapter::redactor`] with the invocation's
-/// ([`adapters`]); everything else is the adapter's own, its identity and its contract judgement
-/// included, so the engine checks it as it checks the adapter.
+/// An adapter with the invocation's redactor and deferred credential preparation. Its identity
+/// and contract judgement are unchanged for the engine's checks.
 struct Redacting<A: ?Sized> {
     inner: Arc<A>,
     redactor: Redactor,
-    stored: Option<Arc<StoredCredentials>>,
+    setup: Arc<Setup>,
 }
 
 impl<A: ?Sized> Redacting<A> {
-    async fn prepare(&self, call: &CallRequest) -> Result<(), String> {
-        if let Some(stored) = &self.stored {
-            stored.prepare(&call.route.provider).await?;
-        }
-        Ok(())
+    fn preparation(&self, call: &CallRequest) -> Option<BoxFuture<'_, Result<(), String>>> {
+        self.setup.stored.as_ref()?;
+        let route = &call.route;
+        // Video is the only fal adapter that sends through the queue client.
+        let client = if route.provider == "fal" && route.capability == "video.generate" {
+            self.setup.fal_queue_client()
+        } else {
+            let declaration = self.setup.declarations().get(&route.provider)?;
+            self.setup.declared_client(declaration)
+        };
+        client
+            .needs_preparation()
+            .then(|| Box::pin(async move { client.prepare().await }) as BoxFuture<_>)
     }
 }
 
 impl RequestAdapter for Redacting<dyn RequestAdapter> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.preparation(call)
+    }
+
     fn send<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Sent> {
         Box::pin(async move {
-            match self.prepare(call).await {
-                Ok(()) => self.inner.send(call).await,
-                Err(reason) => Sent::Refused { reason },
+            if let Some(prepare) = self.preparation(call)
+                && let Err(reason) = prepare.await
+            {
+                return Sent::Refused { reason };
             }
+            self.inner.send(call).await
         })
     }
 
@@ -168,21 +182,29 @@ impl RequestAdapter for Redacting<dyn RequestAdapter> {
 }
 
 impl LongJob for Redacting<dyn LongJob> {
+    fn prepare<'a>(&'a self, call: &'a CallRequest) -> Option<BoxFuture<'a, Result<(), String>>> {
+        self.preparation(call)
+    }
+
     fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
         Box::pin(async move {
-            match self.prepare(call).await {
-                Ok(()) => self.inner.submit(call).await,
-                Err(reason) => Submitted::Refused { reason },
+            if let Some(prepare) = self.preparation(call)
+                && let Err(reason) = prepare.await
+            {
+                return Submitted::Refused { reason };
             }
+            self.inner.submit(call).await
         })
     }
 
     fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
         Box::pin(async move {
-            match self.prepare(call).await {
-                Ok(()) => self.inner.collect(call, handle).await,
-                Err(reason) => Collected::Unreachable { reason },
+            if let Some(prepare) = self.preparation(call)
+                && let Err(reason) = prepare.await
+            {
+                return Collected::Unreachable { reason };
             }
+            self.inner.collect(call, handle).await
         })
     }
 
@@ -331,6 +353,87 @@ mod tests {
 
     fn setup(keys: Keys) -> Setup {
         Setup::new(Arc::new(NoNetwork), keys, Arc::new(FakeClock::new()))
+    }
+
+    #[test]
+    fn fal_video_checks_the_queue_clients_store_eligibility() {
+        use crate::testing::{CallBuilder, block_on};
+
+        let mut setup = setup(Keys::none())
+            .with_stored_credentials(Err("cannot read test store".into()), &[KeyName::Fal]);
+        let call = CallBuilder::new("video.generate", "vid-a@fal").build();
+        let result = |setup: &Setup| {
+            let adapters = adapters(setup);
+            let Some(Adapter::Job(adapter)) = adapters.serving(&call.route) else {
+                panic!("no fal video adapter");
+            };
+            adapter.prepare(&call).map(block_on)
+        };
+        assert_eq!(result(&setup), Some(Err("cannot read test store".into())));
+        for base in ["https://queue.example.test", "https://fal.run"] {
+            setup.endpoints.fal_queue = base.into();
+            assert_eq!(result(&setup), None);
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn a_configured_base_is_refused_once_another_providers_saved_key_matches() {
+        use crate::keys::Environment;
+        use crate::testing::{CallBuilder, block_on};
+        use crate::transport::{HttpRequest, Lane, Method, TransportErrorKind};
+        use std::fs::{DirBuilder, OpenOptions};
+        use std::io::Write;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let directory = tempfile::tempdir().unwrap();
+        let home = directory.path().canonicalize().unwrap();
+        let providers = home.join("providers");
+        DirBuilder::new().mode(0o700).create(&providers).unwrap();
+        writeln!(
+            OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(providers.join("credentials.toml"))
+                .unwrap(),
+            "version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+             [providers.gg]\napi_key = 'ACME-STORE-KEY'"
+        )
+        .unwrap();
+        let environment = Environment::from_pairs(&[
+            ("OPENAI_API_KEY", "acme-test-key"),
+            ("OPENAI_BASE_URL", "https://ACME-STORE-KEY.example.test/v1"),
+        ]);
+        let mut setup = setup(Keys::from_environment(&environment));
+        setup.endpoints = Endpoints::from_environment(&environment, &setup.keys).unwrap();
+        let setup = setup.with_stored_credentials(Ok(home), &[KeyName::GridaGateway]);
+        let adapters = adapters(&setup);
+        let prepare = |call: &CallRequest| {
+            let Some(Adapter::Request(adapter)) = adapters.serving(&call.route) else {
+                panic!("no image adapter");
+            };
+            block_on(adapter.prepare(call).unwrap())
+        };
+
+        let other = CallBuilder::new("image.generate", "img-a@openai").build();
+        assert_eq!(prepare(&other), Ok(()));
+        let gg = CallBuilder::new("image.generate", "img-a@gg").build();
+        assert_eq!(prepare(&gg), Ok(()));
+        assert_eq!(
+            prepare(&other),
+            Err("OPENAI_BASE_URL holds a credential".into())
+        );
+
+        let client = setup.client(KeyName::OpenAi);
+        let request = HttpRequest::new(
+            Method::Post,
+            client.url("images/generations"),
+            Lane::Provider,
+        );
+        let error = block_on(client.send(request)).unwrap_err();
+        assert_eq!(error.kind, TransportErrorKind::Refused);
+        assert_eq!(error.reason, "OPENAI_BASE_URL holds a credential");
     }
 
     #[test]

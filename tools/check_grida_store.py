@@ -22,12 +22,12 @@ import selectors
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 KEY = "synthetic-gg-api-key-for-fx-compatibility"
 PRESENT = "key       GG_API_KEY present (grida)"
 MISSING = "key       GG_API_KEY missing"
+BUSY = "keys      Grida provider credentials: store_busy."
 
 
 def expect(condition: object, message: str) -> None:
@@ -45,21 +45,30 @@ def read_doctor(output: str, status: int, expected: str, home: Path) -> None:
     print(expected, flush=True)
 
 
-def check_lock(
-    driver: Path, engine: Path, home: Path, project: Path, env: dict[str, str], log: Path
-) -> None:
-    with (
-        log.open("w", encoding="utf-8") as stream,
-        subprocess.Popen(
-            [driver],
-            cwd=project,
-            env=env,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ) as holder,
-    ):
+def doctor(
+    engine: Path, project: Path, env: dict[str, str], *, timeout: int = 10
+) -> tuple[str, int]:
+    result = subprocess.run(
+        [engine, "doctor"],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result.stdout + result.stderr, result.returncode
+
+
+def check_lock(driver: Path, engine: Path, home: Path, project: Path, env: dict[str, str]) -> None:
+    with subprocess.Popen(
+        [driver],
+        cwd=project,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ) as holder:
         assert holder.stdin is not None and holder.stdout is not None
         try:
             holder.stdin.write(request(home, "lock"))
@@ -71,38 +80,19 @@ def check_lock(
                     json.loads(holder.stdout.readline()) == {"event": "locked"}, "wrong lock event"
                 )
 
-            with subprocess.Popen(
-                [engine, "doctor"], cwd=project, env=env, stdout=stream, stderr=subprocess.STDOUT
-            ) as waiting:
-                try:
-                    # Doctor prints its runtime probes just before reading provider credentials.
-                    deadline = time.monotonic() + 10
-                    while not any(
-                        line.startswith("node ") for line in log.read_text().splitlines()
-                    ):
-                        expect(
-                            waiting.poll() is None and time.monotonic() < deadline,
-                            "FX did not reach provider diagnostics",
-                        )
-                        time.sleep(0.01)
-                    try:
-                        waiting.wait(timeout=0.25)
-                    except subprocess.TimeoutExpired:
-                        output = log.read_text(encoding="utf-8")
-                        expect(PRESENT not in output, "FX read the key while Grida held the lock")
-                    else:
-                        raise ValueError("FX doctor exited while Grida held the lock")
-                    holder.stdin.write("{}\n")
-                    holder.stdin.flush()
-                    expect(holder.wait(timeout=10) == 0, "Grida did not release the lock")
-                    expect(
-                        json.loads(holder.stdout.readline()).get("ok"), "Grida lock release failed"
-                    )
-                    status = waiting.wait(timeout=10)
-                    read_doctor(log.read_text(encoding="utf-8"), status, PRESENT, home)
-                finally:
-                    if waiting.poll() is None:
-                        waiting.kill()
+            # Keep the writer transaction open through the reader's real 30-second deadline.
+            output, status = doctor(engine, project, env, timeout=50)
+            expect(holder.poll() is None, "Grida exited before releasing the lock")
+            expect(status == 1 and BUSY in output, "FX did not report store_busy under contention")
+            expect(PRESENT not in output, "FX reported the key while Grida held the lock")
+            expect(KEY not in output and str(home) not in output, "FX printed private custody data")
+            print(BUSY, flush=True)
+            holder.stdin.write("{}\n")
+            holder.stdin.flush()
+            expect(holder.wait(timeout=10) == 0, "Grida did not release the lock")
+            expect(json.loads(holder.stdout.readline()).get("ok"), "Grida lock release failed")
+            output, status = doctor(engine, project, env)
+            read_doctor(output, status, PRESENT, home)
         finally:
             if holder.poll() is None:
                 holder.kill()
@@ -143,7 +133,7 @@ def check(engine: Path, driver: Path, scratch: Path) -> None:
     saved = credentials.read_bytes()
     lock = home / "providers" / "profile.lock.sqlite"
     before = lock.stat()
-    check_lock(driver, engine, home, project, env, scratch / "doctor.log")
+    check_lock(driver, engine, home, project, env)
     after = lock.stat()
     expect(credentials.read_bytes() == saved, "FX changed Grida's credential file")
     expect(
@@ -152,15 +142,8 @@ def check(engine: Path, driver: Path, scratch: Path) -> None:
     )
 
     change("provider-remove")
-    result = subprocess.run(
-        [engine, "doctor"],
-        cwd=project,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    read_doctor(result.stdout + result.stderr, result.returncode, MISSING, home)
+    output, status = doctor(engine, project, env)
+    read_doctor(output, status, MISSING, home)
 
 
 def main() -> int:

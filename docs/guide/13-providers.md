@@ -107,9 +107,12 @@ what each call was charged, then set it:
 GG_API_KEY=…
 ```
 
-in the environment or your project's `.env` (keep it out of version control). On macOS and Linux,
-you can also save it with `grida ai providers configure gg` (Grida 0.5.7 or later). FX books a GG
-call at what GG charged for it ([GG's adapter reference](../../crates/grida-fx-providers/src/gg/README.md)).
+in the environment or your project's `.env` (keep it out of version control). With saved-key
+support in FX, you can also save it with `grida ai providers configure gg` on macOS and Linux.
+See [Keys and live runs](05-running.md#keys-and-live-runs).
+
+FX books a GG call at what GG charged for it. See the
+[GG adapter reference](../../crates/grida-fx-providers/src/gg/README.md).
 
 The key needs both scopes, `text` for text and agent steps and `media` for everything else.
 GG's own API reference, written for people and agents alike, is
@@ -123,8 +126,8 @@ speech or music: those routes need their provider's own key (below).
 
 Every other route takes its provider's key under its usual name. Set only the ones your routes use;
 a missing key refuses only the calls that need it, before anything is sent.
-On macOS and Linux, FX also reads eligible OpenRouter, fal, Tripo and ElevenLabs keys saved by
-`grida ai providers configure <provider>`.
+On macOS and Linux, FX builds with saved-key support also read eligible OpenRouter, fal, Tripo,
+and ElevenLabs keys saved by `grida ai providers configure <provider>`.
 
 | Provider | Variable | Built-in routes for | Get a key |
 |---|---|---|---|

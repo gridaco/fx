@@ -77,7 +77,7 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
 - **Grida's provider credential store** is a fallback on macOS and Linux when neither the process
   environment nor the project's `.env` supplies the key. FX reads the
   [v1 file protocol](https://github.com/gridaco/grida/blob/273961f8f050e4c9fd3df8714f1fe409484d5b00/packages/grida-auth/PROVIDER-CREDENTIALS-V1.md)
-  and tests against its
+  and uses original synthetic fixtures based on its
   [compatibility fixtures](https://github.com/gridaco/grida/tree/273961f8f050e4c9fd3df8714f1fe409484d5b00/packages/grida-auth/fixtures/providers-v1),
   both pinned to Grida commit `273961f8f050e4c9fd3df8714f1fe409484d5b00`.
   - The engine reads `<Grida home>/providers/credentials.toml`. The home is the process
@@ -92,10 +92,14 @@ Every provider FX sends requests to is **declared**: its credential (the variabl
   - The effective base URL must equal the provider's normalized default in the table above.
     This also applies to fal jobs on its fixed queue host. A custom base URL uses an explicit
     key from the environment or `.env`.
-  - A live call consults the store only when it needs a key after checking the cache and before
-    sending. This includes calls sent by a resumed run. Offline preparation and execution and
-    stand-in calls skip the store. Online OpenRouter discovery may use its stored key for a
-    missing selected binding ([model-selection.md](model-selection.md) §3).
+  - An uncached live call looks up a missing key for its provider before it reserves budget or
+    records a job submission. Cancellation while waiting for this lookup leaves no charge or
+    uncertain submission. A resumed run uses the same rules for new calls and resolves the key
+    before polling an existing submission. A found key is retained for that provider during the
+    invocation. A missing entry or refused lookup can be checked again by later calls.
+    Offline preparation and execution and stand-in calls skip the store. Online OpenRouter
+    discovery may use its stored key for a valid, missing selected binding
+    ([model-selection.md](model-selection.md) §3).
   - A missing home, store or entry supplies no key. Invalid, inaccessible, unsafe,
     unsupported-version, or migration-pending storage, or a lock that cannot be acquired,
     refuses the lookup with a reason that omits secret values and local paths. The reader uses

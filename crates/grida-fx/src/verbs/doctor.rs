@@ -59,8 +59,8 @@
 //!
 //! **Providers** (spec/providers.md §1, §3), after the engine and host lines (and the target's
 //! routes) and before the `tool` and `missing` lines, for the **planning** project (the one found
-//! from where the command runs; with a target, the project planning would use). Nothing that could
-//! reach the network is constructed:
+//! from where the command runs; with a target, the project planning would use). These diagnostics
+//! use local settings. A target's selected missing model may also use metadata discovery:
 //! - the variables the planning project's provider declarations name (FX's own and its
 //!   `providers:`) are read as a live run reads them (the process environment, then the planning
 //!   project's `.env` unless `GRIDA_FX_DISABLE_DOTENV=1`). A `.env` that is refused prints
@@ -118,7 +118,7 @@ use grida_fx_core::routes::{Route, RouteSelection, RouteTable, load_catalog};
 use grida_fx_protocol::{CallKind, DescribeParams};
 use grida_fx_providers::installed::Version;
 use grida_fx_providers::keys::{Environment, KeyName, KeySource};
-use grida_fx_providers::live::{self, Installed, Servable};
+use grida_fx_providers::live::{self, Installed, Network, Servable};
 use grida_fx_providers::{Adapters, Endpoints, Keys, RouteRef};
 use grida_fx_runtime::adapter_host::{self, Launch, NoLaunch};
 use grida_fx_runtime::host::locate::{
@@ -202,8 +202,14 @@ pub fn run(args: &DoctorArgs) -> Result<u8, Error> {
         &used,
         None,
         false,
-        true,
-        &env,
+        crate::models::MetadataCredentials::Diagnosed {
+            settings: providers
+                .settings_error
+                .as_deref()
+                .map_or(Ok((&providers.keys, &providers.endpoints)), Err),
+            openrouter_store_error: providers.openrouter_store_error.as_deref(),
+            network: Network::from_env(&env),
+        },
     );
     let (uses, unservable) = uses_lines(
         &used,
@@ -489,11 +495,14 @@ fn servable_text(servable: Servable) -> String {
 #[derive(Debug, Clone)]
 struct Providers {
     lines: Vec<String>,
-    /// The `.env`, a base URL or a project adapter was refused: a live run would not start.
+    /// Provider settings or a project adapter were refused: a live run would not start.
     refused: bool,
+    settings_error: Option<String>,
+    openrouter_store_error: Option<String>,
     /// The keys a live run would have, the programs it would find, and the planning project's
     /// catalog.
     keys: Keys,
+    endpoints: Endpoints,
     installed: Vec<Installed>,
     catalog: RouteTable,
 }
@@ -510,31 +519,35 @@ impl Providers {
         let mut lines = Vec::new();
         let declarations = project.declarations();
         let dotenv = crate::engine::dotenv_path(&project.root);
-        let (environment, valid_file) = match Environment::read(env, Some(&dotenv), &declarations) {
-            Ok(environment) => (environment, true),
+        let (environment, dotenv_error) = match Environment::read(env, Some(&dotenv), &declarations)
+        {
+            Ok(environment) => (environment, None),
             Err(sentence) => {
                 lines.push(dotenv_refusal(&sentence));
-                (process_environment(env, &declarations), false)
+                (process_environment(env, &declarations), Some(sentence))
             }
         };
         let mut keys = Keys::from_environment(&environment);
         let (endpoints, _) = Endpoints::each_from_environment(&environment, &keys);
-        if valid_file
-            && let Err(sentence) = crate::engine::stored_keys(
-                env,
-                &mut keys,
-                &environment,
-                &endpoints,
-                &KeyName::STORED,
-            )
-        {
-            lines.push(labelled("keys", &sentence));
+        let store_error = if dotenv_error.is_none() {
+            crate::engine::stored_keys(env, &mut keys, &environment, &endpoints, &KeyName::STORED)
+                .err()
+        } else {
+            None
+        };
+        if let Some(sentence) = &store_error {
+            lines.push(labelled("keys", sentence));
         }
         // Recheck every endpoint against newly loaded secrets before showing diagnostics.
         let (endpoints, refusals) = Endpoints::each_from_environment(&environment, &keys);
         lines.extend(refusals.iter().map(|sentence| labelled("keys", sentence)));
         let (adapter_lines, unloaded) = adapters;
         let refused = !lines.is_empty() || unloaded;
+        let settings_error = dotenv_error.or_else(|| refusals.into_iter().next());
+        let openrouter_store_error = store_error.filter(|_| {
+            keys.get(KeyName::OpenRouter).is_none()
+                && crate::engine::store_eligible(env, &endpoints, KeyName::OpenRouter)
+        });
         lines.extend(key_lines(&keys));
         if !refused {
             lines.extend(stored_key_hints(env, &keys, &endpoints));
@@ -552,7 +565,10 @@ impl Providers {
         Ok(Providers {
             lines,
             refused,
+            settings_error,
+            openrouter_store_error,
             keys,
+            endpoints,
             installed,
             catalog,
         })

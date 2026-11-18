@@ -3,13 +3,14 @@
 //! The caller supplies the exact, trusted Grida home; this module reads no environment and
 //! performs no discovery. Missing directories are absence, without creating them. An existing
 //! provider directory uses the protocol's private SQLite lock and orphan cleanup, but credential
-//! records, migration state and permissions are never changed. See the pinned protocol and
+//! records, migration state and existing permissions are never changed. See the pinned protocol and
 //! synthetic compatibility inputs in `tests/fixtures/grida-provider-v1/README.md`.
 
 use crate::keys::Secret;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 
 /// A fixed, secret-free failure. Parser diagnostics, filesystem paths and underlying errors are
 /// deliberately not retained.
@@ -74,26 +75,43 @@ impl std::error::Error for StoreError {}
 /// the caller owns the allowlist of providers eligible to receive these secrets. Returned values
 /// retain their exact bytes and must remain outside records, browser documents and diagnostics.
 pub fn read(home: &Path, providers: &[&str]) -> Result<BTreeMap<String, Secret>, StoreError> {
+    read_with_cancellation(home, providers, None)
+}
+
+pub(crate) fn read_cancellable(
+    home: &Path,
+    providers: &[&str],
+    cancelled: &AtomicBool,
+) -> Result<BTreeMap<String, Secret>, StoreError> {
+    read_with_cancellation(home, providers, Some(cancelled))
+}
+
+fn read_with_cancellation(
+    home: &Path,
+    providers: &[&str],
+    cancelled: Option<&AtomicBool>,
+) -> Result<BTreeMap<String, Secret>, StoreError> {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
-        native::read(home, providers)
+        native::read(home, providers, cancelled)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        let _ = (home, providers);
+        let _ = (home, providers, cancelled);
         Err(StoreError::UnsupportedPlatform)
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod native {
-    use super::{Secret, StoreError};
+    use super::{AtomicBool, Secret, StoreError};
     use rusqlite::{Connection, ErrorCode, OpenFlags};
     use std::collections::{BTreeMap, BTreeSet};
     use std::fs::{self, File, OpenOptions};
     use std::io::Read;
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
     use std::path::{Component, Path, PathBuf};
+    use std::sync::atomic::Ordering;
     use std::sync::{Arc, Mutex, OnceLock, TryLockError, Weak};
     use std::time::{Duration, Instant};
 
@@ -117,7 +135,7 @@ mod native {
         let value = home.to_str().ok_or(StoreError::InvalidInput)?;
         if !home.is_absolute()
             || home.parent().is_none()
-            || value.chars().any(char::is_control)
+            || value.bytes().any(|byte| byte.is_ascii_control())
             || value.contains("//")
             || value.ends_with('/')
             || value.split('/').any(|part| part == "." || part == "..")
@@ -178,7 +196,13 @@ mod native {
         };
         let file = if lock {
             match options().create_new(true).open(path) {
-                Ok(file) => file,
+                Ok(file) => {
+                    // An owner's umask may have removed write access. Set the mode on the
+                    // new descriptor before validating it. Existing files are never repaired.
+                    file.set_permissions(fs::Permissions::from_mode(0o600))
+                        .map_err(storage)?;
+                    file
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                     options().open(path).map_err(storage)?
                 }
@@ -262,6 +286,14 @@ mod native {
     type ProcessLocks = Mutex<BTreeMap<PathBuf, Weak<Mutex<()>>>>;
     static PROCESS_LOCKS: OnceLock<ProcessLocks> = OnceLock::new();
 
+    fn check_cancelled(cancelled: Option<&AtomicBool>) -> Result<(), StoreError> {
+        if cancelled.is_some_and(|flag| flag.load(Ordering::Relaxed)) {
+            // The waiting caller has already gone away, so this result is discarded.
+            return Err(StoreError::StoreBusy);
+        }
+        Ok(())
+    }
+
     fn wait(deadline: Instant) -> Result<(), StoreError> {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
@@ -271,9 +303,10 @@ mod native {
         Ok(())
     }
 
-    pub(super) fn locked<T>(
+    fn locked<T>(
         path: &Path,
         timeout: Duration,
+        cancelled: Option<&AtomicBool>,
         operation: impl FnOnce() -> Result<T, StoreError>,
     ) -> Result<T, StoreError> {
         let deadline = Instant::now() + timeout;
@@ -291,6 +324,7 @@ mod native {
             }
         };
         let _guard = loop {
+            check_cancelled(cancelled)?;
             match mutex.try_lock() {
                 Ok(guard) => break guard,
                 Err(TryLockError::WouldBlock) => wait(deadline)?,
@@ -330,6 +364,7 @@ mod native {
         connection.load_extension_disable().map_err(storage)?;
         connection.busy_timeout(Duration::ZERO).map_err(storage)?;
         loop {
+            check_cancelled(cancelled)?;
             if Instant::now() >= deadline {
                 return Err(StoreError::StoreBusy);
             }
@@ -343,7 +378,7 @@ mod native {
                 Err(error) => return Err(storage(error)),
             }
         }
-        let outcome = operation();
+        let outcome = check_cancelled(cancelled).and_then(|()| operation());
         let released = connection.execute_batch("ROLLBACK").map_err(storage);
         let closed = connection.close().map_err(storage);
         released?;
@@ -431,7 +466,18 @@ mod native {
     pub(super) fn read(
         home: &Path,
         providers: &[&str],
+        cancelled: Option<&AtomicBool>,
     ) -> Result<BTreeMap<String, Secret>, StoreError> {
+        read_with_timeout(home, providers, LOCK_TIMEOUT, cancelled)
+    }
+
+    fn read_with_timeout(
+        home: &Path,
+        providers: &[&str],
+        timeout: Duration,
+        cancelled: Option<&AtomicBool>,
+    ) -> Result<BTreeMap<String, Secret>, StoreError> {
+        check_cancelled(cancelled)?;
         location(home)?;
         if providers.iter().any(|provider| !valid_provider(provider)) {
             return Err(StoreError::InvalidInput);
@@ -443,7 +489,7 @@ mod native {
         if !directory(&provider_directory)? {
             return Ok(BTreeMap::new());
         }
-        locked(&provider_directory, LOCK_TIMEOUT, || {
+        locked(&provider_directory, timeout, cancelled, || {
             cleanup(&provider_directory)?;
             match bytes(
                 &provider_directory.join("credentials.toml"),
@@ -519,7 +565,121 @@ mod native {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use std::os::unix::fs::PermissionsExt;
+        use std::io::{BufRead, BufReader, Write};
+        use std::process::{Child, Command, Stdio};
+
+        const HOLDER_HOME: &str = "GRIDA_FX_TEST_STORE_HOLDER";
+
+        #[test]
+        fn lock_holder_child() {
+            let Some(home) = std::env::var_os(HOLDER_HOME) else {
+                return;
+            };
+            let lock = PathBuf::from(home).join("providers/profile.lock.sqlite");
+            let connection =
+                Connection::open_with_flags(lock, OpenFlags::SQLITE_OPEN_READ_WRITE).unwrap();
+            connection.execute_batch("BEGIN IMMEDIATE").unwrap();
+            println!("FX_STORE_LOCKED");
+            std::io::stdout().flush().unwrap();
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line).unwrap();
+            connection.execute_batch("ROLLBACK").unwrap();
+        }
+
+        struct Holder(Child);
+
+        impl Holder {
+            fn start(home: &Path) -> Self {
+                let child = Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "grida_store::native::tests::lock_holder_child",
+                        "--nocapture",
+                    ])
+                    .env_clear()
+                    .env(HOLDER_HOME, home)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+                let mut holder = Self(child);
+                let mut output = BufReader::new(holder.0.stdout.take().unwrap());
+                let mut line = String::new();
+                loop {
+                    assert!(
+                        output.read_line(&mut line).unwrap() > 0,
+                        "holder exited before acquiring lock"
+                    );
+                    if line.trim() == "FX_STORE_LOCKED" {
+                        return holder;
+                    }
+                    line.clear();
+                }
+            }
+        }
+
+        impl Drop for Holder {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+
+        #[test]
+        fn reader_reports_busy_until_other_process_dies() {
+            let temporary = tempfile::tempdir().unwrap();
+            let home = temporary.path().canonicalize().unwrap();
+            let directory = home.join("providers");
+            fs::create_dir(&directory).unwrap();
+            fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+            let credential_file = directory.join("credentials.toml");
+            let credential = b"version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n\
+                               [providers.acme]\napi_key = 'fx-fixture-lock-key'\n";
+            fs::write(&credential_file, credential).unwrap();
+            fs::set_permissions(&credential_file, fs::Permissions::from_mode(0o600)).unwrap();
+            assert!(read(&home, &["acme"], None).unwrap().contains_key("acme"));
+            let lock = directory.join("profile.lock.sqlite");
+            let original = fs::metadata(&lock).unwrap();
+
+            let mut holder = Holder::start(&home);
+            assert_eq!(
+                read_with_timeout(&home, &["acme"], Duration::from_millis(200), None).unwrap_err(),
+                StoreError::StoreBusy
+            );
+            let cancelled = AtomicBool::new(false);
+            std::thread::scope(|scope| {
+                let (send, receive) = std::sync::mpsc::channel();
+                let (started, ready) = std::sync::mpsc::channel();
+                let home = &home;
+                let flag = &cancelled;
+                scope.spawn(move || {
+                    started.send(()).unwrap();
+                    let result =
+                        read_with_timeout(home, &["acme"], Duration::from_secs(5), Some(flag));
+                    send.send(result).unwrap();
+                });
+                ready.recv().unwrap();
+                cancelled.store(true, Ordering::Relaxed);
+                assert_eq!(
+                    receive
+                        .recv_timeout(Duration::from_secs(2))
+                        .unwrap()
+                        .unwrap_err(),
+                    StoreError::StoreBusy
+                );
+            });
+            assert!(holder.0.try_wait().unwrap().is_none());
+            holder.0.kill().unwrap();
+            holder.0.wait().unwrap();
+
+            let found = read(&home, &["acme"], None).unwrap();
+            assert_eq!(found["acme"].expose(), "fx-fixture-lock-key");
+            let after = fs::metadata(lock).unwrap();
+            assert_eq!(after.ino(), original.ino());
+            assert_eq!(after.len(), 0);
+            assert_eq!(fs::read(credential_file).unwrap(), credential);
+        }
 
         #[test]
         fn same_process_contention_times_out_without_entering_caller_work() {
@@ -527,10 +687,10 @@ mod native {
             let directory = temporary.path().canonicalize().unwrap().join("providers");
             fs::create_dir(&directory).unwrap();
             fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
-            locked(&directory, Duration::from_secs(5), || {
+            locked(&directory, Duration::from_secs(5), None, || {
                 let start = Instant::now();
                 let result: Result<(), StoreError> =
-                    locked(&directory, Duration::from_millis(30), || {
+                    locked(&directory, Duration::from_millis(30), None, || {
                         panic!("a busy store must not enter caller work")
                     });
                 assert_eq!(result, Err(StoreError::StoreBusy));
@@ -538,7 +698,7 @@ mod native {
                 Ok(())
             })
             .unwrap();
-            locked(&directory, Duration::from_secs(1), || Ok(())).unwrap();
+            locked(&directory, Duration::from_secs(1), None, || Ok(())).unwrap();
         }
     }
 }

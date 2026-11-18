@@ -1,6 +1,3 @@
-# GRIDA-SEC-014 — unsupported version must fail closed.
-version = 2
-[migration]
-state = "complete"
-removed = []
-[providers]
+version = 73
+migration = { state = 'unstarted', removed = [] }
+providers = {}

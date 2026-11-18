@@ -316,6 +316,7 @@ impl AdapterHost {
 
     /// Starts a host and loads the adapter; the refusal of every call when it cannot serve.
     async fn start(&self) -> Result<Arc<Running>, String> {
+        self.client.checked_base()?;
         let incoming = Arc::new(Fetches {
             calls: Arc::clone(&self.calls),
             client: self.client.clone(),
@@ -422,6 +423,9 @@ impl AdapterHost {
 
     /// Asks the host `method` for `call` (module doc).
     async fn ask(&self, method: &'static str, call: &CallRequest, handle: Option<&Value>) -> Asked {
+        if let Err(reason) = self.client.checked_base() {
+            return Asked::Refused(reason);
+        }
         let running = match self.running().await {
             Ok(running) => running,
             Err(reason) => return Asked::Refused(reason),
@@ -510,7 +514,7 @@ impl AdapterHost {
                 provider: call.route.provider.clone(),
                 contract: object(&call.route.contract),
             },
-            base_url: self.client.base.clone(),
+            base_url: self.client.checked_base()?.to_string(),
             request: object(&call.request),
             files,
             take: call.take.iter().map(|&take| u64::from(take)).collect(),

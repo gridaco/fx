@@ -123,9 +123,10 @@ console.log(result.ok, result.chargedUsd, result.failed);
 const icon = result.outputs.icon; // a RunFile: digest, kind, path, read()
 ```
 
-The engine resolves provider keys from the environment, project `.env`, and eligible
-[keys saved in Grida](../../spec/providers.md#1-keys-and-endpoints) on macOS and Linux.
-Use `grida fx doctor` to check which source the engine found.
+The engine checks the environment, then the project's `.env`. On macOS and Linux, builds with
+saved-key support also check Grida's store for eligible keys. Run `npx grida-fx doctor` from your
+project to see which source the SDK's engine found. See
+[Provider keys](../../spec/providers.md#1-keys-and-endpoints).
 
 Cost forecasts can be unknown. `planned.estimate.lowUsd` and `highUsd` are `null` when
 unpriced calls prevent a complete total. `planned.forecast` also exposes `knownLowUsd`,

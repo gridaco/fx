@@ -2,10 +2,9 @@
 
 use grida_fx_providers::grida_store::{self, StoreError};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 const EMPTY: &str = "version = 1\n[migration]\nstate = 'unstarted'\nremoved = []\n[providers]\n";
@@ -17,8 +16,12 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        Self::named("home")
+    }
+
+    fn named(home_name: &str) -> Self {
         let temporary = tempfile::tempdir().unwrap();
-        let home = temporary.path().canonicalize().unwrap().join("home");
+        let home = temporary.path().canonicalize().unwrap().join(home_name);
         fs::create_dir(&home).unwrap();
         fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
         let directory = home.join("providers");
@@ -69,11 +72,11 @@ fn pinned_protocol_inputs_preserve_exact_values_and_errors() {
     for (name, expected) in [
         ("empty", None),
         ("tombstone", None),
-        ("escaping", Some("synthetic-\"-\\-α-🙂")),
+        ("escaping", Some(r#"  fx-"key"\path-λ-🧪  "#)),
     ] {
         let bytes = input(name);
         fixture.write(&bytes);
-        assert_eq!(fixture.value("example").as_deref(), expected);
+        assert_eq!(fixture.value("acme").as_deref(), expected);
         assert_eq!(fs::read(fixture.file()).unwrap(), bytes);
     }
     for (name, code) in [
@@ -84,7 +87,7 @@ fn pinned_protocol_inputs_preserve_exact_values_and_errors() {
         let bytes = input(name);
         fixture.write(&bytes);
         assert_eq!(
-            grida_store::read(&fixture.home, &["example"]).unwrap_err(),
+            grida_store::read(&fixture.home, &["acme"]).unwrap_err(),
             code
         );
         assert_eq!(fs::read(fixture.file()).unwrap(), bytes);
@@ -140,6 +143,36 @@ fn existing_empty_directory_uses_private_stable_lock_without_credential_record()
             .is_empty()
     );
     assert_eq!(fs::metadata(path).unwrap().ino(), before.ino());
+}
+
+#[test]
+fn first_lock_has_private_mode_under_restrictive_umask() {
+    let fixture = Fixture::new();
+    fixture.write(record("acme", "fx-fixture-umask-key"));
+    let output = Command::new("/bin/sh")
+        .env_clear()
+        .env("GRIDA_FX_TEST_STORE_UMASK_HOME", &fixture.home)
+        .args(["-c", r#"umask 0200; exec "$@""#, "sh"])
+        .arg(std::env::current_exe().unwrap())
+        .args(["--exact", "restricted_umask_reader_child"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let lock = fixture.home.join("providers/profile.lock.sqlite");
+    assert_eq!(fs::metadata(lock).unwrap().mode() & 0o7777, 0o600);
+}
+
+#[test]
+fn restricted_umask_reader_child() {
+    let Some(home) = std::env::var_os("GRIDA_FX_TEST_STORE_UMASK_HOME") else {
+        return;
+    };
+    let found = grida_store::read(Path::new(&home), &["acme"]).unwrap();
+    assert_eq!(found["acme"].expose(), "fx-fixture-umask-key");
 }
 
 #[test]
@@ -217,7 +250,14 @@ fn validates_unselected_entries_and_utf8_key_byte_boundary() {
 fn invalid_locations_and_provider_ids_do_not_open_storage() {
     let fixture = Fixture::new();
     for path in [
-        "relative", "/", "/a/../b", "/a/./b", "/a//b", "/a/", "/a\nb",
+        "relative",
+        "/",
+        "/a/../b",
+        "/a/./b",
+        "/a//b",
+        "/a/",
+        "/a\nb",
+        "/a\u{7f}b",
     ] {
         assert_eq!(
             grida_store::read(Path::new(path), &["gg"]).unwrap_err(),
@@ -231,6 +271,16 @@ fn invalid_locations_and_provider_ids_do_not_open_storage() {
         );
     }
     assert!(!fixture.home.join("providers/profile.lock.sqlite").exists());
+}
+
+#[test]
+fn allows_non_ascii_controls_in_home_path() {
+    let fixture = Fixture::named("home\u{85}acme");
+    fixture.write(record("acme", "fx-fixture-path-key"));
+    assert_eq!(
+        fixture.value("acme").as_deref(),
+        Some("fx-fixture-path-key")
+    );
 }
 
 #[test]
@@ -318,6 +368,22 @@ fn rejects_wal_and_nonempty_lock_without_replacing_them() {
     );
 }
 
+#[test]
+fn unsafe_existing_lock_is_refused_without_repair() {
+    let fixture = Fixture::new();
+    let lock = fixture.home.join("providers/profile.lock.sqlite");
+    fs::write(&lock, []).unwrap();
+    fs::set_permissions(&lock, fs::Permissions::from_mode(0o400)).unwrap();
+    let before = fs::metadata(&lock).unwrap();
+    assert_eq!(
+        grida_store::read(&fixture.home, &["acme"]).unwrap_err(),
+        StoreError::StorageFailed
+    );
+    let after = fs::metadata(lock).unwrap();
+    assert_eq!(after.mode() & 0o7777, 0o400);
+    assert_eq!(after.ino(), before.ino());
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn refuses_macos_acl_grants_on_files_and_ancestors() {
@@ -364,86 +430,6 @@ fn refuses_macos_acl_grants_on_files_and_ancestors() {
             .unwrap()
             .success()
     );
-}
-
-const HOLDER_HOME: &str = "GRIDA_FX_TEST_STORE_HOLDER";
-
-#[test]
-fn lock_holder_child() {
-    let Some(home) = std::env::var_os(HOLDER_HOME) else {
-        return;
-    };
-    let lock = PathBuf::from(home).join("providers/profile.lock.sqlite");
-    let connection = rusqlite::Connection::open(lock).unwrap();
-    connection.execute_batch("BEGIN IMMEDIATE").unwrap();
-    println!("FX_STORE_LOCKED");
-    std::io::stdout().flush().unwrap();
-    let mut line = String::new();
-    std::io::stdin().read_line(&mut line).unwrap();
-    connection.execute_batch("ROLLBACK").unwrap();
-}
-
-struct Holder(Child);
-
-impl Holder {
-    fn start(home: &Path) -> Self {
-        let child = Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "lock_holder_child", "--nocapture"])
-            .env(HOLDER_HOME, home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let mut holder = Self(child);
-        let mut output = BufReader::new(holder.0.stdout.take().unwrap());
-        let mut line = String::new();
-        loop {
-            assert!(
-                output.read_line(&mut line).unwrap() > 0,
-                "holder exited before acquiring lock"
-            );
-            if line.trim() == "FX_STORE_LOCKED" {
-                break;
-            }
-            line.clear();
-        }
-        holder
-    }
-}
-
-impl Drop for Holder {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-#[test]
-fn reader_waits_for_other_process_and_lock_survives_process_death() {
-    let fixture = Fixture::new();
-    let credential = record("gg", "synthetic");
-    fixture.write(&credential);
-    assert_eq!(fixture.value("gg").as_deref(), Some("synthetic"));
-    let lock = fixture.home.join("providers/profile.lock.sqlite");
-    let original = fs::metadata(&lock).unwrap();
-    let mut holder = Holder::start(&fixture.home);
-    let home = fixture.home.clone();
-    let (send, receive) = std::sync::mpsc::channel();
-    let reader = std::thread::spawn(move || send.send(grida_store::read(&home, &["gg"])).unwrap());
-    assert!(receive.recv_timeout(Duration::from_millis(150)).is_err());
-    holder.0.kill().unwrap();
-    holder.0.wait().unwrap();
-    let found = receive
-        .recv_timeout(Duration::from_secs(5))
-        .unwrap()
-        .unwrap();
-    reader.join().unwrap();
-    assert_eq!(found["gg"].expose(), "synthetic");
-    let after = fs::metadata(lock).unwrap();
-    assert_eq!(after.ino(), original.ino());
-    assert_eq!(after.len(), 0);
-    assert_eq!(fs::read(fixture.file()).unwrap(), credential.as_bytes());
 }
 
 #[test]

@@ -439,10 +439,10 @@ AR-25 uses the [notes fixture](fixtures/viewer/README.md#try-workflow-notes),
 It covers literal expressions, file snapshots, missing files, renamed associations,
 repeated/imported scopes, native source resolution and disclosed/withheld exports.
 
-AR-27's [pinned v1 fixtures](crates/grida-fx-providers/tests/fixtures/grida-provider-v1/)
+AR-27's [fixtures for the pinned v1 protocol](crates/grida-fx-providers/tests/fixtures/grida-provider-v1/)
 and [GG adapter tests](crates/grida-fx-providers/tests/gg.rs) use synthetic keys.
 The [cross-repository check](tools/check_grida_store.py) passed on macOS with Grida's
-fixture writer. FX waited for the shared lock, reported `GG_API_KEY present (grida)`
+fixture writer. FX reported `store_busy` while Grida held the shared lock, `GG_API_KEY present (grida)`
 after release, and reported `GG_API_KEY missing` after removal. The
 [public CLI acceptance check](CONTRIBUTING.md#verify-your-changes) passed on macOS
 against npm `grida@0.5.7` ([gridaco/grida#1152](https://github.com/gridaco/grida/pull/1152)).

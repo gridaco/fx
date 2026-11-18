@@ -1,6 +1,3 @@
-# GRIDA-SEC-014 — synthetic compatibility fixture; no credentials.
 version = 1
-[migration]
-state = "unstarted"
-removed = []
-[providers]
+migration = { state = 'unstarted', removed = [] }
+providers = {}
