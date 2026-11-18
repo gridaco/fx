@@ -18,11 +18,12 @@ the others run only free steps, or have the example's stand-in answer the paid o
 ``self-contained`` checks, without running anything, that no example links outside its own folder
 except by absolute URL.
 
-The engine installs indexed templates with ``add`` or ``init --template`` from an archive shaped
-like the release's (one top-level folder, tracked files as they are in the working tree), served
-on loopback. Each check runs on exactly what a user gets. For ``add``, also verify the receipt
-and that its advertised starter plans once fixtures supply any declared inputs.
-``templates`` checks that every template has a check and ships in the release archive.
+The engine installs indexed templates with ``add`` or ``init --template`` from a release-shaped
+archive served on loopback. Git archive selects committed members using the working-tree
+attributes. The fixture uses their working-tree contents so local edits can be tested.
+For ``add``, also verify the receipt and that its advertised starter plans once fixtures
+supply any declared inputs. ``templates`` checks that each indexed template has a check and
+that its project file, declared workflow and bundled preset ship in the release archive.
 The checker associates one template with each example folder and refuses an ambiguous index.
 
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
@@ -44,6 +45,7 @@ import tarfile
 import tempfile
 import threading
 import traceback
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -603,33 +605,42 @@ def templates() -> dict[str, dict[str, Any]]:
     return offered
 
 
-def template_problems(offered: dict[str, dict[str, Any]]) -> list[str]:
+def template_problems(offered: dict[str, dict[str, Any]], members: set[str]) -> list[str]:
     problems = []
     checked = {example for example, _ in CHECKS.values()}
     for folder, entry in offered.items():
         if folder not in checked:
             problems.append(f"template {entry['name']} ({folder}) has no check here")
-        attribute = subprocess.run(
-            ["git", "check-attr", "export-ignore", "--", f"examples/{folder}/fx.yaml"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        if not attribute.rstrip().endswith("unspecified"):
-            problems.append(f"examples/{folder} is left out of the release archive: {attribute}")
+        paths = ["fx.yaml"]
+        if starter := entry.get("starter"):
+            paths.append(starter["workflow_entry"])
+            if inputs := starter.get("inputs_file"):
+                paths.append(inputs)
+        for path in paths:
+            file = f"{entry['path']}/{path}"
+            if file not in members:
+                problems.append(f"template {entry['name']} needs {file}, absent from its archive")
     return problems
 
 
-def release_archive(folders: list[str]) -> bytes:
-    """A ``.tar.gz`` shaped like the tag's source archive: a pax global header, one top-level
-    folder, and the tracked files of ``folders`` as they are in the working tree."""
-    listed = subprocess.run(
-        ["git", "ls-files", "-z", "--", *(f"examples/{folder}" for folder in folders)],
+def release_members(folders: set[str]) -> set[str]:
+    """Select committed example files using the same export rules as a tag archive."""
+    archived = subprocess.run(
+        ["git", "archive", "--format=zip", "--worktree-attributes", "HEAD", "--", "examples"],
         cwd=ROOT,
         capture_output=True,
         check=True,
     ).stdout
+    with zipfile.ZipFile(io.BytesIO(archived)) as source:
+        return {
+            member.filename
+            for member in source.infolist()
+            if not member.is_dir() and Path(member.filename).parts[1] in folders
+        }
+
+
+def release_archive(members: set[str]) -> bytes:
+    """A release-shaped ``.tar.gz`` with selected files' working-tree contents."""
     buffer = io.BytesIO()
     with tarfile.open(
         fileobj=buffer,
@@ -637,9 +648,13 @@ def release_archive(folders: list[str]) -> bytes:
         format=tarfile.PAX_FORMAT,
         pax_headers={"comment": "0" * 40},
     ) as archive:
-        for name in sorted(filter(None, listed.decode().split("\0"))):
+        root = tarfile.TarInfo("fx-check/")
+        root.type = tarfile.DIRTYPE
+        root.mode = 0o755
+        archive.addfile(root)
+        for name in sorted(members):
             path = ROOT / name
-            if path.is_file():
+            if path.is_file() or path.is_symlink():
                 archive.add(path, arcname=f"fx-check/{name}", recursive=False)
     return gzip.compress(buffer.getvalue())
 
@@ -711,15 +726,16 @@ def main(names: list[str]) -> int:
     except Failed as failure:
         print(f"FAIL templates: {failure}")
         return 1
+    members = release_members(set(offered))
     if not names or "templates" in names:
-        problems = template_problems(offered)
+        problems = template_problems(offered, members)
         if problems:
             failures += 1
             print("FAIL templates: " + "; ".join(problems))
         else:
             names_offered = ", ".join(entry["name"] for entry in offered.values())
             print(f"ok   templates: {names_offered} each have a check and ship")
-    url, server = serve(release_archive(sorted(offered)))
+    url, server = serve(release_archive(members))
     typed: set[str] = set()  # the TypeScript examples whose types are checked: once each
     if not names or "self-contained" in names:
         leaving = self_contained()

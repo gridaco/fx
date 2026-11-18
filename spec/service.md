@@ -137,13 +137,17 @@ and project settings. `add` never merges into the parent.
 and hidden test source with `init`. It downloads the archive before staging the
 source beside the destination. For a checkout source, the destination must be
 outside the selected example folder. FX validates the staged `fx.yaml` against the
-final project root and validates the declared YAML workflow entry. It verifies
+final project root, including workflow search links that will resolve once the
+project exists there. It validates the declared YAML workflow entry and verifies
 the bundled preset file when one is declared. Missing declared user-supplied inputs
 are reported on success. Prerequisites are declarations. The installer does not
 probe them, launch code, install dependencies, load credentials, or consult
 providers. It publishes the finished directory with one exclusive rename. If
 two installs target the same path, at most one publishes and the other fails.
-If FX accepts an interrupt before publication, it removes staging and exits 130.
+If FX accepts an interrupt before publication, it stops staging, removes the
+temporary directory, and exits 130. A second Ctrl-C while staging is being
+cancelled can force exit with a warning that staging may remain. Publication
+completes once it starts.
 Template inputs in the source tree are copied as files. Canonical runs and
 downloads of separately hosted input or output files are outside this operation.
 

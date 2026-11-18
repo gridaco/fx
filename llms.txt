@@ -103,6 +103,7 @@ exits 2. The new folder has its own `fx.yaml` and can sit inside another project
 from the new folder to use its project settings. FX reads the authored template from the
 matching release archive for its own examples. `GRIDA_FX_NETWORK=off` prevents template downloads.
 If FX accepts an interrupt before publishing the project folder, it cleans up staging and exits 130.
+A second Ctrl-C during staging cancellation can force exit and leave temporary files.
 
 Use `grida fx init --list-templates --json` to discover FX's own templates without a download. Entries
 with a `workflow_entry` can be added. On success, `add --json` emits `fx-project-init-v1` with the

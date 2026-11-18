@@ -533,6 +533,61 @@ fn add_refuses_workflow_search_that_would_cover_the_installed_project() {
 }
 
 #[test]
+fn add_checks_search_links_against_the_installed_project_tree() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = tempfile::tempdir().unwrap();
+    let root = workspace.path().canonicalize().unwrap();
+    let target = root.join("fox-pet");
+    symlink("fox-pet", root.join("project-link")).unwrap();
+    symlink(target.join("workflows"), root.join("child-link")).unwrap();
+    symlink("child-link", root.join("chain")).unwrap();
+    symlink("fox-pet/missing", root.join("missing-link")).unwrap();
+    std::fs::create_dir(root.join("external")).unwrap();
+
+    let install = |workflows: &[&str]| {
+        let config = format!("fx: project/v1\nworkflows: {}\n", json!(workflows));
+        write_test_archive(
+            &root,
+            &[
+                Item::File("fx-9.9.9/examples/pet/fx.yaml", config.as_bytes()),
+                PET[1],
+                PET[2],
+            ],
+        );
+        execute(
+            &root,
+            &[
+                "add",
+                "pet",
+                "fox-pet",
+                "--template-source",
+                "release.tar.gz",
+                "--json",
+            ],
+        )
+    };
+
+    for entry in [
+        "../project-link",
+        "../chain/..",
+        "../project-link/missing/..",
+    ] {
+        refused(&install(&[entry]), "is the project or holds it");
+        assert!(!target.exists(), "{entry}");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 6);
+    }
+    success(install(&[
+        "workflows",
+        "../chain",
+        "../missing-link",
+        "../external",
+    ]));
+    let validated = success(execute(&target, &["init", "--json"]));
+    assert_eq!(validated["created"], false);
+}
+
+#[test]
 fn add_refuses_to_stage_inside_its_checkout_source() {
     let root = tempfile::tempdir().unwrap();
     let example = root.path().join("examples/pet");

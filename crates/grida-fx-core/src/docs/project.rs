@@ -21,7 +21,7 @@ use crate::providers::{Declaration, Declarations};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// The project file's name.
 const PROJECT_FILE: &str = "fx.yaml";
@@ -126,7 +126,7 @@ impl Project {
     /// Validates a staged project file against the location where its folder will be installed.
     pub fn validate_installation(staging: &Path, destination: &Path) -> Result<()> {
         let document = read_project(&staging.join(PROJECT_FILE), PROJECT_FILE)?;
-        refuse_holding_folders(destination, &document, PROJECT_FILE)
+        refuse_holding_folders(destination, &document, PROJECT_FILE, Some(staging))
     }
 
     /// Finds the project of `start` (module doc).
@@ -141,7 +141,7 @@ impl Project {
             let candidate = folder.join(PROJECT_FILE);
             if candidate.is_file() {
                 let document = read_project(&candidate, PROJECT_FILE)?;
-                refuse_holding_folders(folder, &document, PROJECT_FILE)?;
+                refuse_holding_folders(folder, &document, PROJECT_FILE, None)?;
                 return Ok(Project {
                     root: folder.to_path_buf(),
                     document,
@@ -189,12 +189,23 @@ fn read_project(path: &Path, label: &str) -> Result<ProjectDoc> {
 
 /// Refuses a `workflows:` entry that is the project root `root` or a folder above it, compared
 /// lexically and with symbolic links resolved (module doc).
-fn refuse_holding_folders(root: &Path, document: &ProjectDoc, label: &str) -> Result<()> {
+fn refuse_holding_folders(
+    root: &Path,
+    document: &ProjectDoc,
+    label: &str,
+    staging: Option<&Path>,
+) -> Result<()> {
     let root = crate::inputs::bind::resolve(root);
     for entry in &document.workflows {
         let listed = root.join(entry);
         let holds = |folder: PathBuf| root.starts_with(folder);
-        if holds(crate::inputs::lexical(&listed)) || holds(crate::inputs::bind::resolve(&listed)) {
+        let resolved = || match staging {
+            None => crate::inputs::bind::resolve(&listed),
+            Some(staging) => crate::inputs::bind::resolve_with(&listed, |path| {
+                canonicalize_installation(path, &root, staging, &mut 40)
+            }),
+        };
+        if holds(crate::inputs::lexical(&listed)) || holds(resolved()) {
             return Err(Error::document(format!(
                 "{label}: workflows: {entry} is the project or holds it; list the folders under it \
                  that hold workflows"
@@ -202,6 +213,52 @@ fn refuse_holding_folders(root: &Path, document: &ProjectDoc, label: &str) -> Re
         }
     }
     Ok(())
+}
+
+/// Canonicalizes an existing path in the layout after publication. A currently dangling
+/// symlink can become valid when its target is supplied by the staged project tree.
+fn canonicalize_installation(
+    path: &Path,
+    destination: &Path,
+    staging: &Path,
+    links_left: &mut usize,
+) -> Option<PathBuf> {
+    if let Ok(resolved) = path.canonicalize() {
+        return Some(resolved);
+    }
+    let on_disk = |path: &Path| match path.strip_prefix(destination) {
+        Ok(inside) => staging.join(inside),
+        Err(_) => path.to_path_buf(),
+    };
+    let mut resolved = PathBuf::new();
+    let mut components = path.components().peekable();
+    while let Some(component) = components.next() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => {
+                resolved.push(name);
+                let physical = on_disk(&resolved);
+                let metadata = std::fs::symlink_metadata(&physical).ok()?;
+                if metadata.is_symlink() {
+                    *links_left = links_left.checked_sub(1)?;
+                    let target = std::fs::read_link(&physical).ok()?;
+                    let target = resolved.parent()?.join(target);
+                    resolved =
+                        canonicalize_installation(&target, destination, staging, links_left)?;
+                    if components.peek().is_some() && !on_disk(&resolved).is_dir() {
+                        return None;
+                    }
+                } else if components.peek().is_some() && !metadata.is_dir() {
+                    return None;
+                }
+            }
+            other => resolved.push(other.as_os_str()),
+        }
+    }
+    Some(resolved)
 }
 
 /// Validates and types a project document (fx-project-v1).
@@ -555,7 +612,7 @@ mod tests {
                 workflows: vec!["library".into(), entry.into()],
                 ..ProjectDoc::default()
             };
-            refuse_holding_folders(&root, &document, "fx.yaml").map_err(|error| error.message)
+            refuse_holding_folders(&root, &document, "fx.yaml", None).map_err(|error| error.message)
         };
         let above = root.parent().unwrap().to_string_lossy().into_owned();
         let itself = root.to_string_lossy().into_owned();
