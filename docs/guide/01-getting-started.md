@@ -105,7 +105,7 @@ Python and npm install out of git, an `.env.example` listing the key names, and
 `workflows/icon.yaml`, a one-step workflow that draws an icon once you pick a route. It installs
 nothing and starts nothing.
 On a terminal it asks which template to start from; `--template NAME` names one without asking, and
-`grida fx init --list-templates` lists them. A template is one of the
+`grida fx init --list-templates` lists them. A named `init` template is one of the
 [examples](https://github.com/gridaco/fx/tree/main/examples), downloaded from the FX release you
 have, with the same agent files added. In a folder that already has an `fx.yaml`, it checks that file and
 writes nothing. It refuses any other folder that has files in it: to make an existing folder (a
@@ -183,7 +183,7 @@ exist. If the destination already exists, FX exits 2 and leaves your edits in pl
 different destination for a second copy. Run subsequent commands from the new folder to use its
 project settings.
 
-FX downloads the authored files from the release that matches your engine version. Setup checks
+FX downloads its own examples from the release that matches your engine version. Setup checks
 the project configuration and the advertised workflow and preset. It reports prerequisites without
 installing them, running the workflow, or starting a service.
 
@@ -197,7 +197,7 @@ grida fx plan workflows/pet.yaml --inputs inputs/pebble.yaml
 grida fx doctor workflows/pet.yaml
 ```
 
-For automation, `grida fx init --list-templates --json` lists the templates from the embedded
+For automation, `grida fx init --list-templates --json` lists FX's own templates from the embedded
 index without a download. Entries with a `workflow_entry` are available to `add`.
 `grida fx add pet fox-pet --json` returns an absolute `project_root`, a project-relative
 `workflow_entry` and, for Pet, `inputs_file`. It also reports missing declared input files and
@@ -205,6 +205,45 @@ prerequisites for the entry. Use the returned folder as the working directory.
 
 For example, adding `image-recolor` reports `inputs/source.png` in `missing_inputs`. The copied
 README shows how to create that file with `python make_input.py` or supply your own image.
+
+### Community templates
+
+To copy a public GitHub repository, pass its owner, name, and a tag or full 40-character commit SHA.
+For example, a repository named `acme/studio` could offer a workflow in `workflows/posters.yaml`.
+
+```sh
+grida fx add acme/studio@v1.2.0 --workflow posters --json
+```
+
+This copies the project to `./studio`. Pass a destination after the repository reference to name a
+different folder. The repository must have `fx.yaml` at its root. FX downloads the source archive
+for the requested tag or commit. Use a full commit SHA to pin the exact revision.
+
+FX looks for an optional `fx-template.json` at the repository root. If present, it declares the
+default starter. Otherwise FX uses the sole `.yaml` or `.yml` file directly inside `workflows/`
+or `fx/` that declares `fx: workflow/v1`. If the scan finds several workflows, choose one with
+`--workflow NAME`. The name is a unique filename stem such as `posters`. You can also use the
+flag to choose a different workflow from either directory when the project declares a default.
+The receipt reports the selected path in `workflow_entry` and the full repository reference in
+`template.name`, with `template.source` set to `github`.
+
+To publish a default workflow or recommend an input preset, commit a root `fx-template.json`.
+Paths are relative to the project root. `workflow_entry` is required. The other entries are
+optional. These input paths and prerequisites apply when the installer selects the workflow
+named in the file.
+
+```json
+{
+  "workflow_entry": "workflows/posters.yaml",
+  "inputs_file": "inputs/sample.yaml",
+  "required_inputs": ["assets/reference.png"],
+  "prerequisites": ["Python 3.11 or later with the dependencies in pyproject.toml"]
+}
+```
+
+Commit the referenced workflow and preset with the project. The installer reports an absent path
+from `required_inputs` in `missing_inputs`. Setup copies files and checks the chosen entry.
+Review the copied project before planning or running it, since those commands can load its code.
 
 ## Your first workflow
 

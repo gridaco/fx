@@ -67,8 +67,9 @@ grida fx run icon --live --max-usd 1 --open
 Without `--live`, nothing is spent: local steps run and cached results are reused. Start with
 [the guide](docs/guide/01-getting-started.md), or the [examples](examples/).
 
-To start from an editable example, use `grida fx add pet` from your workspace. See
-[Start from a template](docs/guide/01-getting-started.md#start-from-a-template).
+Use `grida fx add pet` to copy an editable example into your workspace. Public GitHub templates
+use `grida fx add OWNER/REPO@REF` with a tag or full commit SHA.
+[Start from a template](docs/guide/01-getting-started.md#start-from-a-template)
 
 ### For agents
 

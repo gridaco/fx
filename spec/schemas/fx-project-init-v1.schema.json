@@ -22,7 +22,7 @@
       "template": {
         "type": "object",
         "properties": {
-          "source": { "enum": ["release", "local"] }
+          "source": { "enum": ["release", "local", "github"] }
         }
       }
     }
@@ -85,16 +85,29 @@
             "source"
           ],
           "properties": {
-            "name": {
-              "type": "string",
-              "pattern": "^[a-z0-9-]+$"
-            },
+            "name": { "type": "string" },
             "source": {
               "enum": [
                 "built_in",
                 "release",
-                "local"
+                "local",
+                "github"
               ]
+            }
+          },
+          "if": {
+            "properties": { "source": { "const": "github" } }
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/(?![.]{1,2}@)[A-Za-z0-9_.-]{1,100}@(?=[A-Za-z0-9_.+/-]{1,255}$)(?!.*[.]{2})(?!.*[.]$)(?!.*[.]lock(?:/|$))[A-Za-z0-9_+-][A-Za-z0-9_.+-]*(?:/[A-Za-z0-9_+-][A-Za-z0-9_.+-]*)*$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "name": { "pattern": "^[a-z0-9-]+$" }
             }
           }
         }

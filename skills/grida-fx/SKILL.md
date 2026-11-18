@@ -94,9 +94,10 @@ For a first setup, or when a live run fails for a missing key, read
 [onboarding.md](references/onboarding.md). Connecting an AI provider needs the
 user: they create the account and key, and you verify with `grida fx doctor`.
 
-Use `grida fx add NAME [destination] --json` when the user wants an editable
-template in a fresh folder. Discover supported templates and use the returned
-project root and workflow entry as described in [onboarding.md](references/onboarding.md#1-install-and-initialize).
+Use `grida fx add NAME [destination] --json` for an editable FX example or
+`grida fx add OWNER/REPO@REF [destination] --json` for a public GitHub template at a
+tag or full commit SHA. Use the returned project root and workflow entry as described in
+[onboarding.md](references/onboarding.md#1-install-and-initialize).
 
 ## Author and plan
 

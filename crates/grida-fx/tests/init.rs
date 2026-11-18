@@ -1,5 +1,5 @@
 //! Project setup with `init` and `add` (spec/service.md §2). Nothing reaches beyond this
-//! machine: the release archive is stood in for by archives built here, served on loopback.
+//! machine: GitHub archives are stood in for by archives built here, sometimes served on loopback.
 #![cfg(unix)]
 
 use serde_json::{Value, json};
@@ -579,6 +579,223 @@ fn add_reports_a_missing_declared_input_without_creating_it() {
     ));
     assert_eq!(result["missing_inputs"], json!(["inputs/source.png"]));
     assert!(!root.path().join("image-recolor/inputs/source.png").exists());
+}
+
+const COMMUNITY: &str = "acme/studio@v1.2.0";
+const COMMUNITY_PROJECT: Item<'static> = Item::File("studio-1.2.0/fx.yaml", b"fx: project/v1\n");
+const COMMUNITY_WORKFLOW: &[u8] = b"fx: workflow/v1
+id: posters
+title: Studio posters
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: A colorful poster }
+";
+
+fn community_add(root: &Path, options: &[&str]) -> Output {
+    let mut args = vec![
+        "add",
+        COMMUNITY,
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    args.extend_from_slice(options);
+    execute(root, &args)
+}
+
+#[test]
+fn community_add_uses_the_root_declaration_and_preserves_local_edits() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/recipes/posters.yaml", COMMUNITY_WORKFLOW),
+            Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW),
+            Item::File("studio-1.2.0/inputs/start.yaml", b"{}\n"),
+            Item::File("studio-1.2.0/README.md", b"# Studio\n"),
+            Item::File("studio-1.2.0/.env.local", b"# Local configuration\n"),
+            Item::File("studio-1.2.0/.env.example", b"# Studio environment\n"),
+            Item::File(
+                "studio-1.2.0/fx-template.json",
+                br#"{
+                    "workflow_entry": "recipes/posters.yaml",
+                    "inputs_file": "inputs/start.yaml",
+                    "required_inputs": ["inputs/reference.png"],
+                    "prerequisites": ["An image provider for live drawing"]
+                }"#,
+            ),
+        ],
+    );
+
+    let install = success(community_add(root.path(), &[]));
+    conforms("fx-project-init-v1", &install);
+    let project = root.path().join("studio");
+    assert_eq!(
+        install["project_root"],
+        json!(project.canonicalize().unwrap())
+    );
+    assert_eq!(
+        install["template"],
+        json!({"name": COMMUNITY, "source": "github"})
+    );
+    assert_eq!(install["workflow_entry"], "recipes/posters.yaml");
+    assert_eq!(install["inputs_file"], "inputs/start.yaml");
+    assert_eq!(install["missing_inputs"], json!(["inputs/reference.png"]));
+    assert_eq!(
+        install["prerequisites"],
+        json!(["An image provider for live drawing"])
+    );
+    assert_eq!(install["files_created"], json!(files(&project)));
+    assert_eq!(
+        std::fs::read(project.join("README.md")).unwrap(),
+        b"# Studio\n"
+    );
+    assert!(!project.join(".env.local").exists());
+    assert_eq!(
+        std::fs::read(project.join(".env.example")).unwrap(),
+        b"# Studio environment\n"
+    );
+
+    let selection = success(community_add(
+        root.path(),
+        &["other", "--workflow", "posters"],
+    ));
+    assert_eq!(selection["inputs_file"], "inputs/start.yaml");
+    let selection = success(community_add(
+        root.path(),
+        &["alternate", "--workflow", "labels"],
+    ));
+    assert_eq!(selection["workflow_entry"], "workflows/labels.yaml");
+    assert!(selection.get("inputs_file").is_none());
+
+    let preset = project.join("inputs/start.yaml");
+    std::fs::write(&preset, "# edited\n").unwrap();
+    refused(&execute(root.path(), &["add", COMMUNITY]), "already exists");
+    assert_eq!(std::fs::read(&preset).unwrap(), b"# edited\n");
+}
+
+#[test]
+fn community_add_discovers_workflow_files_and_requires_an_unambiguous_selection() {
+    let root = tempfile::tempdir().unwrap();
+    let posters = Item::File("studio-1.2.0/fx/posters.yml", COMMUNITY_WORKFLOW);
+    let labels = Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW);
+    let other_yaml = Item::File("studio-1.2.0/workflows/settings.yaml", b"theme: ink\n");
+    let nested = Item::File(
+        "studio-1.2.0/workflows/nested/labels.yaml",
+        COMMUNITY_WORKFLOW,
+    );
+    write_test_archive(
+        root.path(),
+        &[COMMUNITY_PROJECT, posters, other_yaml, nested],
+    );
+    let install = success(community_add(root.path(), &["single"]));
+    assert_eq!(install["workflow_entry"], "fx/posters.yml");
+    assert_eq!(install["missing_inputs"], json!([]));
+
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, posters, labels]);
+    for options in [&[][..], &["--workflow", "does-not-exist"][..]] {
+        let outcome = community_add(root.path(), options);
+        refused(&outcome, "workflows/labels.yaml");
+        assert!(String::from_utf8_lossy(&outcome.stderr).contains("fx/posters.yml"));
+        assert!(!root.path().join("studio").exists());
+    }
+    let malformed = Item::File(
+        "studio-1.2.0/workflows/draft.yaml",
+        b"fx: workflow/v1\nsteps: [\n",
+    );
+    write_test_archive(
+        root.path(),
+        &[COMMUNITY_PROJECT, posters, labels, malformed],
+    );
+    let install = success(community_add(
+        root.path(),
+        &["selected", "--workflow", "labels"],
+    ));
+    assert_eq!(install["workflow_entry"], "workflows/labels.yaml");
+
+    let same_stem = Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW);
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, posters, same_stem]);
+    let outcome = community_add(root.path(), &["--workflow", "posters"]);
+    refused(&outcome, "workflows/posters.yaml");
+    assert!(String::from_utf8_lossy(&outcome.stderr).contains("fx/posters.yml"));
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn community_add_rejects_invalid_sources_before_network_or_writes() {
+    let root = tempfile::tempdir().unwrap();
+    for source in [
+        "acme/studio",
+        "acme/studio@",
+        "acme/studio@../v1",
+        "acme/studio@v1?zip",
+    ] {
+        let outcome = execute(root.path(), &["add", source]);
+        refused(&outcome, "OWNER/REPO@REF");
+        assert!(outcome.stdout.is_empty());
+    }
+    for source in [
+        COMMUNITY,
+        "acme/studio@0123456789abcdef0123456789abcdef01234567",
+    ] {
+        refused(
+            &execute(root.path(), &["add", source]),
+            "GRIDA_FX_NETWORK=off",
+        );
+    }
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+}
+
+#[test]
+fn community_add_refuses_unsafe_archive_entries_without_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let workflow = Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW);
+    for item in [
+        Item::Link("studio-1.2.0/escape", "../outside"),
+        Item::Raw("studio-1.2.0/../outside", b"escape"),
+        Item::Raw(r"studio-1.2.0/fx\outside", b"escape"),
+    ] {
+        write_test_archive(root.path(), &[COMMUNITY_PROJECT, workflow, item]);
+        refused(&community_add(root.path(), &[]), "template was refused");
+        assert_eq!(files(root.path()), vec!["release.tar.gz"]);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+}
+
+#[test]
+fn community_add_refuses_an_invalid_root_declaration_instead_of_falling_back_to_scan() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+            Item::File(
+                "studio-1.2.0/fx-template.json",
+                br#"{"workflow_entry":"../posters.yaml"}"#,
+            ),
+        ],
+    );
+    refused(&community_add(root.path(), &[]), "fx-template.json");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn community_add_counts_implicit_archive_directories_against_the_limit() {
+    let root = tempfile::tempdir().unwrap();
+    let paths: Vec<String> = (0..501)
+        .map(|n| format!("studio-1.2.0/assets/{n}/child/source.txt"))
+        .collect();
+    let mut items = vec![COMMUNITY_PROJECT];
+    items.extend(paths.iter().map(|path| Item::File(path, b"source\n")));
+    write_test_archive(root.path(), &items);
+    refused(
+        &community_add(root.path(), &[]),
+        "more than 1000 directories",
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
 }
 
 #[test]

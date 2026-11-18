@@ -141,10 +141,13 @@ pub struct InitArgs {
 /// Install a named template as its own project.
 #[derive(Debug, Args)]
 pub struct AddArgs {
-    /// template name (see init --list-templates)
+    /// indexed template name or a public GitHub OWNER/REPO@REF
     pub name: String,
-    /// new project folder (default: ./NAME)
+    /// new project folder (default: the template or repository name)
     pub destination: Option<String>,
+    /// select a GitHub starter workflow by file name without its extension
+    #[arg(long, value_name = "NAME")]
+    pub workflow: Option<String>,
     /// read templates from a checkout, a .tar.gz or its URL instead of the release (testing)
     #[arg(long, hide = true, value_name = "SOURCE")]
     pub template_source: Option<String>,
