@@ -34,6 +34,8 @@
         "dependentRequired": {
           "workflow_entry": ["prerequisites"]
         },
+        "if": { "required": ["workflow_entry"] },
+        "then": { "properties": { "source": { "const": "release" } } },
         "required": [
           "name",
           "description",
@@ -59,6 +61,7 @@
           },
           "workflow_entry": {
             "$ref": "#/$defs/project_file",
+            "pattern": "\\.ya?ml$",
             "description": "Presence indicates that add accepts this template."
           },
           "inputs_file": {

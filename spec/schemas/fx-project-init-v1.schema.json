@@ -14,9 +14,22 @@
     "workflow_entry": ["template", "missing_inputs", "prerequisites"]
   },
   "if": {
-    "required": ["workflow_entry"]
+    "anyOf": [
+      { "required": ["workflow_entry"] },
+      {
+        "required": ["template"],
+        "properties": {
+          "template": {
+            "type": "object",
+            "required": ["source"],
+            "properties": { "source": { "const": "github" } }
+          }
+        }
+      }
+    ]
   },
   "then": {
+    "required": ["workflow_entry"],
     "properties": {
       "created": { "const": true },
       "template": {
@@ -56,6 +69,7 @@
     },
     "workflow_entry": {
       "$ref": "#/$defs/project_file",
+      "pattern": "\\.ya?ml$",
       "description": "The installed starter's workflow entry when using add."
     },
     "inputs_file": {

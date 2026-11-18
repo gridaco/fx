@@ -111,7 +111,8 @@ unread. Within the template, the installer refuses:
 - entries under more than one top-level folder;
 - a template folder that is missing from the archive, or holds no `fx.yaml`.
 
-The template is unpacked into a hidden temporary folder. The starter's
+The template is unpacked into a hidden temporary folder. FX checks the gzip
+checksum before publication. The starter's
 `AGENTS.md`, `.env.example` and `README.md`, and each skill file under
 `.agents/skills/`, are added where the template has none. A template's own
 `.gitignore` keeps its lines and gains each line of the starter's it lacks;
@@ -172,7 +173,8 @@ FX copies the repository tree as one project, with `fx.yaml` at the root.
 It omits `.git`, `.fx`, `runs`, `.venv`, `node_modules`, `__pycache__`,
 `.showcase-inputs`, and `.env` or `.env.*` other than `.env.example`, at any
 depth, matching those names case-insensitively. It refuses links, special
-entries, and nonportable paths. The decoded archive scan is capped at 64 MiB,
+entries, nonportable paths, and directory spellings that differ only in case.
+The decoded archive scan is capped at 64 MiB,
 including skipped files and tar metadata. The copied source tree has the same
 1,000-file and 32 MiB limits as an indexed template. It may have at most 1,000 directories
 including implied parents, with no path deeper than 64 components below the

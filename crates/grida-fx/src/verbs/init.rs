@@ -14,7 +14,7 @@ use grida_fx_core::{ENGINE_VERSION, Error, ErrorKind};
 use grida_fx_providers::transport::http::{HttpConfig, HttpTransport};
 use grida_fx_providers::transport::{Body, HttpRequest, Lane, Method, Transport};
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -891,7 +891,7 @@ fn list_files(folder: &Path, relative: &Path, files: &mut Vec<String>) -> Result
 struct Limits {
     files: usize,
     bytes: u64,
-    directories: BTreeSet<String>,
+    directories: BTreeMap<String, String>,
 }
 
 impl Limits {
@@ -910,7 +910,7 @@ impl Limits {
         Ok(())
     }
 
-    /// Count implicit parents as well as directories explicitly named in the source.
+    /// Count implicit parents and preserve directory spellings on case-insensitive disks.
     fn add_directories(&mut self, parts: &[String], is_directory: bool) -> Result<(), Error> {
         let count = parts.len() - usize::from(!is_directory);
         let mut directory = String::new();
@@ -919,7 +919,15 @@ impl Limits {
                 directory.push('/');
             }
             directory.push_str(part);
-            self.directories.insert(directory.clone());
+            let original = self
+                .directories
+                .entry(directory.to_lowercase())
+                .or_insert_with(|| directory.clone());
+            if original != &directory {
+                return Err(refused(format!(
+                    "{directory} differs only in case from {original}"
+                )));
+            }
             if self.directories.len() > MAX_REPOSITORY_DIRS {
                 return Err(refused(format!(
                     "it holds more than {MAX_REPOSITORY_DIRS} directories"
@@ -1162,11 +1170,20 @@ fn unpack(
             )));
         }
     }
-    if community && archive.into_inner().limit() == 0 {
-        return Err(refused(format!(
-            "the decoded archive exceeds {} MiB",
-            MAX_REPOSITORY_SCAN / 1024 / 1024
-        )));
+    // The tar iterator can stop before the gzip decoder has checked its footer.
+    let mut decoded = archive.into_inner();
+    let mut tail = [0; 8192];
+    loop {
+        crate::interrupt::check_template_staging()?;
+        if community && decoded.limit() == 0 {
+            return Err(refused(format!(
+                "the decoded archive exceeds {} MiB",
+                MAX_REPOSITORY_SCAN / 1024 / 1024
+            )));
+        }
+        if decoded.read(&mut tail).map_err(unreadable)? == 0 {
+            break;
+        }
     }
     if !found {
         return Err(missing(template));
@@ -1266,6 +1283,21 @@ mod tests {
         assert_eq!(relative_parts("/examples"), None);
         assert_eq!(relative_parts("examples/../x"), None);
         assert_eq!(relative_parts("examples//x"), None);
+    }
+
+    #[test]
+    fn community_directories_refuse_case_collisions_in_implied_parents() {
+        let mut limits = Limits::default();
+        let first = ["assets", "Icons", "main.svg"].map(str::to_owned);
+        let second = ["assets", "icons", "preview.svg"].map(str::to_owned);
+        limits.add_directories(&first, false).unwrap();
+        limits.add_directories(&first[..2], true).unwrap();
+        let error = limits.add_directories(&second, false).unwrap_err();
+        assert!(
+            error
+                .message
+                .contains("assets/icons differs only in case from assets/Icons")
+        );
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]

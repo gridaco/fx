@@ -736,7 +736,10 @@ fn community_add_discovers_workflow_files_and_requires_an_unambiguous_selection(
     let root = tempfile::tempdir().unwrap();
     let posters = Item::File("studio-1.2.0/fx/posters.yml", COMMUNITY_WORKFLOW);
     let labels = Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW);
-    let other_yaml = Item::File("studio-1.2.0/workflows/settings.yaml", b"theme: ink\n");
+    let other_yaml = Item::File(
+        "studio-1.2.0/workflows/settings.yaml",
+        b"defaults: &defaults {size: 2, fx: workflow/v1}\nposter: *defaults\n",
+    );
     let nested = Item::File(
         "studio-1.2.0/workflows/nested/labels.yaml",
         COMMUNITY_WORKFLOW,
@@ -760,15 +763,30 @@ fn community_add_discovers_workflow_files_and_requires_an_unambiguous_selection(
         "studio-1.2.0/workflows/draft.yaml",
         b"fx: workflow/v1\nsteps: [\n",
     );
+    let unrelated_same_stem = Item::File(
+        "studio-1.2.0/fx/labels.yaml",
+        b"defaults: &defaults {size: 2}\n",
+    );
     write_test_archive(
         root.path(),
-        &[COMMUNITY_PROJECT, posters, labels, malformed],
+        &[
+            COMMUNITY_PROJECT,
+            posters,
+            labels,
+            malformed,
+            unrelated_same_stem,
+        ],
     );
     let install = success(community_add(
         root.path(),
         &["selected", "--workflow", "labels"],
     ));
     assert_eq!(install["workflow_entry"], "workflows/labels.yaml");
+
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, other_yaml, malformed]);
+    let outcome = community_add(root.path(), &["invalid"]);
+    refused(&outcome, "workflows/draft.yaml");
+    assert!(!root.path().join("invalid").exists());
 
     let same_stem = Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW);
     write_test_archive(root.path(), &[COMMUNITY_PROJECT, posters, same_stem]);
@@ -801,6 +819,23 @@ fn community_add_rejects_invalid_sources_before_network_or_writes() {
         );
     }
     assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+}
+
+#[test]
+fn community_add_refuses_a_corrupt_gzip_checksum_before_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let mut bytes = archive(&[
+        COMMUNITY_PROJECT,
+        Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+    ]);
+    let checksum = bytes.len() - 8;
+    bytes[checksum] ^= 1;
+    std::fs::write(root.path().join("release.tar.gz"), bytes).unwrap();
+
+    let outcome = community_add(root.path(), &[]);
+    refused(&outcome, "the template archive is not a readable .tar.gz");
+    assert!(outcome.stdout.is_empty());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
 }
 
 #[test]

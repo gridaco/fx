@@ -23,7 +23,7 @@ archive served on loopback. Git archive selects committed members using the work
 attributes. The fixture uses their working-tree contents so local edits can be tested.
 For ``add``, also verify the receipt and that its advertised starter plans once fixtures
 supply any declared inputs. ``templates`` checks that each indexed template has a check and
-that its project file, declared workflow and bundled preset ship in the release archive.
+that its project file, declared workflow and bundled preset ship as regular files.
 The checker associates one template with each example folder and refuses an ambiguous index.
 
 Prints one line per check and exits 1 when any fails. Names given run only those checks.
@@ -39,6 +39,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -605,7 +606,7 @@ def templates() -> dict[str, dict[str, Any]]:
     return offered
 
 
-def template_problems(offered: dict[str, dict[str, Any]], members: set[str]) -> list[str]:
+def template_problems(offered: dict[str, dict[str, Any]], members: dict[str, int]) -> list[str]:
     problems = []
     checked = {example for example, _ in CHECKS.values()}
     for folder, entry in offered.items():
@@ -620,11 +621,13 @@ def template_problems(offered: dict[str, dict[str, Any]], members: set[str]) -> 
             file = f"{entry['path']}/{path}"
             if file not in members:
                 problems.append(f"template {entry['name']} needs {file}, absent from its archive")
+            elif members[file] not in (0, stat.S_IFREG):
+                problems.append(f"template {entry['name']} needs {file} as a regular archive file")
     return problems
 
 
-def release_members(folders: set[str]) -> set[str]:
-    """Select committed example files using the same export rules as a tag archive."""
+def release_members(folders: set[str]) -> dict[str, int]:
+    """Select committed example files and their archive types using Git's export rules."""
     archived = subprocess.run(
         ["git", "archive", "--format=zip", "--worktree-attributes", "HEAD", "--", "examples"],
         cwd=ROOT,
@@ -632,14 +635,15 @@ def release_members(folders: set[str]) -> set[str]:
         check=True,
     ).stdout
     with zipfile.ZipFile(io.BytesIO(archived)) as source:
+        # Git ZIP archives omit the Unix mode for ordinary non-executable files.
         return {
-            member.filename
+            member.filename: stat.S_IFMT(member.external_attr >> 16)
             for member in source.infolist()
             if not member.is_dir() and Path(member.filename).parts[1] in folders
         }
 
 
-def release_archive(members: set[str]) -> bytes:
+def release_archive(members: dict[str, int]) -> bytes:
     """A release-shaped ``.tar.gz`` with selected files' working-tree contents."""
     buffer = io.BytesIO()
     with tarfile.open(

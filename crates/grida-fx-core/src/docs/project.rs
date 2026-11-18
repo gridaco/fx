@@ -258,6 +258,17 @@ fn canonicalize_installation(
             other => resolved.push(other.as_os_str()),
         }
     }
+    // Preserve trailing-separator behavior from the local filesystem's canonicalizer.
+    if path
+        .as_os_str()
+        .as_encoded_bytes()
+        .last()
+        .is_some_and(|byte| std::path::is_separator(char::from(*byte)))
+    {
+        let mut with_separator = on_disk(&resolved).into_os_string();
+        with_separator.push(std::path::MAIN_SEPARATOR_STR);
+        Path::new(&with_separator).canonicalize().ok()?;
+    }
     Some(resolved)
 }
 
@@ -650,6 +661,29 @@ mod tests {
         ] {
             assert_eq!(refused(entry), Ok(()), "{entry}");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_staged_regular_file_does_not_resolve_through_a_directory_link() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let staging = root.join("staged");
+        let destination = root.join("fox");
+        let external = root.join("external");
+        std::fs::create_dir(&staging).unwrap();
+        std::fs::create_dir(&external).unwrap();
+        std::fs::write(
+            staging.join("fx.yaml"),
+            "fx: project/v1\nworkflows: [\"../external/alias/..\"]\n",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("../fox/fx.yaml/", external.join("alias")).unwrap();
+
+        let before = Project::validate_installation(&staging, &destination);
+        std::fs::rename(&staging, &destination).unwrap();
+        let after = Project::find(&destination).map(|_| ());
+        assert_eq!(before, after);
     }
 
     /// Budgets are read as money (they need [`crate::money`]).

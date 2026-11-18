@@ -113,8 +113,8 @@ pub(super) fn starter(project: &Path, selection: Option<&str>) -> Result<Starter
                 unselected.push(relative);
                 continue;
             }
-            let document = grida_fx_core::yaml::load_file(&path, &relative)?;
-            if document["fx"].as_str() == Some("workflow/v1") {
+            let bytes = std::fs::read(&path).map_err(|error| Error::io(&relative, &error))?;
+            if grida_fx_core::yaml::declares_kind(&bytes, "workflow/v1") {
                 candidates.insert(relative);
             }
         }
