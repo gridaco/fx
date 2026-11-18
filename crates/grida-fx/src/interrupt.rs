@@ -147,16 +147,23 @@ pub fn ending() -> MutexGuard<'static, ()> {
 /// One interruption (module doc). `terminate`: it was a SIGTERM.
 fn interrupted(terminate: bool) {
     if !RUNNER_OWNS.load(Ordering::SeqCst) {
-        let previous =
-            INSTALL.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |state| match state {
-                IDLE => Some(EXITING),
-                STAGING => Some(CANCELLED),
-                _ => None,
-            });
-        if previous == Ok(IDLE) {
-            end_now(None);
+        loop {
+            let state = INSTALL.load(Ordering::SeqCst);
+            let next = match state {
+                IDLE => EXITING,
+                STAGING => CANCELLED,
+                _ => return,
+            };
+            if INSTALL
+                .compare_exchange(state, next, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                if next == EXITING {
+                    end_now(None);
+                }
+                return;
+            }
         }
-        return;
     }
     if !terminate && SIGINT_SEEN.swap(true, Ordering::SeqCst) {
         end_now(Some(
