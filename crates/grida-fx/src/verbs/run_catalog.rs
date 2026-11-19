@@ -1,6 +1,7 @@
 //! Named run allocation and recorded-workflow lookup, independent of a viewer service.
 
 use grida_fx_core::Error;
+use grida_fx_core::project::INLINE_IMAGE_SOURCE;
 use grida_fx_core::value::sha256_hex;
 use grida_fx_runtime::events::run_metadata;
 use grida_fx_runtime::folder::safe_name;
@@ -131,8 +132,8 @@ struct RecordedRun {
     created_at: String,
 }
 
-/// The newest-created run, including failures; different recorded sources cannot silently
-/// share an ID lookup. Names are unique only within a source, so name lookup also checks it.
+/// The newest-created run, including failures. Authored runs take precedence over inline
+/// calls with the same ID. Names are unique within a source, so name lookup checks it too.
 pub(super) fn resolve(runs: &Path, id: &str, name: Option<&str>) -> Result<Option<PathBuf>, Error> {
     resolve_bounded(runs, id, name, None)
 }
@@ -152,10 +153,16 @@ fn resolve_bounded(
     name: Option<&str>,
     wait: Option<(Instant, Duration)>,
 ) -> Result<Option<PathBuf>, Error> {
-    let candidates: Vec<_> = scan(runs, wait)?
+    let mut candidates: Vec<_> = scan(runs, wait)?
         .into_iter()
         .filter(|run| run.id == id)
         .collect();
+    if candidates
+        .iter()
+        .any(|run| run.source != INLINE_IMAGE_SOURCE)
+    {
+        candidates.retain(|run| run.source != INLINE_IMAGE_SOURCE);
+    }
     let sources: BTreeSet<_> = candidates.iter().map(|run| &run.source).collect();
     if sources.len() > 1 {
         return Err(Error::usage(format!(
@@ -439,6 +446,46 @@ mod tests {
             true,
         );
         assert_eq!(resolve(root.path(), "case", None).unwrap(), Some(newest));
+    }
+
+    #[test]
+    fn inline_calls_do_not_shadow_authored_runs_with_the_same_id() {
+        let root = tempfile::tempdir().unwrap();
+        let runs = root.path();
+        let inline = record(
+            runs,
+            "case/call",
+            INLINE_IMAGE_SOURCE,
+            None,
+            "2026-10-08T03:00:00Z",
+            true,
+        );
+        assert_eq!(resolve(runs, "case", None).unwrap(), Some(inline));
+
+        let authored = record(
+            runs,
+            "case/authored",
+            "workflow.yaml",
+            Some("baseline"),
+            "2026-10-08T01:00:00Z",
+            true,
+        );
+        assert_eq!(resolve(runs, "case", None).unwrap(), Some(authored.clone()));
+        assert_eq!(
+            resolve_control(runs, "case", "baseline", None).unwrap(),
+            Some(authored)
+        );
+
+        record(
+            runs,
+            "case/other",
+            "other.yaml",
+            None,
+            "2026-10-08T02:00:00Z",
+            true,
+        );
+        assert!(resolve(runs, "case", None).is_err());
+        assert!(resolve_control(runs, "case", "baseline", None).is_err());
     }
 
     #[test]

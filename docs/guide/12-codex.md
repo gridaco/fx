@@ -37,27 +37,41 @@ This page says how to set it up, what it does well, and where it differs from th
    `too old (codex …)` means the Codex FX found is older than 0.160.1, often an old copy earlier
    on your `PATH`: update it, or name a newer one with `GRIDA_FX_TOOL_CODEX`.
 
-3. Pick the route for your project's images in `fx.yaml`:
+## Draw one image
 
-   ```yaml
-   routes:
-     image.generate: imagegen@codex
-     image.edit: imagegen@codex
-   ```
+Generate a PNG from the terminal with `grida fx call`. You can run it from a directory without
+an FX project.
 
-   Or for one step only, with `route: imagegen@codex` on that step: a project can draw its
-   drafts on Codex and its finals on an API route.
+```sh
+grida fx call image.generate --route imagegen@codex --prompt "A brass compass icon, no text" \
+  --background transparent --out ./compass.png --live
+```
 
-4. Run:
+With `routes.image.generate` set to `imagegen@codex` in the nearest `fx.yaml`, omit `--route`.
+Use `--dry-run` in place of `--live` and `--out` to check the request without using your plan.
+For a live smoke test of the adapter, add `--fresh` to bypass replay. Omit `--out` to use the
+PNG saved in the run's `outputs/` folder. See [Generate one image](05-running.md#generate-one-image).
 
-   ```sh
-   grida fx run kite --live
-   ```
+## Draw images in a workflow
 
-   A run whose paid calls are all on Codex needs no `--max-usd`. FX runs it under a ceiling of $0
-   and refuses a call on any other route, so a priced step cannot slip in without one
-   ([Cost, cache and takes](04-cost-and-cache.md)). It still spends your Codex plan: an agent
-   running FX for you should ask you first, as for any live run.
+Set the routes for your project's images in `fx.yaml`:
+
+```yaml
+routes:
+  image.generate: imagegen@codex
+  image.edit: imagegen@codex
+```
+
+Set `route: imagegen@codex` on an individual step to use Codex for that step. For example, a
+project can draw its drafts on Codex and its final art on an API route.
+
+```sh
+grida fx run kite --live
+```
+
+A run whose paid calls are all on Codex needs no `--max-usd`. FX runs it under a ceiling of $0
+and refuses any dollar-billed call without authorization. Each generation uses your Codex plan.
+Give an agent explicit approval before it runs a live call for you.
 
 ## What it honours
 

@@ -63,7 +63,7 @@ use crate::routes::Route;
 use crate::spec::{NodeSpec, Port, Shape};
 use crate::text;
 use crate::val::{FileValue, Val};
-use crate::value::digest;
+use crate::value::digest_with_fresh_id;
 use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
@@ -684,7 +684,8 @@ impl Expander<'_> {
                 "an at: plan step makes no paid call",
             );
         }
-        let identity = step_identity(&resolved.identity, &with, &routes, &takes);
+        let identity =
+            step_identity_with_fresh_id(&resolved.identity, &with, &routes, &takes, self.fresh_id);
         // The engine runs select itself: it calls nothing and costs nothing.
         let prices = if resolved.is_select() {
             Vec::new()
@@ -886,6 +887,7 @@ impl Expander<'_> {
         if let Some(port) = spec.inputs.get(name) {
             value = self.port_files(value, port, at);
         } else if spec.is_template(name)
+            && self.env.workflow.source != crate::project::INLINE_IMAGE_SOURCE
             && let Some(path) = project_path(&value)
         {
             value = self.project_file(&path, at);
@@ -1102,6 +1104,16 @@ pub fn step_identity(
     routes: &IndexMap<String, Route>,
     takes: &[u32],
 ) -> Option<String> {
+    step_identity_with_fresh_id(type_identity, with, routes, takes, None)
+}
+
+fn step_identity_with_fresh_id(
+    type_identity: &str,
+    with: &IndexMap<String, Val>,
+    routes: &IndexMap<String, Route>,
+    takes: &[u32],
+    fresh_id: Option<&str>,
+) -> Option<String> {
     let mut plain = Map::new();
     for (name, value) in with {
         plain.insert(name.clone(), value.plain()?);
@@ -1110,13 +1122,17 @@ pub fn step_identity(
         .iter()
         .map(|(capability, route)| (capability.clone(), Value::String(route.fingerprint())))
         .collect();
-    Some(digest(&json!({
-        "kind": "fx-step-v1",
-        "type": type_identity,
-        "with": plain,
-        "routes": routes,
-        "take": takes,
-    })))
+    Some(digest_with_fresh_id(
+        json!({
+            "kind": "fx-step-v1",
+            "type": type_identity,
+            "with": plain,
+            "routes": routes,
+            "take": takes,
+        }),
+        "fx-step-fresh-v1",
+        fresh_id,
+    ))
 }
 
 /// Whether a required input given in `with:` is nothing (null or missing), or any list or object

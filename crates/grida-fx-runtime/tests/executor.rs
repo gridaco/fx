@@ -804,6 +804,7 @@ fn stand_in_services(
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })

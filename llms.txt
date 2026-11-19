@@ -38,7 +38,8 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
 
 ## Rules for agents
 
-- **Plan first; it is free.** `grida fx plan <workflow>` never makes a paid model call.
+- **Plan before spending.** `grida fx plan <workflow>` and
+  `grida fx call image.generate --prompt TEXT --dry-run` never make a paid model call.
   A selected missing GG/OpenRouter image model may require a read-only provider metadata
   lookup before the offline planner runs. Show the user the steps and estimate before spending.
 - **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
@@ -789,6 +790,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 |---|---|
 | `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
 | `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
+| `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--background MODE] [--size SIZE] [--live \| --stand-in F#fn] [--max-usd N] [--out FILE] [--dry-run] [--fresh] [--json]` | generate one PNG without authoring a workflow |
 | `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary and recorded call failures, including failures recovered by retry; a workflow id reads its newest run |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
@@ -807,6 +809,20 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
 
+- **One-shot images.** `call image.generate` uses a literal `--prompt` and the nearest `fx.yaml`'s
+  `routes.image.generate` when you omit `--route`. An explicit `--route` must be nonempty.
+  Give a qualified route such as `imagegen@codex` outside a project. `--background` accepts `auto`, `opaque` or
+  `transparent`; `--size` accepts `auto` or `WxH` where the selected route supports it. Use
+  `--dry-run` to check the request and see its forecast and configured ceiling without creating
+  a run or generating. Use `--live`
+  to dispatch, even on Codex or Grok Build. A dollar-billed route needs `--max-usd` or the
+  project's `budget.max_usd`. `--stand-in FILE#FUNCTION` uses the offline stand-in store.
+  `--fresh` requires `--live` or `--stand-in` and makes a new request identity while preserving the
+  normal cache entry. The command saves `outputs/image.png` in an ordinary run and reports its
+  path. Use that run folder with `inspect` to see its attempts. `--out FILE` delivers a copy to
+  an unused UTF-8 filename under an existing writable directory. `--json` prints
+  one `fx-call-result-v1` document with the route, run, saved image and cache disposition. See the
+  [call contract](https://github.com/gridaco/fx/blob/main/spec/call.md).
 - **Ceiling.** A live run needs one: `--max-usd`, else the workflow's `budget:`, else `fx.yaml`'s.
   Before every paid attempt FX reserves its allowance, or remaining applicable budget for
   unpriced work. Calls wait for temporary holds; an exhausted budget stops new paid attempts.

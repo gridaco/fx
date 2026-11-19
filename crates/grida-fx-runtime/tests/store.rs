@@ -127,6 +127,7 @@ fn replay_call(image: &[u8]) -> CallRecord {
         },
         request: json!({"background": "auto", "prompt": "a lantern"}),
         take: vec![1],
+        fresh_id: None,
         files: IndexMap::from([(
             "image".to_string(),
             FileEntry {
@@ -153,6 +154,7 @@ fn job(key: &str, state: JobState, handle: Option<Value>) -> JobRecord {
         },
         request: json!({"prompt": "a lantern at dusk"}),
         take: vec![2, 1],
+        fresh_id: None,
         state,
         handle,
         note: None,

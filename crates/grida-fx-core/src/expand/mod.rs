@@ -352,7 +352,22 @@ pub struct ExpandEnv<'a> {
 /// Expands a workflow. Problems are collected; an `Err` is fatal (exit 2): a used workflow that
 /// is not a valid document, a host that cannot start.
 pub fn expand(env: ExpandEnv<'_>) -> Result<Expansion> {
-    Expander::new(env).run()
+    expand_with_fresh_id(env, None)
+}
+
+/// Expands a workflow in a fresh identity domain when a fresh identifier is provided.
+pub fn expand_with_fresh_id<'a>(
+    env: ExpandEnv<'a>,
+    fresh_id: Option<&'a str>,
+) -> Result<Expansion> {
+    if fresh_id.is_some_and(|id| !crate::value::is_fresh_id(id)) {
+        return Err(Error::usage(
+            "fresh_id must be 32 lowercase hexadecimal digits",
+        ));
+    }
+    let mut expander = Expander::new(env);
+    expander.fresh_id = fresh_id;
+    expander.run()
 }
 
 /// `path + "#" + takes joined with "."` (identity.md §11).
@@ -399,6 +414,7 @@ pub(crate) enum Condition {
 /// The expander: one per expansion; every memo is per call.
 pub(crate) struct Expander<'a> {
     pub(crate) env: ExpandEnv<'a>,
+    pub(crate) fresh_id: Option<&'a str>,
     pub(crate) frames: Vec<Frame>,
     pub(crate) exps: Vec<StepExpansion>,
     /// `(scope frame, step name)` → its expansion.
@@ -455,6 +471,7 @@ impl<'a> Expander<'a> {
     pub(crate) fn new(env: ExpandEnv<'a>) -> Expander<'a> {
         Expander {
             env,
+            fresh_id: None,
             frames: Vec::new(),
             exps: Vec::new(),
             memo: HashMap::new(),

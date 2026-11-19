@@ -385,6 +385,7 @@ fn job_fields() -> JobRecord {
         },
         request: json!({"prompt": "a lantern by the river"}),
         take: vec![1],
+        fresh_id: None,
         state: JobState::Settled,
         handle: None,
         note: None,

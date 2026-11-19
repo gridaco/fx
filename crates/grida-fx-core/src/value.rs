@@ -281,6 +281,22 @@ pub fn digest(value: &Value) -> String {
     sha256_hex(canon(value).as_bytes())
 }
 
+/// Whether a string is a fresh invocation's 32-character lowercase hex identifier.
+pub fn is_fresh_id(s: &str) -> bool {
+    s.len() == 32
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// Hashes an identity object in the invocation's fresh domain when it has a fresh identifier.
+pub fn digest_with_fresh_id(mut value: Value, fresh_kind: &str, fresh_id: Option<&str>) -> String {
+    if let Some(fresh_id) = fresh_id {
+        value["kind"] = Value::from(fresh_kind);
+        value["fresh_id"] = Value::from(fresh_id);
+    }
+    digest(&value)
+}
+
 /// `file_digest(f)`: the SHA-256 of a file's raw bytes.
 pub fn file_digest(bytes: &[u8]) -> String {
     sha256_hex(bytes)

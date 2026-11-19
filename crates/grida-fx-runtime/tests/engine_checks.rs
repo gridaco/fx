@@ -103,6 +103,7 @@ fn run(root: &Path, adapter: grida_fx_providers::Adapter) -> Arc<Services> {
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })
@@ -355,6 +356,7 @@ async fn a_submitted_job_is_collected_without_the_engines_refusals() {
             },
             request: lantern(),
             take: vec![1],
+            fresh_id: None,
             state: JobState::Submitted,
             handle: Some(handle.clone()),
             note: None,

@@ -298,15 +298,18 @@ pub fn make_plan(
 ) -> Result<Plan> {
     let mut unavailable = Vec::new();
     let expansion = loop {
-        let expansion = crate::expand::expand(ExpandEnv {
-            workflow: &planner.workflow,
-            inputs: &planner.inputs.values,
-            registry: &mut planner.registry,
-            host: &mut *host,
-            routes: &planner.routes,
-            takes: &planner.takes,
-            results: &planner.results,
-        })?;
+        let expansion = crate::expand::expand_with_fresh_id(
+            ExpandEnv {
+                workflow: &planner.workflow,
+                inputs: &planner.inputs.values,
+                registry: &mut planner.registry,
+                host: &mut *host,
+                routes: &planner.routes,
+                takes: &planner.takes,
+                results: &planner.results,
+            },
+            planner.fresh_id.as_deref(),
+        )?;
         let runnable: Vec<Instance> = expansion
             .ordered()
             .filter(|i| ready(i, planner))
