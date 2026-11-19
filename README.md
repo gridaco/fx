@@ -68,7 +68,8 @@ Without `--live`, nothing is spent: local steps run and cached results are reuse
 [the guide](docs/guide/01-getting-started.md), or the [examples](examples/).
 
 Use `grida fx add pet` to copy an editable example into your workspace. Public GitHub templates
-use `grida fx add OWNER/REPO@REF` with a tag or full commit SHA.
+use `grida fx add OWNER/REPO@REF` with a tag or full commit SHA. For a private template, add
+`--github-auth` to use your existing GitHub CLI authentication.
 [Start from a template](docs/guide/01-getting-started.md#start-from-a-template)
 
 ### For agents

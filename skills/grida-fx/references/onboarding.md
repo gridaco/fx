@@ -28,8 +28,11 @@ The template comes from the release matching the installed engine. Use the retur
 FX. Use `inputs_file` as the starting preset when present, and check `missing_inputs`
 and `prerequisites` before planning or running. Setup only copies and checks files.
 
-For a public GitHub template, use `grida fx add OWNER/REPO@REF [destination] --json`
+For a GitHub template, use `grida fx add OWNER/REPO@REF [destination] --json`
 with a tag or full 40-character commit SHA. The default folder is `./REPO`.
+For a private template, add `--github-auth` to use the user's existing GitHub CLI
+authentication. Have the user install `gh` if it is missing and sign in with
+`gh auth login` if needed. The account needs read access to the repository.
 The repository must contain a root `fx.yaml`. A root `fx-template.json` can declare
 the default workflow and preset. Otherwise FX selects the sole YAML workflow
 directly under `workflows/` or `fx/`. Use `--workflow NAME` to select a unique

@@ -219,6 +219,15 @@ This copies the project to `./studio`. Pass a destination after the repository r
 different folder. The repository must have `fx.yaml` at its root. FX downloads the source archive
 for the requested tag or commit. Use a full commit SHA to pin the exact revision.
 
+For a private repository, install the GitHub CLI (`gh`) and sign in with `gh auth login` using
+an account with read access. Then add `--github-auth`:
+
+```sh
+grida fx add acme/studio@v1.2.0 --workflow posters --github-auth --json
+```
+
+FX uses `gh` only when you pass this flag. `GRIDA_FX_NETWORK=off` blocks template downloads.
+
 FX looks for an optional `fx-template.json` at the repository root. If present, it declares the
 default starter. Otherwise FX uses the sole `.yaml` or `.yml` file directly inside `workflows/`
 or `fx/` that declares `fx: workflow/v1`. If the scan finds several workflows, choose one with
