@@ -251,6 +251,18 @@ function canvasInset(pane: HTMLElement) {
   };
 }
 
+function usePageMetadata(titleParts: (string | undefined)[], description?: string) {
+  const title = [...titleParts.filter(Boolean), "FX Viewer"].join(" · ");
+  useEffect(() => {
+    document.title = title;
+    if (!description) return;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]')!;
+    const previous = meta.content;
+    meta.content = description;
+    return () => { meta.content = previous; };
+  }, [title, description]);
+}
+
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
@@ -263,6 +275,11 @@ function WorkflowView() {
   const select = (id: string | null) => { setAbout(false); controller.select(id); };
   const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
+  const workflowTitle = view?.workflow.title.trim() || view?.workflow.id;
+  const description = view?.workflow.description?.trim()
+    || (plan ? `Inspect the execution plan for ${workflowTitle}.`
+      : run ? `Inspect run ${run.run_name} for ${workflowTitle}.` : undefined);
+  usePageMetadata([run ? "Run" : plan ? "Plan" : undefined, workflowTitle, run?.run_name], description);
   const selectedNote = graph.notes?.find((note) => note.id === selected);
   const selectedNode = graph.nodes.find((node) => node.id === selected);
   const stepNodes = graph.nodes.filter((node) => node.kind !== "value");
@@ -379,6 +396,7 @@ function HistoryEntry({ entry, latest = false }: { entry: ServiceEntry; latest?:
 }
 
 function ProjectIndex({ catalog, loading }: { catalog: ServiceIndex; loading: boolean }) {
+  usePageMetadata(["Project", catalog.title]);
   const { groups } = new ServiceIndexProjection(catalog);
   return <main className="fx-project">
     <header className="fx-project-heading"><h1>{catalog.title}</h1><button onClick={() => void entryController.refresh()} disabled={loading} className="fx-action" aria-label="Refresh project"><RefreshCw {...iconProps} />Refresh</button></header>

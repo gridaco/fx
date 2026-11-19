@@ -55,6 +55,10 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
   them by hand.
 - **Show the live viewer.** When the project service is running (`grida fx status --json`), give
   the user the URL `plan --open` or `run` prints instead of describing renders yourself.
+  Look for the `f(x)` tab icon. Project tabs show the project name. Plan and Run tabs show
+  the workflow's `title` after the mode, and Run tabs also show the run name. The page
+  description uses the workflow's `description` when present, or a summary naming the plan
+  or run. Viewer pages use the `no-referrer` policy.
 - **Don't retry paid calls yourself.** The engine is the only retry owner (at most 6 attempts per
   call). A failed run is resumed or run again; cached work is not redone.
 
@@ -896,6 +900,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `not_ready`; missing targets return `not_found`; catalog presentation is
   `unavailable`. A successful result confirms applied state, not paint or tab activation.
   Reveal uses the displayed stack/grid position after panning and the space left by floating panels.
+  In a wrapper, `isFxViewerDocument(document)` from `@grida/fx/viewer/client` reads
+  the v1 HTML marker for tab branding before data loads. Use context for recorded IDs.
   Hosts with an existing window use the browser-safe `ViewerClient` from
   `@grida/fx/viewer/client`: async `getContext`, `present`, `subscribe`, and `dispose`.
   Use one client per window pair and recreate it after viewer navigation/reload.
