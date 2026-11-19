@@ -673,7 +673,9 @@ AR-21 has provider-free [page/presentation tests](web/fx-web/tests/viewer-page.t
 [client tests](js/fx/test/viewer-client.test.ts), and a
 [packed-package consumer check](js/fx/test/build_npm.test.ts) that bundles the public
 browser export and compiles its declarations with DOM libraries and no Node ambient
-types. The [browser regression check](tools/check_viewer_browser.mjs), run in CI,
+types. The browser SDK also recognizes the engine page's initial HTML marker for
+host branding. The [browser regression check](tools/check_viewer_browser.mjs), run in CI,
+checks recognition before scripts execute and handles missing or unknown markers. It
 exercises two independent pages of the same synthetic recorded run, exact nested
 take reveal and foregrounding, new details in a narrow pane, expanded-deck reveal
 after panning, camera preservation, user selection callbacks, reload with a fresh

@@ -72,6 +72,10 @@ The built, embedded viewer does not need a dev server.
 
 For application and automation usage, start with
 [Connect to the FX viewer](../../docs/guide/16-viewer-api.md).
+Keep the document marker in `index.html` so a host can
+[recognize the viewer](../../docs/guide/16-viewer-api.md#recognize-the-viewer-in-a-wrapper)
+before JavaScript starts. The browser regression check reads the built HTML using
+the public SDK helper.
 
 The engine-shipped page exposes `window.fx_viewer`. Browser automation evaluates
 these calls in that viewer's realm, without inspecting the DOM:

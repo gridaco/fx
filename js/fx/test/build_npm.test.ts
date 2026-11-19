@@ -118,7 +118,12 @@ describe.skipIf(!tools || linux === undefined)("tools/build_npm.mjs", () => {
       mkdirSync(join(consumer, "node_modules", "@grida"), { recursive: true });
       symlinkSync(join(out, "packages", "fx"), join(consumer, "node_modules", "@grida", "fx"), "dir");
       const entry = join(consumer, "index.ts");
-      writeFileSync(entry, 'import { ViewerClient } from "@grida/fx/viewer/client";\nconst client = new ViewerClient({ targetWindow: window, sourceWindow: window, origin: window.location.origin });\nvoid client.getContext();\n');
+      writeFileSync(entry, `import { isFxViewerDocument, ViewerClient } from "@grida/fx/viewer/client";
+if (isFxViewerDocument(document)) {
+  const client = new ViewerClient({ targetWindow: window, sourceWindow: window, origin: window.location.origin });
+  void client.getContext();
+}
+`);
       writeFileSync(join(consumer, "tsconfig.json"), JSON.stringify({ compilerOptions: {
         target: "ES2022", lib: ["ES2022", "DOM"], types: [], strict: true, skipLibCheck: false,
         module: "ESNext", moduleResolution: "Bundler", noEmit: true,

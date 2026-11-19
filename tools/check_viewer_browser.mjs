@@ -95,6 +95,18 @@ try {
   await context.route("**/*", (route) => [origin, foreignOrigin].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
   const host = await context.newPage();
   await host.goto(`${origin}/host`);
+  const recognition = await host.evaluate(async (html) => {
+    const { isFxViewerDocument } = await import("/viewer-client.js");
+    const shell = new DOMParser().parseFromString(html, "text/html");
+    const marker = shell.head.querySelector('meta[name="application-name"]');
+    const initial = isFxViewerDocument(shell);
+    marker.setAttribute("data-grida-fx-viewer", "2");
+    const unknownVersion = isFxViewerDocument(shell);
+    marker.removeAttribute("data-grida-fx-viewer");
+    return { initial, unknownVersion, nameOnly: isFxViewerDocument(shell), host: isFxViewerDocument(document) };
+  }, await Bun.file(resolve(assets, "index.html")).text());
+  assert.deepEqual(recognition, { initial: true, unknownVersion: false, nameOnly: false, host: false });
+  console.log("ok   SDK recognizes the built viewer head before scripts run, independently of its port");
   const firstPopup = host.waitForEvent("popup");
   await host.evaluate(() => { window.first = window.open("/"); });
   const page = await firstPopup;
@@ -102,6 +114,9 @@ try {
   await host.evaluate(() => { window.second = window.open("/"); });
   const other = await secondPopup;
   await Promise.all([ready(page), ready(other)]);
+  assert.equal(await page.title(), "Run · Sample · recorded · FX Viewer");
+  const description = page.locator('head meta[name="description"]');
+  assert.equal(await description.getAttribute("content"), "Inspect run recorded for Sample.");
   await host.evaluate(async () => {
     const { ViewerClient } = await import("/viewer-client.js");
     window.Client = ViewerClient;
@@ -161,9 +176,31 @@ try {
   assert.equal(fresh.selection, null);
   await page.goto(`${origin}/p/${"a".repeat(64)}/plans/${"b".repeat(64)}/`);
   await ready(page, "plan");
+  assert.equal(await page.title(), "Plan · Sample · FX Viewer");
+  assert.equal(await description.getAttribute("content"), "Inspect the execution plan for Sample.");
   const scoped = await page.evaluate(() => window.fx_viewer.getContext());
   assert.equal(scoped.subject.reference.entry_id, "b".repeat(64));
   console.log("ok   reload supports a fresh client and a scoped plan exposes its recorded reference");
+
+  const authored = 'Prepare the "before" & "after" frames.';
+  await page.route("**/plans/*/api/view", (route) => route.fulfill({ json: {
+    ...plan, workflow: { ...plan.workflow, description: authored },
+  } }));
+  await page.reload();
+  await ready(page, "plan");
+  assert.equal(await description.getAttribute("content"), authored);
+
+  await page.route(/\/api\/(?:view|catalog)$/, (route) => route.fulfill({ json: {
+    kind: "fx-service-index-v1", project_id: "a".repeat(64), title: "Studio", entries: [],
+  } }));
+  await page.goto(origin);
+  await page.waitForFunction(() => document.title === "Project · Studio · FX Viewer");
+  assert.equal(await description.getAttribute("content"), "Browse workflow plans and runs in the local FX viewer.");
+  const destination = `${foreignOrigin}/from-viewer`;
+  const navigation = page.waitForRequest(destination);
+  await page.evaluate((url) => location.assign(url), destination);
+  assert.equal(await (await navigation).headerValue("referer"), null);
+  console.log("ok   viewer titles, workflow descriptions, fallbacks and referrer-free navigation");
 
   const outsider = await context.newPage();
   await outsider.goto(`${foreignOrigin}/`);
