@@ -22,8 +22,10 @@ Choose a template by the effect of the change. Features and fixes can use either
   steps and caveats, and show the implementation running.
 
 For user-facing changes, add a short entry under `Unreleased` in
-[CHANGELOG.md](CHANGELOG.md). Describe what users can do or what changes for them.
-Link the pull request or issue when available.
+[CHANGELOG.md](CHANGELOG.md). Use the applicable change type (`Added`, `Changed`,
+`Deprecated`, `Removed`, `Fixed`, or `Security`) and add its heading as needed.
+Describe what users can do or what changes for them. Link the pull request or
+issue when available.
 
 PRs affecting users need evidence appropriate to the change. For the viewer and
 website, use screenshots for static results and a short video/GIF for interactions.
