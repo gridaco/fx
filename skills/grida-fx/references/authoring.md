@@ -25,9 +25,11 @@ it already mixes them. This gives local paths a consistent project home. The
 greeting examples below are small end-to-end checks after installing FX and the
 runtime of the nodes' language.
 
-For browser inspection, FX 0.2 and later use `start --background` once per project,
-then `plan --open`, `run --open`, and `inspect --open`. Older releases can use `view TARGET` or `view --run DIR` with
-the browser flags their help advertises; do not silently switch to a source build.
+For the project viewer, start the service with `grida fx start --background`.
+Use `plan TARGET --register` or `inspect RUN --register` when supported to get
+an exact route for use with the verified project service URL. `run` prints its
+URL when one is available. Use `--open` when the user wants FX to launch the
+default browser. Discover the installed options with `grida fx --help`.
 
 ## Workflow rules that affect authoring
 

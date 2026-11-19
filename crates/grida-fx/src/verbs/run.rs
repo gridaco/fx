@@ -333,7 +333,7 @@ fn plan_and_run(
                 }
             } else if !args.no_view {
                 super::view::report_service(
-                    super::service::register_run(&project, root, args.open),
+                    super::service::register_run(&project, root),
                     args.open,
                     &declarations,
                 );

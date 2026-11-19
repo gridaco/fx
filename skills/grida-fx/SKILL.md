@@ -280,21 +280,22 @@ to the user's publishing application, with its own authorization.
 Check `grida fx --help` first. The service below needs FX 0.2 or later; an
 older installed release lacks `init` and `start`.
 
-When these commands are available, normal project work uses:
+When installed help lists these options, use the following to get viewer URLs for
+an existing host or to share as links:
 
 ```sh
 grida fx init
 grida fx start --background --json
 grida fx status --json
-grida fx plan workflows/example.yaml --inputs inputs/example.yaml --open
-grida fx run workflows/example.yaml --inputs inputs/example.yaml --run runs/example --open
-grida fx inspect runs/example --open
+grida fx plan workflows/example.yaml --inputs inputs/example.yaml --register --json
+grida fx run workflows/example.yaml --inputs inputs/example.yaml --run runs/example
+grida fx inspect runs/example --register --json
 ```
 
-When the service is running, give the user the viewer URL for what you are
-working on (the plan while designing, the run while it runs) rather than
-presenting renders yourself: the viewer is live, so the user sees each step as it
-happens.
+For a plan or saved run, resolve the receipt's relative `route` against the
+verified service URL for the same `project_id`. Registration works while the
+service is stopped and prints the route as text when you omit `--json`. For a
+live run, share the printed URL as soon as it is available.
 
 Treat this as a sequence of tools to select from, not permission to execute a
 workflow. `init` never overwrites a file; in an existing project it only checks
@@ -303,12 +304,12 @@ for that project. Plain `start` stays foreground. The default address is
 `http://127.0.0.1:8787/`; use the actual URL from `status --json` or command output.
 An explicit `--port N` must be available and is remembered for that project.
 
-Commands never start a background service implicitly. With an explicit project,
-`run` still executes if the service is absent; `--open` reports how to start it.
-`plan --open` and `inspect --open` require the service too. Do not mix browser
-flags with JSON plan/inspect output. A run prints an available URL without
-`--open`; omit that flag when the person does not want a browser launch.
-The service loads no author code, but planning a source target can do so.
+For an FX-managed default browser launch, use `--open` when the user wants it.
+With an explicit project, `plan --open` and `inspect --open` use the project's
+running viewer, and `run` can execute while the service is stopped. For older
+installations, use `--standalone` to serve a plan or saved run and get its URL
+without a browser launch. The service loads recorded data. Planning a source
+target can load author code.
 
 A run reports its actual usable URL after initialization and before run-phase
 steps. Relay it promptly while continuing to supervise the run. Planning-time
@@ -321,12 +322,13 @@ not workflow execution, and preserves data. Service commands accept
 `--project DIRECTORY`. Background mode is detached from the terminal; it does
 not install automatic crash restart or login/boot activation.
 
-For probes and independent inspection, use `--standalone` even inside a project:
+For probes and independent inspection, use `--standalone` even inside a project.
+Add `--open` when the user wants FX to launch the default browser.
 
 ```sh
-grida fx run workflows/example.yaml --standalone --open
-grida fx plan workflows/example.yaml --standalone --open
-grida fx inspect runs/example --standalone --open
+grida fx run workflows/example.yaml --standalone
+grida fx plan workflows/example.yaml --standalone
+grida fx inspect runs/example --standalone
 ```
 
 No `init` or `start` is required. A standalone run's server uses an available

@@ -2,11 +2,11 @@
 //! The advisory lock owns a process lifetime; HTTP authentication owns stop authority. No PID
 //! found in a file is ever signalled, and no service command executes workflow code.
 
-use crate::cli::{LogsArgs, ServiceArgs, StartArgs};
+use crate::cli::{LogsArgs, ServiceArgs, StartArgs, StatusArgs};
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::providers::Declarations;
 use grida_fx_core::{Error, ErrorKind};
-use grida_fx_viewer::service::Catalog;
+use grida_fx_viewer::service::{Catalog, Entry};
 use serde_json::{Value, json};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -37,7 +37,7 @@ fn catalog(project: &Project) -> Result<Catalog, Error> {
         .map_err(|error| Error::io("project service catalog", &error))
 }
 
-fn owned_file(path: &Path, append: bool) -> io::Result<File> {
+fn owned_file(path: &Path, append: bool, create: bool) -> io::Result<File> {
     if let Ok(meta) = std::fs::symlink_metadata(path)
         && (!meta.is_file() || meta.file_type().is_symlink())
     {
@@ -49,7 +49,7 @@ fn owned_file(path: &Path, append: bool) -> io::Result<File> {
     options
         .read(true)
         .write(true)
-        .create(true)
+        .create(create)
         .truncate(false)
         .append(append);
     #[cfg(unix)]
@@ -117,7 +117,11 @@ fn status_value(catalog: &Catalog, state: &str) -> Value {
 }
 
 fn process_locked(catalog: &Catalog) -> io::Result<bool> {
-    let file = owned_file(&catalog.state_dir().join(LOCK), false)?;
+    let file = match owned_file(&catalog.state_dir().join(LOCK), false, false) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
     match file.try_lock() {
         Ok(()) => Ok(false),
         Err(std::fs::TryLockError::WouldBlock) => Ok(true),
@@ -223,9 +227,18 @@ fn print_status(value: &Value, json: bool) -> Result<(), Error> {
         .map_err(|error| Error::io("service output", &error))
 }
 
-pub fn status(args: &ServiceArgs) -> Result<u8, Error> {
-    let catalog = catalog(&project(args.project.as_deref())?)?;
-    let value = probe(&catalog);
+pub fn status(args: &StatusArgs) -> Result<u8, Error> {
+    let value = if let Some(root) = &args.project_root {
+        let catalog = Catalog::locate(Path::new(root))
+            .map_err(|error| Error::io("project directory", &error))?;
+        match catalog.has_state() {
+            Ok(true) => probe(&catalog),
+            Ok(false) => status_value(&catalog, "stopped"),
+            Err(_) => status_value(&catalog, "unavailable"),
+        }
+    } else {
+        probe(&catalog(&project(args.project.as_deref())?)?)
+    };
     print_status(&value, args.json)?;
     Ok(if value["state"] == "running" { 0 } else { 1 })
 }
@@ -321,7 +334,7 @@ fn foreground(
     args: &StartArgs,
     declarations: &Declarations,
 ) -> Result<u8, Error> {
-    let lock = owned_file(&catalog.state_dir().join(LOCK), false)
+    let lock = owned_file(&catalog.state_dir().join(LOCK), false, true)
         .map_err(|error| Error::io("service lock", &error))?;
     let deadline = Instant::now() + WAIT;
     loop {
@@ -512,7 +525,7 @@ fn background_with_executable(
     args: &StartArgs,
     executable: &Path,
 ) -> Result<u8, Error> {
-    let log = owned_file(&catalog.state_dir().join(LOG), true)
+    let log = owned_file(&catalog.state_dir().join(LOG), true, true)
         .map_err(|error| Error::io("service log", &error))?;
     let mut attempt = log
         .metadata()
@@ -690,40 +703,75 @@ pub fn logs(args: &LogsArgs) -> Result<u8, Error> {
 }
 
 /// Register before run-phase execution. Service absence never prevents recording the run.
-pub(crate) fn register_run(
-    project: &Project,
-    folder: &Path,
-    open: bool,
-) -> Result<Option<String>, Error> {
+pub(crate) fn register_run(project: &Project, folder: &Path) -> Result<Option<String>, Error> {
     let catalog = catalog(project)?;
     let entry = catalog
         .register_run(folder)
         .map_err(|error| Error::io("service run registration", &error))?;
-    registered_url(&catalog, &entry.url, open)
+    Ok(registered_url(&catalog, &entry.url))
 }
 
-pub(crate) fn register_plan(
+pub(crate) fn register_plan(project: &Project, graph: &Value) -> Result<Option<String>, Error> {
+    let (catalog, entry) = save_plan(project, graph)?;
+    Ok(registered_url(&catalog, &entry.url))
+}
+
+/// Registers an existing run and returns its stable catalog address.
+pub(crate) fn register_run_receipt(
+    project: &Project,
+    folder: &Path,
+    plan: &Value,
+    events: &[Value],
+) -> Result<Value, Error> {
+    let first = events
+        .first()
+        .ok_or_else(|| Error::usage("The run has no complete initial event."))?;
+    let catalog = catalog(project)?;
+    let entry = catalog
+        .register_inspected_run(folder, plan, first)
+        .map_err(|error| Error::io("service run registration", &error))?;
+    Ok(registration_receipt(&catalog, entry))
+}
+
+/// Persists a plan and reports its stable catalog address without probing service readiness.
+pub(crate) fn register_plan_receipt(
     project: &Project,
     graph: &Value,
-    open: bool,
-) -> Result<Option<String>, Error> {
+    plan_ok: bool,
+) -> Result<Value, Error> {
+    let (catalog, entry) = save_plan(project, graph)?;
+    let mut receipt = registration_receipt(&catalog, entry);
+    receipt["plan_ok"] = json!(plan_ok);
+    Ok(receipt)
+}
+
+fn registration_receipt(catalog: &Catalog, entry: Entry) -> Value {
+    json!({
+        "kind": format!("fx-{}-registration-v1", entry.kind),
+        "reference": {
+            "kind": "service_entry",
+            "project_id": catalog.project_id(),
+            "entry_kind": entry.kind,
+            "entry_id": entry.id,
+        },
+        "route": entry.url,
+    })
+}
+
+fn save_plan(project: &Project, graph: &Value) -> Result<(Catalog, Entry), Error> {
     let catalog = catalog(project)?;
     let entry = catalog
         .register_plan(graph)
         .map_err(|error| Error::io("service plan registration", &error))?;
-    registered_url(&catalog, &entry.url, open)
+    Ok((catalog, entry))
 }
 
-fn registered_url(catalog: &Catalog, path: &str, _open: bool) -> Result<Option<String>, Error> {
+fn registered_url(catalog: &Catalog, path: &str) -> Option<String> {
     let value = probe(catalog);
-    let Some(base) = value["url"]
+    let base = value["url"]
         .as_str()
-        .filter(|_| value["state"] == "running")
-    else {
-        return Ok(None);
-    };
-    let url = format!("{}{}", base.trim_end_matches('/'), path);
-    Ok(Some(url))
+        .filter(|_| value["state"] == "running")?;
+    Some(format!("{}{}", base.trim_end_matches('/'), path))
 }
 
 #[cfg(all(test, unix))]
@@ -817,7 +865,7 @@ mod tests {
         std::fs::write(root.path().join("fx.yaml"), "fx: project/v1\n").unwrap();
         let project = Project::find(root.path()).unwrap();
         let catalog = catalog(&project).unwrap();
-        let lock = owned_file(&catalog.state_dir().join(LOCK), false).unwrap();
+        let lock = owned_file(&catalog.state_dir().join(LOCK), false, true).unwrap();
         lock.try_lock().unwrap();
         let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();

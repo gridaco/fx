@@ -262,6 +262,9 @@ fn service_flags_and_viewing_flags_are_parsed_before_workflow_inputs() {
         vec!["plan", "missing.yaml", "--json", "--standalone"],
         vec!["inspect", "missing", "--json", "--open"],
         vec!["inspect", "missing", "--json", "--standalone"],
+        vec!["inspect", "missing", "--register", "--open"],
+        vec!["inspect", "missing", "--register", "--standalone"],
+        vec!["inspect", "missing", "--register", "--control"],
         vec!["run", "missing.yaml", "--standalone", "--no-view"],
     ] {
         let output = execute(root.path(), &args);
@@ -348,4 +351,42 @@ fn parallel_different_ports_have_one_winner_and_an_explicit_conflict() {
         format!("http://127.0.0.1:{expected}/")
     );
     assert_eq!(loser.status.code(), Some(2));
+}
+
+#[test]
+fn a_refused_plan_has_a_durable_receipt_without_probing_or_starting_a_service() {
+    let service = Service::new();
+    let output = execute(
+        service.path(),
+        &["plan", "icon", "--register", "--check", "--json"],
+    );
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let receipt: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(receipt["kind"], "fx-plan-registration-v1");
+    assert_eq!(receipt["plan_ok"], false);
+    let reference = &receipt["reference"];
+    assert_eq!(reference["kind"], "service_entry");
+    assert_eq!(reference["entry_kind"], "plan");
+    let parent = service.path().join("nested");
+    std::fs::create_dir(&parent).unwrap();
+    let read_status = |root: &Path| {
+        let result = command(service.path())
+            .args(["status", "--project-root"])
+            .arg(root)
+            .arg("--json")
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1));
+        serde_json::from_slice::<Value>(&result.stdout).unwrap()
+    };
+    let exact = read_status(service.path());
+    assert_eq!(exact["state"], "stopped");
+    assert_eq!(exact["project_id"], reference["project_id"]);
+    assert!(!service.path().join(".fx/service/process.lock").exists());
+    let other = read_status(&parent);
+    assert_eq!(other["state"], "stopped");
+    assert_ne!(other["project_id"], reference["project_id"]);
+    assert!(!parent.join(".fx").exists());
+    let graph = success(execute(service.path(), &["plan", "icon", "--json"]));
+    assert_eq!(graph["kind"], "fx-graph-v1");
 }

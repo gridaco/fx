@@ -26,13 +26,23 @@ pub fn run(args: &FilesArgs) -> Result<u8, Error> {
                             message: "The file reference is malformed.",
                         })
                     },
-                    |reference| {
-                        files::resolve(
-                            &cwd.join(&args.target),
+                    |reference| match (&args.target, project.as_deref()) {
+                        (Some(target), project) => files::resolve(
+                            &cwd.join(target),
                             &reference,
-                            project.as_deref(),
+                            project,
                             source_root.as_deref(),
-                        )
+                        ),
+                        (None, Some(project)) => files::resolve_service_entry(
+                            project,
+                            &reference,
+                            source_root.as_deref(),
+                        ),
+                        (None, None) => Err(FileError {
+                            kind: "fx-file-error-v1",
+                            code: "invalid_request",
+                            message: "A project binding is required to resolve a service entry.",
+                        }),
                     },
                 ),
                 args.json,

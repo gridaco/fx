@@ -8,9 +8,12 @@ The viewer API requires FX 0.8.1 or later. An older installed viewer may not
 expose `window.fx_viewer`, and an older `@grida/fx` package may not contain the
 client entry shown below.
 
-First open a plan or recorded run using [Viewing workflows and runs](07-viewing.md).
-The viewer must have loaded its evidence before context is available. Your
-application owns starting FX, opening the page, and activating its tab or window.
+When installed help lists `--register` for the command you are using, get the
+exact viewer route with [plan or saved-run registration](07-viewing.md#register-a-plan-or-saved-run).
+For earlier versions, serve the plan or saved run with `--standalone` and use the
+printed URL. See [Standalone inspection](07-viewing.md#standalone-inspection).
+Your application owns starting FX, opening the page, and activating its tab or
+window. The viewer must load its evidence before context is available.
 The API operates on that page's current content; it does not execute workflows,
 change execution picks, or modify run records.
 
@@ -233,9 +236,20 @@ const detach = await client.handleExternalFile(async (reference) => {
 detach();
 ```
 
-Your native implementation can use the ordinary SDK's record access. Bind the
-viewer subject to the exact record your application opened; never resolve a
-click by looking up whichever run happens to be newest later.
+Bind the viewer subject to the exact record your application opened. When
+`grida fx files resolve --help` shows an optional `TARGET`, trusted native code
+can resolve a captured service entry with
+`grida fx files resolve --project DIR --reference JSON --json`. Supply the
+authorized project directory and the complete captured reference. This catalog
+lookup also accepts `--service-entry` and works while its viewer is stopped.
+
+When installed help requires `TARGET`, pass the exact run folder or saved plan
+JSON file with `grida fx files resolve TARGET --project DIR --reference JSON --json`.
+Keep the returned local path in native code and enforce your application's
+file-opening permissions.
+
+The Python and JavaScript SDKs can also resolve a reference using the exact
+record your application opened:
 
 ```js
 import { loadRun } from "@grida/fx";

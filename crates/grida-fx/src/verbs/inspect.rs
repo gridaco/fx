@@ -8,8 +8,8 @@
 //! to the configured runs tree and does not follow symlinks. A folder without a readable
 //! fx-graph-v1 `plan.json` is `<run> is not a run folder` (exit 2). The log is read as `project`
 //! reads it; a folder with no log has run nothing.
-//! Text/JSON inspection writes nothing. Browser inspection may register the run in
-//! the selected project's private catalog; standalone inspection serves it directly.
+//! Ordinary inspection writes nothing. `--register` saves a catalog entry and reports its
+//! route. Browser inspection may also register the run; standalone inspection serves it directly.
 //!
 //! The steps: each plan instance that is not absent, in plan order, then each instance only the
 //! log names, in the order the log first names it. The last `node_*` event decides a step's state
@@ -79,8 +79,23 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
     let events = read_log(&folder, &label, false)?;
     let view = RunView::new(&plan, &events);
     let verification = args.verify.then(|| verify(&view, &folder));
+    let receipt = args
+        .register
+        .then(|| {
+            let project = Project::find(&cwd)?;
+            super::service::register_run_receipt(&project, &folder, &plan, &events)
+        })
+        .transpose()?;
     if args.json {
-        print_json(&json_document(&view, &label, verification.as_ref()));
+        let document = if let Some(mut receipt) = receipt {
+            if let Some(verification) = &verification {
+                receipt["verification"] = verification.document();
+            }
+            receipt
+        } else {
+            json_document(&view, &label, verification.as_ref())
+        };
+        print_json(&document);
     } else {
         let name = folder
             .components()
@@ -89,6 +104,12 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             .unwrap_or_else(|| label.clone());
         for line in text_lines(&view, &name, verification.as_ref()) {
             print_line(&line);
+        }
+        if let Some(receipt) = receipt {
+            print_line(&labelled(
+                "registered",
+                receipt["route"].as_str().unwrap_or_default(),
+            ));
         }
     }
     let status = u8::from(verification.is_some_and(|v| !v.problems.is_empty()));
@@ -106,7 +127,7 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             )?;
         } else {
             super::view::report_service(
-                super::service::register_run(&project, &folder, args.open),
+                super::service::register_run(&project, &folder),
                 args.open,
                 &declarations,
             );
@@ -447,6 +468,15 @@ struct Verification {
     problems: Vec<String>,
 }
 
+impl Verification {
+    fn document(&self) -> Value {
+        json!({
+            "verified": self.problems.is_empty(),
+            "problems": self.problems,
+        })
+    }
+}
+
 /// Re-checks every placed file of every succeeded step against its recorded digest.
 fn verify(view: &RunView, folder: &Path) -> Verification {
     let mut verification = Verification {
@@ -705,10 +735,7 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
         document["run"]["call_attempt_failures"] = json!(view.call_attempt_failures);
     }
     if let Some(verification) = verification {
-        document["verification"] = json!({
-            "verified": verification.problems.is_empty(),
-            "problems": verification.problems,
-        });
+        document["verification"] = verification.document();
     }
     document
 }

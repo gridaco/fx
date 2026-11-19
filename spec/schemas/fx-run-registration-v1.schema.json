@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-registration-v1",
+  "title": "Registered FX run",
+  "type": "object",
+  "required": ["kind", "reference", "route"],
+  "properties": {
+    "kind": { "const": "fx-run-registration-v1" },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "project_id", "entry_kind", "entry_id"],
+      "properties": {
+        "kind": { "const": "service_entry" },
+        "project_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "entry_kind": { "const": "run" },
+        "entry_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "route": { "type": "string", "pattern": "^/p/[a-f0-9]{64}/runs/[a-f0-9]{64}/$" },
+    "verification": {
+      "type": "object",
+      "required": ["verified", "problems"],
+      "properties": {
+        "verified": { "type": "boolean" },
+        "problems": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

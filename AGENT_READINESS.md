@@ -70,7 +70,7 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Pause | A future, explicitly defined suspension boundary from which work can continue. There is no pause operation today; cancellation is not a pause acknowledgment. |
 | Revise | Change authored inputs or workflow choices and plan again. Today this generally needs a new run folder; valid unchanged work can still be reused from the same cache. |
 | Take / reroll / pick | A take identifies an alternative. Reroll selects a later take for the next execution; pick selects a take. Neither command executes it immediately. |
-| Observe / inspect | Read execution evidence or inspect a saved run; `--open` can present it in the browser. Neither is permission to mutate the run. |
+| Observe / inspect | Read execution evidence or inspect a saved run. `--register` saves a viewer catalog entry and returns its route. `--open` launches the default browser. |
 | Service | A project-scoped process started by `start`, providing the dashboard, catalog and observation HTTP endpoints. Workflow execution has a separate owner and lifetime. |
 | Standalone | Independent inspection with its own available port and foreground owner. It does not mean a fresh cache or different execution semantics. |
 | Project / projection | `init` establishes the recommended `fx.yaml` project; standalone use remains supported. The unrelated `project <run>` command projects recorded events into state. |
@@ -112,6 +112,7 @@ narrower target rules.
 | Observe: `observe <run> --snapshot`, `observe <run> --after <cursor>`, `project <run>`, `inspect <run> --json` | Consistent snapshot, bounded event batches, state projection or summary | Read recorded data without executing workflow code. A step queued for its route's slot is `waiting` (with `waiting_for`), not `running`. Use a precise folder or `inspect <workflow-id>/<name>`; `inspect <workflow-id>` chooses the newest-created run, including failures, and refuses ambiguous recorded sources. Keep the emitted folder for observation commands. |
 | Control: `inspect RUN --control --json`, `cancel RUN [--invocation ID] [--wait] [--timeout 30s] --json` | Selected invocation, verified availability, acceptance or local completion | Exact folder or WORKFLOW_ID/NAME only. No author code, service or provider access. Wait never forces; external completion stays unverified. Python inspect_control/cancel and JavaScript inspectControl/cancel preserve the same structured result. |
 | Verify: `inspect <run> --verify --json` | Recorded summary with placed-file verification | Checks the recorded bytes, not artistic quality, external side effects, or the accuracy of a provider bill. |
+| Register for viewing: `plan TARGET --register [--json]`, `inspect RUN --register [--json]` | Relative route, with a stable catalog reference in JSON | Materializes a plan or reads the selected saved run. Registration works while the project service is stopped and leaves presentation to the caller. Repeat registration keeps the same entry for the same evidence. `inspect --register --verify` also checks recorded files, adds verification details to the JSON receipt, and exits 1 on verification problems. Use `status --project-root DIRECTORY --json` to verify the service at an exact project binding. |
 | Open browser: `plan <target> --open`, `inspect <run> --open` | A selected plan/run page in the running project service | Explicit project startup required. Source targets plan once; saved runs read records. `--standalone` hosts independently until interrupted; projectless browser inspection does this by default. Run pages follow recorded events and resumes; plans stay static. `view` remains hidden compatibility syntax, including saved-plan files. |
 | Resume: `run <target> ... --resume NAME`, or repeat `--run FOLDER` | Another invocation in the existing folder | A named resume requires an existing name; repeat current inputs/routes/takes/builder arguments explicitly. Requires the same plan digest and stand-in mode, and no other writer. A changed plan is refused rather than silently replacing history. Recorded spend and original creation time carry forward; resume does not reset the budget ledger or promote the record as newly created. |
 | Choose alternatives: `reroll <run> <step-path>`, `pick <run> <step-path> <take>` | Takes-file mutation and a `next` line | Affect a later plan/run, not the active scheduler; both refuse stand-in runs. `next` is the command that repeats the run, rebuilt from its latest `run_started` `repeat` (target, inputs files, route tables, `--max-usd`, and `--live` only when the run was live); a run given input flags, `--arg`, a file outside the project, or started by an SDK gets advice to run it again instead. Running that command can spend: it needs the same approval as the original run. Reroll's `--live` is accepted and ignored. Picking may still require generation of the selected take or downstream work. CLI-only: SDK callers repeat a run by calling `run` again with the same request. |
@@ -174,8 +175,10 @@ grida fx start --background --json
 grida fx status --json
 grida fx schema workflows/example.yaml
 grida fx plan workflows/example.yaml --inputs inputs.yaml --check --json
-grida fx run workflows/example.yaml --inputs inputs.yaml --run runs/example --open
+grida fx plan workflows/example.yaml --inputs inputs.yaml --register --json
+grida fx run workflows/example.yaml --inputs inputs.yaml --run runs/example
 grida fx inspect runs/example --verify --json
+grida fx inspect runs/example --register --json
 ```
 
 These are individual operations, not an unconditional script. Resolve validation
@@ -187,8 +190,10 @@ readiness. Preserve existing project settings rather than replacing them.
 an actual usable run URL after initialization and before run-phase execution.
 An agent can relay it immediately while supervising execution; planning-time code
 precedes it. The service keeps that page available after completion and across
-service restarts while the record is retained. `--open` requests browser launch;
-otherwise report the printed URL. Do not synthesize a URL from filesystem paths.
+service restarts while the record is retained. Report the printed URL and use
+`--open` when the user asks FX to launch the default browser. For plans and saved
+runs, resolve the registered route against the verified address for the same
+project ID.
 
 Commands never start a background service implicitly. An absent project service
 does not prevent execution; `--open` reports the startup prerequisite. For a probe,
@@ -712,6 +717,13 @@ complete-target matching and ambiguous digest omissions; a label alone cannot
 establish a source file's owning root. Host menus, OS-specific opening,
 historical source recovery and publishing a component SDK remain outside this
 delivery.
+
+Plan and saved-run registration, exact service status, and file resolution based
+on only the project and captured service-entry reference are CLI jobs. The SDKs
+resolve files when given an exact native run folder or saved graph. The
+[service CLI tests](crates/grida-fx/tests/service_run.rs) cover stable registration
+across a service address change. The [file CLI tests](crates/grida-fx/tests/files.rs)
+cover resolution from exact recorded evidence while the service is stopped.
 
 ## Gaps that should guide design
 

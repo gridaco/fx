@@ -3,7 +3,7 @@
 //! No workflow source is loaded or executed. Artifact lookup shares the verified HTTP
 //! inventory; source lookup uses only recorded labels and an explicit native source root.
 
-use crate::{read, service};
+use crate::{Source, read, service};
 use grida_fx_core::value::{digest, is_digest, parse_json};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -432,15 +432,69 @@ pub fn resolve(
     project: Option<&Path>,
     source_root: Option<&Path>,
 ) -> Result<Value, FileError> {
+    let requested = requested_target(reference)?;
+    let subject = &reference["subject"];
+    let source = RecordedSource::open(path)?;
+    validate_subject(&source, subject)?;
+    if let Some(entry) = ServiceEntryReference::read(subject)? {
+        let root = project
+            .and_then(|path| path.canonicalize().ok())
+            .ok_or_else(stale_subject)?;
+        if digest(&json!(["fx-local-project-v1", root])) != entry.project_id {
+            return Err(stale_subject());
+        }
+        let matches = match &source {
+            RecordedSource::Run(run, _) => service::matches_run_entry(&root, entry.id, run),
+            RecordedSource::Plan(graph) => service::matches_plan_entry(&root, entry.id, graph),
+        };
+        if !matches.unwrap_or(false) {
+            return Err(stale_subject());
+        }
+    }
+    resolve_target(&source, requested, project, source_root)
+}
+
+/// Resolves one portable file reference against its exact registered service entry. The caller
+/// supplies its local project binding. This reads the catalog directly without running a service.
+pub fn resolve_service_entry(
+    project: &Path,
+    reference: &Value,
+    source_root: Option<&Path>,
+) -> Result<Value, FileError> {
+    let requested = requested_target(reference)?;
+    let subject = &reference["subject"];
+    let entry = ServiceEntryReference::read(subject)?.ok_or_else(invalid_request)?;
+    let catalog = service::Catalog::locate(project).map_err(|_| stale_subject())?;
+    if catalog.project_id() != entry.project_id {
+        return Err(stale_subject());
+    }
+    let source = match catalog
+        .source(entry.id, entry.route_kind)
+        .map_err(|_| stale_subject())?
+    {
+        Source::Run(path) => RecordedSource::open(&path)?,
+        Source::Plan(graph) => RecordedSource::Plan(std::sync::Arc::unwrap_or_clone(graph)),
+    };
+    validate_subject(&source, subject)?;
+    resolve_target(&source, requested, Some(project), source_root)
+}
+
+fn requested_target(reference: &Value) -> Result<&Value, FileError> {
     if reference.as_object().is_none_or(|object| {
         object.len() != 2 || !object.contains_key("subject") || !object.contains_key("target")
     }) || !valid_target(&reference["target"])
     {
         return Err(invalid_request());
     }
-    let source = RecordedSource::open(path)?;
-    validate_subject(&source, &reference["subject"], project)?;
-    let requested = &reference["target"];
+    Ok(&reference["target"])
+}
+
+fn resolve_target(
+    source: &RecordedSource,
+    requested: &Value,
+    project: Option<&Path>,
+    source_root: Option<&Path>,
+) -> Result<Value, FileError> {
     let inventory = source.list(None, None)?;
     let matching: Vec<_> = inventory["files"]
         .as_array()
@@ -469,7 +523,7 @@ pub fn resolve(
             let digest = target["artifact"]["digest"]
                 .as_str()
                 .ok_or_else(invalid_request)?;
-            match &source {
+            match source {
                 RecordedSource::Run(root, snapshot) => {
                     match snapshot.open_artifact_with_path(root, digest) {
                         Ok((_, _, path)) => (Some(path), None, None),
@@ -580,11 +634,7 @@ fn source_digest(file: &mut fs::File) -> io::Result<String> {
     Ok(format!("{:x}", hash.finalize()))
 }
 
-fn validate_subject(
-    source: &RecordedSource,
-    subject: &Value,
-    project: Option<&Path>,
-) -> Result<(), FileError> {
+fn validate_subject(source: &RecordedSource, subject: &Value) -> Result<(), FileError> {
     let Some(subject_fields) = subject.as_object() else {
         return Err(invalid_request());
     };
@@ -619,36 +669,44 @@ fn validate_subject(
             return Err(stale_subject());
         }
     }
-    let Some(reference) = subject.get("reference") else {
-        return Ok(());
-    };
-    if reference["kind"] != "service_entry" {
-        return Err(stale_subject());
-    }
-    let (Some(project_id), Some(entry_id), Some(entry_kind)) = (
-        reference["project_id"].as_str().filter(|id| is_digest(id)),
-        reference["entry_id"].as_str().filter(|id| is_digest(id)),
-        reference["entry_kind"].as_str(),
-    ) else {
-        return Err(invalid_request());
-    };
-    if reference.as_object().is_none_or(|fields| fields.len() != 4) || entry_kind != expected_kind {
-        return Err(invalid_request());
-    }
-    let root = project
-        .and_then(|path| path.canonicalize().ok())
-        .ok_or_else(stale_subject)?;
-    if digest(&json!(["fx-local-project-v1", root])) != project_id {
-        return Err(stale_subject());
-    }
-    let matches = match source {
-        RecordedSource::Run(run, _) => service::matches_run_entry(&root, entry_id, run),
-        RecordedSource::Plan(graph) => service::matches_plan_entry(&root, entry_id, graph),
-    };
-    if !matches.unwrap_or(false) {
-        return Err(stale_subject());
-    }
     Ok(())
+}
+
+struct ServiceEntryReference<'a> {
+    project_id: &'a str,
+    id: &'a str,
+    route_kind: &'static str,
+}
+
+impl<'a> ServiceEntryReference<'a> {
+    fn read(subject: &'a Value) -> Result<Option<Self>, FileError> {
+        let Some(reference) = subject.get("reference") else {
+            return Ok(None);
+        };
+        if reference["kind"] != "service_entry" {
+            return Err(stale_subject());
+        }
+        let (Some(project_id), Some(id), Some(kind)) = (
+            reference["project_id"].as_str().filter(|id| is_digest(id)),
+            reference["entry_id"].as_str().filter(|id| is_digest(id)),
+            reference["entry_kind"].as_str(),
+        ) else {
+            return Err(invalid_request());
+        };
+        if reference.as_object().is_none_or(|fields| fields.len() != 4) || subject["kind"] != kind {
+            return Err(invalid_request());
+        }
+        let route_kind = match kind {
+            "run" => "runs",
+            "plan" => "plans",
+            _ => return Err(invalid_request()),
+        };
+        Ok(Some(Self {
+            project_id,
+            id,
+            route_kind,
+        }))
+    }
 }
 
 #[cfg(test)]

@@ -67,13 +67,13 @@ pub enum Verb {
     /// start the project FX service; workflow execution remains independent
     Start(StartArgs),
     /// show the project service status and verified URL
-    Status(ServiceArgs),
+    Status(StatusArgs),
     /// stop the project service without stopping workflow runs
     Stop(ServiceArgs),
     /// read the latest project service log lines
     Logs(LogsArgs),
     /// expand, check and price a workflow; never spends
-    Plan(PlanArgs),
+    Plan(PlanCommandArgs),
     /// the expanded graph, as JSON
     Expand(PlanArgs),
     /// each instance's identity, as JSON
@@ -182,6 +182,19 @@ pub struct StartArgs {
 }
 
 #[derive(Debug, Args, Clone)]
+pub struct StatusArgs {
+    /// directory in the project (default: here)
+    #[arg(long, value_name = "DIRECTORY")]
+    pub project: Option<String>,
+    /// exact local project directory, without ancestor discovery
+    #[arg(long, conflicts_with = "project", value_name = "DIRECTORY")]
+    pub project_root: Option<String>,
+    /// print the verified service status as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Debug, Args, Clone)]
 pub struct ServiceArgs {
     /// directory in the project (default: here)
     #[arg(long, value_name = "DIRECTORY")]
@@ -199,6 +212,15 @@ pub struct LogsArgs {
     /// number of final lines, from 1 to 10000
     #[arg(long, default_value_t = 100)]
     pub lines: usize,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct PlanCommandArgs {
+    #[command(flatten)]
+    pub plan: PlanArgs,
+    /// save the materialized plan to the project catalog and print its viewer route
+    #[arg(long, conflicts_with_all = ["open", "standalone", "prepared"])]
+    pub register: bool,
 }
 
 /// The common options of the planning verbs, plus the verb-specific flags.
@@ -230,13 +252,13 @@ pub struct PlanArgs {
     /// plan: exit 1 when the plan has problems
     #[arg(long)]
     pub check: bool,
-    /// plan: print the graph as JSON
+    /// plan: print the graph or registration receipt as JSON
     #[arg(long)]
     pub json: bool,
     /// plan: exit 1 unless every step is cached
     #[arg(long = "expect-cached")]
     pub expect_cached: bool,
-    /// plan: open the materialized plan in the running project service
+    /// plan: open the materialized plan in the default browser
     #[arg(long, conflicts_with = "json")]
     pub open: bool,
     /// plan: serve this plan in a foreground viewer on an available port
@@ -584,12 +606,16 @@ pub struct FilesListArgs {
 
 #[derive(Debug, Args, Clone)]
 pub struct FilesResolveArgs {
-    /// an existing run folder or saved plan JSON file
-    pub target: String,
+    /// a run folder or saved plan JSON file; omit for a catalog reference
+    #[arg(required_unless_present_any = ["project", "service_entry"])]
+    pub target: Option<String>,
+    /// compatibility spelling for catalog lookup
+    #[arg(long, conflicts_with = "target", requires = "project", hide = true)]
+    pub service_entry: bool,
     /// captured {subject,target} JSON reference
     #[arg(long, value_name = "JSON")]
     pub reference: String,
-    /// explicit local project/catalog binding; also the default source root
+    /// local project binding and default source root; required without TARGET
     #[arg(long, value_name = "DIRECTORY")]
     pub project: Option<String>,
     /// owning workflow source root when different from the project binding
@@ -613,13 +639,16 @@ pub struct InspectArgs {
     /// re-check every placed file against its record
     #[arg(long)]
     pub verify: bool,
-    /// print the summary as JSON
+    /// print the summary or registration receipt as JSON
     #[arg(long)]
     pub json: bool,
     /// observe verified local control for an exact run folder or WORKFLOW_ID/NAME
     #[arg(long, conflicts_with_all = ["open", "standalone", "verify"])]
     pub control: bool,
-    /// open the recorded run in the running project service
+    /// register the recorded run in the project catalog and print its viewer route
+    #[arg(long, conflicts_with_all = ["open", "standalone", "control"])]
+    pub register: bool,
+    /// open the recorded run in the default browser
     #[arg(long, conflicts_with = "json")]
     pub open: bool,
     /// serve this recorded run in a foreground viewer on an available port
@@ -794,7 +823,13 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Status(args) => verbs::service::status(&args),
         Verb::Stop(args) => verbs::service::stop(&args),
         Verb::Logs(args) => verbs::service::logs(&args),
-        Verb::Plan(args) => planning(PlanVerb::Plan, args, rest),
+        Verb::Plan(args) => planning(
+            PlanVerb::Plan {
+                register: args.register,
+            },
+            args.plan,
+            rest,
+        ),
         Verb::Expand(args) => planning(PlanVerb::Expand, args, rest),
         Verb::Identity(args) => planning(PlanVerb::Identity, args, rest),
         Verb::Price(args) => planning(PlanVerb::Price, args, rest),
@@ -884,6 +919,7 @@ mod tests {
         else {
             panic!("not plan")
         };
+        let plan = plan.plan;
         assert_eq!(plan.max_usd.as_deref(), Some("-2"));
         assert!(plan.check);
         assert_eq!(plan.inputs, ["a.yaml", "b.yaml"]);

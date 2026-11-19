@@ -126,23 +126,25 @@ impl Record {
 impl Catalog {
     /// Opens local state beneath the canonical project root. No workflow code is loaded.
     pub fn open(root: &Path, runs_dir: &Path) -> io::Result<Self> {
+        let mut catalog = Self::locate(root)?;
+        catalog.runs_dir = catalog.root.join(runs_dir);
+        private_dir(&catalog.root.join(".fx"), false)?;
+        private_dir(&catalog.state_dir, true)?;
+        private_ignore(&catalog.state_dir)?;
+        private_dir(&catalog.state_dir.join("entries"), true)?;
+        Ok(catalog)
+    }
+
+    /// Binds an exact project directory without creating local service state.
+    pub fn locate(root: &Path) -> io::Result<Self> {
         let root = root.canonicalize()?;
         if !root.is_dir() {
             return Err(invalid("The project root is not a directory."));
         }
-        let fx_dir = root.join(".fx");
-        private_dir(&fx_dir, false)?;
-        let state_dir = fx_dir.join("service");
-        private_dir(&state_dir, true)?;
-        private_ignore(&state_dir)?;
-        private_dir(&state_dir.join("entries"), true)?;
+        let state_dir = root.join(".fx/service");
         let project_id = digest(&json!(["fx-local-project-v1", root]));
         Ok(Self {
-            runs_dir: if runs_dir.is_absolute() {
-                runs_dir.to_path_buf()
-            } else {
-                root.join(runs_dir)
-            },
+            runs_dir: root.join("runs"),
             root,
             state_dir,
             project_id,
@@ -156,13 +158,44 @@ impl Catalog {
         &self.state_dir
     }
 
+    /// Reports whether confined service state already exists, without creating it.
+    pub fn has_state(&self) -> io::Result<bool> {
+        match self.check_state() {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Registers an explicitly selected existing run. This operation is available only to local
     /// callers, never as an HTTP endpoint accepting browser-provided filesystem paths.
     pub fn register_run(&self, run: &Path) -> io::Result<Entry> {
+        self.register_matching_run(run, None)
+    }
+
+    /// Registers a run only if it still matches the recorded evidence read by inspection.
+    pub fn register_inspected_run(
+        &self,
+        run: &Path,
+        graph: &Value,
+        initial_event: &Value,
+    ) -> io::Result<Entry> {
+        let expected = recorded_run_identity(graph, initial_event.clone());
+        let entry = self.register_matching_run(run, Some(&expected))?;
+        if entry.state == "unavailable" {
+            return Err(invalid("The inspected run folder is unavailable."));
+        }
+        Ok(entry)
+    }
+
+    fn register_matching_run(&self, run: &Path, expected: Option<&str>) -> io::Result<Entry> {
         self.check_state()?;
         let root = run.canonicalize()?;
         let details = run_details(&root)?;
         let identity = details.identity;
+        if expected.is_some_and(|expected| expected != identity) {
+            return Err(invalid("The inspected run folder has been replaced."));
+        }
         let id = digest(&json!(["fx-local-run-v1", root, identity]));
         let record = Record::Run {
             id,
@@ -277,23 +310,7 @@ impl Catalog {
         if !is_digest(id) {
             return Err(invalid("Unknown catalog entry."));
         }
-        let path = read::confined_file(&self.state_dir, &format!("entries/{id}.json"))?;
-        let file = File::open(path)?;
-        if file.metadata()?.len() > MAX_RECORD_BYTES {
-            return Err(invalid("The catalog entry is too large."));
-        }
-        let record: Record = serde_json::from_reader(file)
-            .map_err(|_| invalid("The catalog entry cannot be read."))?;
-        let expected = match &record {
-            Record::Run { root, identity, .. } => {
-                digest(&json!(["fx-local-run-v1", root, identity]))
-            }
-            Record::Plan { graph, .. } => digest(&json!(["fx-local-plan-v1", graph])),
-        };
-        if record.id() != id || expected != id {
-            return Err(invalid("The catalog entry identity differs."));
-        }
-        Ok(record)
+        read_entry(&self.state_dir.join("entries"), id)
     }
 
     fn entry(&self, record: &Record) -> Entry {
@@ -361,7 +378,7 @@ impl Catalog {
         timestamp(time)
     }
 
-    fn source(&self, id: &str, kind: &str) -> io::Result<Source> {
+    pub(crate) fn source(&self, id: &str, kind: &str) -> io::Result<Source> {
         match self.record(id)? {
             Record::Run { root, identity, .. } if kind == "runs" => {
                 checked_run(&root, &identity)?;
@@ -544,8 +561,7 @@ fn entries_dir(project_root: &Path) -> io::Result<Option<PathBuf>> {
 
 /// One entry, checked as [`Catalog::record`] checks it.
 fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
-    let path = read::confined_file(entries, &format!("{id}.json"))?;
-    let file = File::open(path)?;
+    let (file, _) = read::open_confined_file(entries, &format!("{id}.json"))?;
     if file.metadata()?.len() > MAX_RECORD_BYTES {
         return Err(invalid("The catalog entry is too large."));
     }
@@ -598,7 +614,7 @@ fn run_details(root: &Path) -> io::Result<RunDetails> {
     if first_line.last() != Some(&b'\n') {
         return Err(invalid("The run has no complete initial event."));
     }
-    let mut first: Value = serde_json::from_slice(&first_line)
+    let first: Value = serde_json::from_slice(&first_line)
         .map_err(|_| invalid("The initial run event cannot be read."))?;
     if first["kind"] != "fx-run-events-v1" || first["event"] != "run_started" {
         return Err(invalid("The run has no initial run_started event."));
@@ -612,15 +628,8 @@ fn run_details(root: &Path) -> io::Result<RunDetails> {
     );
     let created_at = normalize_time(&created_at).unwrap_or(created_at);
     let name = name.filter(|name| safe_name(name));
-    if let Some(first) = first.as_object_mut() {
-        first.remove("created_at");
-        first.remove("name");
-    }
-    // The first invocation remains unchanged when execution resumes. Its event also
-    // supports older records lacking invocation_id without tying URLs to the latest invocation.
-    // Presentation metadata does not identify execution or alter existing legacy URLs.
     Ok(RunDetails {
-        identity: digest(&json!([graph, first])),
+        identity: recorded_run_identity(&graph, first),
         title: graph_title(&graph),
         metadata: RunMetadata {
             created_at,
@@ -628,6 +637,15 @@ fn run_details(root: &Path) -> io::Result<RunDetails> {
             name,
         },
     })
+}
+
+fn recorded_run_identity(graph: &Value, mut first: Value) -> String {
+    if let Some(first) = first.as_object_mut() {
+        first.remove("created_at");
+        first.remove("name");
+    }
+    // Resumes retain the first invocation, including legacy events without invocation_id.
+    digest(&json!([graph, first]))
 }
 
 fn checked_run(root: &Path, identity: &str) -> io::Result<()> {

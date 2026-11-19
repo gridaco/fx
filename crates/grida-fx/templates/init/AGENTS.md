@@ -10,12 +10,11 @@ compare it with `grida fx --version`.
 
 ## Rules
 
-- **Show the live viewer, not a summary of it.** When the project's service is running
-  (`grida fx status --json`), give the user the viewer's URL for what you are working on: the
-  plan while you design a workflow (`grida fx plan <workflow> --open`), the run while it runs
-  (`grida fx run … --open`), and the recorded run afterwards. The viewer updates live, so the
-  user sees each step as it happens. Do not try to present the final renders yourself instead.
-  Start the service with `grida fx start --background` when the user wants it.
+- **Share the viewer URL.** For a plan or saved run, use `grida fx plan <workflow> --register --json`
+  or `grida fx inspect <run> --register --json` when installed help lists `--register`. Use the
+  returned route with the verified address for the same project (`grida fx status --json`). For a
+  live run, share the URL `grida fx run` prints. Use `--open` when the user wants FX to launch the
+  default browser. Start the service with `grida fx start --background` when the user wants it.
 - **Discover before guessing.** `grida fx nodes`, `grida fx nodes <type>` and
   `grida fx schema workflows/<file>.yaml` list what is installed; `grida fx --help` lists commands.
 - **Plan first.** `grida fx plan <workflow>` never spends. Show the user its steps and estimate.
