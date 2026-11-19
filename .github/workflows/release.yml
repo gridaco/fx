@@ -4,7 +4,8 @@ name: release
 # around each one, holds every package to the conformance suite as installed, and then (for a
 # v* tag, once a reviewer approves the "release" environment) publishes them: npm under the
 # dist-tag latest for stable versions or next for pre-releases. PyPI uses the Python manifest
-# version. RELEASING.md has the owner's steps.
+# version. After both registries succeed, the workflow publishes the tagged changelog on GitHub.
+# RELEASING.md has the owner's steps.
 #
 # A workflow_dispatch run is a dry run unless dry_run is unchecked on a v* tag: it builds and
 # checks everything and publishes nothing. Windows is not in the preview: the engine's runner uses
@@ -60,6 +61,13 @@ jobs:
           print=(uv run --no-project --python 3.12 tools/check_versions.py --print)
           echo "version=$("${print[@]}" semver)" >> "$GITHUB_OUTPUT"
           echo "python_version=$("${print[@]}" pep440)" >> "$GITHUB_OUTPUT"
+      - name: Prepare GitHub Release notes from the versioned changelog
+        run: uv run --no-project --python 3.12 tools/release_notes.py > "$RUNNER_TEMP/release-notes.md"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
 
   viewer:
     name: Build viewer assets
@@ -343,3 +351,34 @@ jobs:
           packages-dir: dist/wheels/
           skip-existing: true
           print-hash: true
+
+  github_release:
+    name: Publish GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+      - name: Announce the published packages
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          draft=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f tag="$GITHUB_REF_NAME" \
+            -f query='query($owner: String!, $repo: String!, $tag: String!) {
+              repository(owner: $owner, name: $repo) { release(tagName: $tag) { isDraft } }
+            }' --jq '.data.repository.release.isDraft | tostring')
+          case "$draft" in
+            false) echo "$GITHUB_REF_NAME already has a published release"; exit 0 ;;
+            true) echo "::error::A draft release already exists for $GITHUB_REF_NAME"; exit 1 ;;
+            null) ;; # No release for this tag yet.
+            *) echo "::error::Unexpected release lookup result"; exit 1 ;;
+          esac
+          flags=(--verify-tag --title "Grida FX ${GITHUB_REF_NAME#v}" --notes-file release-notes.md)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease --latest=false); fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"

@@ -4,6 +4,9 @@ Notable changes to Grida FX are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers use
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Starting with 0.11.0, each [GitHub Release](https://github.com/gridaco/fx/releases)
+publishes the corresponding notes and links to the packages on npm and PyPI.
+
 The initial backfill lists selected highlights and uses Git tag dates in Asia/Seoul,
 with the tagged commit date for the lightweight `v0.4.0` tag.
 
