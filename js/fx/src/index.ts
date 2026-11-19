@@ -9,7 +9,7 @@
  * (`dist/host-entry.js`, Node 24 or later).
  */
 
-export const version = "0.10.0";
+export const version = "0.11.0";
 
 export {
   type Accepted,

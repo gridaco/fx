@@ -5,7 +5,7 @@
 > plans its price, runs only what changed, caches every result by content, reserves every paid call
 > against a ceiling, and records how each result was made. The command is `grida fx`.
 
-Version: 0.10.0
+Version: 0.11.0
 
 This file is the reference for people and coding agents using FX: what exists, how to write it,
 and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
@@ -881,7 +881,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   disclosure, and older exports without them show all three categories. Export refusal
   `invalid_viewer_config` means current project configuration cannot supply valid display
   defaults; fix `fx.yaml` and export again, without rerunning the workflow.
-- **Visible workflow data.** Current source records effective inputs (including defaults),
+- **Visible workflow data.** FX records effective inputs (including defaults),
   shared tables, contextual `let` results and outputs as read-only value evidence. Input and
   output cards use labelled data sheets with monospaced binding names. Tables and `let`
   results are available at consuming ports, without standalone cards by default.
@@ -917,7 +917,6 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   Explicitly revealing a normally omitted value temporarily adds that selected card;
   changing selection removes it. Contextual occurrences retain their distinct recorded IDs.
   Default clients see null for value selection; contexts contain references, never values.
-  Source support does not imply an older release contains it.
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
@@ -925,14 +924,16 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `grida fx inspect RUN --register` registers the selected saved run. Both print the relative
   viewer route without starting a service or opening a browser. Add `--json` for the
   `fx-plan-registration-v1` or `fx-run-registration-v1` receipt with `reference` and `route`.
-  The plan receipt also reports `plan_ok`. With `inspect --register --verify --json`, the
-  receipt also includes `verification` (`verified` and `problems`). Verification problems
-  return exit status 1. Registration works while the service is stopped.
+  The plan receipt reports `plan_ok`. A materialized plan can register even when it has
+  planning problems. Use `--check` to require a passing plan.
+  With `inspect --register --verify --json`, the receipt also includes `verification`
+  (`verified` and `problems`). Verification problems return exit status 1. Registration
+  works while the service is stopped.
   Use `status --project-root DIR --json` or `start --background --json` for the verified base
   URL, and use the receipt's route for the same project. An exact status read does not
   discover ancestors or create service state. `--register` conflicts with `--open` and
-  `--standalone`. To serve a page independently and launch the default browser, combine
-  `--standalone --open`.
+  `--standalone`. On `inspect`, it also conflicts with `--control`. To serve a page
+  independently and launch the default browser, combine `--standalone --open`.
 - **Viewer context and presentation.** The engine-shipped page exposes
   `window.fx_viewer.getContext()`, `.subscribe(listener)` (returns unsubscribe), and
   `.present(action)` to browser automation in that page. Context identifies the
@@ -955,7 +956,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   An opener/parent is not automatically trusted. HTTP/framing policies remain unchanged.
   The client does not launch FX, manage tabs or retry presentation on timeout.
   See https://github.com/gridaco/fx/blob/main/spec/viewer.md for wire protocol v1.
-- **External viewer files.** A matching source build exposes
+- **External viewer files.** Use
   `await client.handleExternalFile(handler)` (returns detach), or synchronous
   `window.fx_viewer.handleExternalFile(handler)` in the viewer realm. The handler
   receives `{subject, target}` captured at activation: `target.kind` is `artifact`
@@ -1305,7 +1306,7 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.10.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.11.0" } }
 ```
 
 ```ts

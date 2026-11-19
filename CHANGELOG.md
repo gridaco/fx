@@ -9,11 +9,13 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-20
+
 ### Added
 
-- Register a plan or saved run with `--register` to get its viewer route without launching a browser. Host apps can resolve the route and files using the exact project. [#153](https://github.com/gridaco/fx/issues/153)
-- Copy a private GitHub template with `grida fx add OWNER/REPO@REF --github-auth` using your existing GitHub CLI authentication. [#151](https://github.com/gridaco/fx/issues/151)
-- Generate one image from the terminal with `grida fx call image.generate`. Use a project route or select one explicitly, check it with `--dry-run`, and get a PNG and a normal run record. [#149](https://github.com/gridaco/fx/issues/149)
+- Register a plan or saved run with `--register` to get its viewer route without launching a browser. Host apps can resolve the route and files using the exact project. [#144](https://github.com/gridaco/fx/pull/144)
+- Copy a private GitHub template with `grida fx add OWNER/REPO@REF --github-auth` using your existing GitHub CLI authentication. [#152](https://github.com/gridaco/fx/pull/152)
+- Generate one image from the terminal with `grida fx call image.generate`. Use a project route or select one explicitly, check it with `--dry-run`, and get a PNG and a normal run record. [#150](https://github.com/gridaco/fx/pull/150)
 
 ### Changed
 
@@ -116,7 +118,8 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 - Preview tag for the first stable release.
 
-[Unreleased]: https://github.com/gridaco/fx/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/gridaco/fx/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/gridaco/fx/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/gridaco/fx/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/gridaco/fx/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/gridaco/fx/compare/v0.8.0...v0.8.1
