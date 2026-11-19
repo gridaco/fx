@@ -211,6 +211,9 @@ step_identity = digest({
 - The step's path, name and instance id are not part of it. Identical work in two places has one identity and runs once in a run: an instance whose identity another instance of the same run is running waits for it, and the result cache then answers it. If that instance fails, the waiting one runs on its own. Runs in other processes that share the store do not wait for each other. Such work is priced once per phase as well: of a phase's live instances that share an identity, a plan's estimate and phase totals and a run's phase gate price only the first in listing order, and the gate prices nothing for an instance whose identity has a succeeded result in the run. A copy in another phase is priced again, since each phase is approved on its own price.
 - If `with_values` contains a pending value, the identity is `null` until the values it waits on exist.
 
+For a fresh invocation (§10), use the same object with
+`"kind": "fx-step-fresh-v1"` and add its `fresh_id`.
+
 Upstream results enter by content: a file an upstream step wrote is `{"file": digest}`. An upstream step that runs again and writes the same bytes therefore leaves every downstream identity unchanged.
 
 A workflow step's optional [`preview`](previews.md) names its own output ports for display.
@@ -240,6 +243,10 @@ The **canonical request** is the JSON the capability receives:
 
 A call record keeps its canonical request with nothing removed or added, because requests never carry secrets: keys travel in the transport, never in the request. A record is therefore enough to recompute its own key.
 
+For a fresh invocation (§10), use the same object with
+`"kind": "fx-call-fresh-v1"` and add its `fresh_id`. Call and job records for
+this invocation carry the same `fresh_id`, outside the canonical request.
+
 ## 10. Plan digest
 
 A run folder records the digest of the plan it ran. Resuming a run whose plan digest has changed is refused.
@@ -259,11 +266,24 @@ plan_digest = digest({
 - Adding or editing a step's `preview` declaration changes that authored document and therefore
   the plan digest. It requires a new run folder; identical work can still reuse the result and
   call caches. Other presentation metadata is not exempt from this authored-document rule.
-- `source` is the document's project-relative POSIX path, or `<path>:<function>` for a builder.
+- `source` is the document's project-relative POSIX path, `<path>:<function>` for a
+  builder, or the reserved `fx:call/image.generate` for an inline image call.
+  An inline call's validated one-step workflow document is recorded as
+  `inline_workflow` in the graph, with the caller's given values in the saved
+  plan's `inputs`.
 - `routes` is a list because one route can serve several capabilities, each with its own fingerprint (§7).
 - `inputs` are the values as given, after merging every inputs file and flag, before defaults are filled in. An optional input that was not given is left out.
 - Whether a run answers its paid calls with a stand-in ([protocol.md](protocol.md) §5.7) is not part of the digest; `plan.json` records it apart ([store.md](store.md) §8).
 - The canvas layout file ([layout.md](layout.md) §7, a ratified design not yet implemented) is not part of the digest: adding, editing or removing it changes no digest, so it needs no `kind` change.
+
+A fresh one-shot call uses a new random 128-bit `fresh_id`, encoded as
+32 lowercase hexadecimal digits. The engine uses the same identifier throughout
+the invocation, including its retries and job collection. Its plan digest uses
+the object above with `"kind": "fx-plan-fresh-v1"` and adds `fresh_id`. The
+graph and saved plan carry `fresh_id` so the plan and step identities can be
+recomputed. Freshness selects distinct result, call, and job keys without
+changing the request sent to the provider or the take shown in the run.
+Ordinary invocations omit this identifier and keep their existing identities.
 
 ## 11. Instance ids
 

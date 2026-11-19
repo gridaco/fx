@@ -90,6 +90,8 @@ pub enum Verb {
     Lock(LockArgs),
     /// run a workflow; --live admits paid calls, within a ceiling
     Run(RunArgs),
+    /// invoke one managed capability without authoring a workflow
+    Call(CallArgs),
     /// draw the next take of one step of a run
     Reroll(RerollArgs),
     /// use one take of a step of a run from now on
@@ -334,6 +336,47 @@ pub struct RunArgs {
     /// workflow input flags (separated before parsing)
     #[arg(skip)]
     pub rest: Vec<String>,
+}
+
+/// Invoke one managed capability using the working directory's project configuration.
+#[derive(Debug, Args)]
+pub struct CallArgs {
+    /// the capability to invoke
+    #[arg(value_parser = ["image.generate"])]
+    pub capability: String,
+    /// the image prompt, treated as literal text
+    #[arg(long, value_name = "TEXT")]
+    pub prompt: String,
+    /// override the project's route for this capability
+    #[arg(long, value_name = "SELECTOR")]
+    pub route: Option<String>,
+    /// the requested image background
+    #[arg(long, value_parser = ["auto", "opaque", "transparent"])]
+    pub background: Option<String>,
+    /// the requested image size, auto or WxH
+    #[arg(long, value_name = "SIZE")]
+    pub size: Option<String>,
+    /// admit a live provider call, including routes that use a subscription
+    #[arg(long)]
+    pub live: bool,
+    /// the ceiling in US dollars; overrides budget.max_usd in fx.yaml
+    #[arg(long, value_name = "USD", allow_negative_numbers = true)]
+    pub max_usd: Option<String>,
+    /// answer the call offline with a file's function
+    #[arg(long, value_name = "FILE#FUNCTION", conflicts_with = "live")]
+    pub stand_in: Option<String>,
+    /// also write the image to this new file
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<std::path::PathBuf>,
+    /// validate the request and report the resolved route and forecast
+    #[arg(long, conflicts_with_all = ["live", "stand_in", "fresh", "out"])]
+    pub dry_run: bool,
+    /// request a fresh result, with --live or --stand-in
+    #[arg(long)]
+    pub fresh: bool,
+    /// print one versioned JSON result
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// `reroll`: the run's takes file gives the step the take after the latest its run drew.
@@ -664,7 +707,10 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
         }
     };
     crate::interrupt::install();
-    if matches!(cli.verb, Verb::Run(_)) {
+    if matches!(
+        cli.verb,
+        Verb::Run(_) | Verb::Call(CallArgs { dry_run: false, .. })
+    ) {
         crate::interrupt::expect_runner();
     }
     let ran = on_big_stack(move || dispatch(cli.verb, rest));
@@ -757,6 +803,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
             args.rest = rest;
             verbs::run::run(&args)
         }
+        Verb::Call(args) => verbs::call::run(&args),
         Verb::Reroll(args) => verbs::takes::reroll(&args),
         Verb::Pick(args) => verbs::takes::pick(&args),
         Verb::Takes(args) => verbs::takes::takes(&args),

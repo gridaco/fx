@@ -9,6 +9,10 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+### Added
+
+- Generate one image from the terminal with `grida fx call image.generate`. Use a project route or select one explicitly, check it with `--dry-run`, and get a PNG and a normal run record. [#149](https://github.com/gridaco/fx/issues/149)
+
 ### Changed
 
 - For provider failures, `grida fx run` points to the exact run and shows a safe explanation when available. `inspect` and both SDKs show saved failed attempts, including failures recovered by retry. Codex failures include ephemeral thread and turn IDs when available. [#148](https://github.com/gridaco/fx/pull/148)

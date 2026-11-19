@@ -3622,3 +3622,523 @@ fn integrated_a_stand_in_on_standard_input_answers_the_run() {
     let output = grida_fx(project.path(), &["inspect", "runs/one", "--json"]);
     assert_eq!(parse(&stdout(&output))["run"]["stand_in"], json!(true));
 }
+
+fn image_call_args<'a>(prompt: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = vec!["call", "image.generate", "--prompt", prompt, "--json"];
+    args.extend_from_slice(extra);
+    args
+}
+
+fn call_result(output: &Output, exit: i32, result_status: &str) -> Value {
+    assert_eq!(status(output), exit, "{}{}", stdout(output), stderr(output));
+    let result = parse(&stdout(output));
+    assert_eq!(result["kind"], "fx-call-result-v1", "{result}");
+    assert_eq!(result["capability"], "image.generate", "{result}");
+    assert_eq!(result["status"], result_status, "{result}");
+    result
+}
+
+#[test]
+fn integrated_call_dry_run_uses_project_defaults_and_accepts_route_override() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("fx.yaml"),
+        "fx: project/v1\nroute_tables: [routes.yaml]\n\
+         budget: { max_usd: 2 }\nroutes: { image.generate: acme/img-a }\n\
+         provider_preferences: { image.generate: acme }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n\
+         - { capability: image.generate, route: img-a-v1@acme, model_id: acme/img-a, \
+         price: { usd: 0.02 } }\n",
+    )
+    .unwrap();
+    let child = root.join("child");
+    std::fs::create_dir(&child).unwrap();
+
+    let args = image_call_args("Draw a lantern", &["--dry-run", "--max-usd", "1"]);
+    let planned = call_result(&grida_fx(&child, &args), 0, "planned");
+    assert_eq!(planned["route"], "img-a-v1@acme");
+    assert_eq!(planned["ceiling_usd"], 1);
+    assert_eq!(planned["forecast"]["high_usd"], 0.02);
+    assert!(planned["run"].is_null());
+    assert!(planned["artifact"].is_null());
+
+    let args = image_call_args(
+        "Draw a lantern",
+        &["--dry-run", "--route", "imagegen@codex"],
+    );
+    let planned = call_result(&grida_fx(&child, &args), 0, "planned");
+    assert_eq!(planned["route"], "imagegen@codex");
+    assert_eq!(planned["ceiling_usd"], 2);
+    assert_eq!(planned["forecast"]["high_usd"], 0);
+    assert!(planned["output"].is_null());
+
+    let output = grida_fx(
+        &child,
+        &[
+            "call",
+            "image.generate",
+            "--prompt",
+            "Draw a lantern",
+            "--dry-run",
+        ],
+    );
+    assert_eq!(status(&output), 0, "{}{}", stdout(&output), stderr(&output));
+    assert!(
+        stdout(&output)
+            .lines()
+            .any(|line| line == "ceiling   $2.00")
+    );
+
+    for folder in [root, &child] {
+        assert!(!folder.join("runs").exists());
+        assert!(!folder.join(".fx").exists());
+    }
+}
+
+#[test]
+fn integrated_call_projectless_validation_and_option_conflicts() {
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path();
+    let args = image_call_args("Draw a lantern", &["--dry-run"]);
+    let refused = call_result(&grida_fx(cwd, &args), 1, "refused");
+    let message = refused["error"]["message"].as_str().unwrap();
+    assert!(
+        message.contains("--route") && message.contains("fx.yaml"),
+        "{message}"
+    );
+
+    let args = image_call_args(
+        "Draw a lantern",
+        &["--dry-run", "--route", "imagegen@codex", "--size", "64x64"],
+    );
+    let refused = call_result(&grida_fx(cwd, &args), 1, "refused");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("exact_size")
+    );
+    for size in ["bogus", "0x0"] {
+        let args = image_call_args(
+            "Draw a lantern",
+            &[
+                "--dry-run",
+                "--route",
+                "gpt-image-2.5-sunburst@openai",
+                "--size",
+                size,
+            ],
+        );
+        let error = call_result(&grida_fx(cwd, &args), 2, "error");
+        assert_eq!(
+            error["error"]["message"],
+            "--size must be auto or WIDTHxHEIGHT"
+        );
+    }
+
+    for options in [
+        &["--dry-run", "--live"][..],
+        &["--dry-run", "--stand-in", "stand_in.py#answer"],
+        &["--dry-run", "--out", "forbidden.png"],
+        &["--dry-run", "--fresh", "--live"],
+        &["--live", "--stand-in", "stand_in.py#answer"],
+        &["--fresh"],
+        &["--unknown"],
+    ] {
+        let output = grida_fx(cwd, &image_call_args("Draw a lantern", options));
+        assert_eq!(
+            status(&output),
+            2,
+            "{options:?}: {}{}",
+            stdout(&output),
+            stderr(&output)
+        );
+    }
+    assert_eq!(std::fs::read_dir(cwd).unwrap().count(), 0);
+}
+
+#[test]
+fn integrated_call_requires_live_and_a_ceiling_for_dollar_billed_dispatch() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(root.join("fx.yaml"), BUILT_IN).unwrap();
+    let args = image_call_args("Draw a lantern", &["--live"]);
+    let refused = call_result(&grida_fx(root, &args), 1, "refused");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("needs a ceiling")
+    );
+    assert!(!root.join("runs").exists());
+
+    std::fs::write(
+        root.join("fx.yaml"),
+        format!("{BUILT_IN}budget: {{ max_usd: 2 }}\n"),
+    )
+    .unwrap();
+    let no_live = call_result(
+        &grida_fx(root, &image_call_args("Draw a lantern", &[])),
+        1,
+        "failed",
+    );
+    assert_eq!(no_live["error"]["code"], "not_live");
+
+    let args = image_call_args("Draw a lantern", &["--live", "--max-usd", "1"]);
+    let failed = call_result(&grida_fx(root, &args), 1, "failed");
+    assert_eq!(failed["ceiling_usd"], 1);
+    assert_eq!(failed["charged_usd"], 0);
+    assert!(
+        failed["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("OPENAI_API_KEY")
+    );
+    assert_spent_nothing(&root.join(failed["run"].as_str().unwrap()));
+
+    // A subscription route can reach its runtime checks without a dollar ceiling.
+    let directory = tempfile::tempdir().unwrap();
+    let args = image_call_args("Draw a lantern", &["--live", "--route", "imagegen@codex"]);
+    let failed = call_result(&grida_fx(directory.path(), &args), 1, "failed");
+    assert_eq!(failed["ceiling_usd"], 0, "{failed}");
+    assert_eq!(failed["charged_usd"], 0, "{failed}");
+    assert!(failed["run"].is_string(), "{failed}");
+}
+
+/// Reuse the conformance PNG synthesizer. The count changes the image at each dispatch so
+/// that an accidental write to an ordinary cache key is visible in the next replay.
+fn install_call_stand_in(cwd: &Path) {
+    let fixture = repository().join("conformance/stand-in-image/in/stand_in.py");
+    let synthesize = std::fs::read_to_string(fixture).unwrap();
+    let answerers = r#"
+
+def counted(call):
+    note(call)
+    size = call.request.get("size", "auto")
+    width, height = (2, 2) if size == "auto" else map(int, size.split("x"))
+    return Answer(files={"image": png(width, height, (int(COUNT.read_text()), 90, 160))})
+
+
+def occupy_destination(call):
+    Path("late.png").write_bytes(b"concurrent output")
+    return counted(call)
+
+
+def retarget_parent(call):
+    alias = Path("linked")
+    alias.unlink()
+    alias.symlink_to("replacement", target_is_directory=True)
+    return counted(call)
+"#;
+    std::fs::write(cwd.join("call_fixture.py"), synthesize + answerers).unwrap();
+}
+
+#[test]
+fn integrated_call_delivers_projectless_and_passes_prompts_literally() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path();
+    install_call_stand_in(cwd);
+    std::fs::write(cwd.join("prompt.txt"), "Read from the fixture file.").unwrap();
+
+    let prompts = [
+        "./prompt.txt",
+        "../prompt.txt",
+        "${{ inputs.missing }}\n\"Draw a lantern\"",
+    ];
+    for (number, prompt) in prompts.into_iter().enumerate() {
+        let destination = format!("lantern-{number}.png");
+        let args = image_call_args(
+            prompt,
+            &[
+                "--route",
+                "imagegen@codex",
+                "--stand-in",
+                "call_fixture.py#counted",
+                "--out",
+                &destination,
+            ],
+        );
+        let output = grida_fx_with_python(cwd, &python, &args);
+        let result = call_result(&output, 0, "ok");
+        assert_eq!(result["route"], "imagegen@codex");
+        assert_eq!(result["cache"], "miss");
+        assert_eq!(result["stand_in"], true);
+        assert_eq!(result["output"], destination);
+        let artifact = cwd.join(result["artifact"].as_str().unwrap());
+        let run = result["run"].as_str().unwrap();
+        let recorded = cwd.join(run);
+        assert_eq!(artifact, recorded.join("outputs/image.png"));
+        let image = std::fs::read(artifact).unwrap();
+        assert!(image.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert_eq!(std::fs::read(cwd.join(&destination)).unwrap(), image);
+        let plan = parse(&std::fs::read_to_string(recorded.join("plan.json")).unwrap());
+        assert!(plan.get("takes_file").is_none(), "{plan}");
+        let log = events(&recorded);
+        let start = log
+            .iter()
+            .find(|event| event["event"] == "run_started")
+            .unwrap();
+        assert!(start.get("repeat").is_none(), "{start}");
+        if number == 0 {
+            let inspection = grida_fx(cwd, &["inspect", run, "--verify", "--json"]);
+            assert_eq!(status(&inspection), 0, "{}", stderr(&inspection));
+            assert_eq!(
+                parse(&stdout(&inspection))["verification"]["verified"],
+                true
+            );
+        }
+    }
+    let asked = parse(&std::fs::read_to_string(cwd.join("asked.json")).unwrap());
+    let asked = asked.as_array().unwrap();
+    assert_eq!(asked.len(), prompts.len());
+    for prompt in prompts {
+        assert!(
+            asked.iter().any(|call| {
+                call["request"]["prompt"] == prompt && call["request"]["background"] == "auto"
+            }),
+            "{prompt:?}: {asked:?}"
+        );
+    }
+    assert!(!cwd.join("fx.yaml").exists());
+    assert!(!cwd.join("workflows").exists());
+}
+
+#[test]
+fn integrated_call_fresh_preserves_ordinary_workflow_and_call_cache_replay() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let project = conformance_project("stand-in-image");
+    let cwd = project.path();
+    let config = std::fs::read_to_string(cwd.join("fx.yaml")).unwrap();
+    std::fs::write(
+        cwd.join("fx.yaml"),
+        config + "route_tables: [routes.yaml]\n",
+    )
+    .unwrap();
+    install_call_stand_in(cwd);
+    let stand_in = "call_fixture.py#counted";
+    let authored = grida_fx_with_python(
+        cwd,
+        &python,
+        &[
+            "run",
+            "case",
+            "--no-view",
+            "--run",
+            "runs/authored",
+            "--stand-in",
+            stand_in,
+        ],
+    );
+    assert_eq!(
+        status(&authored),
+        0,
+        "{}{}",
+        stdout(&authored),
+        stderr(&authored)
+    );
+    let original = std::fs::read(cwd.join("runs/authored/outputs/image.png")).unwrap();
+    let mut args = image_call_args(
+        "a lantern on a quay",
+        &[
+            "--stand-in",
+            stand_in,
+            "--size",
+            "64x64",
+            "--background",
+            "opaque",
+        ],
+    );
+    // The authored workflow used vars without changing the request: only the call cache hits.
+    for cached in ["call", "step"] {
+        let result = call_result(&grida_fx_with_python(cwd, &python, &args), 0, "ok");
+        assert_eq!(result["cache"], cached, "{result}");
+        assert_eq!(result["output"], result["artifact"]);
+        assert_eq!(
+            std::fs::read(cwd.join(result["artifact"].as_str().unwrap())).unwrap(),
+            original
+        );
+    }
+
+    args.push("--fresh");
+    for _ in 0..2 {
+        let fresh = call_result(&grida_fx_with_python(cwd, &python, &args), 0, "ok");
+        assert_eq!(fresh["cache"], "miss", "{fresh}");
+        let image = std::fs::read(cwd.join(fresh["artifact"].as_str().unwrap())).unwrap();
+        assert_ne!(image, original);
+    }
+    args.pop();
+    let again = call_result(&grida_fx_with_python(cwd, &python, &args), 0, "ok");
+    assert_eq!(again["cache"], "step", "{again}");
+    assert_eq!(
+        std::fs::read(cwd.join(again["artifact"].as_str().unwrap())).unwrap(),
+        original
+    );
+    // A new step identity still finds the original answer in the ordinary call cache.
+    let another_workflow_run = grida_fx_with_python(
+        cwd,
+        &python,
+        &[
+            "run",
+            "case",
+            "--no-view",
+            "--run",
+            "runs/another-authored",
+            "--stand-in",
+            stand_in,
+            "--",
+            "--mood",
+            "windy",
+        ],
+    );
+    assert_eq!(
+        status(&another_workflow_run),
+        0,
+        "{}{}",
+        stdout(&another_workflow_run),
+        stderr(&another_workflow_run)
+    );
+    assert_eq!(
+        std::fs::read(cwd.join("runs/another-authored/outputs/image.png")).unwrap(),
+        original
+    );
+    assert_eq!(
+        std::fs::read_to_string(cwd.join("count.txt")).unwrap(),
+        "3\n"
+    );
+    assert!(!cwd.join("workflows/case.takes.yaml").exists());
+}
+
+#[test]
+fn integrated_call_preserves_existing_and_concurrent_output_entries() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path();
+    install_call_stand_in(cwd);
+    std::fs::write(cwd.join("occupied.png"), b"existing output").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("absent.png", cwd.join("dangling.png")).unwrap();
+    let destinations = [
+        "occupied.png",
+        "absent-parent/image.png",
+        "image.png/",
+        "image.png/.",
+        #[cfg(unix)]
+        "dangling.png",
+    ];
+    for destination in destinations {
+        let args = image_call_args(
+            "Draw a lantern",
+            &[
+                "--route",
+                "imagegen@codex",
+                "--stand-in",
+                "call_fixture.py#counted",
+                "--out",
+                destination,
+            ],
+        );
+        let output = grida_fx_with_python(cwd, &python, &args);
+        assert_eq!(
+            status(&output),
+            2,
+            "{destination}: {}{}",
+            stdout(&output),
+            stderr(&output)
+        );
+    }
+    assert_eq!(
+        std::fs::read(cwd.join("occupied.png")).unwrap(),
+        b"existing output"
+    );
+    assert!(!cwd.join("image.png").exists());
+    assert!(!cwd.join("count.txt").exists());
+    assert!(!cwd.join("runs").exists());
+
+    let args = image_call_args(
+        "Draw a lantern",
+        &[
+            "--route",
+            "imagegen@codex",
+            "--stand-in",
+            "call_fixture.py#occupy_destination",
+            "--out",
+            "late.png",
+        ],
+    );
+    let result = call_result(&grida_fx_with_python(cwd, &python, &args), 1, "failed");
+    assert_eq!(
+        std::fs::read(cwd.join("late.png")).unwrap(),
+        b"concurrent output"
+    );
+    let retained = cwd.join(result["artifact"].as_str().unwrap());
+    assert!(
+        std::fs::read(retained)
+            .unwrap()
+            .starts_with(b"\x89PNG\r\n\x1a\n")
+    );
+    assert_eq!(result["error"]["code"], "delivery_failed");
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("late.png")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn integrated_call_rejects_a_retargeted_output_parent_and_keeps_the_artifact() {
+    let Some(python) = python_host() else {
+        eprintln!("skipped: no Python with the grida package");
+        return;
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path();
+    install_call_stand_in(cwd);
+    std::fs::create_dir(cwd.join("original")).unwrap();
+    std::fs::create_dir(cwd.join("replacement")).unwrap();
+    std::os::unix::fs::symlink("original", cwd.join("linked")).unwrap();
+
+    let args = image_call_args(
+        "Draw a lantern",
+        &[
+            "--route",
+            "imagegen@codex",
+            "--stand-in",
+            "call_fixture.py#retarget_parent",
+            "--out",
+            "linked/image.png",
+        ],
+    );
+    let result = call_result(&grida_fx_with_python(cwd, &python, &args), 1, "failed");
+    assert_eq!(result["error"]["code"], "delivery_failed");
+    assert!(result["output"].is_null());
+    assert_eq!(
+        std::fs::read_link(cwd.join("linked")).unwrap(),
+        Path::new("replacement")
+    );
+    for target in ["original", "replacement"] {
+        assert!(!cwd.join(target).join("image.png").exists());
+    }
+    let retained = cwd.join(result["artifact"].as_str().unwrap());
+    assert!(
+        std::fs::read(retained)
+            .unwrap()
+            .starts_with(b"\x89PNG\r\n\x1a\n")
+    );
+}

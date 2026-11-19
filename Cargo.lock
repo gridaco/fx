@@ -710,6 +710,7 @@ dependencies = [
  "chrono",
  "clap",
  "flate2",
+ "getrandom 0.3.4",
  "grida-fx-core",
  "grida-fx-protocol",
  "grida-fx-providers",

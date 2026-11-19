@@ -112,7 +112,9 @@ use crate::executor::stage::file_ref;
 use crate::ledger::{Hold, Ledger, NotReserved, Scopes};
 use crate::stand_in::{AnswererError, Reply, StandIn};
 use crate::store::Store;
-use crate::store::records::{CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key};
+use crate::store::records::{
+    CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key_with_fresh_id,
+};
 use flights::{Joined, Landed, Tracked};
 use grida_fx_core::money::Usd;
 use grida_fx_core::routes::Route;
@@ -542,7 +544,13 @@ pub async fn call(
         Ok(named) => named,
         Err(refusal) => return Err(known.error(refusal.code(), refusal.message())),
     };
-    let key = call_key(capability, &route.fingerprint(), &request, &site.takes);
+    let key = call_key_with_fresh_id(
+        capability,
+        &route.fingerprint(),
+        &request,
+        &site.takes,
+        services.fresh_id.as_deref(),
+    );
     known.key = Some(key.clone());
 
     // 3, then: the key's flight in the invocation.
@@ -783,6 +791,11 @@ impl Lead<'_> {
         let collect = match store.load_job(&key) {
             Err(error) => return Err(CallError::Fault(error.to_string())),
             Ok(None) => None,
+            Ok(Some(record)) if record.fresh_id != services.fresh_id => {
+                return Err(CallError::Fault(format!(
+                    "job {key} has a different fresh invocation identifier"
+                )));
+            }
             Ok(Some(record)) => match record.state {
                 JobState::Settled => None,
                 JobState::Submitting => {
@@ -852,6 +865,7 @@ impl Lead<'_> {
             route: route_entry.clone(),
             request: request.clone(),
             take: site.takes.clone(),
+            fresh_id: services.fresh_id.clone(),
             state: JobState::Submitting,
             handle: None,
             note: None,
@@ -1058,6 +1072,7 @@ impl Lead<'_> {
             route,
             request,
             take: self.site.takes.clone(),
+            fresh_id: self.services.fresh_id.clone(),
             files: entries,
             data: answer.data,
             cost_usd: reported,

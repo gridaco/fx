@@ -105,6 +105,7 @@ fn rig_in(root: &Path, adapters: Adapters, live: bool, ceiling: Option<Usd>) -> 
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     });
@@ -634,6 +635,7 @@ fn rig_with_log(root: &Path, adapters: Adapters, log: Arc<EventLog>) -> Rig {
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     });

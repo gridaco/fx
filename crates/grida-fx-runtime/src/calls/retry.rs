@@ -1287,6 +1287,7 @@ mod tests {
             },
             request: json!({}),
             take: vec![1],
+            fresh_id: None,
             state: JobState::Submitting,
             handle: None,
             note: None,

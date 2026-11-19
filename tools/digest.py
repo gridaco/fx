@@ -58,6 +58,7 @@ _EXACT_INT = 2**53 - 1
 # JCS writes every integral number of 1e21 and above with an exponent, so no integer literal of
 # more than 21 digits is ever canonical.
 _MAX_INTEGER_DIGITS = 21
+_HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _SURROGATE = re.compile("[\ud800-\udfff]")
 
@@ -541,36 +542,59 @@ def complete_contract(
     return completed
 
 
+def _with_fresh_id(value: dict[str, Any], kind: str, fresh_id: str | None) -> dict[str, Any]:
+    if fresh_id is not None:
+        if not isinstance(fresh_id, str) or not _HEX32.fullmatch(fresh_id):
+            raise RefusedInput("fresh_id must be 32 lowercase hexadecimal digits")
+        value["kind"] = kind
+        value["fresh_id"] = fresh_id
+    return value
+
+
 def step_object(
-    type_identity: str, with_values: dict[str, Any], routes: dict[str, str], take: list[int]
+    type_identity: str,
+    with_values: dict[str, Any],
+    routes: dict[str, str],
+    take: list[int],
+    fresh_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    value = {
         "kind": "fx-step-v1",
         "type": type_identity,
         "with": with_values,
         "routes": routes,
         "take": list(take),
     }
+    return _with_fresh_id(value, "fx-step-fresh-v1", fresh_id)
 
 
 def step_identity(
-    type_identity: str, with_values: dict[str, Any], routes: dict[str, str], take: list[int]
+    type_identity: str,
+    with_values: dict[str, Any],
+    routes: dict[str, str],
+    take: list[int],
+    fresh_id: str | None = None,
 ) -> str:
-    return digest(step_object(type_identity, with_values, routes, take))
+    return digest(step_object(type_identity, with_values, routes, take, fresh_id))
 
 
-def call_object(capability: str, route_fp: str, request: Any, take: list[int]) -> dict[str, Any]:
-    return {
+def call_object(
+    capability: str, route_fp: str, request: Any, take: list[int], fresh_id: str | None = None
+) -> dict[str, Any]:
+    value = {
         "kind": "fx-call-v1",
         "capability": capability,
         "route": route_fp,
         "request": request,
         "take": list(take),
     }
+    return _with_fresh_id(value, "fx-call-fresh-v1", fresh_id)
 
 
-def call_key(capability: str, route_fp: str, request: Any, take: list[int]) -> str:
-    return digest(call_object(capability, route_fp, request, take))
+def call_key(
+    capability: str, route_fp: str, request: Any, take: list[int], fresh_id: str | None = None
+) -> str:
+    return digest(call_object(capability, route_fp, request, take, fresh_id))
 
 
 def node_source_object(files: dict[str, str], resources: dict[str, str]) -> dict[str, Any]:
@@ -603,9 +627,10 @@ def plan_object(
     takes: dict[str, Any],
     types: dict[str, str],
     routes: Iterable[str],
+    fresh_id: str | None = None,
 ) -> dict[str, Any]:
     """routes: the fingerprint of every capability and route the plan binds, in any order."""
-    return {
+    value = {
         "kind": "fx-plan-v1",
         "workflows": {
             source: execution_document(document) for source, document in workflows.items()
@@ -615,6 +640,7 @@ def plan_object(
         "types": types,
         "routes": sorted(set(routes)),
     }
+    return _with_fresh_id(value, "fx-plan-fresh-v1", fresh_id)
 
 
 def plan_digest(
@@ -623,8 +649,9 @@ def plan_digest(
     takes: dict[str, Any],
     types: dict[str, str],
     routes: Iterable[str],
+    fresh_id: str | None = None,
 ) -> str:
-    return digest(plan_object(workflows, inputs, takes, types, routes))
+    return digest(plan_object(workflows, inputs, takes, types, routes, fresh_id))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -932,19 +959,26 @@ def _example_failures(example: dict[str, Any]) -> Iterator[str]:
     if kind == "fx-route-v1":
         route_id = f"{value['model']}@{value['provider']}"
         rebuilt = route_fingerprint(value["capability"], route_id, value.get("contract"))
-    elif kind == "fx-step-v1":
-        rebuilt = step_identity(value["type"], value["with"], value["routes"], value["take"])
-    elif kind == "fx-call-v1":
-        rebuilt = call_key(value["capability"], value["route"], value["request"], value["take"])
+    elif kind in ("fx-step-v1", "fx-step-fresh-v1"):
+        fresh_id = value["fresh_id"] if kind == "fx-step-fresh-v1" else None
+        rebuilt = step_identity(
+            value["type"], value["with"], value["routes"], value["take"], fresh_id
+        )
+    elif kind in ("fx-call-v1", "fx-call-fresh-v1"):
+        fresh_id = value["fresh_id"] if kind == "fx-call-fresh-v1" else None
+        rebuilt = call_key(
+            value["capability"], value["route"], value["request"], value["take"], fresh_id
+        )
     elif kind == "fx-node-source-v1":
         rebuilt = node_source_digest(value["files"], value["resources"])
-    elif kind == "fx-plan-v1":
+    elif kind in ("fx-plan-v1", "fx-plan-fresh-v1"):
         rebuilt = plan_digest(
             example.get("authored_workflows", value["workflows"]),
             value["inputs"],
             value["takes"],
             value["types"],
             value["routes"],
+            value["fresh_id"] if kind == "fx-plan-fresh-v1" else None,
         )
     if rebuilt is not None and rebuilt != want_digest:
         yield f"{name}: the {kind} formula gives {rebuilt}, expected {want_digest}"
@@ -1392,13 +1426,19 @@ class GraphCheck:
         if graph.get("kind") not in ("fx-graph-v1", "fx-graph-v2"):
             self.fail(f"kind is {graph.get('kind')!r}, expected 'fx-graph-v1' or 'fx-graph-v2'")
         has_problems = bool(graph.get("problems"))
+        fresh_id = graph.get("fresh_id")
+        if "fresh_id" in graph and (
+            not isinstance(fresh_id, str) or not _HEX32.fullmatch(fresh_id)
+        ):
+            self.fail("fresh_id must be 32 lowercase hexadecimal digits")
+            return
         instances = graph.get("instances")
         if not isinstance(instances, list):
             self.fail("instances is not a list")
             return
         for instance in instances:
             if isinstance(instance, dict):
-                self._check_instance(instance, has_problems)
+                self._check_instance(instance, has_problems, fresh_id)
             else:
                 self.fail(f"instance {instance!r} is not an object")
         self._check_types(graph.get("types"), instances, has_problems)
@@ -1415,7 +1455,8 @@ class GraphCheck:
         if not isinstance(source, str) or not isinstance(workflow_id, str):
             self.notes.append(skip + "the graph names no workflow file")
             return
-        if ":" in source:
+        is_inline = source == "fx:call/image.generate"
+        if ":" in source and not is_inline:
             self.notes.append(skip + f"{source} is a builder, which this checker cannot run")
             return
         inputs = graph.get("inputs")
@@ -1423,6 +1464,12 @@ class GraphCheck:
             self.notes.append(skip + "the graph carries no inputs")
             return
         workflows: dict[str, Any] = {}
+        if is_inline:
+            document = graph.get("inline_workflow")
+            if not isinstance(document, dict):
+                self.fail("plan: inline call has no inline_workflow object")
+                return
+            workflows[source] = document
         wanted = [(source, "workflow.file")]
         steps = graph.get("steps") if isinstance(graph.get("steps"), dict) else {}
         for path, step in sorted(steps.items()):
@@ -1438,7 +1485,7 @@ class GraphCheck:
             workflows[relative] = load_yaml(data, relative)
         takes: dict[str, Any] = {}
         takes_file = (Path(source).parent / f"{workflow_id}.takes.yaml").as_posix()
-        if (self.project / takes_file).is_file():
+        if not is_inline and (self.project / takes_file).is_file():
             document = read_yaml_file(self.project / takes_file)
             if not isinstance(document, dict):
                 self.fail(f"plan: {takes_file} is not a mapping of step paths")
@@ -1462,7 +1509,7 @@ class GraphCheck:
             for bound in (instance.get("routes") or {}).values():
                 if isinstance(bound, dict) and isinstance(bound.get("fingerprint"), str):
                     routes.add(bound["fingerprint"])
-        hashed = plan_object(workflows, inputs, takes, types, routes)
+        hashed = plan_object(workflows, inputs, takes, types, routes, graph.get("fresh_id"))
         computed = digest(hashed)
         self.counts["plans"] += 1
         if computed != printed:
@@ -1473,7 +1520,9 @@ class GraphCheck:
                 f"  hashed:   {canon(hashed).decode('utf-8')}"
             )
 
-    def _check_instance(self, instance: dict[str, Any], has_problems: bool) -> None:
+    def _check_instance(
+        self, instance: dict[str, Any], has_problems: bool, fresh_id: str | None
+    ) -> None:
         name = str(instance.get("id", "<no id>"))
         identity = instance.get("identity")
         type_identity = instance.get("type")
@@ -1524,7 +1573,7 @@ class GraphCheck:
         if _contains_pending(with_values):
             self.fail(f"{name}: has an identity although its with: holds a pending value")
             return
-        hashed = step_object(type_identity, with_values, printed_routes, take)
+        hashed = step_object(type_identity, with_values, printed_routes, take, fresh_id)
         expected = digest(hashed)
         self.counts["identities"] += 1
         if expected != identity:

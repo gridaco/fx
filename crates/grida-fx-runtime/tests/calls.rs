@@ -135,6 +135,7 @@ fn live_with(
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })
@@ -1167,6 +1168,7 @@ fn seed_lantern(store: &Store) {
             },
             request: json!({"background": "auto", "prompt": "a lantern"}),
             take: vec![1],
+            fresh_id: None,
             files: IndexMap::from([(
                 "image".to_string(),
                 FileEntry {
@@ -1233,6 +1235,7 @@ async fn a_recorded_call_replays_offline_without_adapters() {
             },
             request: lantern_request(),
             take: vec![1],
+            fresh_id: None,
             state: JobState::Submitting,
             handle: None,
             note: None,
@@ -1754,6 +1757,7 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
         },
         request: lantern_request(),
         take: vec![1],
+        fresh_id: None,
         state,
         handle,
         note: None,
