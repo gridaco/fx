@@ -21,6 +21,10 @@ Choose a template by the effect of the change. Features and fixes can use either
   or visual output. Explain the user problem, resulting behavior, reproduction
   steps and caveats, and show the implementation running.
 
+For user-facing changes, add a short entry under `Unreleased` in
+[CHANGELOG.md](CHANGELOG.md). Describe what users can do or what changes for them.
+Link the pull request or issue when available.
+
 PRs affecting users need evidence appropriate to the change. For the viewer and
 website, use screenshots for static results and a short video/GIF for interactions.
 For CLI/SDK changes, include runnable commands or code with actual output; use

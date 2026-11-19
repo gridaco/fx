@@ -85,6 +85,7 @@ the engine.
 - [The guide](docs/guide/README.md): workflows, nodes, cost and cache, running, viewing, sharing
 - [Python SDK](python/README.md) and [JavaScript SDK](js/fx/README.md)
 - [Specifications](spec/): the language-neutral contracts
+- [Changelog](CHANGELOG.md)
 
 ## Contribute
 

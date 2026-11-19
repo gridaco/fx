@@ -203,6 +203,10 @@ uv run --locked --project python python tools/publish_local.py --manifest <outpu
 ## Releasing
 
 First bump every manifest and lockfile to a new version as described above.
+In [CHANGELOG.md](CHANGELOG.md), move the entries shipping in this release from
+`Unreleased` into a section with the release version and date. Keep `Unreleased`
+at the top for future changes. Include the changelog update in the release commit.
+
 Then tag that version; never reuse an already published version or tag.
 
 ```sh

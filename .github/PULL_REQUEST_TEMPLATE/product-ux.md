@@ -6,6 +6,8 @@
 
 <!-- Explain what users can do or see after this change. Include before/after workflow YAML, CLI commands or SDK code when useful. -->
 
+- [ ] I added an Unreleased entry to [CHANGELOG.md](https://github.com/gridaco/fx/blob/main/CHANGELOG.md).
+
 ## Working demo
 
 <!-- Show the actual implementation running. Use screenshots for static viewer/website changes and a short video/GIF for interactions. For CLI/SDK changes, include runnable commands/code and actual output. Explain what reviewers should look for and relevant edge cases. If no meaningful demo applies, explain why. -->
