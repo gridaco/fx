@@ -289,3 +289,4 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv run --no-project --python 3.12 tools/check_versions.py --self-check
       - run: uv run --no-project --python 3.12 tools/check_versions.py
+      - run: uv run --no-project --python 3.12 tools/release_notes.py

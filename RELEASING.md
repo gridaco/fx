@@ -110,10 +110,10 @@ and [PyPI existing-project setup](https://docs.pypi.org/trusted-publishers/addin
 ## A dry run
 
 Go to Actions → release → Run workflow. Pick `main` (or the tag), and leave **dry_run** checked.
-The run builds all four targets and checks everything, but publishes nothing. Its artifacts
-(`wheel-<target>`, `npm-<target>` and `npm-sdk`) are the exact files a release would publish, so
-you can download and inspect them. Do this before the first tag. (A run started on a `v*` tag
-with dry_run unchecked publishes, just as pushing the tag does.)
+The run builds and checks all four targets and skips both package publication and the GitHub
+Release. Its artifacts (`wheel-<target>`, `npm-<target>` and `npm-sdk`) are the exact files a
+release would publish, so you can download and inspect them. Do this before the first tag.
+A run started on a `v*` tag with **dry_run** unchecked publishes, just as pushing the tag does.
 
 A new engine package needs a manual first upload, since npm configures a trusted publisher only
 on a package that exists. Take its tarball from a **successful** dry run of the same source and
@@ -219,10 +219,11 @@ git tag -a "v$version" -m "Grida FX $version"
 git push origin "v$version"
 ```
 
-The tag starts `release.yml`, which runs four jobs:
+Pushing the tag starts the jobs in `release.yml`.
 
 1. **versions:** `tools/check_versions.py --tag <tag>`. Every manifest names the
-   workspace version, and the tag names it too.
+   workspace version, and the tag names it too. The `release-notes` artifact contains
+   the GitHub Release body rendered by `python3 tools/release_notes.py`.
 2. **viewer:** installs the frozen root Bun workspace, checks, tests and builds the viewer, and uploads
    `web/viewer/dist` as one build artifact. Generated assets stay out of Git. Missing assets fail
    the native build rather than producing a package without its UI.
@@ -256,6 +257,12 @@ The tag starts `release.yml`, which runs four jobs:
    `@grida/fx` to npm, under `latest` for stable versions or `next` for pre-releases, with `--access public --provenance`, and then the four wheels
    to PyPI. It checks out no code. A package version that is already published is skipped,
    so you can re-run a publish that failed partway.
+5. **github_release** publishes a [GitHub Release](https://github.com/gridaco/fx/releases)
+   for the same tag after `publish` succeeds. Starting with `v0.11.0`, its notes come from
+   the matching version section of the tagged `CHANGELOG.md`, with links to that version of
+   `@grida/fx` on npm and `grida` on PyPI. The job marks alpha, beta and rc tags as pre-releases.
+   The job uses the built-in `GITHUB_TOKEN` with `contents: write`. If the announcement fails,
+   rerun the failed job. An already published release for the same tag counts as success.
 
 The tag also serves indexed examples for `init --template` and `add`. An engine of this version
 downloads its templates from the tag's source archive on GitHub. CI's `tools/check_examples.py`
