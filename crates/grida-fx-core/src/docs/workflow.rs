@@ -197,9 +197,9 @@ pub struct LoadedWorkflow {
     pub document: Value,
     pub workflow: Rc<WorkflowDoc>,
     /// The plan digest's key (identity.md §10): the project-relative POSIX path, or
-    /// `<path>:<function>` for a builder.
+    /// `<path>:<function>` for a builder, or the reserved label of an inline call.
     pub source: String,
-    /// The workflow file (or the builder file), absolute.
+    /// The workflow file (or the builder file), absolute. Empty for an inline call.
     pub path: PathBuf,
 }
 

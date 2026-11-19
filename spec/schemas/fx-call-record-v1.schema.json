@@ -53,6 +53,11 @@
       "description": "The canonical request (identity.md §9), exactly as keyed: files as `{\"file\": digest}`. It never holds a secret.",
       "type": "object"
     },
+    "fresh_id": {
+      "description": "The fresh invocation identity discriminator when present (identity.md §9).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
     "take": {
       "type": "array",
       "items": {

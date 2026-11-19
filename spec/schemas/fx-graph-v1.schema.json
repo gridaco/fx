@@ -46,6 +46,15 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "fresh_id": {
+      "description": "The fresh invocation identity discriminator (identity.md §10).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "inline_workflow": {
+      "description": "The validated workflow document for the inline call named by workflow.file (identity.md §10).",
+      "type": "object"
+    },
     "steps": {
       "description": "Each declared step, by its declaration path, as a reader sees it.",
       "type": "object",

@@ -51,16 +51,22 @@ TypeScript nodes needs only this package (and Node 24 or later for those nodes).
 The [viewer integration guide](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md)
 covers browser automation, host integration, context capture, and authorization.
 
+To recognize a document from a webview preload or a same-origin host, call
+`isFxViewerDocument(document)` from `@grida/fx/viewer/client` after its head is
+parsed. It checks the v1 HTML marker locally. Older viewers can return `false`
+and still support `ViewerClient`. Use the marker for branding and `getContext()`
+for the loaded plan, run or catalog.
+
 Use the separate browser-safe entry to communicate with an **already loaded** FX
 viewer window. It does not start an engine or open a tab:
 
 ```ts
 import { ViewerClient } from "@grida/fx/viewer/client";
 
-// viewerWindow is a Window reference your application already owns.
+// Use the window and URL your application actually opened.
 const client = new ViewerClient({
   targetWindow: viewerWindow,
-  origin: "http://127.0.0.1:8787", // exact viewer origin, including port
+  origin: new URL(viewerUrl).origin,
 });
 const unsubscribe = await client.subscribe((context) => console.log(context.selection));
 const context = await client.getContext(); // capture afresh when the user sends a message

@@ -5,7 +5,7 @@
 > plans its price, runs only what changed, caches every result by content, reserves every paid call
 > against a ceiling, and records how each result was made. The command is `grida fx`.
 
-Version: 0.9.0
+Version: 0.10.0
 
 This file is the reference for people and coding agents using FX: what exists, how to write it,
 and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
@@ -38,7 +38,8 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
 
 ## Rules for agents
 
-- **Plan first; it is free.** `grida fx plan <workflow>` never makes a paid model call.
+- **Plan before spending.** `grida fx plan <workflow>` and
+  `grida fx call image.generate --prompt TEXT --dry-run` never make a paid model call.
   A selected missing GG/OpenRouter image model may require a read-only provider metadata
   lookup before the offline planner runs. Show the user the steps and estimate before spending.
 - **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
@@ -55,6 +56,10 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
   them by hand.
 - **Show the live viewer.** When the project service is running (`grida fx status --json`), give
   the user the URL `plan --open` or `run` prints instead of describing renders yourself.
+  Look for the `f(x)` tab icon. Project tabs show the project name. Plan and Run tabs show
+  the workflow's `title` after the mode, and Run tabs also show the run name. The page
+  description uses the workflow's `description` when present, or a summary naming the plan
+  or run. Viewer pages use the `no-referrer` policy.
 - **Don't retry paid calls yourself.** The engine is the only retry owner (at most 6 attempts per
   call). A failed run is resumed or run again; cached work is not redone.
 
@@ -93,8 +98,53 @@ grida fx plan icon -- --name "copper lantern"
 
 `init` writes `fx.yaml`, `README.md`, `AGENTS.md`, the FX agent skills in `.agents/skills/`,
 `.gitignore`, `.env.example` and `workflows/icon.yaml`. `grida fx init --list-templates` lists
-templates; `--template NAME` picks one. In a folder that already has an `fx.yaml` it only checks it;
-any other non-empty folder is refused (write `fx.yaml` yourself to adopt an existing repository).
+templates, and `--template NAME` picks one for a new or empty folder. In a folder that already
+has an `fx.yaml`, plain `init` just checks it. `init` refuses other non-empty folders. To adopt
+one as an FX project, write `fx.yaml` yourself.
+
+`grida fx add NAME [destination]` creates an editable copy of an example in a new folder.
+The default destination is `./NAME`. Its immediate parent must exist. An occupied destination
+exits 2. The new folder has its own `fx.yaml` and can sit inside another project. Run commands
+from the new folder to use its project settings. FX reads the authored template from the
+matching release archive for its own examples. `GRIDA_FX_NETWORK=off` prevents template downloads.
+If FX accepts an interrupt before publishing the project folder, it cleans up staging and exits 130.
+A second Ctrl-C during staging cancellation can force exit and leave temporary files.
+
+Use `grida fx init --list-templates --json` to discover FX's own templates without a download. Entries
+with a `workflow_entry` can be added. On success, `add --json` emits `fx-project-init-v1` with the
+absolute `project_root`, `created: true`, `files_created`, `template`, `workflow_entry` and
+optional `inputs_file`.
+The entry and preset paths are relative to the new root. `missing_inputs` lists declared
+input file paths the user still needs to supply, and `prerequisites` lists requirements for the
+entry. FX checks the copied project configuration and advertised files before publishing.
+Dependency installation, provider access and execution are separate from setup. Check runtime
+readiness with `grida fx doctor <target>` after setting up the prerequisites.
+
+`grida fx add pet fox-pet` installs `workflows/pet.yaml` with the text-only `inputs/pebble.yaml`
+preset. Edit the preset in `fox-pet`. Follow its README to set up Python and preview with the
+stand-in or draw live with signed-in Codex.
+
+`grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` copies a GitHub
+repository with `fx.yaml` at its root. Give a tag or full 40-character commit SHA. For example,
+`grida fx add acme/studio@v1.2.0 --workflow posters` creates `./studio` and selects the workflow
+whose filename stem is `posters`. `template.name` is the full reference and `template.source`
+is `github`.
+
+For a private GitHub template, sign in with `gh auth login`, then use
+`grida fx add acme/studio@v1.2.0 --github-auth`. The GitHub CLI (`gh`) must be on `PATH` and
+authenticated to read the repository. Only GitHub template requests with `--github-auth`
+invoke `gh`. An occupied destination or `GRIDA_FX_NETWORK=off` stops the install before `gh`
+starts. If the GitHub CLI is unavailable, authentication is missing, or the repository or ref
+is inaccessible, FX exits 2 without creating the project. The archive follows the same checks
+and receipt format.
+
+A root `fx-template.json` can declare the default starter. Its required `workflow_entry` names
+the YAML workflow, and optional `inputs_file`, `required_inputs` and `prerequisites` describe the
+preset, input paths to check, and requirements. Paths are project-relative. If no starter is
+declared, FX checks direct children of `workflows/` and `fx/` for `.yaml` and `.yml` files
+declaring `fx: workflow/v1`. It selects the sole candidate or requires `--workflow NAME` to identify
+a unique filename stem. The flag also selects a workflow when the project declares a default.
+If you select the declared workflow, the metadata applies.
 
 ```
 my-assets/
@@ -428,14 +478,14 @@ appears as a `models` diagnostic after the provider report; other diagnostics co
   API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
   exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
   whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
-- **Keys.** Published FX 0.9.0 uses a nonblank process environment value first, then the project's
+- **Keys.** FX uses a nonblank process environment value first, then the project's
   `.env` for declared key and base URL names. Set `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`. Keys stay
   out of `fx.yaml` and workflows. Paid capability calls require `--live`. A read-only metadata
   lookup for a missing selected OpenRouter image binding may use its key. GG metadata is public.
   `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
   HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
   in its place when set), so a proxy whose root the machine trusts works.
-- **Saved Grida keys.** FX builds with saved-key support check Grida's store on macOS and Linux
+- **Saved Grida keys.** FX 0.10.0 and later check Grida's store on macOS and Linux
   when both the environment and `.env` lack an eligible provider's key. The provider IDs are
   `gg`, `openrouter`, `fal`, `tripo` and `elevenlabs`. The store is `providers/credentials.toml`
   under the process `GRIDA_HOME` or `$HOME/.grida`. The home must be an absolute normalized
@@ -676,8 +726,9 @@ standard capability's validation. See the native-operation recipe below.
 
 Failure outcomes may carry `diagnostic`: Python's `AdapterDiagnostic(source=, phase=, ...)`,
 or a TypeScript object with `source`, `phase`, `operation`, `httpStatus`, `code`, `field`,
-`message`, `requestId`, `taskId`, `detail`, `redacted` and `truncated` (all but source and phase
-optional). Wire and recorded fields use lower_snake_case. Sources are `engine`, `adapter`,
+`message`, `requestId`, `taskId`, `threadId`, `turnId`, `ephemeral`, `detail`, `redacted` and
+`truncated` (all but source and phase optional). Wire and recorded fields use lower_snake_case.
+Sources are `engine`, `adapter`,
 `transport`, `provider`; phases are `validate`, `upload`, `send`, `submit`, `poll`, `collect`,
 `download`. Detail is `available`, `unavailable`, `unreadable` or `withheld`. The engine bounds
 and redacts evidence, input echoes and local paths before recording it. Adapters extract only
@@ -689,8 +740,14 @@ event's `diagnostic`, `project` and `inspect --json`. Python also exposes
 `result.failures[id].diagnostic`; JavaScript exposes `result.steps[id].diagnostic`.
 The provider explanation is included in the human error when safe. Older adapters and records
 may have only a reason. Tripo supplies diagnostics for paid submission, upload refusals and
-terminal task failures; other built-in adapters may still give reasons without structured
-evidence. Receipt and billing remain independent: a provider rejection does not prove $0,
+terminal task failures. Built-in HTTP adapters can record observed status, safe error fields
+and whether an explanation was available. Codex records thread and turn IDs
+when received, along with the ephemeral mode. The IDs help correlate an attempt and carry no
+conversation history. `inspect --json` exposes sanitized `call_attempt_failed` events in
+`run.call_attempt_failures` when recorded, including failures a later retry recovered from.
+The text view shows those attempts with their call keys. `run` points to `inspect` for the
+exact failed run.
+Receipt and billing remain independent: a provider rejection does not prove $0,
 and a 5xx or unreadable paid-submit response remains uncertain. Its retained diagnostic
 survives a later `job_unsettled`; FX does not submit it again automatically.
 
@@ -741,7 +798,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 |---|---|
 | `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open \| --register]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
 | `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
-| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary; a workflow id reads its newest run |
+| `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--background MODE] [--size SIZE] [--live \| --stand-in F#fn] [--max-usd N] [--out FILE] [--dry-run] [--fresh] [--json]` | generate one PNG without authoring a workflow |
+| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary and recorded call failures, including failures recovered by retry; a workflow id reads its newest run |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
 | `grida fx cancel <run> [--invocation ID] [--wait] [--timeout 30s] [--json]` | cancel one invocation; `inspect <run> --control --json` first |
@@ -754,10 +812,25 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
 | `grida fx start [--background] [--port N] [--open]`, `status [--project-root DIR] [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
 | `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
+| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` | copy an editable template into a fresh project folder |
 
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
 
+- **One-shot images.** `call image.generate` uses a literal `--prompt` and the nearest `fx.yaml`'s
+  `routes.image.generate` when you omit `--route`. An explicit `--route` must be nonempty.
+  Give a qualified route such as `imagegen@codex` outside a project. `--background` accepts `auto`, `opaque` or
+  `transparent`; `--size` accepts `auto` or `WxH` where the selected route supports it. Use
+  `--dry-run` to check the request and see its forecast and configured ceiling without creating
+  a run or generating. Use `--live`
+  to dispatch, even on Codex or Grok Build. A dollar-billed route needs `--max-usd` or the
+  project's `budget.max_usd`. `--stand-in FILE#FUNCTION` uses the offline stand-in store.
+  `--fresh` requires `--live` or `--stand-in` and makes a new request identity while preserving the
+  normal cache entry. The command saves `outputs/image.png` in an ordinary run and reports its
+  path. Use that run folder with `inspect` to see its attempts. `--out FILE` delivers a copy to
+  an unused UTF-8 filename under an existing writable directory. `--json` prints
+  one `fx-call-result-v1` document with the route, run, saved image and cache disposition. See the
+  [call contract](https://github.com/gridaco/fx/blob/main/spec/call.md).
 - **Ceiling.** A live run needs one: `--max-usd`, else the workflow's `budget:`, else `fx.yaml`'s.
   Before every paid attempt FX reserves its allowance, or remaining applicable budget for
   unpriced work. Calls wait for temporary holds; an exhausted budget stops new paid attempts.
@@ -864,6 +937,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `not_ready`; missing targets return `not_found`; catalog presentation is
   `unavailable`. A successful result confirms applied state, not paint or tab activation.
   Reveal uses the displayed stack/grid position after panning and the space left by floating panels.
+  In a wrapper, `isFxViewerDocument(document)` from `@grida/fx/viewer/client` reads
+  the v1 HTML marker for tab branding before data loads. Use context for recorded IDs.
   Hosts with an existing window use the browser-safe `ViewerClient` from
   `@grida/fx/viewer/client`: async `getContext`, `present`, `subscribe`, and `dispose`.
   Use one client per window pair and recreate it after viewer navigation/reload.
@@ -1218,7 +1293,7 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.9.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.10.0" } }
 ```
 
 ```ts

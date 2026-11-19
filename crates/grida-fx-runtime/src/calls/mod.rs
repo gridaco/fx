@@ -107,12 +107,14 @@ pub mod retry;
 
 use crate::agent::AGENT_TURN;
 use crate::engine::{Cancel, RunFiles, Services};
-use crate::events::Event;
+use crate::events::{CallAttemptFailure, Event};
 use crate::executor::stage::file_ref;
 use crate::ledger::{Hold, Ledger, NotReserved, Scopes};
 use crate::stand_in::{AnswererError, Reply, StandIn};
 use crate::store::Store;
-use crate::store::records::{CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key};
+use crate::store::records::{
+    CallRecord, FileEntry, JobRecord, JobState, RouteEntry, call_key_with_fresh_id,
+};
 use flights::{Joined, Landed, Tracked};
 use grida_fx_core::money::Usd;
 use grida_fx_core::routes::Route;
@@ -121,7 +123,7 @@ use grida_fx_core::value::is_digest;
 use grida_fx_protocol::{ErrorCode, RpcError, StandInAnswerParams, StandInInstance, StandInRoute};
 use grida_fx_providers::{Adapter, Answer, CallRequest, RequestFile, RouteRef};
 use indexmap::IndexMap;
-use retry::{AnswerCheck, Attempts, Backoff, HoldBook, Outcome, Waits};
+use retry::{AnswerCheck, Attempts, Backoff, FailureLog, HoldBook, Outcome, Waits};
 use serde_json::{Map, Value};
 use std::sync::{Arc, Mutex};
 
@@ -542,7 +544,13 @@ pub async fn call(
         Ok(named) => named,
         Err(refusal) => return Err(known.error(refusal.code(), refusal.message())),
     };
-    let key = call_key(capability, &route.fingerprint(), &request, &site.takes);
+    let key = call_key_with_fresh_id(
+        capability,
+        &route.fingerprint(),
+        &request,
+        &site.takes,
+        services.fresh_id.as_deref(),
+    );
     known.key = Some(key.clone());
 
     // 3, then: the key's flight in the invocation.
@@ -783,6 +791,11 @@ impl Lead<'_> {
         let collect = match store.load_job(&key) {
             Err(error) => return Err(CallError::Fault(error.to_string())),
             Ok(None) => None,
+            Ok(Some(record)) if record.fresh_id != services.fresh_id => {
+                return Err(CallError::Fault(format!(
+                    "job {key} has a different fresh invocation identifier"
+                )));
+            }
             Ok(Some(record)) => match record.state {
                 JobState::Settled => None,
                 JobState::Submitting => {
@@ -852,6 +865,7 @@ impl Lead<'_> {
             route: route_entry.clone(),
             request: request.clone(),
             take: site.takes.clone(),
+            fresh_id: services.fresh_id.clone(),
             state: JobState::Submitting,
             handle: None,
             note: None,
@@ -863,7 +877,7 @@ impl Lead<'_> {
             unrecorded: Mutex::new(None),
         };
         let hold_name = || services.next_hold(&site.instance_id);
-        let waits = RouteWaits {
+        let events = CallEvents {
             services,
             id: &site.instance_id,
             capability,
@@ -896,7 +910,8 @@ impl Lead<'_> {
             book: &tally,
             jobs: &**store,
             pacing: &*services.pacing,
-            waits: Some(&waits),
+            waits: Some(&events),
+            failures: services.events.as_ref().map(|_| &events as &dyn FailureLog),
             cancel: &services.cancel,
             backoff: Backoff::default(),
             job: matches!(adapter, Adapter::Job(_)).then_some(job_template),
@@ -1057,6 +1072,7 @@ impl Lead<'_> {
             route,
             request,
             take: self.site.takes.clone(),
+            fresh_id: self.services.fresh_id.clone(),
             files: entries,
             data: answer.data,
             cost_usd: reported,
@@ -1217,10 +1233,9 @@ impl Lead<'_> {
     }
 }
 
-/// Records a call's waits for its route's slot as `call_waiting` and `call_admitted`
-/// (spec/store.md §8, "Waiting for a route"); nothing while planning. The event log keeps its own
+/// Records waits for a route slot and failed exchanges. The event log keeps its own write
 /// failure, which stops the run.
-struct RouteWaits<'a> {
+struct CallEvents<'a> {
     services: &'a Services,
     id: &'a str,
     capability: &'a str,
@@ -1228,7 +1243,7 @@ struct RouteWaits<'a> {
     call: &'a str,
 }
 
-impl RouteWaits<'_> {
+impl CallEvents<'_> {
     fn emit(&self, event: Event) {
         if let Some(events) = &self.services.events {
             let _ = events.emit(&event);
@@ -1236,7 +1251,7 @@ impl RouteWaits<'_> {
     }
 }
 
-impl Waits for RouteWaits<'_> {
+impl Waits for CallEvents<'_> {
     fn waiting(&self) {
         self.emit(Event::CallWaiting {
             id: self.id.to_string(),
@@ -1253,6 +1268,23 @@ impl Waits for RouteWaits<'_> {
             route: self.route.to_string(),
             call: self.call.to_string(),
         });
+    }
+}
+
+impl FailureLog for CallEvents<'_> {
+    fn failed(&self, failure: CallAttemptFailure) -> Result<(), String> {
+        let Some(events) = &self.services.events else {
+            return Ok(());
+        };
+        events
+            .emit(&Event::CallAttemptFailed {
+                id: self.id.to_string(),
+                capability: self.capability.to_string(),
+                route: self.route.to_string(),
+                call: self.call.to_string(),
+                failure,
+            })
+            .map_err(|error| format!("cannot record a failed attempt for {}: {error}", self.id))
     }
 }
 

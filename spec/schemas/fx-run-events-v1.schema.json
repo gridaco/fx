@@ -28,6 +28,7 @@
         "node_skipped",
         "node_retry",
         "call",
+        "call_attempt_failed",
         "call_waiting",
         "call_admitted",
         "budget_reserved",
@@ -150,6 +151,24 @@
     "attempt": {
       "type": "integer",
       "minimum": 1
+    },
+    "send": {
+      "description": "The managed call's 1-based send ordinal. Absent for a collect of an earlier submission.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "outcome": {
+      "enum": [
+        "refused",
+        "not_received",
+        "failed",
+        "unsettled",
+        "unreachable"
+      ]
+    },
+    "retryable": {
+      "description": "The failure may be retried within the send limit, subject to admission, budget and cancellation.",
+      "type": "boolean"
     },
     "duration_ms": {
       "type": "integer",
@@ -532,6 +551,15 @@
         "task_id": {
           "type": "string"
         },
+        "thread_id": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        },
+        "ephemeral": {
+          "type": "boolean"
+        },
         "http_status": {
           "type": "integer",
           "minimum": 100,
@@ -805,6 +833,27 @@
           "call",
           "cached",
           "cost_usd"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "call_attempt_failed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "capability",
+          "route",
+          "call",
+          "attempt",
+          "outcome",
+          "reason",
+          "retryable"
         ]
       }
     },

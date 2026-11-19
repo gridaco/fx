@@ -380,6 +380,7 @@ pub struct CallRecord {
     /// The canonical request, exactly as keyed.
     pub request: Value,
     pub take: Vec<u32>,
+    pub fresh_id: Option<String>,
     /// By name, in the provider's order; `key` is never set here.
     pub files: IndexMap<String, CallFile>,
     pub data: Value,
@@ -401,6 +402,9 @@ impl CallRecord {
         map.insert("route".into(), self.route.to_value());
         map.insert("request".into(), self.request.clone());
         map.insert("take".into(), take_value(&self.take));
+        if let Some(fresh_id) = &self.fresh_id {
+            map.insert("fresh_id".into(), Value::from(fresh_id.as_str()));
+        }
         map.insert(
             "files".into(),
             Value::Object(
@@ -436,7 +440,7 @@ impl CallRecord {
                 "data",
                 "cost_usd",
             ],
-            &["usage"],
+            &["usage", "fresh_id"],
         )?;
         let files = object(&map["files"], "the files of the call record")?
             .iter()
@@ -452,6 +456,7 @@ impl CallRecord {
             route: RouteEntry::from_value(&map["route"])?,
             request: request_member(map, what)?,
             take: take_member(map, what)?,
+            fresh_id: fresh_id_member(map, what)?,
             files,
             data: map["data"].clone(),
             cost_usd: money(&map["cost_usd"], what)?,
@@ -465,11 +470,12 @@ impl CallRecord {
 
     /// The key recomputed from the record (store.md §3: it MUST equal `key`).
     pub fn computed_key(&self) -> String {
-        call_key(
+        call_key_with_fresh_id(
             &self.capability,
             &self.route.fingerprint,
             &self.request,
             &self.take,
+            self.fresh_id.as_deref(),
         )
     }
 }
@@ -509,6 +515,7 @@ pub struct JobRecord {
     pub route: RouteEntry,
     pub request: Value,
     pub take: Vec<u32>,
+    pub fresh_id: Option<String>,
     pub state: JobState,
     /// `None` while `submitting`; an object once `submitted`.
     pub handle: Option<Value>,
@@ -529,6 +536,9 @@ impl JobRecord {
         map.insert("route".into(), self.route.to_value());
         map.insert("request".into(), self.request.clone());
         map.insert("take".into(), take_value(&self.take));
+        if let Some(fresh_id) = &self.fresh_id {
+            map.insert("fresh_id".into(), Value::from(fresh_id.as_str()));
+        }
         map.insert("state".into(), Value::from(self.state.as_str()));
         map.insert("handle".into(), self.handle.clone().unwrap_or(Value::Null));
         if let Some(diagnostic) = &self.diagnostic {
@@ -560,7 +570,7 @@ impl JobRecord {
                 "state",
                 "handle",
             ],
-            &["note", "diagnostic"],
+            &["note", "diagnostic", "fresh_id"],
         )?;
         let state = map["state"]
             .as_str()
@@ -600,12 +610,13 @@ impl JobRecord {
         if map.contains_key("diagnostic") && state != JobState::Submitting {
             return Err(format!("{what} is {} and has a diagnostic", state.as_str()));
         }
-        Ok(JobRecord {
+        let record = JobRecord {
             key: digest_member(map, "key", what)?,
             capability: capability_member(map, what)?,
             route: RouteEntry::from_value(&map["route"])?,
             request: request_member(map, what)?,
             take: take_member(map, what)?,
+            fresh_id: fresh_id_member(map, what)?,
             state,
             handle,
             note,
@@ -616,20 +627,49 @@ impl JobRecord {
                         .map_err(|_| "the job diagnostic is not a diagnostic".to_string())
                 })
                 .transpose()?,
-        })
+        };
+        if let Some(fresh_id) = &record.fresh_id
+            && record.key
+                != call_key_with_fresh_id(
+                    &record.capability,
+                    &record.route.fingerprint,
+                    &record.request,
+                    &record.take,
+                    Some(fresh_id),
+                )
+        {
+            return Err(format!(
+                "the key of {what} does not match its fresh call key"
+            ));
+        }
+        Ok(record)
     }
 }
 
 /// `call_key` (spec/identity.md §9): `digest({"kind": "fx-call-v1", capability, route:
 /// fingerprint, request, take})`. `request` is already plain (files as `{"file": digest}`).
 pub fn call_key(capability: &str, fingerprint: &str, request: &Value, take: &[u32]) -> String {
-    value::digest(&value::object([
-        ("kind", Value::from(CALL_KEY_KIND)),
-        ("capability", Value::from(capability)),
-        ("route", Value::from(fingerprint)),
-        ("request", request.clone()),
-        ("take", take_value(take)),
-    ]))
+    call_key_with_fresh_id(capability, fingerprint, request, take, None)
+}
+
+pub(crate) fn call_key_with_fresh_id(
+    capability: &str,
+    fingerprint: &str,
+    request: &Value,
+    take: &[u32],
+    fresh_id: Option<&str>,
+) -> String {
+    value::digest_with_fresh_id(
+        value::object([
+            ("kind", Value::from(CALL_KEY_KIND)),
+            ("capability", Value::from(capability)),
+            ("route", Value::from(fingerprint)),
+            ("request", request.clone()),
+            ("take", take_value(take)),
+        ]),
+        "fx-call-fresh-v1",
+        fresh_id,
+    )
 }
 
 // ------------------------------------------------------------------ reading helpers
@@ -734,6 +774,20 @@ fn digest_member(map: &Map<String, Value>, name: &str, what: &str) -> Result<Str
             shown(&map[name])
         )),
     }
+}
+
+fn fresh_id_member(map: &Map<String, Value>, what: &str) -> Result<Option<String>, String> {
+    map.get("fresh_id")
+        .map(|value| {
+            value
+                .as_str()
+                .filter(|id| value::is_fresh_id(id))
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!("the fresh_id of {what} must be 32 lowercase hexadecimal digits")
+                })
+        })
+        .transpose()
 }
 
 fn capability_member(map: &Map<String, Value>, what: &str) -> Result<String, String> {
@@ -891,6 +945,49 @@ mod tests {
             key,
             "9f66a9f2d23c7cf21331a3a45778bf9a660451a79cd4df3aae5f576e0b807d38"
         );
+    }
+
+    #[test]
+    fn fresh_call_and_job_records_keep_the_same_recomputable_key() {
+        let fresh_id = "00112233445566778899aabbccddeeff";
+        let request = json!({"background": "auto", "prompt": "A picture of 2 lines"});
+        let key = call_key_with_fresh_id("image.generate", FP, &request, &[1], Some(fresh_id));
+        assert_eq!(
+            key,
+            "f92c14fd5bcce7536c662443453a92d16d2c883f660f96af17bb0d4c31678f55"
+        );
+
+        let record = json!({
+            "kind": CALL_KIND,
+            "key": key,
+            "capability": "image.generate",
+            "route": {"id": "img-a@acme", "fingerprint": FP},
+            "request": request,
+            "take": [1],
+            "fresh_id": fresh_id,
+            "files": {},
+            "data": null,
+            "cost_usd": null,
+        });
+        let call = CallRecord::from_value(&record).unwrap();
+        assert_eq!(call.computed_key(), key);
+        assert_eq!(call.to_value(), record);
+
+        let mut job = JobRecord {
+            key,
+            capability: call.capability,
+            route: call.route,
+            request: call.request,
+            take: call.take,
+            fresh_id: call.fresh_id,
+            state: JobState::Submitted,
+            handle: Some(json!({"job": "job-1"})),
+            note: None,
+            diagnostic: None,
+        };
+        assert_eq!(JobRecord::from_value(&job.to_value()).unwrap(), job);
+        job.fresh_id = Some("f".repeat(32));
+        assert!(JobRecord::from_value(&job.to_value()).is_err());
     }
 
     #[test]

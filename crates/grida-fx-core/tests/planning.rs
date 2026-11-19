@@ -2261,6 +2261,7 @@ fn hand_planner(takes: &[&str]) -> (Fixture, Planner) {
         registry: fixture.registry(),
         results: IndexMap::new(),
         max_usd: None,
+        fresh_id: None,
     };
     (fixture, planner)
 }

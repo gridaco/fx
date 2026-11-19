@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-call-result-v1",
+  "title": "FX one-shot capability call result",
+  "type": "object",
+  "required": [
+    "kind", "status", "capability", "route", "cache", "run", "invocation_id",
+    "artifact", "output", "charged_usd", "ceiling_usd", "forecast", "stand_in", "error"
+  ],
+  "properties": {
+    "kind": {"const": "fx-call-result-v1"},
+    "status": {"enum": ["planned", "ok", "refused", "failed", "cancelled", "error"]},
+    "capability": {"const": "image.generate"},
+    "route": {"$ref": "#/$defs/optional_text"},
+    "cache": {"enum": ["step", "call", "miss", null]},
+    "run": {"$ref": "#/$defs/optional_text"},
+    "invocation_id": {"$ref": "#/$defs/optional_text"},
+    "artifact": {"$ref": "#/$defs/optional_text"},
+    "output": {"$ref": "#/$defs/optional_text"},
+    "charged_usd": {"$ref": "#/$defs/optional_usd"},
+    "ceiling_usd": {"$ref": "#/$defs/optional_usd"},
+    "forecast": {
+      "type": ["object", "null"],
+      "required": ["low_usd", "high_usd", "unpriced_calls"],
+      "properties": {
+        "low_usd": {"$ref": "#/$defs/optional_usd"},
+        "high_usd": {"$ref": "#/$defs/optional_usd"},
+        "known_low_usd": {"$ref": "#/$defs/optional_usd"},
+        "known_high_usd": {"$ref": "#/$defs/optional_usd"},
+        "unpriced_calls": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "stand_in": {"type": "boolean"},
+    "error": {
+      "type": ["object", "null"],
+      "required": ["code", "message", "diagnostic"],
+      "properties": {
+        "code": {"$ref": "#/$defs/optional_text"},
+        "message": {"type": "string", "minLength": 1},
+        "diagnostic": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "urn:grida-fx:schema:fx-node-protocol-v1#/$defs/adapter_diagnostic"}
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "optional_text": {"type": ["string", "null"], "minLength": 1},
+    "optional_usd": {"type": ["number", "null"], "minimum": 0}
+  }
+}

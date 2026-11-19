@@ -63,6 +63,40 @@ pub struct NodeDisplay {
     pub preview: Option<grida_fx_core::docs::workflow::Preview>,
 }
 
+/// Observed evidence from one unsuccessful exchange of a managed call.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallAttemptFailure {
+    pub attempt: u32,
+    pub send: Option<u32>,
+    pub outcome: CallAttemptOutcome,
+    pub reason: String,
+    pub diagnostic: Option<grida_fx_protocol::AdapterDiagnostic>,
+    pub charged_usd: Option<Usd>,
+    pub retryable: bool,
+}
+
+/// What the failing exchange established, independently of its optional diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallAttemptOutcome {
+    Refused,
+    NotReceived,
+    Failed,
+    Unsettled,
+    Unreachable,
+}
+
+impl CallAttemptOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Refused => "refused",
+            Self::NotReceived => "not_received",
+            Self::Failed => "failed",
+            Self::Unsettled => "unsettled",
+            Self::Unreachable => "unreachable",
+        }
+    }
+}
+
 /// One event's own fields (module doc). Names and members follow fx-run-events-v1.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -176,6 +210,13 @@ pub enum Event {
         /// true`, written only when true.
         stand_in: bool,
     },
+    CallAttemptFailed {
+        id: String,
+        capability: String,
+        route: String,
+        call: String,
+        failure: CallAttemptFailure,
+    },
     /// A call that could not take its route's slot at once, written before it waits
     /// (spec/store.md §8, "Waiting for a route").
     CallWaiting {
@@ -270,6 +311,7 @@ impl Event {
             Event::NodeSkipped { .. } => "node_skipped",
             Event::NodeRetry { .. } => "node_retry",
             Event::Call { .. } => "call",
+            Event::CallAttemptFailed { .. } => "call_attempt_failed",
             Event::CallWaiting { .. } => "call_waiting",
             Event::CallAdmitted { .. } => "call_admitted",
             Event::BudgetReserved { .. } => "budget_reserved",
@@ -539,6 +581,34 @@ impl Event {
                 if *stand_in {
                     fields.put("stand_in", Value::Bool(true));
                 }
+            }
+            Event::CallAttemptFailed {
+                id,
+                capability,
+                route,
+                call,
+                failure,
+            } => {
+                fields.text("id", id);
+                fields.text("capability", capability);
+                fields.text("route", route);
+                fields.text("call", call);
+                fields.put("attempt", Value::from(failure.attempt));
+                if let Some(send) = failure.send {
+                    fields.put("send", Value::from(send));
+                }
+                fields.text("outcome", failure.outcome.as_str());
+                fields.text("reason", &failure.reason);
+                if let Some(diagnostic) = &failure.diagnostic {
+                    fields.put(
+                        "diagnostic",
+                        serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
+                    );
+                }
+                if let Some(charged) = failure.charged_usd {
+                    fields.money("charged_usd", charged);
+                }
+                fields.put("retryable", Value::Bool(failure.retryable));
             }
             Event::BudgetReserved {
                 node_id,

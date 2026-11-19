@@ -5,6 +5,7 @@
 //! and messages name it that way (spec/store.md §8 "Nothing private").
 
 pub mod cache;
+pub mod call;
 pub mod control;
 pub mod doctor;
 pub mod export;

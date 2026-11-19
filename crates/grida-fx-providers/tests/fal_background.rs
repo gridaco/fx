@@ -46,7 +46,7 @@ fn post() -> Expect {
 fn send(transport: &Arc<ReplayTransport>, call: &CallRequest) -> Sent {
     let sent = block_on(adapter(transport.clone()).send(call));
     transport.assert_done();
-    sent
+    sent.into_report().0
 }
 
 fn refused(call: &CallRequest, keys: Keys) -> String {

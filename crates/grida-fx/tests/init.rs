@@ -1,6 +1,5 @@
-//! `init`: the built-in starter, templates from a checkout, an archive and a loopback URL, and the
-//! refusals that leave a folder untouched (spec/service.md §2, §2.1). Nothing reaches beyond this
-//! machine: the release archive is stood in for by archives built here, served on loopback.
+//! Project setup with `init` and `add` (spec/service.md §2). Nothing reaches beyond this
+//! machine: tests serve synthetic archives on loopback or through a stand-in for GitHub CLI.
 #![cfg(unix)]
 
 use serde_json::{Value, json};
@@ -53,10 +52,14 @@ fn refused(output: &Output, says: &str) {
     assert!(stderr.contains(says), "{stderr}");
 }
 
-fn conforms(schema: &str, document: &Value) {
+fn validator(schema: &str) -> jsonschema::Validator {
     let path = repository().join(format!("spec/schemas/{schema}.schema.json"));
     let schema: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-    let validator = jsonschema::validator_for(&schema).unwrap();
+    jsonschema::validator_for(&schema).unwrap()
+}
+
+fn conforms(schema: &str, document: &Value) {
+    let validator = validator(schema);
     let problems: Vec<String> = validator
         .iter_errors(document)
         .map(|error| format!("{error} at {}", error.instance_path()))
@@ -73,7 +76,11 @@ fn files(folder: &Path) -> Vec<String> {
             if entry.file_type().unwrap().is_dir() {
                 walk(folder, &path, found);
             } else {
-                found.push(path.to_str().unwrap().to_string());
+                let parts: Vec<&str> = path
+                    .components()
+                    .map(|part| part.as_os_str().to_str().unwrap())
+                    .collect();
+                found.push(parts.join("/"));
             }
         }
     }
@@ -198,6 +205,19 @@ fn the_listing_is_the_starter_then_the_index() {
             .map(|template| template["name"].as_str().unwrap()),
     );
     assert_eq!(names, expected);
+    assert!(listed["templates"][0].get("workflow_entry").is_none());
+    for (entry, template) in listed["templates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .skip(1)
+        .zip(index)
+    {
+        for field in ["workflow_entry", "inputs_file", "prerequisites"] {
+            assert_eq!(entry.get(field), template["starter"].get(field));
+        }
+        assert!(entry.get("missing_inputs").is_none());
+    }
     refused(
         &execute(root.path(), &["init", "x", "--template", "nope"]),
         "no template \"nope\"; the templates: starter,",
@@ -306,6 +326,7 @@ fn a_template_s_own_gitignore_keeps_its_lines() {
 // --- Archives -----------------------------------------------------------------------------------
 
 /// An entry of an archive built here.
+#[derive(Clone, Copy)]
 enum Item<'a> {
     File(&'a str, &'a [u8]),
     Link(&'a str, &'a str),
@@ -358,6 +379,548 @@ const HELLO: [Item<'static>; 3] = [
         b"fx: workflow/v1\n",
     ),
 ];
+
+const PET: [Item<'static>; 3] = [
+    Item::File(
+        "fx-9.9.9/examples/pet/fx.yaml",
+        include_bytes!("../../../examples/pet/fx.yaml"),
+    ),
+    Item::File(
+        "fx-9.9.9/examples/pet/workflows/pet.yaml",
+        include_bytes!("../../../examples/pet/workflows/pet.yaml"),
+    ),
+    Item::File(
+        "fx-9.9.9/examples/pet/inputs/pebble.yaml",
+        include_bytes!("../../../examples/pet/inputs/pebble.yaml"),
+    ),
+];
+
+fn write_test_archive(root: &Path, items: &[Item]) {
+    std::fs::write(root.join("release.tar.gz"), archive(items)).unwrap();
+}
+
+#[test]
+fn add_installs_pet_as_its_own_project_and_preserves_local_edits() {
+    let root = tempfile::tempdir().unwrap();
+    let parent_config = "fx: project/v1\nroutes:\n  image.generate: imagegen@openai\n";
+    std::fs::write(root.path().join("fx.yaml"), parent_config).unwrap();
+    write_test_archive(root.path(), &PET);
+    let args = [
+        "add",
+        "pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    let result = success(execute(root.path(), &args));
+    conforms("fx-project-init-v1", &result);
+    let validator = validator("fx-project-init-v1");
+    for (field, invalid) in [
+        ("created", json!(false)),
+        ("template", Value::Null),
+        ("template", json!({"name": "pet", "source": "built_in"})),
+    ] {
+        let mut broken = result.clone();
+        broken[field] = invalid;
+        assert!(!validator.is_valid(&broken), "accepted {broken:#}");
+    }
+    let project = root.path().join("pet").canonicalize().unwrap();
+    assert_eq!(result["project_root"], json!(project));
+    assert_eq!(
+        result["template"],
+        json!({"name": "pet", "source": "local"})
+    );
+    assert_eq!(result["workflow_entry"], "workflows/pet.yaml");
+    assert_eq!(result["inputs_file"], "inputs/pebble.yaml");
+    assert_eq!(result["missing_inputs"], json!([]));
+    assert_eq!(result["prerequisites"].as_array().unwrap().len(), 2);
+    assert_eq!(result["files_created"], json!(files(&project)));
+    assert!(project.join(".agents/skills/grida-fx/SKILL.md").is_file());
+
+    let inputs = project.join("inputs/pebble.yaml");
+    std::fs::write(&inputs, "id: edited\n").unwrap();
+    // Even with no network, the collision is diagnosed before a template is acquired.
+    refused(
+        &execute(root.path(), &["add", "pet", "--json"]),
+        "already exists",
+    );
+    assert_eq!(std::fs::read_to_string(inputs).unwrap(), "id: edited\n");
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("fx.yaml")).unwrap(),
+        parent_config
+    );
+}
+
+#[test]
+fn add_rejects_a_broken_starter_before_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let args = [
+        "add",
+        "pet",
+        "fox-pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    let cases = [
+        (
+            [
+                Item::File("fx-9.9.9/examples/pet/fx.yaml", b"fx: wrong/v1\n"),
+                PET[1],
+                PET[2],
+            ],
+            "fx.yaml",
+        ),
+        (
+            [
+                PET[0],
+                Item::File(
+                    "fx-9.9.9/examples/pet/workflows/pet.yaml",
+                    b"fx: wrong/v1\n",
+                ),
+                PET[2],
+            ],
+            "workflows/pet.yaml",
+        ),
+        (
+            [PET[0], PET[1], Item::File("fx-9.9.9/README.md", b"")],
+            "starter input preset",
+        ),
+    ];
+    for (items, says) in cases {
+        write_test_archive(root.path(), &items);
+        refused(&execute(root.path(), &args), says);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+    refused(
+        &execute(root.path(), &["add", "starter"]),
+        "no add template",
+    );
+    assert!(!root.path().join("starter").exists());
+    refused(
+        &execute(root.path(), &["add", "pet", "absent/fox"]),
+        "destination parent",
+    );
+    assert!(!root.path().join("absent").exists());
+}
+
+#[test]
+fn add_refuses_workflow_search_that_would_cover_the_installed_project() {
+    let root = tempfile::tempdir().unwrap();
+    let target = root.path().canonicalize().unwrap().join("fox-pet");
+    let config = format!("fx: project/v1\nworkflows: [{}]\n", json!(target));
+    write_test_archive(
+        root.path(),
+        &[
+            Item::File("fx-9.9.9/examples/pet/fx.yaml", config.as_bytes()),
+            PET[1],
+            PET[2],
+        ],
+    );
+    let outcome = execute(
+        root.path(),
+        &[
+            "add",
+            "pet",
+            "fox-pet",
+            "--template-source",
+            "release.tar.gz",
+        ],
+    );
+    refused(&outcome, "is the project or holds it");
+    assert!(!target.exists());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn add_checks_search_links_against_the_installed_project_tree() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = tempfile::tempdir().unwrap();
+    let root = workspace.path().canonicalize().unwrap();
+    let target = root.join("fox-pet");
+    symlink("fox-pet", root.join("project-link")).unwrap();
+    symlink(target.join("workflows"), root.join("child-link")).unwrap();
+    symlink("child-link", root.join("chain")).unwrap();
+    symlink("fox-pet/missing", root.join("missing-link")).unwrap();
+    std::fs::create_dir(root.join("external")).unwrap();
+
+    let install = |workflows: &[&str]| {
+        let config = format!("fx: project/v1\nworkflows: {}\n", json!(workflows));
+        write_test_archive(
+            &root,
+            &[
+                Item::File("fx-9.9.9/examples/pet/fx.yaml", config.as_bytes()),
+                PET[1],
+                PET[2],
+            ],
+        );
+        execute(
+            &root,
+            &[
+                "add",
+                "pet",
+                "fox-pet",
+                "--template-source",
+                "release.tar.gz",
+                "--json",
+            ],
+        )
+    };
+
+    for entry in [
+        "../project-link",
+        "../chain/..",
+        "../project-link/missing/..",
+    ] {
+        refused(&install(&[entry]), "is the project or holds it");
+        assert!(!target.exists(), "{entry}");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 6);
+    }
+    success(install(&[
+        "workflows",
+        "../chain",
+        "../missing-link",
+        "../external",
+    ]));
+    let validated = success(execute(&target, &["init", "--json"]));
+    assert_eq!(validated["created"], false);
+}
+
+#[test]
+fn add_refuses_to_stage_inside_its_checkout_source() {
+    let root = tempfile::tempdir().unwrap();
+    let example = root.path().join("examples/pet");
+    std::fs::create_dir_all(&example).unwrap();
+    let link = root.path().join("example-link");
+    std::os::unix::fs::symlink(&example, &link).unwrap();
+    let outcome = execute(
+        root.path(),
+        &["add", "pet", "example-link/fox", "--template-source", "."],
+    );
+    refused(&outcome, "destination is inside the template source");
+    assert!(std::fs::read_dir(example).unwrap().next().is_none());
+}
+
+#[test]
+fn add_reports_a_missing_declared_input_without_creating_it() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/fx.yaml",
+                b"fx: project/v1\n",
+            ),
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/workflows/image-recolor.yaml",
+                include_bytes!("../../../examples/image-recolor/workflows/image-recolor.yaml"),
+            ),
+            Item::File(
+                "fx-9.9.9/examples/image-recolor/inputs/example.yaml",
+                include_bytes!("../../../examples/image-recolor/inputs/example.yaml"),
+            ),
+        ],
+    );
+    let result = success(execute(
+        root.path(),
+        &[
+            "add",
+            "image-recolor",
+            "--template-source",
+            "release.tar.gz",
+            "--json",
+        ],
+    ));
+    assert_eq!(result["missing_inputs"], json!(["inputs/source.png"]));
+    assert!(!root.path().join("image-recolor/inputs/source.png").exists());
+}
+
+const COMMUNITY: &str = "acme/studio@v1.2.0";
+const COMMUNITY_PROJECT: Item<'static> = Item::File("studio-1.2.0/fx.yaml", b"fx: project/v1\n");
+const COMMUNITY_WORKFLOW: &[u8] = b"fx: workflow/v1
+id: posters
+title: Studio posters
+steps:
+  draw:
+    uses: fx/image.generate@1
+    with: { prompt: A colorful poster }
+";
+
+fn community_add(root: &Path, options: &[&str]) -> Output {
+    let mut args = vec![
+        "add",
+        COMMUNITY,
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ];
+    args.extend_from_slice(options);
+    execute(root, &args)
+}
+
+#[test]
+fn community_add_uses_the_root_declaration_and_preserves_local_edits() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/recipes/posters.yaml", COMMUNITY_WORKFLOW),
+            Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW),
+            Item::File("studio-1.2.0/inputs/start.yaml", b"{}\n"),
+            Item::File("studio-1.2.0/README.md", b"# Studio\n"),
+            Item::File("studio-1.2.0/.env.local", b"# Local configuration\n"),
+            Item::File("studio-1.2.0/.env.example", b"# Studio environment\n"),
+            Item::File(
+                "studio-1.2.0/fx-template.json",
+                br#"{
+                    "workflow_entry": "recipes/posters.yaml",
+                    "inputs_file": "inputs/start.yaml",
+                    "required_inputs": ["inputs/reference.png"],
+                    "prerequisites": ["An image provider for live drawing"]
+                }"#,
+            ),
+        ],
+    );
+
+    let install = success(community_add(root.path(), &[]));
+    conforms("fx-project-init-v1", &install);
+    let project = root.path().join("studio");
+    assert_eq!(
+        install["project_root"],
+        json!(project.canonicalize().unwrap())
+    );
+    assert_eq!(
+        install["template"],
+        json!({"name": COMMUNITY, "source": "github"})
+    );
+    assert_eq!(install["workflow_entry"], "recipes/posters.yaml");
+    assert_eq!(install["inputs_file"], "inputs/start.yaml");
+    assert_eq!(install["missing_inputs"], json!(["inputs/reference.png"]));
+    assert_eq!(
+        install["prerequisites"],
+        json!(["An image provider for live drawing"])
+    );
+    assert_eq!(install["files_created"], json!(files(&project)));
+    assert_eq!(
+        std::fs::read(project.join("README.md")).unwrap(),
+        b"# Studio\n"
+    );
+    assert!(!project.join(".env.local").exists());
+    assert_eq!(
+        std::fs::read(project.join(".env.example")).unwrap(),
+        b"# Studio environment\n"
+    );
+
+    let selection = success(community_add(
+        root.path(),
+        &["other", "--workflow", "posters"],
+    ));
+    assert_eq!(selection["inputs_file"], "inputs/start.yaml");
+    let selection = success(community_add(
+        root.path(),
+        &["alternate", "--workflow", "labels"],
+    ));
+    assert_eq!(selection["workflow_entry"], "workflows/labels.yaml");
+    assert!(selection.get("inputs_file").is_none());
+
+    let preset = project.join("inputs/start.yaml");
+    std::fs::write(&preset, "# edited\n").unwrap();
+    refused(&execute(root.path(), &["add", COMMUNITY]), "already exists");
+    assert_eq!(std::fs::read(&preset).unwrap(), b"# edited\n");
+}
+
+#[test]
+fn community_add_discovers_workflow_files_and_requires_an_unambiguous_selection() {
+    let root = tempfile::tempdir().unwrap();
+    let posters = Item::File("studio-1.2.0/fx/posters.yml", COMMUNITY_WORKFLOW);
+    let labels = Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW);
+    let other_yaml = Item::File(
+        "studio-1.2.0/workflows/settings.yaml",
+        b"defaults: &defaults {size: 2, fx: workflow/v1}\nposter: *defaults\n",
+    );
+    let nested = Item::File(
+        "studio-1.2.0/workflows/nested/labels.yaml",
+        COMMUNITY_WORKFLOW,
+    );
+    write_test_archive(
+        root.path(),
+        &[COMMUNITY_PROJECT, posters, other_yaml, nested],
+    );
+    let install = success(community_add(root.path(), &["single"]));
+    assert_eq!(install["workflow_entry"], "fx/posters.yml");
+    assert_eq!(install["missing_inputs"], json!([]));
+
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, posters, labels]);
+    for options in [&[][..], &["--workflow", "does-not-exist"][..]] {
+        let outcome = community_add(root.path(), options);
+        refused(&outcome, "workflows/labels.yaml");
+        assert!(String::from_utf8_lossy(&outcome.stderr).contains("fx/posters.yml"));
+        assert!(!root.path().join("studio").exists());
+    }
+    let malformed = Item::File(
+        "studio-1.2.0/workflows/draft.yaml",
+        b"fx: workflow/v1\nsteps: [\n",
+    );
+    let unrelated_same_stem = Item::File(
+        "studio-1.2.0/fx/labels.yaml",
+        b"defaults: &defaults {size: 2}\n",
+    );
+    write_test_archive(
+        root.path(),
+        &[
+            COMMUNITY_PROJECT,
+            posters,
+            labels,
+            malformed,
+            unrelated_same_stem,
+        ],
+    );
+    let install = success(community_add(
+        root.path(),
+        &["selected", "--workflow", "labels"],
+    ));
+    assert_eq!(install["workflow_entry"], "workflows/labels.yaml");
+
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, other_yaml, malformed]);
+    let outcome = community_add(root.path(), &["invalid"]);
+    refused(&outcome, "workflows/draft.yaml");
+    assert!(!root.path().join("invalid").exists());
+
+    let same_stem = Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW);
+    write_test_archive(root.path(), &[COMMUNITY_PROJECT, posters, same_stem]);
+    let outcome = community_add(root.path(), &["--workflow", "posters"]);
+    refused(&outcome, "workflows/posters.yaml");
+    assert!(String::from_utf8_lossy(&outcome.stderr).contains("fx/posters.yml"));
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn community_add_rejects_invalid_sources_before_network_or_writes() {
+    let root = tempfile::tempdir().unwrap();
+    for source in [
+        "acme/studio",
+        "acme/studio@",
+        "acme/studio@../v1",
+        "acme/studio@v1?zip",
+    ] {
+        let outcome = execute(root.path(), &["add", source]);
+        refused(&outcome, "OWNER/REPO@REF");
+        assert!(outcome.stdout.is_empty());
+    }
+    for source in [
+        COMMUNITY,
+        "acme/studio@0123456789abcdef0123456789abcdef01234567",
+    ] {
+        refused(
+            &execute(root.path(), &["add", source]),
+            "GRIDA_FX_NETWORK=off",
+        );
+    }
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+}
+
+#[test]
+fn community_add_refuses_a_corrupt_gzip_checksum_before_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let mut bytes = archive(&[
+        COMMUNITY_PROJECT,
+        Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+    ]);
+    let checksum = bytes.len() - 8;
+    bytes[checksum] ^= 1;
+    std::fs::write(root.path().join("release.tar.gz"), bytes).unwrap();
+
+    let outcome = community_add(root.path(), &[]);
+    refused(&outcome, "the template archive is not a readable .tar.gz");
+    assert!(outcome.stdout.is_empty());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn community_add_refuses_unsafe_archive_entries_without_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    let workflow = Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW);
+    for item in [
+        Item::Link("studio-1.2.0/escape", "../outside"),
+        Item::Raw("studio-1.2.0/../outside", b"escape"),
+        Item::Raw(r"studio-1.2.0/fx\outside", b"escape"),
+    ] {
+        write_test_archive(root.path(), &[COMMUNITY_PROJECT, workflow, item]);
+        refused(&community_add(root.path(), &[]), "template was refused");
+        assert_eq!(files(root.path()), vec!["release.tar.gz"]);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+}
+
+#[test]
+fn community_add_refuses_an_invalid_root_declaration_instead_of_falling_back_to_scan() {
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(
+        root.path(),
+        &[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+            Item::File(
+                "studio-1.2.0/fx-template.json",
+                br#"{"workflow_entry":"../posters.yaml"}"#,
+            ),
+        ],
+    );
+    refused(&community_add(root.path(), &[]), "fx-template.json");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn community_add_counts_implicit_archive_directories_against_the_limit() {
+    let root = tempfile::tempdir().unwrap();
+    let paths: Vec<String> = (0..501)
+        .map(|n| format!("studio-1.2.0/assets/{n}/child/source.txt"))
+        .collect();
+    let mut items = vec![COMMUNITY_PROJECT];
+    items.extend(paths.iter().map(|path| Item::File(path, b"source\n")));
+    write_test_archive(root.path(), &items);
+    refused(
+        &community_add(root.path(), &[]),
+        "more than 1000 directories",
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn concurrent_add_has_one_complete_winner() {
+    use std::process::Stdio;
+    let root = tempfile::tempdir().unwrap();
+    write_test_archive(root.path(), &PET);
+    let mut call = command(root.path());
+    call.args([
+        "add",
+        "pet",
+        "fox-pet",
+        "--template-source",
+        "release.tar.gz",
+        "--json",
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    let first = call.spawn().unwrap();
+    let second = call.spawn().unwrap();
+    let first = first.wait_with_output().unwrap();
+    let second = second.wait_with_output().unwrap();
+    let (winner, loser) = if first.status.success() {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    refused(&loser, "already exists");
+    let winner = success(winner);
+    assert_eq!(
+        winner["files_created"],
+        json!(files(&root.path().join("fox-pet")))
+    );
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 2);
+}
 
 fn from_archive(root: &Path, bytes: &[u8]) -> Output {
     let path = root.join("release.tar.gz");
@@ -422,6 +985,10 @@ fn an_unsafe_or_wrong_archive_is_refused_and_writes_nothing() {
             ]),
             "leaves its folder",
         ),
+        (
+            archive(&[Item::Raw("/examples/hello/fx.yaml", b"fx: project/v1\n")]),
+            "leaves its folder",
+        ),
         (archive(&crowded), "more than 1000 files"),
         (
             archive(&[Item::File(
@@ -452,6 +1019,197 @@ fn an_unsafe_or_wrong_archive_is_refused_and_writes_nothing() {
 }
 
 // --- Downloads ----------------------------------------------------------------------------------
+
+fn write_github_cli(root: &Path, body: &str) {
+    grida_fx_providers::testing::write_program(
+        &root.join("gh"),
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"${{0%/*}}/gh-args\"\n{body}\n"),
+    );
+}
+
+fn github_cli_add(root: &Path, source: &str, options: &[&str]) -> Command {
+    let mut call = command(root);
+    call.env("PATH", root)
+        .env_remove("GRIDA_FX_NETWORK")
+        .args(["add", source, "--github-auth"])
+        .args(options);
+    call
+}
+
+#[test]
+fn github_auth_add_installs_the_pinned_snapshot_with_the_same_receipt() {
+    for (source, endpoint) in [
+        (
+            "acme/studio@releases/v1.2.0+studio",
+            "repos/acme/studio/tarball/refs%2Ftags%2Freleases%2Fv1.2.0%2Bstudio",
+        ),
+        (
+            "acme/studio@0123456789ABCDEF0123456789ABCDEF01234567",
+            "repos/acme/studio/tarball/0123456789abcdef0123456789abcdef01234567",
+        ),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        write_test_archive(
+            root.path(),
+            &[
+                COMMUNITY_PROJECT,
+                Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+                Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW),
+                Item::File("studio-1.2.0/.env.local", b"# Studio local configuration\n"),
+            ],
+        );
+        write_github_cli(
+            root.path(),
+            "test \"$GH_PROMPT_DISABLED\" = 1 || exit 1\nexec /bin/cat \"${0%/*}/release.tar.gz\"",
+        );
+
+        let result = success(
+            github_cli_add(root.path(), source, &["--workflow", "posters", "--json"])
+                .output()
+                .unwrap(),
+        );
+        conforms("fx-project-init-v1", &result);
+        assert_eq!(
+            result["template"],
+            json!({"name": source, "source": "github"})
+        );
+        assert_eq!(result["workflow_entry"], "workflows/posters.yaml");
+        let project = root.path().join("studio");
+        assert_eq!(
+            result["project_root"],
+            json!(project.canonicalize().unwrap())
+        );
+        assert_eq!(
+            std::fs::read(project.join("workflows/posters.yaml")).unwrap(),
+            COMMUNITY_WORKFLOW
+        );
+        assert!(!project.join(".env.local").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("gh-args")).unwrap(),
+            format!("api\n--hostname\ngithub.com\n{endpoint}\n")
+        );
+    }
+}
+
+#[test]
+fn github_auth_add_reports_setup_and_fetch_errors_without_exposing_output() {
+    let root = tempfile::tempdir().unwrap();
+    let call = || {
+        github_cli_add(root.path(), COMMUNITY, &["--json"])
+            .output()
+            .unwrap()
+    };
+    refused(&call(), "requires GitHub CLI (gh)");
+    write_github_cli(root.path(), "exit 4");
+    refused(&call(), "gh auth login");
+
+    let private_output = "https://example.test/archive?token=fixture-not-a-credential";
+    write_github_cli(
+        root.path(),
+        &format!(
+            "printf '%s\\n' '{private_output}'\nprintf '%s\\n' '{private_output}' >&2\nexit 1"
+        ),
+    );
+    let outcome = call();
+    refused(&outcome, "repository read access");
+    assert!(!String::from_utf8_lossy(&outcome.stderr).contains(private_output));
+    assert!(outcome.stdout.is_empty());
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn github_auth_add_refuses_oversized_downloads_without_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(
+        root.path(),
+        "exec /usr/bin/head -c $((64 * 1024 * 1024 + 1)) /dev/zero",
+    );
+    let outcome = github_cli_add(root.path(), COMMUNITY, &[])
+        .output()
+        .unwrap();
+    refused(&outcome, "the template download exceeds 64 MiB");
+    assert!(outcome.stdout.is_empty());
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn github_auth_add_validates_before_invoking_github_cli() {
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(root.path(), "exit 1");
+    refused(
+        &github_cli_add(root.path(), COMMUNITY, &[])
+            .env("GRIDA_FX_NETWORK", "off")
+            .output()
+            .unwrap(),
+        "GRIDA_FX_NETWORK=off",
+    );
+    assert!(!root.path().join("studio").exists());
+    std::fs::create_dir(root.path().join("studio")).unwrap();
+    refused(
+        &github_cli_add(root.path(), COMMUNITY, &[])
+            .output()
+            .unwrap(),
+        "already exists",
+    );
+    refused(
+        &github_cli_add(root.path(), "pet", &[]).output().unwrap(),
+        "--github-auth requires a GitHub template",
+    );
+    assert!(!root.path().join("gh-args").exists());
+}
+
+#[test]
+fn interrupting_github_auth_add_stops_the_downloader() {
+    use rustix::process::{Pid, Signal, kill_process, test_kill_process};
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+
+    fn wait_for<T>(mut check: impl FnMut() -> Option<T>) -> Option<T> {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5) {
+            if let Some(value) = check() {
+                return Some(value);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        None
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(
+        root.path(),
+        "printf '%s\\n' \"$$\" > \"${0%/*}/gh-pid\"\nexec /bin/sleep 30",
+    );
+    let mut engine = github_cli_add(root.path(), COMMUNITY, &[])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let downloader = wait_for(|| {
+        let text = std::fs::read_to_string(root.path().join("gh-pid")).ok()?;
+        Pid::from_raw(text.strip_suffix('\n')?.parse().ok()?)
+    })
+    .unwrap_or_else(|| {
+        let _ = engine.kill();
+        let _ = engine.wait();
+        panic!("the downloader did not start");
+    });
+
+    let interrupted = kill_process(Pid::from_child(&engine), Signal::INT);
+    let status = wait_for(|| engine.try_wait().unwrap());
+    if status.is_none() {
+        let _ = engine.kill();
+        let _ = engine.wait();
+    }
+    let downloader_exited = test_kill_process(downloader) == Err(rustix::io::Errno::SRCH);
+    if !downloader_exited {
+        let _ = kill_process(downloader, Signal::KILL);
+    }
+    interrupted.unwrap();
+    assert_eq!(status.and_then(|exit| exit.code()), Some(130));
+    assert!(downloader_exited, "the downloader outlived grida-fx");
+    assert_eq!(files(root.path()), vec!["gh", "gh-args", "gh-pid"]);
+}
 
 /// Serves one HTTP response on loopback and returns its URL and the request it received.
 fn serve_once(status: &str, body: Vec<u8>) -> (String, std::thread::JoinHandle<String>) {
@@ -500,6 +1258,44 @@ fn download(root: &Path, url: &str, network: bool) -> Output {
         ])
         .output()
         .unwrap()
+}
+
+#[test]
+fn ordinary_github_add_downloads_anonymously_without_invoking_github_cli() {
+    let root = tempfile::tempdir().unwrap();
+    let (url, served) = serve_once(
+        "200 OK",
+        archive(&[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+        ]),
+    );
+    let install = |url: &str, destination: &str| {
+        command(root.path())
+            .env("PATH", root.path())
+            .env_remove("GRIDA_FX_NETWORK")
+            .args([
+                "add",
+                COMMUNITY,
+                destination,
+                "--template-source",
+                url,
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let installed = success(install(&url, "public"));
+    assert_eq!(installed["workflow_entry"], "workflows/posters.yaml");
+    let request = served.join().unwrap().to_ascii_lowercase();
+    assert!(!request.contains("authorization"), "{request}");
+
+    write_github_cli(root.path(), "exit 1");
+    let (url, served) = serve_once("404 Not Found", b"no such tag".to_vec());
+    refused(&install(&url, "missing"), "returned HTTP 404");
+    served.join().unwrap();
+    assert!(!root.path().join("missing").exists());
+    assert!(!root.path().join("gh-args").exists());
 }
 
 #[test]

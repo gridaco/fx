@@ -36,7 +36,7 @@
 use crate::docs::lock::LockFile;
 use crate::docs::project::Project;
 use crate::docs::takes::Takes;
-use crate::docs::workflow::LoadedWorkflow;
+use crate::docs::workflow::{LoadedWorkflow, parse_workflow};
 use crate::error::{Error, Result};
 use crate::expand::NodeResult;
 use crate::host::{HostFailure, NodeHost};
@@ -47,7 +47,7 @@ use crate::routes::RouteTable;
 use grida_fx_protocol::BuildParams;
 use indexmap::IndexMap;
 use regex::Regex;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -55,6 +55,9 @@ use std::sync::LazyLock;
 
 /// The project file's name, never a workflow.
 const PROJECT_FILE: &str = "fx.yaml";
+
+/// Portable source label of the engine's workflow for an inline `image.generate` call.
+pub const INLINE_IMAGE_SOURCE: &str = "fx:call/image.generate";
 
 /// `file.py:function` or `file.ts:function` (also `.mts`, `.js`, `.mjs`); `.tsx`, `.cts` and
 /// `.cjs` are builder targets too, refused when loaded (module doc, step 2).
@@ -306,6 +309,15 @@ pub struct Planner {
     /// Results known while planning (at-plan results, and the runner's results).
     pub results: IndexMap<String, NodeResult>,
     pub max_usd: Option<Usd>,
+    /// A fresh inline invocation's identity discriminator. Ordinary plans leave it unset.
+    pub fresh_id: Option<String>,
+}
+
+impl Planner {
+    /// Whether the workflow was built by the engine for an inline call.
+    pub fn is_inline_call(&self) -> bool {
+        self.workflow.source == INLINE_IMAGE_SOURCE
+    }
 }
 
 /// A workflow as loaded by steps 1 and 2 of [`make_planner`].
@@ -325,7 +337,7 @@ impl LoadedTarget {
     /// The workflow's home project: the planning project for a builder, else the nearest
     /// fx.yaml above the workflow file.
     fn home(&self) -> Result<Project> {
-        if self.is_builder() {
+        if self.is_builder() || self.workflow.source == INLINE_IMAGE_SOURCE {
             Ok(self.project.clone())
         } else {
             Project::find(&self.workflow.path)
@@ -486,6 +498,73 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         .map(|file| (absolute(cwd, file), file.clone()))
         .collect();
     let inputs = crate::inputs::bind::load_inputs(&schema, &files, flags, cwd)?;
+    complete_planner(request, loaded, schema, inputs, host)
+}
+
+/// Settings for one managed image generation. The prompt is literal text.
+pub struct ImageCall<'a> {
+    pub prompt: &'a str,
+    pub route: Option<&'a str>,
+    pub background: Option<&'a str>,
+    pub size: Option<&'a str>,
+}
+
+/// Constructs the engine-owned workflow in memory and plans it in the working directory's
+/// project. Binding the prompt as data keeps its contents out of the expression grammar.
+pub fn make_image_call_planner(
+    request: &PlanRequest,
+    call: ImageCall<'_>,
+    host: &mut dyn NodeHost,
+) -> Result<Planner> {
+    let mut step = json!({
+        "uses": "fx/image.generate@1",
+        "with": { "prompt": "${{ inputs.prompt }}" }
+    });
+    if let Some(route) = call.route {
+        step["route"] = Value::from(route);
+    }
+    for (name, value) in [("background", call.background), ("size", call.size)] {
+        if let Some(value) = value {
+            step["with"][name] = Value::from(value);
+        }
+    }
+    let document = json!({
+        "fx": "workflow/v1",
+        "id": "fx-call-image-generate",
+        "title": "Generate image",
+        "inputs": { "prompt": { "type": "string" } },
+        "steps": { "generate": step },
+        "outputs": { "image": "${{ steps.generate.outputs.image }}" }
+    });
+    let workflow = parse_workflow(&document, INLINE_IMAGE_SOURCE)?;
+    let schema = crate::inputs::compile_inputs(&workflow.inputs, None)?;
+    let inputs = crate::inputs::bind::load_inputs(
+        &schema,
+        &[],
+        IndexMap::from([("prompt".into(), Value::from(call.prompt))]),
+        &request.cwd,
+    )?;
+    let loaded = LoadedTarget {
+        project: Project::find(&request.cwd)?,
+        workflow: LoadedWorkflow {
+            document,
+            workflow: Rc::new(workflow),
+            source: INLINE_IMAGE_SOURCE.into(),
+            path: PathBuf::new(),
+        },
+        builder_takes: None,
+    };
+    complete_planner(request, loaded, schema, inputs, host)
+}
+
+fn complete_planner(
+    request: &PlanRequest,
+    loaded: LoadedTarget,
+    schema: Value,
+    inputs: RootInputs,
+    host: &mut dyn NodeHost,
+) -> Result<Planner> {
+    let cwd = request.cwd.as_path();
     // 5. The planning project's adapters; the home, its lock, the registry.
     let home = loaded.home()?;
     let LoadedTarget {
@@ -493,7 +572,8 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         mut workflow,
         builder_takes,
     } = loaded;
-    if builder_takes.is_none() {
+    let inline = workflow.source == INLINE_IMAGE_SOURCE;
+    if builder_takes.is_none() && !inline {
         workflow.source = workflow_source(&home, &workflow.path);
     }
     crate::adapters::load_declared(&mut project, host)?;
@@ -515,23 +595,27 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         .collect();
     let routes = crate::routes::load_catalog(&project, &request.builtin_routes, &extra)?;
     // 7. The takes file.
-    let folder = match builder_takes {
-        Some(folder) => folder,
-        None if home.root != project.root => project.root.clone(),
-        None => workflow
-            .path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| home.root.clone()),
+    let (takes_path, takes) = if inline {
+        (PathBuf::new(), Takes::new())
+    } else {
+        let folder = match builder_takes {
+            Some(folder) => folder,
+            None if home.root != project.root => project.root.clone(),
+            None => workflow
+                .path
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| home.root.clone()),
+        };
+        let path = crate::docs::takes::takes_path(&folder, &workflow.workflow.id);
+        let label = relative_inside(&project.root, &path).unwrap_or_else(|| {
+            path.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        });
+        let takes = crate::docs::takes::read_takes(&path, &label)?;
+        (path, takes)
     };
-    let takes_path = crate::docs::takes::takes_path(&folder, &workflow.workflow.id);
-    let takes_label = relative_inside(&project.root, &takes_path).unwrap_or_else(|| {
-        takes_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
-    let takes = crate::docs::takes::read_takes(&takes_path, &takes_label)?;
     Ok(Planner {
         cwd: cwd.to_path_buf(),
         project,
@@ -545,6 +629,7 @@ pub fn make_planner(request: &PlanRequest, host: &mut dyn NodeHost) -> Result<Pl
         registry,
         results: IndexMap::new(),
         max_usd: request.max_usd,
+        fresh_id: None,
     })
 }
 

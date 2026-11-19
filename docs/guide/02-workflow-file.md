@@ -142,9 +142,9 @@ absolute path is refused.
 
 Planning never downloads workflow, node or adapter code. A selected missing GG/OpenRouter image
 binding may require a read-only provider metadata lookup before the offline core plans it
-([AI providers](13-providers.md#a-model-fx-does-not-list)). A registry of workflows and nodes
-comes later, and it copies: `grida fx add <item>` will put a copy in your project, used through
-a `./` path like your own files.
+([AI providers](13-providers.md#a-model-fx-does-not-list)). Use `grida fx add` to copy a template
+as a fresh project with editable local files. See
+[Start from a template](01-getting-started.md#start-from-a-template).
 
 Every step field:
 

@@ -4,6 +4,27 @@ Protocol v1 exposes inspection context and presentation in an existing viewer
 page. It does not execute workflows, mutate records or picks, launch processes,
 activate windows, or navigate to arbitrary sources.
 
+## Recognizing a viewer document
+
+The engine-shipped viewer includes this marker in the initial HTML head for its
+catalog, plan and run pages, including standalone viewers.
+
+```html
+<meta name="application-name" content="FX Viewer" data-grida-fx-viewer="1">
+```
+
+The value `1` identifies this document marker format independently of the engine
+release and the message protocol. The application name is display text. The
+browser SDK's synchronous `isFxViewerDocument(document)` matches
+`head > meta[name="application-name"][data-grida-fx-viewer="1"]` in the supplied
+document. A missing or unsupported marker returns `false`. Earlier viewers can
+support the page API while omitting the marker.
+
+Hosts may use this declaration for branded presentation as soon as the head is
+parsed. Read the current subject and its recorded identifiers through
+`getContext()` after evidence loads. Native actions require their own trusted
+binding and cross-origin messaging requires the grant described below.
+
 ## Project display settings
 
 The optional `viewer.display` object in `fx.yaml` defines the project's canvas defaults:

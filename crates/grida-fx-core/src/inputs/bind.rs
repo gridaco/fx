@@ -248,8 +248,16 @@ fn join_label(folder: &str, text: &str) -> String {
 /// Python's `Path.resolve()` (not strict): absolute, symbolic links resolved where the path
 /// exists, `.` and `..` applied to the resolved prefix.
 pub(crate) fn resolve(path: &Path) -> PathBuf {
+    resolve_with(path, |path| path.canonicalize().ok())
+}
+
+/// Resolves an absolute path's existing prefixes using the supplied filesystem view.
+pub(crate) fn resolve_with(
+    path: &Path,
+    canonicalize: impl Fn(&Path) -> Option<PathBuf>,
+) -> PathBuf {
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    if let Ok(real) = absolute.canonicalize() {
+    if let Some(real) = canonicalize(&absolute) {
         return real;
     }
     let mut out = PathBuf::new();
@@ -261,7 +269,7 @@ pub(crate) fn resolve(path: &Path) -> PathBuf {
             }
             Component::Normal(part) => {
                 out.push(part);
-                if let Ok(real) = out.canonicalize() {
+                if let Some(real) = canonicalize(&out) {
                     out = real;
                 }
             }

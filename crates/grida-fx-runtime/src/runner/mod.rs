@@ -334,15 +334,18 @@ fn place_file(
 
 /// Expands the workflow with every result so far.
 fn expand(planner: &mut Planner, host: &mut dyn NodeHost) -> grida_fx_core::Result<Expansion> {
-    grida_fx_core::expand::expand(ExpandEnv {
-        workflow: &planner.workflow,
-        inputs: &planner.inputs.values,
-        registry: &mut planner.registry,
-        host,
-        routes: &planner.routes,
-        takes: &planner.takes,
-        results: &planner.results,
-    })
+    grida_fx_core::expand::expand_with_fresh_id(
+        ExpandEnv {
+            workflow: &planner.workflow,
+            inputs: &planner.inputs.values,
+            registry: &mut planner.registry,
+            host,
+            routes: &planner.routes,
+            takes: &planner.takes,
+            results: &planner.results,
+        },
+        planner.fresh_id.as_deref(),
+    )
 }
 
 /// The step budgets of an instance id in an expansion (empty when it lists no such instance).
@@ -527,13 +530,15 @@ fn invoke(
     let ledger = Arc::new(ledger);
     let scoped = first.as_ref().unwrap_or(&plan.expansion);
     ledger.replay(&prior, &|id: &str| scopes_of(scoped, id));
-    let services = Arc::new(Services::run(
+    let mut services = Services::run(
         Arc::clone(engine),
         Arc::clone(&ledger),
         Arc::clone(&log),
         invocation_id,
         cancel.clone(),
-    ));
+    );
+    services.fresh_id.clone_from(&planner.fresh_id);
+    let services = Arc::new(services);
     let workflow = planner.workflow.workflow.id.clone();
     let captured_value_views = captured_value_views(&folder, &prior);
     let mut scheduler = Scheduler {

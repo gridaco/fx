@@ -17,11 +17,31 @@ npx grida fx init my-assets
 In an empty or new folder, recent releases write a starter project: `fx.yaml`
 (routes and budget commented out), `README.md`, `AGENTS.md`, `.gitignore`,
 `.env.example`, `workflows/icon.yaml` and the FX skills under `.agents/skills/`.
-`--json` lists them in `files_created`. To start from an example instead, see
-`grida fx init --list-templates --json` and pass `--template NAME`; it downloads
-the template from the FX release, so ask the user first if the network is a
-concern. Agents always pass `--template` or get the starter: `init` asks no
-question without a terminal.
+`--json` lists them in `files_created`.
+
+To start from an example, use `grida fx init --list-templates --json` to discover
+entries with a `workflow_entry`, then `grida fx add NAME [destination] --json`. The
+default destination is `./NAME`. Choose an absent destination under an existing
+parent. If the destination already exists, FX preserves it and exits 2.
+The template comes from the release matching the installed engine. Use the returned
+`project_root` as the working directory and pass the returned `workflow_entry` to
+FX. Use `inputs_file` as the starting preset when present, and check `missing_inputs`
+and `prerequisites` before planning or running. Setup only copies and checks files.
+
+For a GitHub template, use `grida fx add OWNER/REPO@REF [destination] --json`
+with a tag or full 40-character commit SHA. The default folder is `./REPO`.
+For a private template, add `--github-auth` to use the user's existing GitHub CLI
+authentication. Have the user install `gh` if it is missing and sign in with
+`gh auth login` if needed. The account needs read access to the repository.
+The repository must contain a root `fx.yaml`. A root `fx-template.json` can declare
+the default workflow and preset. Otherwise FX selects the sole YAML workflow
+directly under `workflows/` or `fx/`. Use `--workflow NAME` to select a unique
+filename stem. Review the copied project before invoking commands that can load its code.
+
+On releases with templated `init` and without `add`, use
+`grida fx init <directory> --template NAME --json` and read the copied README to
+find the workflow and preset. `init` asks no question without a terminal.
+
 `init` installs nothing: the user, or you with their agreement, installs the CLI
 as the main skill describes (`npm install -g grida`), or keeps using `npx grida fx`.
 

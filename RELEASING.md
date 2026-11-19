@@ -203,6 +203,12 @@ uv run --locked --project python python tools/publish_local.py --manifest <outpu
 ## Releasing
 
 First bump every manifest and lockfile to a new version as described above.
+In [CHANGELOG.md](CHANGELOG.md), move the entries shipping in this release from
+`Unreleased` into a `## [X.Y.Z] - YYYY-MM-DD` section. Link the new version to its
+comparison with the previous tag. Keep `Unreleased` at the top and update its
+comparison to start from the new tag. Include the changelog update in the release
+commit.
+
 Then tag that version; never reuse an already published version or tag.
 
 ```sh
@@ -251,11 +257,11 @@ The tag starts `release.yml`, which runs four jobs:
    to PyPI. It checks out no code. A package version that is already published is skipped,
    so you can re-run a publish that failed partway.
 
-The tag also serves `init --template` ([spec/service.md](spec/service.md) §2.1): an engine of
-this version downloads its templates from the tag's source archive on GitHub. CI's
-`tools/check_examples.py` already starts every template from an archive shaped like it, and its
-`templates` check refuses an indexed example left out by `export-ignore`, so nothing more is
-needed before tagging.
+The tag also serves indexed examples for `init --template` and `add`. An engine of this version
+downloads its templates from the tag's source archive on GitHub. CI's `tools/check_examples.py`
+uses Git's archive membership for the fixture it installs. Its `templates` check requires the
+project file, declared workflow and bundled preset to survive `export-ignore`.
+See [the template contract](spec/service.md#21-templates).
 
 A published version can never be replaced. If something is wrong after publishing, fix it,
 bump to a new version (for example `0.1.1`) and tag again.
@@ -287,7 +293,8 @@ fx-check/bin/python -m grida.fx --version   # grida-fx 0.1.0
 Then start a project from a template, which downloads the tag's archive:
 
 ```sh
-cd "$(mktemp -d)" && grida-fx init demo --template hello --json   # "source": "release"
+cd "$(mktemp -d)" && grida-fx init demo --template hello --json   # template.source is "release"
+grida-fx add pet --json   # template.source is "release", workflow_entry is "workflows/pet.yaml"
 ```
 
 - **Provenance:** each package's npm page shows its provenance, linked to the workflow run.

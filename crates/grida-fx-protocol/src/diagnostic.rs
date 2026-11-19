@@ -53,6 +53,12 @@ pub struct AdapterDiagnostic {
     pub request_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ephemeral: Option<bool>,
     #[serde(default)]
     pub detail: DiagnosticDetail,
     #[serde(default)]
@@ -73,6 +79,9 @@ impl AdapterDiagnostic {
             message: None,
             request_id: None,
             task_id: None,
+            thread_id: None,
+            turn_id: None,
+            ephemeral: None,
             detail: DiagnosticDetail::Unavailable,
             redacted: false,
             truncated: false,

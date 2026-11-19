@@ -37,27 +37,41 @@ This page says how to set it up, what it does well, and where it differs from th
    `too old (codex …)` means the Codex FX found is older than 0.160.1, often an old copy earlier
    on your `PATH`: update it, or name a newer one with `GRIDA_FX_TOOL_CODEX`.
 
-3. Pick the route for your project's images in `fx.yaml`:
+## Draw one image
 
-   ```yaml
-   routes:
-     image.generate: imagegen@codex
-     image.edit: imagegen@codex
-   ```
+Generate a PNG from the terminal with `grida fx call`. You can run it from a directory without
+an FX project.
 
-   Or for one step only, with `route: imagegen@codex` on that step: a project can draw its
-   drafts on Codex and its finals on an API route.
+```sh
+grida fx call image.generate --route imagegen@codex --prompt "A brass compass icon, no text" \
+  --background transparent --out ./compass.png --live
+```
 
-4. Run:
+With `routes.image.generate` set to `imagegen@codex` in the nearest `fx.yaml`, omit `--route`.
+Use `--dry-run` in place of `--live` and `--out` to check the request without using your plan.
+For a live smoke test of the adapter, add `--fresh` to bypass replay. Omit `--out` to use the
+PNG saved in the run's `outputs/` folder. See [Generate one image](05-running.md#generate-one-image).
 
-   ```sh
-   grida fx run kite --live
-   ```
+## Draw images in a workflow
 
-   A run whose paid calls are all on Codex needs no `--max-usd`. FX runs it under a ceiling of $0
-   and refuses a call on any other route, so a priced step cannot slip in without one
-   ([Cost, cache and takes](04-cost-and-cache.md)). It still spends your Codex plan: an agent
-   running FX for you should ask you first, as for any live run.
+Set the routes for your project's images in `fx.yaml`:
+
+```yaml
+routes:
+  image.generate: imagegen@codex
+  image.edit: imagegen@codex
+```
+
+Set `route: imagegen@codex` on an individual step to use Codex for that step. For example, a
+project can draw its drafts on Codex and its final art on an API route.
+
+```sh
+grida fx run kite --live
+```
+
+A run whose paid calls are all on Codex needs no `--max-usd`. FX runs it under a ceiling of $0
+and refuses any dollar-billed call without authorization. Each generation uses your Codex plan.
+Give an agent explicit approval before it runs a live call for you.
 
 ## What it honours
 
@@ -271,8 +285,12 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | `Codex is not signed in: …`, or `Codex is signed in with an API key, …` | Run `codex login` and sign in with ChatGPT. |
 | `Codex's MCP servers could not be listed, …` | Check that `codex mcp list` works; update Codex. |
 | `Codex image generation was not started: …` | Check that `codex app-server` starts; update Codex. |
-| `Codex image generation failed: Codex answered without an image` | Run again; rephrase a prompt Codex will not draw. |
+| `… Codex completed the turn without an image. Structured failure reason unavailable.` | Use the `grida fx inspect` command printed for the failed run. The attempt shows which details Codex returned. |
 | `Codex was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
+
+Inspection shows the Codex thread and turn IDs when received, along with the ephemeral session
+mode. Those IDs identify the original attempt. The cause of a missing image remains unknown
+when Codex supplies no structured reason.
 
 How the route is specified, sentence by sentence, is
 [the Codex adapter's reference](../../crates/grida-fx-providers/src/codex/README.md).

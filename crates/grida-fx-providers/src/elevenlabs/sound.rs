@@ -75,7 +75,15 @@ impl RequestAdapter for ElevenLabsSound {
                 Err(reason) => return refused(&self.client, &reason),
             };
             body.extend(options);
-            post(&self.client, LABEL, "sound-generation", credential, body).await
+            post(
+                &self.client,
+                call,
+                LABEL,
+                "sound-generation",
+                credential,
+                body,
+            )
+            .await
         })
     }
 

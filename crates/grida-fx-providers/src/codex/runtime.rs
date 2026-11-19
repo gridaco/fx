@@ -19,8 +19,8 @@
 //! A connection whose Codex exited is replaced by the next call. Shutting down closes stdin and
 //! ends the process group ([`Group::finish`]).
 
-use super::Stop;
 use super::protocol::{self, Message};
+use super::{Failure, Stop};
 use crate::BoxFuture;
 use crate::adapter::Runtime;
 use crate::installed::{Program, locked, read_line};
@@ -86,7 +86,7 @@ impl Connection {
         folder: tempfile::TempDir,
     ) -> Result<Connection, Stop> {
         let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-            return Err(Stop::Failed("Codex has no pipes".into()));
+            return Err(Stop::failed("Codex has no pipes"));
         };
         let routes = Arc::new(Routes::default());
         let (writer, mut lines) = mpsc::unbounded_channel::<Value>();
@@ -142,7 +142,7 @@ impl Connection {
             Ok(id)
         } else {
             locked(&self.routes.pending).remove(&id);
-            Err(Stop::Failed(self.ended()))
+            Err(Stop::failed(self.ended()))
         }
     }
 
@@ -173,7 +173,7 @@ impl Connection {
         match response {
             Ok(Ok(result)) => Ok(result),
             Ok(Err(code)) => Err(refusal(method, code)),
-            Err(_) => Err(Stop::Failed(self.ended())),
+            Err(_) => Err(Stop::failed(self.ended())),
         }
     }
 
@@ -186,9 +186,9 @@ impl Connection {
         self.send("thread/start", params, Pending::Thread(answer))?;
         match response.await {
             Ok((Ok(result), Some(notes))) => Ok((result, notes)),
-            Ok((Ok(_), None)) => Err(Stop::Failed("Codex started no thread".into())),
+            Ok((Ok(_), None)) => Err(Stop::failed("Codex started no thread")),
             Ok((Err(code), _)) => Err(refusal("thread/start", code)),
-            Err(_) => Err(Stop::Failed(self.ended())),
+            Err(_) => Err(Stop::failed(self.ended())),
         }
     }
 
@@ -219,7 +219,10 @@ fn refusal(method: &str, code: i64) -> Stop {
     if code == protocol::OVERLOADED {
         Stop::NotReceived(protocol::OVERLOADED_REASON.into())
     } else {
-        Stop::Failed(format!("Codex refused {method} (error {code})"))
+        Stop::Failed(Failure {
+            reason: format!("Codex refused {method} (error {code})"),
+            code: Some(code.to_string()),
+        })
     }
 }
 
@@ -402,7 +405,7 @@ async fn open(program: &Program, variables: &[String]) -> Result<Connection, Sto
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-codex-")
         .tempdir()
-        .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
+        .map_err(|error| Stop::failed(grida_fx_core::error::io_reason(&error)))?;
     let version = super::version(&program.path, folder.path(), variables)
         .await
         .map_err(Stop::Refused)?;
@@ -417,7 +420,7 @@ async fn open(program: &Program, variables: &[String]) -> Result<Connection, Sto
         .spawn()
         .map_err(|error| Stop::Refused(super::not_started(&error)))?;
     let Some(group) = Group::enlist(&mut child) else {
-        return Err(Stop::Failed("the command is stopping".into()));
+        return Err(Stop::failed("the command is stopping"));
     };
     let mut connection = Connection::start(child, group, folder)?;
     let greeted = async {

@@ -118,6 +118,61 @@ pub fn load_file(path: &Path, label: &str) -> Result<Value, Error> {
     Ok(load(&bytes, label)?)
 }
 
+/// Finds a literal root `fx` discriminator in the first YAML document for discovery.
+/// The caller must use the strict loader to validate a document selected this way.
+pub fn declares_kind(bytes: &[u8], kind: &str) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let mut parser = Parser::new_from_str(text.strip_prefix('\u{FEFF}').unwrap_or(text));
+    let mut events = std::iter::from_fn(|| parser.next_token().ok().map(|(event, _)| event));
+    if !matches!(events.next(), Some(Event::StreamStart))
+        || !matches!(events.next(), Some(Event::DocumentStart))
+        || !matches!(events.next(), Some(Event::MappingStart(..)))
+    {
+        return false;
+    }
+
+    let mut depth = 0;
+    let mut reading_key = true;
+    let mut is_fx_key = false;
+    for event in events {
+        match event {
+            Event::Scalar(text, ..) if depth == 0 => {
+                if reading_key {
+                    is_fx_key = text == "fx";
+                } else if is_fx_key && text == kind {
+                    return true;
+                }
+                reading_key = !reading_key;
+            }
+            Event::MappingStart(..) | Event::SequenceStart(..) => {
+                if depth == 0 {
+                    is_fx_key = false;
+                    reading_key = !reading_key;
+                }
+                depth += 1;
+                if depth > crate::value::MAX_DEPTH {
+                    return false;
+                }
+            }
+            Event::MappingEnd | Event::SequenceEnd => {
+                if depth == 0 {
+                    return false;
+                }
+                depth -= 1;
+            }
+            Event::Alias(..) if depth == 0 => {
+                is_fx_key = false;
+                reading_key = !reading_key;
+            }
+            Event::StreamEnd | Event::DocumentEnd => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// One `load` call: the label its errors carry.
 struct Loader<'a> {
     file: &'a str,
@@ -601,6 +656,19 @@ mod tests {
 
     fn at(error: &YamlError) -> (usize, usize, &'static str) {
         (error.line, error.column, error.rule)
+    }
+
+    #[test]
+    fn discovery_reads_only_the_first_documents_root_discriminator() {
+        let matches = |text: &str| declares_kind(text.as_bytes(), "workflow/v1");
+        assert!(matches(
+            "defaults: &defaults [one, two]\n'fx': workflow/v1\n"
+        ));
+        assert!(matches(r#"{"f\u0078": 'workflow/v1'}"#));
+        assert!(matches("fx: workflow/v1\nsteps: [\n"));
+        assert!(!matches("defaults: {fx: workflow/v1}\n"));
+        assert!(!matches("label: fx\nother: workflow/v1\n"));
+        assert!(!matches("fx: project/v1\n---\nfx: workflow/v1\n"));
     }
 
     #[test]

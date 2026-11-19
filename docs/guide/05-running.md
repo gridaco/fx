@@ -11,6 +11,7 @@ standalone `grida-fx` command and the source setup are in
 | Command | |
 |---|---|
 | `grida fx init [directory] [--template NAME] [--json]` | start a new project in an empty folder from the starter or a template (`--list-templates` lists them), or check an existing `fx.yaml`; never overwrites |
+| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` | copy an FX example or a GitHub template at a tag or full commit SHA into a new, editable project ([Start from a template](01-getting-started.md#start-from-a-template)) |
 | `grida fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
 | `grida fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
 | `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
@@ -18,6 +19,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
 | `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex or Grok Build) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | check a request or generate one image without a workflow ([below](#generate-one-image)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
@@ -31,11 +33,38 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx observe <run> [--after cursor] [--limit 256]` / `observe <run> --snapshot` | consistent snapshot or bounded recorded events, as JSON ([contract](../../spec/observation.md)) |
 
 `grida fx --help` lists what your installation has; the service commands need FX 0.2 or later.
-Use `init`, then `start --background` for normal project work. The service uses
-loopback port 8787 by default and keeps run pages available after execution exits.
+Use `init` or `add` to set up a project, then `start --background` from the project folder.
+The service uses loopback port 8787 by default and keeps run pages available after execution exits.
 `run` prints an available run URL after initialization and before run-phase steps;
 `--open` requests browser launch. Commands never start a background service implicitly.
 Execution still works when the service is stopped.
+
+## Generate one image
+
+`grida fx call` runs a single `image.generate` from a literal prompt. It uses the nearest
+`fx.yaml`'s `routes.image.generate` by default. Supply `--route` to override it or to select
+a built-in route from a directory without a project.
+
+```sh
+grida fx call image.generate --route imagegen@codex --prompt "A brass compass icon" --dry-run
+grida fx call image.generate --route imagegen@codex --prompt "A brass compass icon" \
+  --background transparent --out ./compass.png --live
+```
+
+`--dry-run` resolves and checks the request and reports the forecast and any configured ceiling
+without dispatching a generation or creating a run. `--live` admits dispatch, including use of
+your Codex or Grok Build subscription quota. Dollar-billed routes require `--max-usd` or
+`budget.max_usd` in `fx.yaml`.
+For offline execution, use `--stand-in FILE#FUNCTION` instead of `--live`.
+
+FX can replay a cached image. To exercise the selected provider or stand-in again, add `--fresh`.
+The command saves the image as `outputs/image.png` in its run folder and reports the path.
+`--out` also copies the image to an unused UTF-8 filename under an existing writable directory.
+Use `--json` for structured results, and `inspect` with the reported run folder for recorded
+attempts. See the [call contract](../../spec/call.md) for flag combinations and delivery behavior.
+
+From Python or JavaScript, use `run` with a one-step workflow or builder and read the image
+from its outputs. See [From Python](#from-python) and [From JavaScript](#from-javascript).
 
 ## Name a run or continue it
 
@@ -242,9 +271,9 @@ the project you run from (the built-in table and its `route_tables`); with a tar
 and node types the workflow needs follow:
 
 ```
-engine    grida-fx 0.9.0
-python    .venv/bin/python (grida 0.9.0)
-node      /usr/local/bin/node (@grida/fx 0.9.0)
+engine    grida-fx 0.10.0
+python    .venv/bin/python (grida 0.10.0)
+node      /usr/local/bin/node (@grida/fx 0.10.0)
 key       GG_API_KEY present (.env)
 key       OPENAI_API_KEY missing
 key       OPENROUTER_API_KEY missing
@@ -284,9 +313,9 @@ serve it and how many steps use it (a repeated step counts once; groups and used
 included):
 
 ```
-engine    grida-fx 0.9.0
-python    .venv/bin/python (grida 0.9.0)
-node      /usr/local/bin/node (@grida/fx 0.9.0)
+engine    grida-fx 0.10.0
+python    .venv/bin/python (grida 0.10.0)
+node      /usr/local/bin/node (@grida/fx 0.10.0)
 uses      image.generate imagegen@codex servable (8 steps)
 key       GG_API_KEY missing
 …
@@ -301,7 +330,7 @@ Doctor takes no `--routes`: routes a run adds with `--routes` show as `not in th
 
 **The Python line.** FX's Python node host needs Python 3.11 or later with `grida`. The Python
 line names the interpreter FX would use and says what it found:
-- `python    .venv/bin/python (grida 0.9.0)`: ready;
+- `python    .venv/bin/python (grida 0.10.0)`: ready;
 - `python    python3 too old (3.9.6; FX needs 3.11+)`: run `uv sync` or `pip install grida` in
   the project, or set `GRIDA_FX_PYTHON` to a newer Python;
 - `python    python3 no grida`: install `grida` into that Python;
@@ -312,7 +341,7 @@ line names the interpreter FX would use and says what it found:
 **The Node line.** FX's TypeScript node host needs Node 24 or later and `@grida/fx`
 ([Getting started](01-getting-started.md#when-fx-needs-node)). The Node line names the Node FX
 would use and says what it found:
-- `node      /usr/local/bin/node (@grida/fx 0.9.0)`: ready;
+- `node      /usr/local/bin/node (@grida/fx 0.10.0)`: ready;
 - `node      /usr/local/bin/node too old (22.12.0; FX needs 24+)`, or `bun not Node.js 24+`:
   install Node 24 or later, or set `GRIDA_FX_NODE` to one;
 - `node      /usr/local/bin/node no @grida/fx`: run `npm install @grida/fx` in the project;
@@ -389,6 +418,7 @@ result    failed   booked $0.00
 failed    nope#1: refused on purpose
 failed    after#1: something it reads failed
 failed    bang#1: RuntimeError: kaboom y
+inspect   grida fx inspect runs/one
 ```
 
 `result` is `ok`, `incomplete` or `failed`; a `failed` line follows for each step that failed or
@@ -402,7 +432,9 @@ not run again, even under `retry="engine"`.
 - **`grida fx inspect <run>`:** the run's state and a count of its steps' states, what it spent,
   and each failure. Given a workflow id instead of a folder, it reads that workflow's newest run.
   `--verify` rehashes every file its steps placed and exits 1 if one differs from its record;
-  `--json` prints the same summary as JSON, each step with its files. A started step whose paid
+  `--json` prints the same summary as JSON, each step with its files. Recorded call failures
+  show the call key, attempt and any safe provider detail, even when a later retry succeeded.
+  In JSON, they are in `run.call_attempt_failures`. A started step whose paid
   call is queued for its route's slot (a route with `concurrency: 1` runs one call at a time) is
   counted as `waiting`, not `running`, while it waits: `67 steps: 57 pending, 1 running,
   3 succeeded, 6 waiting`; in `--json` such a step has `waiting_for`, the route.

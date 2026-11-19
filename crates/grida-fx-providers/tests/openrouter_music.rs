@@ -71,7 +71,7 @@ fn send_one(call: &TestCall, prompt: &str, reply: Reply) -> Sent {
     let sent = block_on(adapter_over(transport.clone(), test_keys()).send(call));
     transport.assert_done();
     assert_eq!(transport.requests().len(), 1, "one send, never a retry");
-    sent
+    sent.into_report().0
 }
 
 /// One 200 answer of `body`.
@@ -619,7 +619,9 @@ fn statuses_and_phases_classify_per_spec() {
         assert!(ok, "{shown}: expected {class}, got {sent:?}");
     }
     let sent =
-        block_on(adapter_over(Arc::new(Offline), test_keys()).send(&call(json!({"prompt": "p"}))));
+        block_on(adapter_over(Arc::new(Offline), test_keys()).send(&call(json!({"prompt": "p"}))))
+            .into_report()
+            .0;
     assert_eq!(
         sent,
         Sent::Refused {
@@ -668,8 +670,10 @@ fn the_key_never_leaves_the_credential_slot() {
         let sent = block_on(
             adapter_over(transport.clone(), test_keys()).send(&call(json!({"prompt": "p"}))),
         );
+        let (sent, diagnostic) = sent.into_report();
+        assert!(!format!("{diagnostic:?}").contains(KEY));
         let shown = match &sent {
-            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
+            Sent::Diagnosed(..) => unreachable!("the diagnostic was separated"),
             Sent::Answered(answer) => answer.data.to_string(),
             Sent::Failed { reason, .. }
             | Sent::NotReceived { reason, .. }

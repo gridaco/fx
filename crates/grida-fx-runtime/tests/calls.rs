@@ -135,6 +135,7 @@ fn live_with(
         pacing: Arc::new(Pacing::new()),
         cancel,
         invocation_id: "inv".into(),
+        fresh_id: None,
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })
@@ -1167,6 +1168,7 @@ fn seed_lantern(store: &Store) {
             },
             request: json!({"background": "auto", "prompt": "a lantern"}),
             take: vec![1],
+            fresh_id: None,
             files: IndexMap::from([(
                 "image".to_string(),
                 FileEntry {
@@ -1233,6 +1235,7 @@ async fn a_recorded_call_replays_offline_without_adapters() {
             },
             request: lantern_request(),
             take: vec![1],
+            fresh_id: None,
             state: JobState::Submitting,
             handle: None,
             note: None,
@@ -1396,17 +1399,29 @@ async fn an_unreported_cost_charges_the_hold_and_reports_null() {
 #[tokio::test]
 async fn a_billed_failure_before_the_answer_is_part_of_the_charge() {
     let dir = tempfile::tempdir().unwrap();
+    use grida_fx_protocol::{
+        AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource,
+    };
+    let mut diagnostic = AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Send);
+    diagnostic.http_status = Some(502);
+    diagnostic.detail = DiagnosticDetail::Unreadable;
+    diagnostic.request_id = Some("req-7".into());
     let fake = FakeAdapter::plain(vec![
+        Sent::not_received("provider rejected before admission"),
         Sent::Failed {
-            reason: "the provider timed out".into(),
+            reason: "the provider timed out for a lantern".into(),
             cost: Some(Usd(10_000)),
             retryable: true,
-        },
+        }
+        .with_diagnostic(diagnostic),
         Sent::Answered(answered(b"png", Some(Usd(20_000)))),
     ]);
     let mut adapters = Adapters::new();
     adapters.register("image.generate", "acme", fake.as_request());
-    let services = live(engine(dir.path(), adapters, true), Some(Usd(1_000_000)));
+    let log_path = dir.path().join("events.jsonl");
+    let events = Arc::new(EventLog::open(&log_path, "inv", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(Some(Usd(1_000_000)), Some(events.clone())));
+    let services = live_with(engine(dir.path(), adapters, true), ledger, Some(events));
     let counter = CallCounter::new();
     let answer = call(
         &services,
@@ -1421,6 +1436,30 @@ async fn a_billed_failure_before_the_answer_is_part_of_the_charge() {
     assert_eq!(answer.cost, Some(Usd(20_000)));
     assert_eq!(answer.charged, Usd(30_000));
     assert_eq!(counter.cost(), Some(Usd(30_000)));
+    let events = read_events(&log_path).unwrap();
+    let failures: Vec<_> = events
+        .iter()
+        .filter(|event| event["event"] == "call_attempt_failed")
+        .collect();
+    let [resend, retry] = failures.as_slice() else {
+        panic!("expected two failed sends, got {failures:?}");
+    };
+    assert_eq!(resend["attempt"], json!(1));
+    assert_eq!(resend["send"], json!(1));
+    assert_eq!(resend["outcome"], "not_received");
+    assert_eq!(resend["retryable"], true);
+    assert!(resend.get("charged_usd").is_none());
+    assert_eq!(retry["id"], "draw#1");
+    assert_eq!(retry["call"], LANTERN_KEY);
+    assert_eq!(retry["attempt"], json!(1));
+    assert_eq!(retry["send"], json!(2));
+    assert_eq!(retry["outcome"], "failed");
+    assert_eq!(retry["charged_usd"], json!(0.01));
+    assert_eq!(retry["reason"], "the provider timed out for [redacted]");
+    assert_eq!(retry["diagnostic"]["http_status"], json!(502));
+    assert_eq!(retry["diagnostic"]["detail"], "unreadable");
+    assert_eq!(retry["diagnostic"]["request_id"], "req-7");
+    assert_eq!(events.last().unwrap()["event"], "call");
 }
 
 #[tokio::test]
@@ -1718,6 +1757,7 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
         },
         request: lantern_request(),
         take: vec![1],
+        fresh_id: None,
         state,
         handle,
         note: None,
@@ -1727,11 +1767,12 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
 
 #[tokio::test]
 async fn an_uncertain_submit_s_reason_is_kept_for_the_next_run() {
-    let reason = "fal took the video job but returned no handle to collect it by (request req-7)";
+    let reason = "submit for [redacted] may have succeeded (request req-7) at [redacted path]";
     let dir = tempfile::tempdir().unwrap();
     let fake = FakeAdapter::long_job(
         vec![Submitted::Uncertain {
-            reason: reason.into(),
+            reason: "submit for a lantern may have succeeded (request req-7) at /private/input"
+                .into(),
         }],
         Vec::new(),
     );
@@ -1761,8 +1802,11 @@ async fn an_uncertain_submit_s_reason_is_kept_for_the_next_run() {
          grida-fx jobs --forget {LANTERN_KEY} to submit it again"
     );
 
-    // The run that submitted it: the adapter's reason, and the record keeps it as its note.
-    let error = call_once(live(Arc::clone(&engine_), Some(Usd(1_000_000)))).await;
+    // Retain the provider's reason and request ID after removing the input and path.
+    let log_path = dir.path().join("events.jsonl");
+    let events = Arc::new(EventLog::open(&log_path, "inv", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(Some(Usd(1_000_000)), Some(events.clone())));
+    let error = call_once(live_with(Arc::clone(&engine_), ledger, Some(events))).await;
     assert_eq!(error.code, ErrorCode::JobUnsettled.code());
     assert_eq!(error.message, message);
     assert_eq!(error.data.as_ref().unwrap()["reason"], json!(reason));
@@ -1771,6 +1815,15 @@ async fn an_uncertain_submit_s_reason_is_kept_for_the_next_run() {
     assert_eq!(record.handle, None);
     assert_eq!(record.note.as_deref(), Some(reason));
     assert_eq!(fake.log().len(), 1);
+    let events = read_events(&log_path).unwrap();
+    let event = events.last().unwrap();
+    assert_eq!(event["event"], "call_attempt_failed");
+    assert_eq!(event["outcome"], "unsettled");
+    assert_eq!(event["attempt"], json!(1));
+    assert_eq!(event["send"], json!(1));
+    assert_eq!(event["reason"], reason);
+    assert_eq!(event["charged_usd"], json!(0.04));
+    assert_eq!(event["retryable"], false);
 
     // A later run stops for a person, with the same reason, and submits nothing.
     let error = call_once(live(Arc::clone(&engine_), Some(Usd(1_000_000)))).await;

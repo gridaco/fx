@@ -696,7 +696,7 @@ fn an_upstream_error_keeps_only_its_safe_detail() {
         text_contract(),
         json!({"prompt": prompt, "schema": colour_schema()}),
     );
-    let sent = send(&adapter, &call);
+    let (sent, diagnostic) = send(&adapter, &call).into_report();
     transport.assert_done();
     let Sent::Failed {
         reason,
@@ -708,10 +708,14 @@ fn an_upstream_error_keeps_only_its_safe_detail() {
     };
     assert_eq!(
         reason,
-        "OpenRouter structured generation returned HTTP 400: message=invalid schema, required must include every key, response_format; type=invalid_request_error; code=invalid_json_schema; param=response_format"
+        "OpenRouter structured generation returned HTTP 400: message=invalid schema, required must include every key, response_format; code=invalid_json_schema; param=response_format"
     );
     assert_eq!((cost, retryable), (Some(Usd::ZERO), false));
     assert!(!reason.contains(KEY) && !reason.contains(prompt));
+    let diagnostic = diagnostic.expect("the HTTP response has a diagnostic");
+    assert_eq!(diagnostic.code.as_deref(), Some("invalid_json_schema"));
+    assert!(!format!("{diagnostic:?}").contains(KEY));
+    assert!(!format!("{diagnostic:?}").contains(prompt));
 }
 
 #[test]
@@ -741,7 +745,9 @@ fn statuses_and_transport_failures_follow_the_openrouter_table() {
         text_contract(),
         json!({"prompt": "p", "schema": colour_schema()}),
     );
-    let outcomes: Vec<Sent> = (0..8).map(|_| send(&adapter, &call)).collect();
+    let outcomes: Vec<Sent> = (0..8)
+        .map(|_| send(&adapter, &call).into_report().0)
+        .collect();
     transport.assert_done();
     // `NotReceived` may carry more than its reason (a provider's requested wait).
     assert!(
@@ -795,7 +801,7 @@ fn a_transport_that_refuses_is_a_refusal() {
         json!({"prompt": "p", "schema": colour_schema()}),
     );
     assert_eq!(
-        send(&adapter, &call),
+        send(&adapter, &call).into_report().0,
         Sent::Refused {
             reason:
                 "OpenRouter structured generation was not sent: the network is off (GRIDA_FX_NETWORK=off)"
@@ -1005,8 +1011,10 @@ fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
     );
     let mut seen = Vec::new();
     for _ in 0..4 {
-        match send(&adapter, &call) {
-            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
+        let (outcome, diagnostic) = send(&adapter, &call).into_report();
+        assert!(!format!("{diagnostic:?}").contains(KEY));
+        match outcome {
+            Sent::Diagnosed(..) => unreachable!("the diagnostic was separated"),
             Sent::Answered(answer) => seen.push(answer.data.to_string()),
             Sent::Failed { reason, .. }
             | Sent::Refused { reason }

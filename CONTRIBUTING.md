@@ -9,6 +9,13 @@ agents discover and compose FX operations. Use its scenarios when changing the
 CLI, SDKs, lifecycle or public contracts, and update supported behavior and evidence
 alongside those changes.
 
+## Issues
+
+Choose [General or Product & UX](https://github.com/gridaco/fx/issues/new/choose)
+when opening an issue. Each template uses the same sections as its corresponding
+PR template. Carry over the problem, affected workflows, and verification when
+you open the implementation PR.
+
 ## Pull requests
 
 Choose a template by the effect of the change. Features and fixes can use either:
@@ -21,12 +28,20 @@ Choose a template by the effect of the change. Features and fixes can use either
   or visual output. Explain the user problem, resulting behavior, reproduction
   steps and caveats, and show the implementation running.
 
+For user-facing changes, add a short entry under `Unreleased` in
+[CHANGELOG.md](CHANGELOG.md). Use the applicable change type (`Added`, `Changed`,
+`Deprecated`, `Removed`, `Fixed`, or `Security`) and add its heading as needed.
+Describe what users can do or what changes for them. Link the pull request or
+issue when available.
+
 PRs affecting users need evidence appropriate to the change. For the viewer and
 website, use screenshots for static results and a short video/GIF for interactions.
-For CLI/SDK changes, include runnable commands or code with actual output; use
-before/after examples when useful. Describe what reviewers should look for. A
-simple recording is enough; narration is optional. If no meaningful demo applies,
-explain why in the PR.
+For CLI changes, use complete A/B terminal transcripts for the affected scenarios
+in both the issue and PR. Show what the user types, sees, and does next. Label
+faux output and demonstrate the implemented behavior with runnable commands and
+actual output in the PR. For SDK changes, include runnable code and actual output.
+Describe what reviewers should look for. If no meaningful demo applies, explain
+why in the PR.
 
 Prefer the [provider-free viewer fixtures](fixtures/viewer/README.md) for visual
 evidence. Keep generated screenshots and recordings outside Git and attach them

@@ -8,9 +8,11 @@ use grida_fx_providers::{
 };
 use grida_fx_runtime::calls::pacing::{Admission, Slot};
 use grida_fx_runtime::calls::retry::{
-    Attempts, Backoff, HoldBook, JobBook, MAX_SENDS, Outcome, collect_job, send_plain, submit_job,
+    Attempts, Backoff, FailureLog, HoldBook, JobBook, MAX_SENDS, Outcome, collect_job, send_plain,
+    submit_job,
 };
 use grida_fx_runtime::engine::Cancel;
+use grida_fx_runtime::events::{CallAttemptFailure, CallAttemptOutcome};
 use grida_fx_runtime::ledger::{Hold, NotReserved, Refusal, Scopes};
 use grida_fx_runtime::store::StoreError;
 use grida_fx_runtime::store::records::{JobRecord, JobState, RouteEntry};
@@ -34,6 +36,16 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 // ---------------------------------------------------------------------------------------------
 // Fakes
+
+#[derive(Default)]
+struct FailureEvidence(Mutex<Vec<CallAttemptFailure>>);
+
+impl FailureLog for FailureEvidence {
+    fn failed(&self, failure: CallAttemptFailure) -> Result<(), String> {
+        lock(&self.0).push(failure);
+        Ok(())
+    }
+}
 
 /// A hold book that records every reservation and settlement and refuses on demand.
 #[derive(Default)]
@@ -320,6 +332,7 @@ impl Rig {
             jobs: &self.jobs,
             pacing: &self.gate,
             waits: None,
+            failures: None,
             cancel: &self.cancel,
             backoff: Backoff::default(),
             job,
@@ -372,6 +385,7 @@ fn job_fields() -> JobRecord {
         },
         request: json!({"prompt": "a lantern by the river"}),
         take: vec![1],
+        fresh_id: None,
         state: JobState::Settled,
         handle: None,
         note: None,
@@ -1110,6 +1124,45 @@ async fn an_unrecorded_settlement_makes_no_new_attempt() {
     assert_eq!(fake.log().len(), 1);
 }
 
+#[tokio::test(start_paused = true)]
+async fn an_unrecorded_failure_stops_and_settles_an_open_resend_hold() {
+    struct BrokenLog;
+    impl FailureLog for BrokenLog {
+        fn failed(&self, _: CallAttemptFailure) -> Result<(), String> {
+            Err("cannot record failure".into())
+        }
+    }
+
+    let rig = Rig::new();
+    let mut attempts = rig.plain();
+    attempts.failures = Some(&BrokenLog);
+    let fake = FakeAdapter::plain(vec![not_received("not received")]);
+    assert_eq!(
+        send_plain(&fake, &attempts).await,
+        Outcome::Unrecorded("cannot record failure".into())
+    );
+    assert_eq!(fake.log().len(), 1);
+    rig.book.assert_all_settled();
+
+    let rig = Rig::new();
+    let mut attempts = rig.long();
+    attempts.failures = Some(&BrokenLog);
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::NotReceived {
+            reason: "not received".into(),
+            retry_after: None,
+        }],
+        Vec::new(),
+    );
+    assert_eq!(
+        submit_job(&fake, &attempts).await,
+        Outcome::Unrecorded("cannot record failure".into())
+    );
+    assert_eq!(fake.log().len(), 1);
+    assert_eq!(rig.jobs.ops(), [submitting(), JobOp::Removed]);
+    rig.book.assert_all_settled();
+}
+
 // ---------------------------------------------------------------------------------------------
 // A long job
 
@@ -1467,16 +1520,31 @@ async fn a_job_that_ended_at_a_reported_cost_is_settled_at_it() {
 #[tokio::test(start_paused = true)]
 async fn an_unreachable_job_stays_submitted_and_is_settled_in_full() {
     let rig = Rig::new();
+    let failures = FailureEvidence::default();
     let fake = FakeAdapter::long_job(
         vec![accepted()],
         vec![Collected::Unreachable {
             reason: "collect timed out".into(),
         }],
     );
-    let outcome = submit_job(&fake, &rig.long()).await;
+    let mut attempts = rig.long();
+    attempts.failures = Some(&failures);
+    let outcome = submit_job(&fake, &attempts).await;
     assert_eq!(outcome, Outcome::Failed("collect timed out".into()));
     assert_eq!(rig.jobs.ops(), vec![submitting(), submitted()]);
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
+    assert_eq!(
+        *lock(&failures.0),
+        vec![CallAttemptFailure {
+            attempt: 1,
+            send: Some(1),
+            outcome: CallAttemptOutcome::Unreachable,
+            reason: "collect timed out".into(),
+            diagnostic: None,
+            charged_usd: Some(HOLD),
+            retryable: false,
+        }]
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -1739,16 +1807,31 @@ async fn a_collected_job_that_ended_is_settled() {
 #[tokio::test(start_paused = true)]
 async fn an_unreachable_collected_job_is_left_submitted() {
     let rig = Rig::new();
+    let failures = FailureEvidence::default();
     let fake = FakeAdapter::long_job(
         Vec::new(),
         vec![Collected::Unreachable {
             reason: "collect timed out".into(),
         }],
     );
-    let outcome = collect_job(&fake, &rig.long(), &handle()).await;
+    let mut attempts = rig.long();
+    attempts.failures = Some(&failures);
+    let outcome = collect_job(&fake, &attempts, &handle()).await;
     assert_eq!(outcome, Outcome::Failed("collect timed out".into()));
     assert!(rig.jobs.ops().is_empty());
     assert!(rig.book.holds().is_empty());
+    assert_eq!(
+        *lock(&failures.0),
+        vec![CallAttemptFailure {
+            attempt: 1,
+            send: None,
+            outcome: CallAttemptOutcome::Unreachable,
+            reason: "collect timed out".into(),
+            diagnostic: None,
+            charged_usd: None,
+            retryable: false,
+        }]
+    );
 }
 
 #[tokio::test(start_paused = true)]

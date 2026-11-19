@@ -716,7 +716,8 @@ fn provider_evidence_is_exported_only_with_explicit_diagnostic_disclosure() {
     use std::io::Write;
     let fixture = source("image/png");
     let diagnostic = json!({"source":"provider","phase":"submit","http_status":400,
-        "code":"bad_input","message":"Unsupported native format","detail":"available"});
+        "code":"bad_input","message":"Unsupported native format","detail":"available",
+        "thread_id":"thread-a","turn_id":"turn-a","ephemeral":true});
     let mut events = std::fs::OpenOptions::new()
         .append(true)
         .open(fixture.root().join("events.jsonl"))

@@ -97,6 +97,7 @@ narrower target rules.
 |---|---|---|
 | Discover: `--version`, `--help`, `<verb> --help` | Installed version and human-readable command help | No common machine-readable capability manifest yet. |
 | Establish project: `init [directory] [--template NAME] --json`; `init --list-templates --json` | Resolved project, the files it wrote and the template it started from; the templates on offer | A new or empty directory gets the starter project (`fx.yaml`, `README.md`, `AGENTS.md`, `.gitignore`, `.env.example`, `workflows/icon.yaml`, and every FX skill under `.agents/skills/`), with no route set, or a named template: an example read from the release's source archive, with the starter's agent files added. Never asks a question under `--json`, without a terminal or in CI. An existing `fx.yaml` is validated and nothing is written. Any other non-empty directory is refused (exit 2): to add FX to an existing folder, write `fx.yaml` (`fx: project/v1`). Never overwrites; no dependencies, service, credentials or execution. |
+| Install a starter: `add NAME [DESTINATION] --json`; `add OWNER/REPO@REF [DESTINATION] [--workflow NAME] [--github-auth] --json` | Local project root, exact workflow entry, bundled preset when declared, missing inputs and declared prerequisites | A listed template with `workflow_entry` or a GitHub repository at an explicit tag or full commit gets its own fresh project folder. For a private template, `--github-auth` uses the user's configured GitHub CLI authentication. The destination must be absent and its parent must already be a directory. A GitHub repository must have a root `fx.yaml`. It can choose a starter in an optional root `fx-template.json` or supply a YAML workflow under `workflows/` or `fx/`. An agent can select a unique file stem with `--workflow`. Use the returned entry with the returned root. Setup validates copied source and requires network access for the archive. Diagnose runtime readiness separately with `doctor`. |
 | Start service: `start --background [--project directory] [--port N] [--open] --json` | Ready service identity and actual URL | Native background process, port 8787 by default. Matching startup is idempotent; readiness checks project, instance and protocol. A failed start exits 2 with this attempt's cause in one line (an occupied port names `--port N`); `--json` also prints the `stopped` status with that `cause`. Does not execute workflows or install crash/login recovery. |
 | Manage service: `status --json`, `logs --lines N`, `stop --json` | Service identity/status, bounded logs, shutdown outcome | Select the project explicitly when needed. Stop affects inspection only; runs and records remain. Plain `start` stays foreground. |
 | Discover built-ins: `nodes [TYPE]` | Text descriptions, settings, ports and applicable routes | Lists built-in types, not a complete custom-node registry. Unknown types currently print nothing with exit 0. Listing a type does not prove every advertised capability can execute. |
@@ -106,6 +107,7 @@ narrower target rules.
 | Inspect planned work: `expand`, `identity`, `price <target> ...` | JSON graph, instance identities, or phased estimates | Planning conditions apply. Unresolved work and estimates are not proof of final work or actual billing. |
 | Diagnose: `doctor [target]` | Text prerequisite, tool, route and key-presence diagnostics. The Python line says whether the node host's interpreter is ready, `too old` (FX needs Python 3.11+), has `no grida`, is `NOT FOUND`, or `cannot start`. The Node line after it says the same of the TypeScript node host's Node: ready (with its `@grida/fx` version), `too old` (FX needs Node 24+), `not Node.js 24+` (Bun, Deno), `no @grida/fx`, `NOT FOUND`, or `cannot start`. For that line, doctor starts the host only for a project with a `package.json` (the workflow's or the planning project), since its program may come from an `@grida/fx` above the project; without one, the line gives what Node answered, `(Node <version>)`, or the Node alone. An `adapter` line per declared project adapter gives its version and each capability's kind, as planning loads it, or `cannot load: <sentence>`, which makes the exit status fail. A `program` line per installed-program provider names the Codex or Grok Build a live run would start, where it was found and, for Codex, its version; a Codex older than 0.160.1 (or naming none) makes its routes `too old` (`no version`), as a live run refuses it. With a target, `uses` lines come first: each route its paid steps use (groups and used workflows included), whether it is servable, and how many steps use it | Let FX inspect credential configuration; agents must not read secret values. Missing keys alone do not make its exit status fail; a route the target uses that cannot be served does (exit 1), so `doctor <target>` answers "can this run live?" without matching routes by hand. Needs no inputs, and takes no `--routes`: a project that plans with extra route files lists their routes as `not in the catalog`. With a target, it may make bounded read-only model-metadata requests for a selected missing GG/OpenRouter image binding; without a target it stays local. It never generates an asset and is not a provider health check. CLI-only: an SDK caller sees a Python older than 3.11, or a Node older than 24, as the engine's refusal sentence. Neither line changes the exit status. |
 | Execute: `run <target> ... [--name NAME \| --run <folder>]` | Foreground execution, an early run URL when inspection is available, and final summary | Local code needs no `--live`; paid calls need admission and a ceiling, except cached answers and runs whose every call is on the user's own Codex or Grok Build (`imagegen@codex`, `imagine@grok`, which need no ceiling but spend the user's plan, so still need their go). Choose a name or explicit folder when supervising asynchronously. `--name` refuses collisions; neither naming nor a fresh record forces fresh generation. Project run pages survive completion through the separately started service. `--open` requests browser launch; `--standalone` owns a temporary viewer instead; `--no-view` skips integration and conflicts with `--open`. |
+| Generate one image: `call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | Resolved route and forecast in a dry run, or a saved run and the PNG path after execution | Reuses FX's project discovery, route selection, budget, stand-ins, cancellation, and caches. Explicit `--live` admits provider dispatch, including subscription quota use. `--fresh` requires `--live` or `--stand-in` and isolates the new result from ordinary replay. `--out` delivers to an unused path under an existing directory. |
 | Answer paid calls offline: `run <target> --stand-in FILE#FUNCTION`; SDK `run(…, stand_in=…)` / `run(…, { standIn })` | A run whose paid calls the cache cannot answer are answered by a test's function, at $0 | Never live and runs every phase: `--live` and `--yes-up-to` are usage errors. The file is `.py`, `.ts`, `.mts`, `.js` or `.mjs`, hosted by its language's stand-in host; the SDKs serve the function in the caller's process. Answers pass a provider's checks; what the run stores is kept apart from the project's store, and it resumes only as a stand-in run. It shows what a workflow does with an answer, not how a provider behaves. |
 | Observe: `observe <run> --snapshot`, `observe <run> --after <cursor>`, `project <run>`, `inspect <run> --json` | Consistent snapshot, bounded event batches, state projection or summary | Read recorded data without executing workflow code. A step queued for its route's slot is `waiting` (with `waiting_for`), not `running`. Use a precise folder or `inspect <workflow-id>/<name>`; `inspect <workflow-id>` chooses the newest-created run, including failures, and refuses ambiguous recorded sources. Keep the emitted folder for observation commands. |
 | Control: `inspect RUN --control --json`, `cancel RUN [--invocation ID] [--wait] [--timeout 30s] --json` | Selected invocation, verified availability, acceptance or local completion | Exact folder or WORKFLOW_ID/NAME only. No author code, service or provider access. Wait never forces; external completion stays unverified. Python inspect_control/cancel and JavaScript inspectControl/cancel preserve the same structured result. |
@@ -284,8 +286,12 @@ work may change. Preserve the original run as evidence.
 
 ### "Recover from failure"
 
-Inspect the explicit run and failed/skipped instances before retrying. Distinguish
-node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
+Use the `inspect` command printed after a failed run to read its recorded evidence.
+Check the call key, attempt and send shown in text before retrying. `inspect --json` exposes these
+records in `run.call_attempt_failures`, including a failure recovered by retry.
+Distinguish node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
+If acceptance was uncertain, use `jobs` and the provider's records to reconcile the
+original submission before another paid attempt.
 Resume the same folder when the plan is unchanged; revise into a new folder when
 it changed. FX owns paid-call retries and settlement. Do not multiply retries in
 node code or a loop around a paid command; recorded failure is not proof that a
@@ -434,6 +440,8 @@ promise through documentation alone.
 | AR-25 | "Explain this workflow on its canvas so another person can use the template." | Implemented in FX 0.9.0 for [#80](https://github.com/gridaco/fx/issues/80): [workflow notes](spec/notes.md), inline or local files, Markdown or literal text, root/group SDK authoring. | Capture static documentation without expression evaluation; show readable cards and full details in plans, runs and shared exports. Note-only edits retain plan identity, resume retains the original snapshot, and unavailable documentation does not fail executable work. Scope, source provenance, disclosure and opt-in viewer focus remain explicit. |
 | AR-26 | "Understand the prompt, reference, shared settings and result at a glance." | Implemented in FX 0.9.0 for [#81](https://github.com/gridaco/fx/issues/81): [recorded values](spec/values.md), effective parameter summaries, scoped value cards and opt-in focus. | Planning exposes declared defaults from built-in/custom SDK nodes; lazy expressions retain contextual occurrences. Inspection uses recorded evidence and captured original input bytes, never regeneration or guessed file-shaped JSON. Pending/null/absent/unavailable/withheld remain distinct; exports and host actions preserve existing disclosure and authority. |
 | AR-27 | "Use the provider key I already saved with Grida." | [Credential store fallback](spec/providers.md#1-keys-and-endpoints) for [#45](https://github.com/gridaco/fx/issues/45), shared by CLI and SDK engine invocations. Grida 0.5.7 added standalone GG key management. | In an isolated home, save and remove a synthetic GG key through the public Grida CLI, verify FX's redacted diagnosis, and exercise its GG adapter through a fake transport. Exercise precedence, cache replay, offline and stand-in paths, custom endpoint isolation, and v1 lock and malformed file handling on supported platforms. |
+| AR-28 | "Start from this template and keep my edits for the next message." | CLI implemented in source for [#87](https://github.com/gridaco/fx/issues/87). [CLI listing and install](spec/service.md#21-templates) expose the authored workflow and preset for indexed examples and a starter from a pinned GitHub repository. Private sources can opt in to existing GitHub CLI authentication ([#151](https://github.com/gridaco/fx/issues/151)). Host reuse for delivery retries and follow-up messages is pending in [Grida #1160](https://github.com/gridaco/grida/issues/1160). | Discover an eligible template, install from a release-shaped or repository-shaped archive and plan the returned starter offline. Verify explicit workflow selection, ambiguous names, and refusal of an unpinned repository. Exercise opt-in authentication with a GitHub CLI stand-in, check failures leave the destination absent, and verify ordinary `add` never calls the stand-in. Repeats preserve edits and concurrent installs publish one complete folder. Report declared missing inputs and prerequisites without launching template code. |
+| AR-29 | "Generate one image on this route and give me the PNG." | [One-shot call](spec/call.md) for [#149](https://github.com/gridaco/fx/issues/149) exposes image generation directly in the CLI. Python and JavaScript callers can build a one-step workflow, run it, and resolve or deliver its output. Native one-shot SDK entry points and a `--fresh` equivalent on that API are deferred. | Exercise project discovery from a child directory, explicit override, empty override refusal and projectless selection. Dry-run never generates. Prove request, output and cache behavior with a stand-in, including fresh execution and ordinary replay. Verify budget and live admission, reject output names that cannot be reported as UTF-8, and preserve the saved image on delivery failure or interruption. An opt-in signed-in Codex invocation is the live smoke test. |
 
 AR-25 uses the [notes fixture](fixtures/viewer/README.md#try-workflow-notes),
 [engine acceptance](tools/check_notes.py), browser acceptance and builder/core/viewer tests.
@@ -542,9 +550,15 @@ provider code/field/explanation and reconciliation IDs, with redaction and
 truncation flags. SDK errors, node-failure events, inspection, projection and
 observation preserve them separately from node facts. An uncertain job retains
 its diagnostic for the next invocation. Tripo's upload refusals, paid submissions
-and terminal task failures supply evidence; legacy hosts and other built-in
-adapters may still return a reason alone. Synthetic tests cover keys, input
-echoes, signed URLs, local paths, malformed bodies and uncertainty without repeat
+and terminal task failures supply evidence. Built-in HTTP adapters use shared extraction for
+safe fields and detail availability. Codex diagnostics preserve returned thread and turn IDs
+and ephemeral mode. The engine records failed managed attempts even when a retry succeeds.
+`run` points to the exact saved run and `inspect` presents the recorded attempts in text and JSON.
+Both SDKs expose them through `RunRecord.inspection`. A synthetic HTTP rejection exercises
+both commands in `crates/grida-fx/tests/model_discovery.rs`. Fake Codex turns cover ID
+availability in `crates/grida-fx-providers/tests/codex.rs`.
+Legacy hosts and some adapter paths may still return a reason alone. Synthetic tests cover
+keys, input echoes, signed URLs, local paths, malformed bodies and uncertainty without repeat
 submission (`crates/grida-fx-providers/tests/tripo_mesh.rs`,
 `crates/grida-fx-providers/src/diagnostic.rs`, and the SDK tests above).
 
@@ -631,6 +645,15 @@ Use [the viewer fixtures](fixtures/viewer/README.md),
 [image-recolor](examples/image-recolor/README.md), SDK tests and
 [conformance cases](conformance/) as the initial provider-free harness. Test the
 public interface through an independent consumer, not only internal methods.
+
+For AR-28, [the example checker](tools/check_examples.py) installs starters
+through the public CLI from a release-shaped archive, verifies the receipt, and
+plans the advertised entry and preset with offline fixtures. The
+[CLI installer tests](crates/grida-fx/tests/init.rs) exercise repository selection
+from synthetic GitHub archives, refusal, preservation of edits, and concurrent
+publication. A stand-in GitHub CLI exercises authenticated archive acquisition
+without credentials. Project setup remains a CLI job for Python and JavaScript
+consumers.
 SDK record tests in [Python](python/tests/test_record.py) and
 [JavaScript](js/fx/test/record.test.ts), plus their run tests, cover AR-13 naming,
 resume and record observation through the real engine. For AR-13's TypeScript hosting,
@@ -664,7 +687,9 @@ AR-21 has provider-free [page/presentation tests](web/fx-web/tests/viewer-page.t
 [client tests](js/fx/test/viewer-client.test.ts), and a
 [packed-package consumer check](js/fx/test/build_npm.test.ts) that bundles the public
 browser export and compiles its declarations with DOM libraries and no Node ambient
-types. The [browser regression check](tools/check_viewer_browser.mjs), run in CI,
+types. The browser SDK also recognizes the engine page's initial HTML marker for
+host branding. The [browser regression check](tools/check_viewer_browser.mjs), run in CI,
+checks recognition before scripts execute and handles missing or unknown markers. It
 exercises two independent pages of the same synthetic recorded run, exact nested
 take reveal and foregrounding, new details in a narrow pane, expanded-deck reveal
 after panning, camera preservation, user selection callbacks, reload with a fresh

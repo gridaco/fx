@@ -48,7 +48,8 @@
 //! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `stand-in
 //!    <source as typed>` for a stand-in run, `result    ok
 //!    | incomplete | failed   booked $<charged, 2 places>`, `failed    <id>: <error or "no reason
-//!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
+//!    recorded">` per failure in order, an `inspect` command for a failed run, and
+//!    `stopped   <message>`. An absolute path of the project,
 //!    the home or the store left in an error is shown relative to the project.
 //! 7. `--deliver`, after the run, request by request. First every request is matched with the
 //!    output's files (one file; else each file of a list, keyed collection or object, labelled
@@ -100,7 +101,15 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     let stand_in = args
         .stand_in
         .as_deref()
-        .map(|text| StandInSource::parse(text, args, &cwd))
+        .map(|text| {
+            if args.live {
+                return Err(Error::usage("--stand-in cannot be used with --live"));
+            }
+            if args.yes_up_to.is_some() {
+                return Err(Error::usage("--stand-in cannot be used with --yes-up-to"));
+            }
+            StandInSource::parse(text, &cwd)
+        })
         .transpose()?;
     let max_usd = args
         .max_usd
@@ -167,35 +176,7 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         delivery.check_name(&declared)?;
     }
     let runtime = crate::engine::runtime()?;
-    // Paths the engine keeps out of what it records besides its own roots: the working
-    // directory, and a stand-in file's folder (its traceback names it).
-    let mut private = vec![cwd.clone()];
-    if let Some(StandInSource::File { path, .. }) = &stand_in
-        && let Some(folder) = std::path::absolute(path)
-            .ok()
-            .and_then(|path| path.parent().map(Path::to_path_buf))
-    {
-        private.push(folder);
-    }
-    let stand_in = stand_in
-        .map(|source| start_stand_in(&runtime, source, &planner, &cwd))
-        .transpose()?;
-    let engine = match crate::engine::engine_for(
-        &runtime,
-        &planner,
-        args.live,
-        stand_in.clone(),
-        &private,
-        prepared.settings,
-    ) {
-        Ok(engine) => engine,
-        Err(error) => {
-            if let Some(stand_in) = &stand_in {
-                runtime.block_on(stand_in.shutdown());
-            }
-            return Err(error);
-        }
-    };
+    let engine = start_engine(&runtime, &planner, args.live, stand_in, prepared.settings)?;
     let ran = plan_and_run(
         args,
         &engine,
@@ -207,6 +188,37 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     );
     crate::engine::shutdown(&runtime, &engine);
     ran
+}
+
+/// Builds an execution engine and owns stand-in cleanup if setup fails.
+pub(super) fn start_engine(
+    runtime: &tokio::runtime::Runtime,
+    planner: &Planner,
+    live: bool,
+    stand_in: Option<StandInSource>,
+    settings: Option<crate::engine::ProviderSettings>,
+) -> Result<Arc<Engine>, Error> {
+    // Paths the engine keeps out of what it records besides its own roots: the working
+    // directory, and a stand-in file's folder (its traceback names it).
+    let mut private = vec![planner.cwd.clone()];
+    if let Some(StandInSource::File { path, .. }) = &stand_in
+        && let Some(folder) = std::path::absolute(path)
+            .ok()
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+    {
+        private.push(folder);
+    }
+    let stand_in = stand_in
+        .map(|source| start_stand_in(runtime, source, planner, &planner.cwd))
+        .transpose()?;
+    let engine =
+        crate::engine::engine_for(runtime, planner, live, stand_in.clone(), &private, settings);
+    if engine.is_err()
+        && let Some(stand_in) = stand_in
+    {
+        runtime.block_on(stand_in.shutdown());
+    }
+    engine
 }
 
 /// Steps 3–8 of the module doc.
@@ -415,7 +427,7 @@ impl Drop for RunViewer {
 
 /// Where a stand-in run's stand-in is (spec/protocol.md §5.7), checked (module doc, step 0).
 #[derive(Debug)]
-enum StandInSource {
+pub(super) enum StandInSource {
     /// `<file>#<function>`: `file` as typed, relative to the working directory, its absolute
     /// path, and its language.
     File {
@@ -429,15 +441,8 @@ enum StandInSource {
 }
 
 impl StandInSource {
-    /// Checks `--stand-in <text>` against the other options and the working directory `cwd`
-    /// (module doc, step 0).
-    fn parse(text: &str, args: &RunArgs, cwd: &Path) -> Result<StandInSource, Error> {
-        if args.live {
-            return Err(Error::usage("--stand-in cannot be used with --live"));
-        }
-        if args.yes_up_to.is_some() {
-            return Err(Error::usage("--stand-in cannot be used with --yes-up-to"));
-        }
+    /// Reads a stand-in specification relative to the working directory.
+    pub(super) fn parse(text: &str, cwd: &Path) -> Result<StandInSource, Error> {
         if text == "-" {
             return socket_on_stdin().map(StandInSource::Socket).map_err(|()| {
                 Error::usage("--stand-in - needs the stand-in's socket on standard input")
@@ -602,6 +607,11 @@ fn summary(
     for (id, error) in &outcome.failed {
         let error = error.as_deref().unwrap_or("no reason recorded");
         lines.push(labelled("failed", &format!("{id}: {}", scrub.apply(error))));
+    }
+    if !outcome.failed.is_empty() {
+        let command = crate::invoker::command();
+        let path = super::repeat::path_word(label);
+        lines.push(labelled("inspect", &format!("{command} inspect {path}")));
     }
     if let Some(stopped) = &outcome.stopped {
         lines.push(labelled("stopped", &scrub.apply(stopped)));
@@ -1178,6 +1188,7 @@ mod tests {
                 "result    failed   booked $0.12",
                 "failed    nope#1: refused on purpose",
                 "failed    bang#1: no reason recorded",
+                "inspect   grida-fx inspect runs/one",
             ]
         );
         let stopped = RunOutcome {

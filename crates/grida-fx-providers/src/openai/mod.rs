@@ -40,6 +40,7 @@ use crate::BoxFuture;
 use crate::adapter::{Adapter, Answer, CallRequest, Identity, RequestAdapter, RouteRef, Sent};
 use crate::capabilities;
 use crate::checks;
+use crate::diagnostic::identifier_echoes_input;
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -176,9 +177,9 @@ impl OpenAiImages {
     }
 
     /// What one exchange's response means (spec/adapters.md §3.3, §3.4; src/openai/README.md).
-    fn classify(&self, response: &HttpResponse) -> Sent {
+    fn classify(&self, call: &CallRequest, response: &HttpResponse) -> Sent {
         let status = response.status;
-        let id = wire::request_id(response);
+        let id = wire::request_id(response).filter(|id| !identifier_echoes_input(call, id));
         let reason = |text: String| -> String {
             match &id {
                 Some(id) => self.client.reason(&format!("{text} (request {id})")),
@@ -204,7 +205,7 @@ impl OpenAiImages {
                 retryable: false,
             };
         }
-        let detail = wire::safe_error_detail(&response.body, &self.client.redactor);
+        let detail = wire::safe_error_detail_for_call(&response.body, call, &self.client.redactor);
         let said = wire::status_reason(LABEL, status, detail.as_deref());
         let error = ErrorFields::of(&response.body);
         match status {
@@ -283,8 +284,14 @@ impl RequestAdapter for OpenAiImages {
                 }
             };
             match self.client.send(request).await {
-                Ok(response) => self.classify(&response),
-                Err(error) => self.transport_failure(&error),
+                Ok(response) if response.is_success() => self.classify(call, &response),
+                Ok(response) => {
+                    let diagnostic = wire::http_diagnostic(call, &response, &self.client.redactor);
+                    self.classify(call, &response).with_diagnostic(diagnostic)
+                }
+                Err(error) => self
+                    .transport_failure(&error)
+                    .with_diagnostic(wire::transport_diagnostic(&error)),
             }
         })
     }

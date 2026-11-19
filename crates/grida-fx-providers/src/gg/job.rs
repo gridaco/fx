@@ -42,6 +42,7 @@ use crate::transport::{
 };
 use crate::wire;
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticPhase};
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::sync::{Arc, LazyLock};
@@ -138,9 +139,11 @@ enum Read {
     /// The job, as GG answered it.
     Job(Map<String, Value>),
     /// Nothing: poll again.
-    Nothing,
+    Nothing(AdapterDiagnostic),
     /// Collecting stops here.
     Stop(Collected),
+    /// The polling deadline passed before a read could start.
+    Deadline,
 }
 
 /// Where a job stands.
@@ -271,25 +274,45 @@ impl Jobs {
     /// The submit table of the module doc for an answered POST.
     fn submitted(&self, call: &CallRequest, kind: &Kind, response: &HttpResponse) -> Submitted {
         let status = response.status;
-        let code = super::error_code(&response.body);
+        let diagnose = || {
+            let mut diagnostic =
+                wire::http_diagnostic(call, response, &self.gateway.client.redactor);
+            diagnostic.phase = DiagnosticPhase::Submit;
+            diagnostic
+        };
         let uncertain = |text: &str| Submitted::Uncertain {
             reason: self.gateway.reason(&format!(
-                "{} (Idempotency-Key {})",
-                super::with_request_id(text.to_string(), response),
+                "{text} (Idempotency-Key {})",
                 self.gateway.idempotency_key(call)
             )),
         };
-        let text = super::status_text(kind.submit_label, response, &self.gateway.client);
-        match (status, code.as_deref()) {
-            (200..=299, _) => match handle_of(&response.body, kind) {
+        if response.is_success() {
+            return match handle_of(&response.body, kind) {
                 Ok(handle) => Submitted::Accepted { handle },
-                Err(sentence) => uncertain(&sentence),
-            },
-            (300..=399, _) => uncertain(&format!(
-                "{} was redirected (HTTP {status}); check {}",
-                kind.submit_label,
-                super::BASE_URL_VARIABLE
-            )),
+                Err(mut sentence) => {
+                    let diagnostic = diagnose();
+                    if let Some(id) = &diagnostic.request_id {
+                        sentence.push_str(&format!(" (request {id})"));
+                    }
+                    uncertain(&sentence).with_diagnostic(diagnostic)
+                }
+            };
+        }
+        let diagnostic = diagnose();
+        let code = super::error_code(&response.body);
+        let text = super::status_text(kind.submit_label, response, &diagnostic);
+        let outcome = match (status, code.as_deref()) {
+            (300..=399, _) => {
+                let mut text = format!(
+                    "{} was redirected (HTTP {status}); check {}",
+                    kind.submit_label,
+                    super::BASE_URL_VARIABLE
+                );
+                if let Some(id) = &diagnostic.request_id {
+                    text.push_str(&format!(" (request {id})"));
+                }
+                uncertain(&text)
+            }
             (429, Some("key_budget_exceeded")) => Submitted::Failed {
                 reason: self.gateway.reason(&text),
                 cost: Some(Usd::ZERO),
@@ -310,13 +333,14 @@ impl Jobs {
                 "GG may have taken the {} job; it is not submitted again ({text})",
                 kind.noun
             )),
-        }
+        };
+        outcome.with_diagnostic(diagnostic)
     }
 
     /// A failed submit exchange (spec/adapters.md §3.2).
     fn submit_failure(&self, call: &CallRequest, kind: &Kind, error: &TransportError) -> Submitted {
         let label = kind.submit_label;
-        match (error.kind, error.phase) {
+        let outcome = match (error.kind, error.phase) {
             (TransportErrorKind::Refused, Phase::NotSent) => Submitted::Refused {
                 reason: self
                     .gateway
@@ -334,7 +358,10 @@ impl Jobs {
                     self.gateway.idempotency_key(call)
                 )),
             },
-        }
+        };
+        let mut diagnostic = wire::transport_diagnostic(error);
+        diagnostic.phase = DiagnosticPhase::Submit;
+        outcome.with_diagnostic(diagnostic)
     }
 
     /// Collects job `id`, the one a handle names (module doc); `None` when the handle is not one
@@ -342,6 +369,7 @@ impl Jobs {
     /// there is `Unreachable`, with nothing requested.
     pub async fn collect(
         &self,
+        call: &CallRequest,
         id: Option<&str>,
         kind: &Kind,
         contract: Result<(), String>,
@@ -363,7 +391,10 @@ impl Jobs {
             Err(reason) => return unreachable(&reason),
         };
         let deadline = self.clock.now() + COLLECT_DEADLINE;
-        let job = match self.await_result(&credential, id, kind, deadline).await {
+        let job = match self
+            .await_result(call, &credential, id, kind, deadline)
+            .await
+        {
             Ok(job) => job,
             Err(collected) => return collected,
         };
@@ -376,13 +407,15 @@ impl Jobs {
                 };
             }
         };
-        let path = format!("jobs/{id}");
-        let mut answer = match self.download(&url, deadline, billing(&job), kind).await {
+        let mut answer = match self
+            .download(call, &url, deadline, billing(&job), kind)
+            .await
+        {
             Ok(answer) => answer,
             Err(collected) => return collected,
         };
         answer.cost = self
-            .settled(&credential, &path, id, deadline, &job, kind)
+            .settled(call, &credential, id, deadline, &job, kind)
             .await;
         Collected::Answered(answer)
     }
@@ -393,16 +426,17 @@ impl Jobs {
     #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     pub async fn await_result(
         &self,
+        call: &CallRequest,
         credential: &Credential,
         id: &str,
         kind: &Kind,
         deadline: Duration,
     ) -> Result<Map<String, Value>, Collected> {
-        let path = format!("jobs/{id}");
-        loop {
-            match self.read(credential, &path, id, deadline, kind).await {
+        let mut last_failure = None;
+        let collected = loop {
+            last_failure = match self.read(call, credential, id, deadline, kind).await {
                 Read::Job(job) => match stage(&job, kind.job_label) {
-                    Stage::Waiting => {}
+                    Stage::Waiting => None,
                     Stage::Available => return Ok(job),
                     Stage::Ended(sentence) => {
                         return Err(Collected::Ended {
@@ -416,11 +450,18 @@ impl Jobs {
                         });
                     }
                 },
-                Read::Nothing => {}
+                Read::Nothing(diagnostic) => Some(diagnostic),
                 Read::Stop(collected) => return Err(collected),
+                Read::Deadline => break self.outstanding(kind),
+            };
+            if let Err(collected) = self.wait(deadline, kind).await {
+                break collected;
             }
-            self.wait(deadline, kind).await?;
-        }
+        };
+        Err(match last_failure {
+            Some(diagnostic) => collected.with_diagnostic(diagnostic),
+            None => collected,
+        })
     }
 
     /// Sends a free submit (a pre-check GG does not bill) and reads its job id: the free phase of
@@ -438,44 +479,53 @@ impl Jobs {
         let label = kind.submit_label;
         let response = match self.gateway.client.send(request).await {
             Ok(response) => response,
-            Err(error) if error.kind == TransportErrorKind::Refused => {
-                return Err(Submitted::Refused {
-                    reason: self
-                        .gateway
-                        .reason(&format!("{label} was not sent: {}", error.reason)),
-                });
-            }
             Err(error) => {
-                return Err(Submitted::not_received(
-                    self.gateway
-                        .reason(&format!("{label} failed: {}", error.reason)),
-                ));
+                let outcome = if error.kind == TransportErrorKind::Refused {
+                    Submitted::Refused {
+                        reason: self
+                            .gateway
+                            .reason(&format!("{label} was not sent: {}", error.reason)),
+                    }
+                } else {
+                    Submitted::not_received(
+                        self.gateway
+                            .reason(&format!("{label} failed: {}", error.reason)),
+                    )
+                };
+                let mut diagnostic = wire::transport_diagnostic(&error);
+                diagnostic.phase = DiagnosticPhase::Submit;
+                return Err(outcome.with_diagnostic(diagnostic));
             }
         };
         self.gateway.renew_if_asked(call, &response);
-        let text = super::status_text(label, &response, &self.gateway.client);
-        match response.status {
-            200..=299 => match handle_of(&response.body, kind) {
+        if response.is_success() {
+            return match handle_of(&response.body, kind) {
                 Ok(handle) => Ok(job_id(&handle).unwrap_or_default().to_string()),
                 Err(sentence) => Err(Submitted::not_received(self.gateway.reason(&sentence))),
-            },
-            408 | 429 => Err(Submitted::NotReceived {
+            };
+        }
+        let mut diagnostic = wire::http_diagnostic(call, &response, &self.gateway.client.redactor);
+        diagnostic.phase = DiagnosticPhase::Submit;
+        let text = super::status_text(label, &response, &diagnostic);
+        let outcome = match response.status {
+            408 | 429 => Submitted::NotReceived {
                 reason: self.gateway.reason(&text),
                 retry_after: crate::adapter::retry_after(&response),
-            }),
-            400..=499 => Err(Submitted::Refused {
+            },
+            400..=499 => Submitted::Refused {
                 reason: self.gateway.reason(&text),
-            }),
-            _ => Err(Submitted::not_received(self.gateway.reason(&text))),
-        }
+            },
+            _ => Submitted::not_received(self.gateway.reason(&text)),
+        };
+        Err(outcome.with_diagnostic(diagnostic))
     }
 
     /// The job's charge, waiting up to [`SETTLE_WAIT`] (and never past `deadline`) for GG to settle
     /// it.
     async fn settled(
         &self,
+        call: &CallRequest,
         credential: &Credential,
-        path: &str,
         id: &str,
         deadline: Duration,
         job: &Map<String, Value>,
@@ -485,7 +535,7 @@ impl Jobs {
         let until = (self.clock.now() + SETTLE_WAIT).min(deadline);
         while charged.is_none() && self.clock.now() + POLL <= until {
             self.clock.sleep(POLL).await;
-            if let Read::Job(job) = self.read(credential, path, id, deadline, kind).await {
+            if let Read::Job(job) = self.read(call, credential, id, deadline, kind).await {
                 charged = billing(&job);
             }
         }
@@ -495,8 +545,8 @@ impl Jobs {
     /// One authorized read of the job (module doc: failed reads are polls that saw nothing).
     async fn read(
         &self,
+        call: &CallRequest,
         credential: &Credential,
-        path: &str,
         id: &str,
         deadline: Duration,
         kind: &Kind,
@@ -505,37 +555,57 @@ impl Jobs {
         let label = kind.job_label;
         let remaining = deadline.saturating_sub(self.clock.now());
         if remaining.is_zero() {
-            return Read::Stop(self.outstanding(kind));
+            return Read::Deadline;
         }
-        let request = HttpRequest::new(Method::Get, client.url(path), Lane::Provider)
-            .credential(credential.clone())
-            .timeout(remaining.min(READ_DEADLINE))
-            .max_response_bytes(JSON_RESPONSE_BYTES);
+        let request = HttpRequest::new(
+            Method::Get,
+            client.url(&format!("jobs/{id}")),
+            Lane::Provider,
+        )
+        .credential(credential.clone())
+        .timeout(remaining.min(READ_DEADLINE))
+        .max_response_bytes(JSON_RESPONSE_BYTES);
         let response = match client.send(request).await {
             Ok(response) => response,
-            Err(error) if error.kind == TransportErrorKind::Refused => {
-                return Read::Stop(Collected::Unreachable {
-                    reason: client.reason(&format!("{label} was not read: {}", error.reason)),
-                });
+            Err(error) => {
+                let mut diagnostic = wire::transport_diagnostic(&error);
+                diagnostic.phase = DiagnosticPhase::Poll;
+                return if error.kind == TransportErrorKind::Refused {
+                    Read::Stop(
+                        Collected::Unreachable {
+                            reason: client
+                                .reason(&format!("{label} was not read: {}", error.reason)),
+                        }
+                        .with_diagnostic(diagnostic),
+                    )
+                } else {
+                    Read::Nothing(diagnostic)
+                };
             }
-            Err(_) => return Read::Nothing,
         };
-        let text = || client.reason(&super::status_text(label, &response, client));
-        match response.status {
-            200..=299 => match wire::json_object(&response.body, label) {
-                Ok(job) if job.get("id").and_then(Value::as_str) == Some(id) => Read::Job(job),
-                Ok(_) => Read::Stop(Collected::Unreachable {
+        if response.is_success()
+            && let Ok(job) = wire::json_object(&response.body, label)
+        {
+            return if job.get("id").and_then(Value::as_str) == Some(id) {
+                Read::Job(job)
+            } else {
+                Read::Stop(Collected::Unreachable {
                     reason: client.reason(&format!("{label} answered about another job")),
-                }),
-                Err(_) => Read::Nothing,
-            },
-            408 | 429 | 500..=599 => Read::Nothing,
-            410 => Read::Stop(Collected::Ended {
+                })
+            };
+        }
+        let mut diagnostic = wire::http_diagnostic(call, &response, &client.redactor);
+        diagnostic.phase = DiagnosticPhase::Poll;
+        let text = || client.reason(&super::status_text(label, &response, &diagnostic));
+        let collected = match response.status {
+            200..=299 | 408 | 429 | 500..=599 => return Read::Nothing(diagnostic),
+            410 => Collected::Ended {
                 reason: text(),
                 cost: None,
-            }),
-            _ => Read::Stop(Collected::Unreachable { reason: text() }),
-        }
+            },
+            _ => Collected::Unreachable { reason: text() },
+        };
+        Read::Stop(collected.with_diagnostic(diagnostic))
     }
 
     /// Sleeps one poll interval, unless that would pass the deadline.
@@ -559,6 +629,7 @@ impl Jobs {
     #[allow(clippy::result_large_err)] // `Collected` is what the caller returns at once
     async fn download(
         &self,
+        call: &CallRequest,
         url: &str,
         deadline: Duration,
         cost: Option<Usd>,
@@ -587,26 +658,30 @@ impl Jobs {
             .max_response_bytes(kind.max_bytes);
         let response = match client.send(request).await {
             Ok(response) => response,
-            Err(error) if error.kind == TransportErrorKind::TooLarge => {
-                return Err(ended(&format!("{label} failed: {}", error.reason)));
-            }
-            Err(error) if error.kind == TransportErrorKind::Refused => {
-                return Err(unreachable(&format!(
-                    "{label} was not sent: {}",
-                    error.reason
-                )));
-            }
             Err(error) => {
-                return Err(unreachable(&format!("{label} failed: {}", error.reason)));
+                let collected = match error.kind {
+                    TransportErrorKind::TooLarge => {
+                        ended(&format!("{label} failed: {}", error.reason))
+                    }
+                    TransportErrorKind::Refused => {
+                        unreachable(&format!("{label} was not sent: {}", error.reason))
+                    }
+                    _ => unreachable(&format!("{label} failed: {}", error.reason)),
+                };
+                let mut diagnostic = wire::transport_diagnostic(&error);
+                diagnostic.phase = DiagnosticPhase::Download;
+                return Err(collected.with_diagnostic(diagnostic));
             }
         };
-        let status = wire::status_reason(label, response.status, None);
-        match response.status {
-            200..=299 => {}
-            400..=499 if !matches!(response.status, 401 | 403 | 408 | 429) => {
-                return Err(ended(&status));
-            }
-            _ => return Err(unreachable(&status)),
+        if !response.is_success() {
+            let mut diagnostic = wire::http_diagnostic(call, &response, &redactor);
+            diagnostic.phase = DiagnosticPhase::Download;
+            let text = wire::status_reason(label, response.status, None);
+            let collected = match response.status {
+                400..=499 if !matches!(response.status, 401 | 403 | 408 | 429) => ended(&text),
+                _ => unreachable(&text),
+            };
+            return Err(collected.with_diagnostic(diagnostic));
         }
         let bytes = response.body;
         if bytes.is_empty() {

@@ -14,6 +14,33 @@ application owns starting FX, opening the page, and activating its tab or window
 The API operates on that page's current content; it does not execute workflows,
 change execution picks, or modify run records.
 
+## Recognize the viewer in a wrapper
+
+To choose tab branding, inspect the current document after its head has been
+parsed. The browser SDK can recognize the initial HTML even while the viewer is
+loading its project. In a webview preload, pass the viewer's document to the
+helper. A same-origin host can also pass a document it can already read.
+
+```js
+import { isFxViewerDocument } from "@grida/fx/viewer/client";
+
+const showFxBranding = isFxViewerDocument(document);
+```
+
+The helper checks the versioned FX marker on the HTML `application-name` tag
+without a network request. Check each new document on navigation, regardless of
+port. A missing marker (including on older viewers) or an unknown marker version
+returns `false`. A cross-origin opener needs code in the viewer's realm to read
+its document. Treat the marker as a request for branding. Keep the host's own
+authorization for native actions such as opening local files.
+
+Once evidence loads, read `context.subject.kind` for `catalog`, `plan`, or
+`run`, and `context.subject.workflow?.id` for the workflow. If your app tracks
+a task, associate its task ID with the `service_entry` reference
+(`project_id`, `entry_kind`, `entry_id`) when available. A standalone viewer
+can omit the reference. A selected step has its own `selection.instance_id`
+when `selection.kind` is `instance`.
+
 ## Read the current selection
 
 Browser automation can evaluate these calls inside the viewer page. They also

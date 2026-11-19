@@ -105,7 +105,7 @@ fn exchange(capability: &str, billing: Option<Value>, response: HttpResponse) ->
     let Body::Json(body) = &transport.requests()[0].body else {
         panic!("expected JSON");
     };
-    (outcome, body.clone())
+    (outcome.into_report().0, body.clone())
 }
 
 #[test]

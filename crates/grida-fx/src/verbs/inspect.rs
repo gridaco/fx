@@ -25,6 +25,8 @@
 //! `run_started`, `succeeded`/`failed` after `run_finished` (by its `ok`), `cancelled` after
 //! `run_cancelled`, the last one winning; it has ended once succeeded, failed or cancelled.
 //! `spent` is the `charged_usd` of the last `run_finished` or `run_cancelled`.
+//! Failed managed attempts are read in event order, including failures from earlier invocations
+//! and failures followed by a successful retry.
 //!
 //! A succeeded step's files are where the run placed them (spec/store.md §8 "One file or
 //! several": `files/<step>/<port><suffix>` for a port holding one file, else
@@ -38,11 +40,13 @@
 //! state     <run state>   <n> steps: <count state, …, sorted by state; or none>
 //! booked    $<charged, 2 places>                   (when the run finished or was cancelled)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
+//! attempt   <id> · attempt <n> [· send <n>] · <route> [· call <key>]
 //! differs   <id>: <relative path> is missing | differs from its recorded digest   (--verify)
 //! verified  <n> files                              (--verify, nothing differs)
 //! ```
 //! `--json`: `{"run": {workflow, folder, state, charged_usd, steps: [{id, path, state, error?,
-//! cache?, waiting_for?, files: [{path, digest, size}]}], stand_in?}, "verification"?: {verified,
+//! cache?, waiting_for?, files: [{path, digest, size}]}], call_attempt_failures?, stand_in?},
+//! "verification"?: {verified,
 //! problems}}`, where `folder` is the folder as named, `charged_usd` is null before the run ended
 //! and `waiting_for` is the route a `waiting` step waits for (when recorded). A
 //! stand-in run (spec/store.md §8, "Stand-in runs"), whose `plan.json` or a `run_started` says
@@ -181,6 +185,7 @@ struct RunView {
     /// The last `charged_usd` of a run that ended.
     charged: Option<Value>,
     steps: Vec<StepView>,
+    call_attempt_failures: Vec<Value>,
 }
 
 /// What the plan and the log say about one instance.
@@ -220,6 +225,7 @@ impl RunView {
         let mut state = "planned";
         let mut charged = None;
         let mut stand_in = holds_stand_in(plan);
+        let mut call_attempt_failures = Vec::new();
         for event in events {
             match event_name(event) {
                 Some("run_started") => {
@@ -265,6 +271,7 @@ impl RunView {
                         entry.waits.clear();
                     }
                 }
+                Some("call_attempt_failed") => call_attempt_failures.push(event.clone()),
                 Some(name @ ("call_waiting" | "call_admitted")) => {
                     // Only a step's start in progress waits for a route.
                     let Some(entry) =
@@ -307,6 +314,7 @@ impl RunView {
             state,
             charged,
             steps,
+            call_attempt_failures,
         }
     }
 }
@@ -513,6 +521,9 @@ fn text_lines(
         let error = step.error.as_deref().unwrap_or("no reason recorded");
         lines.push(labelled("failed", &format!("{}: {error}", step.id)));
     }
+    for event in &view.call_attempt_failures {
+        append_call_attempt(&mut lines, event);
+    }
     if let Some(verification) = verification {
         if verification.problems.is_empty() {
             lines.push(labelled(
@@ -526,6 +537,119 @@ fn text_lines(
         }
     }
     lines
+}
+
+/// Describe one recorded failure independently of the step's final state.
+fn append_call_attempt(lines: &mut Vec<String>, event: &Value) {
+    let (Some(id), Some(route), Some(attempt)) = (
+        text(event, "id"),
+        text(event, "route"),
+        event.get("attempt").and_then(Value::as_u64),
+    ) else {
+        return;
+    };
+    let mut heading = format!("{id} · attempt {attempt}");
+    if let Some(send) = event.get("send").and_then(Value::as_u64) {
+        heading.push_str(&format!(" · send {send}"));
+    }
+    heading.push_str(&format!(" · {route}"));
+    if let Some(call) = text(event, "call") {
+        heading.push_str(&format!(" · call {call}"));
+    }
+    lines.push(labelled("attempt", &heading));
+
+    if let Some(reason) = text(event, "reason") {
+        lines.push(labelled("", reason));
+    }
+    if let Some(diagnostic) = event.get("diagnostic") {
+        append_attempt_diagnostic(lines, diagnostic, text(event, "reason"));
+    }
+    let disposition = text(event, "outcome");
+    let mut outcome = match disposition {
+        Some("not_received") => vec!["request not received".into()],
+        Some("refused") => vec!["call refused".into()],
+        Some("failed") => vec!["call failed".into()],
+        Some("unsettled") => vec!["submission outcome unknown".into()],
+        Some("unreachable") => vec!["job outcome unavailable".into()],
+        _ => Vec::new(),
+    };
+    if let Some(retryable) = event.get("retryable").and_then(Value::as_bool) {
+        outcome.push(
+            if retryable {
+                "retry eligible"
+            } else {
+                "no retry"
+            }
+            .into(),
+        );
+    }
+    if let Some(charge) = event
+        .get("charged_usd")
+        .and_then(|v| Usd::from_value(v).ok())
+    {
+        outcome.push(format!("{} booked by FX", charge.dollars_2()));
+    }
+    if disposition == Some("unsettled") {
+        outcome.push("actual provider charge unknown".into());
+    }
+    if !outcome.is_empty() {
+        lines.push(labelled("", &outcome.join(" · ")));
+    }
+    if disposition == Some("unsettled") {
+        let command = crate::invoker::command();
+        lines.push(labelled(
+            "",
+            &format!(
+                "reconcile the original submission using {command} jobs and the provider's records"
+            ),
+        ));
+    }
+}
+
+fn append_attempt_diagnostic(lines: &mut Vec<String>, diagnostic: &Value, reason: Option<&str>) {
+    let mut facts = Vec::new();
+    if let (Some(source), Some(phase)) = (text(diagnostic, "source"), text(diagnostic, "phase")) {
+        facts.push(format!("{source}/{phase}"));
+    }
+    if let Some(status) = diagnostic.get("http_status").and_then(Value::as_u64) {
+        facts.push(format!("HTTP {status}"));
+    }
+    for (key, label) in [
+        ("code", "code"),
+        ("field", "field"),
+        ("request_id", "request"),
+        ("task_id", "task"),
+        ("thread_id", "thread"),
+        ("turn_id", "turn"),
+    ] {
+        if let Some(value) = text(diagnostic, key) {
+            facts.push(format!("{label} {value}"));
+        }
+    }
+    if let Some(ephemeral) = diagnostic.get("ephemeral").and_then(Value::as_bool) {
+        facts.push(
+            if ephemeral {
+                "ephemeral session"
+            } else {
+                "persistent session"
+            }
+            .into(),
+        );
+    }
+    match text(diagnostic, "detail") {
+        Some("unavailable") => facts.push("explanation unavailable".into()),
+        Some("unreadable") => facts.push("explanation unreadable".into()),
+        Some("withheld") => facts.push("explanation withheld".into()),
+        _ => {}
+    }
+    if !facts.is_empty() {
+        lines.push(labelled("", &facts.join(" · ")));
+    }
+    if let Some(message) =
+        text(diagnostic, "message").filter(|m| reason.is_none_or(|r| !r.contains(*m)))
+    {
+        lines.push(labelled("", message));
+    }
 }
 
 /// The `--json` document (module doc).
@@ -576,6 +700,9 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
     }
     if view.stand_in {
         document["run"]["stand_in"] = Value::Bool(true);
+    }
+    if !view.call_attempt_failures.is_empty() {
+        document["run"]["call_attempt_failures"] = json!(view.call_attempt_failures);
     }
     if let Some(verification) = verification {
         document["verification"] = json!({
@@ -647,6 +774,41 @@ mod tests {
             ),
             event("run_finished", json!({"ok": false, "charged_usd": 0.125})),
         ]
+    }
+
+    #[test]
+    fn inspect_keeps_call_failures_independent_of_the_final_step_state() {
+        let failed = event(
+            "call_attempt_failed",
+            json!({"id": "ok#1", "capability": "image.generate", "route": "imagegen@codex",
+              "call": "1".repeat(64), "attempt": 1, "send": 1, "outcome": "failed",
+              "reason": "Codex completed the turn without an image", "charged_usd": 0,
+              "retryable": false, "diagnostic": {"source": "adapter", "phase": "send",
+                "thread_id": "thread-a", "turn_id": "turn-a", "ephemeral": true,
+                "detail": "unavailable"}}),
+        );
+        let mut another_failure = failed.clone();
+        another_failure["call"] = json!("2".repeat(64));
+        let succeeded = event("node_finished", json!({"id": "ok#1", "cache": "miss"}));
+        let view = RunView::new(
+            &plan(),
+            &[failed.clone(), another_failure.clone(), succeeded],
+        );
+        let lines = text_lines(&view, "runs/one", None).join("\n");
+        for call in ["1".repeat(64), "2".repeat(64)] {
+            assert!(lines.contains(&format!(
+                "attempt   ok#1 · attempt 1 · send 1 · imagegen@codex · call {call}"
+            )));
+        }
+        assert!(lines.contains("thread thread-a · turn turn-a · ephemeral session"));
+        assert!(lines.contains("explanation unavailable"));
+        assert!(lines.contains("no retry · $0.00 booked by FX"));
+        let summary = json_document(&view, "runs/one", None);
+        assert_eq!(summary["run"]["steps"][0]["state"], "succeeded");
+        assert_eq!(
+            summary["run"]["call_attempt_failures"],
+            json!([failed, another_failure])
+        );
     }
 
     #[test]

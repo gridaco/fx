@@ -10,6 +10,11 @@ export type ViewerFileTarget = ViewerProtocol.FileTarget;
 export type ViewerFileReference = ViewerProtocol.FileReference;
 export type ViewerExternalFileHandler = ViewerProtocol.ExternalFileHandler;
 
+/** Reads the v1 branding marker from an accessible document, even before viewer scripts run. */
+export function isFxViewerDocument(doc: { querySelector(selector: string): unknown }): boolean {
+  return Boolean(doc.querySelector('head > meta[name="application-name"][data-grida-fx-viewer="1"]'));
+}
+
 /** Structural browser interfaces keep this subpath's declarations free of ambient DOM/Node types. */
 export interface ViewerMessageEvent { readonly data: unknown; readonly origin: string; readonly source: unknown }
 export interface ViewerTargetWindow { postMessage(message: unknown, targetOrigin: string): void }

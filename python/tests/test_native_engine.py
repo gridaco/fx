@@ -175,6 +175,9 @@ def test_provider_diagnostics_reach_sdk_cli_observation_and_uncertain_jobs(nativ
     original = uncertain.failures["native#1"].diagnostic
     assert original and original["http_status"] == 502
     assert uncertain.failures["native#1"].code == "job_unsettled"
+    attempt = fx.load_run(uncertain.run_dir).inspection["run"]["call_attempt_failures"][0]
+    assert attempt["outcome"] == "unsettled" and attempt["send"] == 1
+    assert attempt["diagnostic"] == original and attempt["retryable"] is False
     again = run(native, "uncertain", mode="uncertain")
     assert again.failures["native#1"].diagnostic == original
     assert len(submitted(native)) == 2  # one rejected, one uncertain; no second uncertain POST

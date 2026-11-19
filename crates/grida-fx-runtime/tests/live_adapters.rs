@@ -9,6 +9,7 @@
 
 use grida_fx_core::money::Usd;
 use grida_fx_core::providers::{BaseUrl, Credential, Declaration, Declarations};
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticSource};
 use grida_fx_providers::keys::Environment;
 use grida_fx_providers::testing::media::{MP3, MP3_FRAME};
 use grida_fx_providers::testing::{setup, test_keys};
@@ -50,6 +51,13 @@ const SOUND_BODY: &str = r#"{"text":"wooden door opens","model_id":"eleven_text_
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn diagnosed(outcome: Outcome) -> (Outcome, AdapterDiagnostic) {
+    match outcome {
+        Outcome::Diagnosed(outcome, diagnostic) => (*outcome, *diagnostic),
+        other => panic!("expected diagnostic evidence, got {other:?}"),
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -208,6 +216,7 @@ impl Rig {
             jobs: &self.jobs,
             pacing: &self.gate,
             waits: None,
+            failures: None,
             cancel: &self.cancel,
             backoff: Backoff::default(),
             job: None,
@@ -421,6 +430,8 @@ async fn a_401_is_one_billed_attempt_and_the_call_fails() {
     )
     .await;
     assert_clean(&outcome);
+    let (outcome, diagnostic) = diagnosed(outcome);
+    assert_eq!(diagnostic.http_status, Some(401));
     assert_eq!(
         outcome,
         Outcome::Failed("ElevenLabs sound generation returned HTTP 401: invalid_api_key".into())
@@ -442,6 +453,8 @@ async fn six_5xx_answers_are_six_settled_holds_and_the_call_fails() {
         .map(|_| sound_request().reply(HttpResponse::new(500, b"internal error".to_vec())))
         .collect();
     let (outcome, transport) = play_sound(&rig, exchanges).await;
+    let (outcome, diagnostic) = diagnosed(outcome);
+    assert_eq!(diagnostic.http_status, Some(500));
     assert_eq!(
         outcome,
         Outcome::Failed("ElevenLabs sound generation returned HTTP 500".into())
@@ -467,6 +480,8 @@ async fn six_429s_end_the_call_under_one_hold_at_no_cost() {
         })
         .collect();
     let (outcome, transport) = play_sound(&rig, exchanges).await;
+    let (outcome, diagnostic) = diagnosed(outcome);
+    assert_eq!(diagnostic.http_status, Some(429));
     assert_eq!(
         outcome,
         Outcome::Failed("ElevenLabs sound generation returned HTTP 429; retry-after 1".into())
@@ -541,6 +556,9 @@ async fn the_network_switched_off_is_capability_refused_at_no_cost() {
     let call = sound_call();
     let adapter = adapter_for(&call, Arc::new(Offline), test_keys());
     let outcome = send_plain(adapter.as_ref(), &rig.attempts(call, SOUND_HOLD)).await;
+    let (outcome, diagnostic) = diagnosed(outcome);
+    assert_eq!(diagnostic.source, DiagnosticSource::Transport);
+    assert_eq!(diagnostic.http_status, None);
     assert_eq!(
         outcome,
         Outcome::Refused(

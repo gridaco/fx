@@ -66,7 +66,7 @@ files, cancellation, resume and independent call-cache replay in both SDKs.
 
 Python failure outcomes accept a keyword-only `diagnostic=AdapterDiagnostic(...)`;
 TypeScript outcomes accept `diagnostic: {source, phase, ...}` with camelCase
-`httpStatus`, `requestId` and `taskId`. Evidence is optional, independent of the
+`httpStatus`, `requestId`, `taskId`, `threadId` and `turnId`. Evidence is optional, independent of the
 outcome and sanitized by the engine. Uncaught capability errors retain it in
 `EngineError.data.diagnostic`. Recorded fields use lower_snake_case:
 Python `RunResult.failures[id].diagnostic`, JavaScript
@@ -83,7 +83,9 @@ emitted folder is resolved once against the inspection call's working directory.
 Subsequent observation uses that absolute folder, never a fresh latest-run lookup.
 
 The record exposes `inspection`, the full engine summary and optional verification
-result, and `run_dir` / `runDir`. It has no process exit code or execution ownership.
+result, and `run_dir` / `runDir`. Where recorded, `inspection.run.call_attempt_failures`
+contains the sanitized call failure events, including earlier attempts the run recovered from.
+The record has no process exit code or execution ownership.
 A verification failure returns its documented unsuccessful verification result;
 input/engine errors raise the SDK's `FxError`. Inspection does not load author
 code, run a workflow, or contact providers. Stored/placed files remain immutable.
@@ -240,7 +242,8 @@ Plans already expose graph/problems/pricing, and execution results expose output
 files and delivery. Independent wrappers for every planning verb are optional
 conveniences rather than required parity. Existing JS wrappers remain supported.
 
-Project initialization, service management/browser opening, diagnostics, node locks,
+Project initialization and template installation (`init` and `add`), service
+management/browser opening, diagnostics, node locks,
 take maintenance and job forgetting stay CLI operations. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
 Pause, active revision and cloud control remain separate contracts.

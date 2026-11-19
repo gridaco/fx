@@ -78,6 +78,12 @@ pub fn graph_document(plan: &Plan, planner: &Planner) -> Value {
         "estimate": forecast,
         "problems": problems(&plan.problems),
     });
+    if planner.is_inline_call() {
+        graph["inline_workflow"] = loaded.document.clone();
+    }
+    if let Some(fresh_id) = &planner.fresh_id {
+        graph["fresh_id"] = Value::from(fresh_id.as_str());
+    }
     if !plan.expansion.value_views.is_empty() {
         graph["value_views"] =
             serde_json::to_value(&plan.expansion.value_views).expect("serializable display values");
@@ -229,9 +235,11 @@ pub fn plan_digest(plan: &Plan, planner: &Planner) -> Option<String> {
         .ordered()
         .flat_map(|i| i.routes.values().map(|route| route.fingerprint()))
         .collect();
-    Some(value::digest(&plan_object(
-        workflows, inputs, takes, types, routes,
-    )))
+    Some(value::digest_with_fresh_id(
+        plan_object(workflows, inputs, takes, types, routes),
+        "fx-plan-fresh-v1",
+        planner.fresh_id.as_deref(),
+    ))
 }
 
 /// The `fx-plan-v1` object of identity.md §10 from its parts.
@@ -843,6 +851,56 @@ mod tests {
         assert_eq!(
             plan_digest(&plan, &planner).as_deref(),
             Some("89d7ffdb27cd591501b572fcc8ea6260e794b5af27baa6a2aae0f9a86542a3c2")
+        );
+    }
+
+    #[test]
+    fn integrated_fresh_image_plan_matches_the_fresh_identity_vectors() {
+        use crate::host::{NoCache, NoHost};
+        use crate::project::{ImageCall, PlanRequest, make_image_call_planner};
+        use crate::routes::RouteTable;
+
+        let root = tempfile::tempdir().unwrap();
+        let mut host = NoHost;
+        let mut planner = make_image_call_planner(
+            &PlanRequest {
+                cwd: root.path().to_path_buf(),
+                builtin_routes: RouteTable::from_document(
+                    &json!({
+                        "fx": "routes/v1",
+                        "routes": [
+                            {"capability": "image.generate", "route": "img-a@acme",
+                             "price": {"usd": 0.01}}
+                        ]
+                    }),
+                    "test route table",
+                )
+                .unwrap(),
+                ..Default::default()
+            },
+            ImageCall {
+                prompt: "A picture of 2 lines",
+                route: Some("img-a@acme"),
+                background: None,
+                size: None,
+            },
+            &mut host,
+        )
+        .unwrap();
+        planner.fresh_id = Some("00112233445566778899aabbccddeeff".into());
+        let plan = crate::plan::make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+        assert!(plan.ok(), "{:?}", plan.problems);
+        let graph = graph_document(&plan, &planner);
+        assert_valid_graph(&graph);
+        assert_eq!(graph["fresh_id"], "00112233445566778899aabbccddeeff");
+        assert_eq!(graph["inline_workflow"], planner.workflow.document);
+        assert_eq!(
+            graph["instances"][0]["identity"],
+            "494d808efb1b3da956779bae624e90da22c9cee2fa0305a3c8b39b7b9384a189"
+        );
+        assert_eq!(
+            plan_digest(&plan, &planner).as_deref(),
+            Some("23b3e3294630e8011ef60f0e87ba9b8cd202c0d8c6c741650a8746287a0ff0e3")
         );
     }
 

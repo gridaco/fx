@@ -67,11 +67,11 @@ A route whose contract names an adapter of its capability with another `adapter_
   - **500, 502 and 503:** `NotReceived`. fal answers these without taking the job.
   - **504 and other 5xx:** `Uncertain`.
 - **Collect statuses:**
-  - A status read of 404, 410 or another 4xx (not 401, 403, 408 or 429), or a status with a truthy `error`, is `Ended`. Its reason gives `error_type` and the error text, each redacted before it is cut (to 100 and 500 characters).
+  - A status read of 404, 410 or another 4xx (not 401, 403, 408 or 429), or a status with a truthy `error`, is `Ended`. A terminal status can be reported on HTTP 200. FX records the observed status, task ID and safe `error_type` when available, and withholds the free-form error.
   - A 408, a 429, a 5xx, a transport failure or a body that is not a JSON object is a failed status or result read, and polling goes on.
   - A 401, 403 or 3xx on a status or result read is `Unreachable`, and so is a status that names another `request_id`.
   - The download is made once per collect ([adapters.md](../../../../spec/adapters.md) §7). A transport failure, a refusal by the transport, a 3xx, 401, 403, 408, 429, a 5xx or another status outside 2xx and 4xx is `Unreachable`; a later collect reads the result and downloads again. Another 4xx is `Ended`, and so is a body that is empty, over the cap or not MP4 by its bytes, or a clip with no video stream.
   - A handle that is not one the adapter wrote (`a fal video job handle is not one this adapter wrote`) is `Unreachable`, and nothing is requested.
   - A fal job that may still be running is never settled.
   - An `Ended` after the result read (a result without an https video, or a download that ends the job) comes from a job fal finished, so it costs that read's `usage.cost`, as an answer would ([adapters.md](../../../../spec/adapters.md) §6). Every other `Ended` costs `None`, and so does a result read without a cost: the run that submitted the job then charges its whole hold.
-- **Reasons:** the labels are `fal image generation`, `fal output image download`, `fal video submission`, `fal video job status`, `fal video job result`, `fal output video download` and `fal background removal`. Response bodies are never quoted, except the bounded `error_type` and error of a failed job.
+- **Reasons:** the labels are `fal image generation`, `fal output image download`, `fal video submission`, `fal video job status`, `fal video job result`, `fal output video download` and `fal background removal`. Failed exchanges can carry structured diagnostics from observed responses or a transport error.

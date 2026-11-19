@@ -250,6 +250,7 @@ pub(crate) fn planner_for(source: &str, document: Value) -> Planner {
         registry: Registry::new(root, Vec::new(), LockFile::default(), IndexMap::new()),
         results: IndexMap::new(),
         max_usd: None,
+        fresh_id: None,
     }
 }
 

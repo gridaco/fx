@@ -9,7 +9,7 @@
  * (`dist/host-entry.js`, Node 24 or later).
  */
 
-export const version = "0.9.0";
+export const version = "0.10.0";
 
 export {
   type Accepted,
@@ -83,6 +83,7 @@ export {
   type RunRemovalFailure, type RunRemovalSkip, type RunState,
 } from "./runs.js";
 export type {
+  CallAttemptFailed,
   Encoded,
   FileRef,
   Graph,

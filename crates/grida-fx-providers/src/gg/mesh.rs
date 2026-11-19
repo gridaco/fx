@@ -313,7 +313,7 @@ impl LongJob for GgMesh {
             let contract =
                 endpoints(call, "mesh.generate", &MESH_IDENTITY, &["endpoint"]).map(|_| ());
             self.jobs
-                .collect(job_id(handle), &MESH_KIND, contract)
+                .collect(call, job_id(handle), &MESH_KIND, contract)
                 .await
         })
     }
@@ -446,7 +446,7 @@ impl GgRig {
         let deadline = self.jobs.now() + CHECK_DEADLINE;
         let job = match self
             .jobs
-            .await_result(&credential, &id, &CHECK_KIND, deadline)
+            .await_result(call, &credential, &id, &CHECK_KIND, deadline)
             .await
         {
             Ok(job) => job,
@@ -497,7 +497,7 @@ impl GgRig {
         let contract = endpoints(call, "mesh.rig", &RIG_IDENTITY, &RIG_MEMBERS).map(|_| ());
         let collected = self
             .jobs
-            .collect(rig_job_id(handle), &RIG_KIND, contract)
+            .collect(call, rig_job_id(handle), &RIG_KIND, contract)
             .await;
         let Collected::Answered(mut answer) = collected else {
             return collected;

@@ -4,7 +4,7 @@
 
 ## What changed?
 
-<!-- Describe the change and link any related issue. -->
+<!-- Describe the change and link the corresponding General issue if there is one. -->
 
 ## Why?
 

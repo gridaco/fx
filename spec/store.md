@@ -70,7 +70,11 @@ Facts that the engine computes from bytes ([identity.md](identity.md) §4) are n
 
 The **read set** of an instance maps `<name>/<index>` to a file digest: for each `with:` name, every file its value holds, in order, numbered from 0.
 
-A call record is enough to recompute its own key: `call_key` over its `capability`, `route.fingerprint`, `request` and `take` ([identity.md](identity.md) §9) MUST equal its `key`. An engine MUST NOT add anything to `request` that it did not hash, or remove anything from it.
+A call record is enough to recompute its own key. Its `capability`,
+`route.fingerprint`, `request`, `take`, and `fresh_id` when present determine
+`call_key` ([identity.md](identity.md) §9), which MUST equal its `key`. A job
+record with `fresh_id` also MUST match this key. An engine MUST NOT add
+anything to `request` that it did not hash, or remove anything from it.
 
 ## 4. When a record is trusted
 
@@ -214,6 +218,18 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
+**Failed call attempts.** A `call_attempt_failed` event associates a sanitized failure reason
+and optional `diagnostic` with the step `id`, `capability`, `route`, and `call` key. `attempt`
+is the engine's attempt number, and `send` counts adapter send or submit invocations. A
+provably unreceived request can reuse its attempt with a new send ordinal. The `outcome` is
+`refused`, `not_received`, `failed`, `unsettled` or `unreachable`. `retryable` describes
+eligibility for another send. A later retry also needs admission and applicable budget.
+`charged_usd`, when present, is the amount FX booked at this failure. For an uncertain
+submission, actual provider charge remains unknown. A standalone collect omits `send`.
+Events survive successful retries and later invocations. `inspect --json` exposes them in
+event order in `run.call_attempt_failures` when any were recorded. The text view also shows
+them with their call keys, even when a step succeeded on retry.
+
 **Layout.**
 
 ```
@@ -242,6 +258,8 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
   runs need not have it. Recorded model, provider and contract remain authoritative; current
   configuration and the usual plan-digest comparison still govern resume.
 - **`plan.json`** is the fx-graph-v1 document that `grida-fx expand` prints, `types` included, with `plan` (the plan digest), `steps` (each declared step by its declaration path, with its declaration `order`), `inputs` and `view_origins` added, and `takes_file`: the POSIX path of the workflow's takes file relative to the planning project's root, which `reroll` and `pick` write to (found as *Repeating a run* says). A stand-in run's also has `"stand_in": true`; no other run's has the member. The first invocation writes it before any step runs, under a temporary name and then renamed (§6). Later invocations compare its `plan` and never rewrite it.
+  An inline call records its `inline_workflow` and omits `takes_file`.
+  A fresh call also records `fresh_id` ([identity.md](identity.md) §10).
 - **`events.jsonl`** is the record, and the source of truth for every command that reads the run. Each line is one fx-run-events-v1 event, written as `canon(event)` and then one line feed (U+000A), oldest first. Each line is written whole and flushed before the run goes on, in one write. A line that cannot be written whole (a full disk can take part of one) MUST NOT stay: the engine cuts the file back to its length before the line, writes nothing more if it cannot, and stops the run, so no line ever follows part of a line. A last line without its line feed is a line an invocation began and never finished (it was killed): readers leave it out, and the next invocation cuts it off, says so, and appends after it. A resumed run appends lines under a new `invocation_id`. Lines are never rewritten or removed otherwise. Every line reads back as JSON ([identity.md](identity.md) §2, nested at most 512 deep): a node fact or mark nested deeper than 509 fails its node ([protocol.md](protocol.md) §5.3), and an encoded list (fx-run-events-v1 `encoded`) nested so deep that its `{"list": …}` levels would pass that is written once as `{"value": <its plain JSON>}`, which reads back as the same list.
 - **Waiting for a route.** A paid call takes its route's slot before each send: the route's `concurrency` and `requests_per_minute` ([providers.md](providers.md) §3). A call that cannot take one at once writes `call_waiting` (`id`, `capability`, `route`, and `call`, its key) before it waits, and `call_admitted` with the same members once it has the slot; a call admitted at once writes neither, so a run on unpaced routes records nothing more. A wait that the run's cancellation ends writes no `call_admitted`. A wait is open from its `call_waiting` until the `call_admitted` of the same call, or until the step starts again, makes a new attempt (`node_retry`) or its run a new invocation (`run_started`): a wait those leave behind is no longer the step's. Readers show a started step that has not ended and has an open wait as `waiting` rather than `running` (`inspect`, `project`, the viewer), and time the work a step did from its start less the time it waited. A step whose body makes several calls at once is shown `waiting` while any of them waits, though another may be drawing: the record names only calls that waited.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing. It stays in place while the folder holds a run; a removal (§9) unlinks it last. An invocation that took the lock then checks that the file it locked is still the folder's `run.lock` (the same device and inode), and is refused otherwise ("<folder> was removed while this invocation started"), since that lock was taken on a folder that is gone.

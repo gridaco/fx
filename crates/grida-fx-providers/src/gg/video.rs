@@ -287,7 +287,7 @@ impl LongJob for GgVideo {
     fn collect<'a>(&'a self, call: &'a CallRequest, handle: &'a Value) -> BoxFuture<'a, Collected> {
         Box::pin(async move {
             let id = super::job::job_id(handle);
-            self.jobs.collect(id, &KIND, contract(call)).await
+            self.jobs.collect(call, id, &KIND, contract(call)).await
         })
     }
 

@@ -282,6 +282,8 @@ pub struct Services {
     pub control: Arc<crate::run_control::RunControl>,
     /// `fx-run-events-v1` `invocation_id`; also names holds and run ids.
     pub invocation_id: String,
+    /// Present for an invocation in the fresh cache identity domain.
+    pub fresh_id: Option<String>,
     /// Counts `run` requests, for unique `run_id`s.
     pub runs: std::sync::atomic::AtomicU64,
     /// Counts holds, for unique hold ids (`ledger::hold_id`).
@@ -302,6 +304,7 @@ impl Services {
             control: crate::run_control::RunControl::unrecorded(cancel.clone()),
             cancel,
             invocation_id: format!("plan-{}", crate::events::new_invocation_id()),
+            fresh_id: None,
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
         }
@@ -323,6 +326,7 @@ impl Services {
             pacing: Arc::new(Pacing::new()),
             cancel,
             invocation_id,
+            fresh_id: None,
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
         }
