@@ -140,7 +140,7 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
   |---|---|---|
   | The job finished, its result files downloaded and passed their checks | `Answered` | removed after the call record is published |
   | A built-in adapter confirms the provider ended generation with a failure (such as failed or cancelled) | `Ended` | `settled` without a handle for a new job. A probe of a retained `settled` handle marks it `unavailable`. |
-  | A project adapter returns `ended`, which historically also allowed an unusable result | `ended` (§9) | `settled` with a handle if success is unconfirmed. Previously confirmed completion becomes `unavailable`. |
+  | A project adapter returns `ended`, which can describe failed generation or an unusable result | `Undetermined` (§9) | `settled` with a handle if success is unconfirmed. Previously confirmed completion becomes `unavailable`. |
   | The provider finished generation, and reading, downloading or validating its result failed | `Incomplete` | `recoverable`. A later live run collects the same handle again |
   | The provider confirms the retained result is gone | `Unavailable` | `unavailable`. The handle stays and the engine refuses another submission |
   | Still running at the deadline, or every read failed until it | `Unreachable` | stays `submitted`; a later run collects again |
@@ -149,7 +149,7 @@ A long job (a video, a mesh, a rig) is submitted once and then collected by its 
   | A credential or proxy problem on a status read (401, 403, a 3xx) | `Unreachable` | stays `submitted` |
 
   `Unreachable` preserves a handle when the job's outcome is unclear. `Incomplete` requires evidence that the job finished, such as a provider success status. A failed download can be retried by collecting again, including when a provider may issue a fresh URL. A missing result or a 404 from a download URL alone can be inconclusive about permanent loss.
-- **Costs.** `Ended`, `Incomplete` and `Unavailable` carry the provider's reported cost when the adapter's reference reads one. `Some(0)` is used when the provider reports zero, or when the reference says the provider does not bill that terminal outcome and there is no figure. The run that submitted the job settles its hold at that cost, else in full (§5). A later collect has no new hold and books no new amount.
+- **Costs.** `Ended`, `Undetermined`, `Incomplete` and `Unavailable` carry the provider's reported cost when available. `Some(0)` is used when the provider reports zero, or when the reference says the provider does not bill that terminal outcome and there is no figure. The run that submitted the job settles its hold at that cost, else in full (§5). A later collect has no new hold and books no new amount.
 - **The check of a collected answer** runs as for a plain answer. A refusal fails the call, settles any outstanding hold, and keeps the handle for recovery. Once FX has evidence that generation finished, an inconclusive later collect preserves that evidence. Neither `collect` nor this check reads a limit the route's table declares (§4 step 4): those are not in the call's key, so a job sent before its route's table changed is still collected, and checked against what its request asked for.
 
 ## 7. Downloads and reasons
@@ -253,7 +253,7 @@ A project's own adapter is this contract's second binding: Python or TypeScript 
 | | `uncertain` | `Uncertain` |
 | | `not_received`, `refused`, `failed` | as for a send |
 | `adapter.collect` | `answered` | `Answered(answer)` |
-| | `ended` | `Ended { cost }` |
+| | `ended` | `Undetermined { cost }` |
 | | `unreachable` | `Unreachable` |
 
 - **Costs.** `cost_usd` is the provider's own figure in US dollars, read and rounded up as §5 says. Left out, the provider reported none, and the engine charges the whole hold, or a capped route's cap. A project adapter bills dollars, to the account of its declaration's key: no declaration can claim a plan. An answer's `usage` may report tokens, which the call record keeps under `billing: dollars` ([store.md](store.md) §3).
