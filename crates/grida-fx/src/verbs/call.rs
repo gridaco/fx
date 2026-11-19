@@ -10,12 +10,12 @@ use grida_fx_core::money::Usd;
 use grida_fx_core::plan::{Estimate, output::forecast_document};
 use grida_fx_core::project::{ImageCall, PlanRequest, Planner, make_image_call_planner};
 use grida_fx_runtime::engine::Engine;
-use grida_fx_runtime::folder::{new_folder, output_files};
+use grida_fx_runtime::folder::{new_folder, output_files, same_file};
 use grida_fx_runtime::runner::{self, RunError, RunOptions};
 use grida_fx_runtime::stderr;
 use serde_json::{Value, json};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -172,6 +172,7 @@ fn run_prepared(
                 "control   unavailable"
             });
         });
+    crate::interrupt::runner_ended();
     if ran.is_err() {
         let _ = fs::remove_dir(&folder);
     }
@@ -245,13 +246,11 @@ struct Delivery {
 
 impl Delivery {
     fn prepare(cwd: &Path, typed: &Path) -> Result<Self, Error> {
-        let label = typed.display().to_string();
-        let last = typed
-            .as_os_str()
-            .as_encoded_bytes()
-            .rsplit(|byte| *byte == b'/')
-            .next();
-        if matches!(last, Some(b"" | b"." | b"..")) {
+        let label = typed
+            .to_str()
+            .ok_or_else(|| Error::usage("--out needs a UTF-8 file path"))?
+            .to_owned();
+        if matches!(label.rsplit('/').next(), Some("" | "." | "..")) {
             return Err(Error::usage("--out needs a file path"));
         }
         let requested = cwd.join(typed);
@@ -266,8 +265,7 @@ impl Delivery {
             Err(error) => return Err(Error::io(&label, &error)),
             Ok(_) => return Err(Error::usage(format!("{label}: output already exists"))),
         }
-        tempfile::NamedTempFile::new_in(&parent)
-            .and_then(tempfile::NamedTempFile::close)
+        crate::interrupt::with_delivery_staging(&parent, tempfile::NamedTempFile::close)
             .map_err(|error| Error::io(&label, &error))?;
         Ok(Self {
             requested,
@@ -292,18 +290,21 @@ impl Delivery {
             .requested
             .parent()
             .expect("absolute file path has a parent");
-        if fs::canonicalize(requested_parent).map_err(io_error)? != parent {
-            return Err(Error::usage(format!(
-                "{}: output parent changed during the run",
-                self.label
-            )));
-        }
-        let mut staged = tempfile::NamedTempFile::new_in(parent).map_err(io_error)?;
-        staged.write_all(&bytes).map_err(io_error)?;
-        staged.as_file().sync_all().map_err(io_error)?;
-        staged
-            .persist_noclobber(&self.target)
-            .map_err(|error| io_error(error.error))?;
+        crate::interrupt::with_delivery_staging(parent, |mut staged| {
+            staged.write_all(&bytes)?;
+            staged.as_file().sync_all()?;
+            if fs::canonicalize(requested_parent)? != parent {
+                return Err(io::Error::other("output parent changed during the run"));
+            }
+            let published = staged
+                .persist_noclobber(&self.target)
+                .map_err(|error| error.error)?;
+            if !same_file(&published, &self.requested) {
+                return Err(io::Error::other("output path changed during publication"));
+            }
+            Ok(())
+        })
+        .map_err(io_error)?;
         Ok(self.label)
     }
 }

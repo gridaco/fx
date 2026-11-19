@@ -59,7 +59,7 @@ For offline execution, use `--stand-in FILE#FUNCTION` instead of `--live`.
 
 FX can replay a cached image. To exercise the selected provider or stand-in again, add `--fresh`.
 The command saves the image as `outputs/image.png` in its run folder and reports the path.
-`--out` also copies the image to an unused filename under an existing writable directory.
+`--out` also copies the image to an unused UTF-8 filename under an existing writable directory.
 Use `--json` for structured results, and `inspect` with the reported run folder for recorded
 attempts. See the [call contract](../../spec/call.md) for flag combinations and delivery behavior.
 

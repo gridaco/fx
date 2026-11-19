@@ -3677,6 +3677,12 @@ fn integrated_call_dry_run_uses_project_defaults_and_accepts_route_override() {
     assert_eq!(planned["forecast"]["high_usd"], 0);
     assert!(planned["output"].is_null());
 
+    let args = image_call_args("Draw a lantern", &["--route", "", "--live"]);
+    let empty_route = grida_fx(&child, &args);
+    assert_eq!(status(&empty_route), 2, "{}", stderr(&empty_route));
+    assert!(stdout(&empty_route).is_empty());
+    assert!(stderr(&empty_route).contains("--route"));
+
     let output = grida_fx(
         &child,
         &[
@@ -3855,7 +3861,11 @@ fn integrated_call_delivers_projectless_and_passes_prompts_literally() {
         "${{ inputs.missing }}\n\"Draw a lantern\"",
     ];
     for (number, prompt) in prompts.into_iter().enumerate() {
-        let destination = format!("lantern-{number}.png");
+        let destination = if cfg!(unix) && number == 0 {
+            r"lantern\étoile.png".to_owned()
+        } else {
+            format!("lantern-{number}.png")
+        };
         let args = image_call_args(
             prompt,
             &[
@@ -4098,6 +4108,26 @@ fn integrated_call_preserves_existing_and_concurrent_output_entries() {
             .unwrap()
             .contains("late.png")
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn integrated_call_refuses_a_non_utf8_output_path_before_dispatch() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let cwd = directory.path();
+    let destination = OsString::from_vec(b"image-\xff.png".to_vec());
+    let args = image_call_args(
+        "Draw a lantern",
+        &["--route", "imagegen@codex", "--live", "--out"],
+    );
+    let output = command(cwd, &args).arg(&destination).output().unwrap();
+    let result = call_result(&output, 2, "error");
+    assert_eq!(result["error"]["message"], "--out needs a UTF-8 file path");
+    assert!(result["run"].is_null());
+    assert_eq!(std::fs::read_dir(cwd).unwrap().count(), 0);
 }
 
 #[cfg(unix)]

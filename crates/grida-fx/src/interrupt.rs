@@ -6,8 +6,8 @@
 //! busy in user code (a module that loops while it imports) never reads the end of its input.
 //!
 //! Who acts on an interruption depends on what the command is doing:
-//! - while a run is running (the `run` verb, from persisted readiness, [`runner_started`], until
-//!   the engine is shut down, [`runner_ended`]) the runner owns acceptance: accepted cancellation
+//! - while a run is running (from persisted readiness, [`runner_started`], until
+//!   [`runner_ended`]) the runner owns acceptance: accepted cancellation
 //!   stops work, settles reservations, writes `run_cancelled` and exits 130. Finalization can
 //!   win first and preserve the actual terminal outcome. Repeated SIGTERM stays
 //!   cooperative. A second explicit SIGINT is emergency force, with cleanup unverified.
@@ -16,6 +16,10 @@
 //!   setup after dropping staging. A second explicit SIGINT can force exit before cleanup
 //!   finishes. Repeated SIGTERM stays cooperative. Once publication starts, FX finishes the
 //!   rename and staging cleanup before resuming immediate-exit handling.
+//! - after an inline call has recorded its run, output delivery returns to immediate-exit
+//!   handling. FX attempts to unlink the staged output without waiting for its writer and
+//!   bounds the time it waits for the destination filesystem. The run and any published output
+//!   are outside that cleanup.
 //! - at any other time (planning, `at: plan` steps, every other verb) the command ends at once:
 //!   the process group of every node host it started is killed
 //!   ([`grida_fx_runtime::host::end_every_host_now`]) and it exits 130. Nothing is written: planning
@@ -30,6 +34,10 @@
 
 use crate::verbs::run::INTERRUPTED;
 use grida_fx_core::Error;
+use grida_fx_runtime::folder::same_file;
+use std::fs::File;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -47,6 +55,8 @@ const CANCELLED: u8 = 3;
 const CANCELLED_BY_SIGINT: u8 = 4;
 const PUBLISHING: u8 = 5;
 static INSTALL: AtomicU8 = AtomicU8::new(IDLE);
+/// The temporary file of a call delivering an output, never its publication path.
+static DELIVERY_STAGING: Mutex<Option<StagedDelivery>> = Mutex::new(None);
 /// Held by an end at once from its start until it exits the process, and by the command's own
 /// return ([`ending`]): a command that finishes while it is forced to end waits for that end,
 /// so the forced exit's message is never cut short by the command's own exit.
@@ -80,6 +90,74 @@ pub fn runner_started() {
 /// recorded runner outcome determines the exit status of an earlier accepted cancellation.
 pub fn runner_ended() {
     RUNNER_OWNS.store(false, Ordering::SeqCst);
+}
+
+/// Creates and registers an output staging file before its writer can block.
+pub fn with_delivery_staging<T>(
+    parent: &Path,
+    deliver: impl FnOnce(tempfile::NamedTempFile) -> io::Result<T>,
+) -> io::Result<T> {
+    let staged = {
+        let mut active = delivery_staging();
+        if INSTALL.load(Ordering::SeqCst) == EXITING {
+            return Err(io::ErrorKind::Interrupted.into());
+        }
+        let staged = tempfile::NamedTempFile::new_in(parent)?;
+        *active = Some(StagedDelivery {
+            file: staged.as_file().try_clone()?,
+            path: staged.path().to_path_buf(),
+        });
+        staged
+    };
+    let registration = DeliveryRegistration;
+    let result = deliver(staged);
+    drop(registration);
+    result
+}
+
+struct DeliveryRegistration;
+
+struct StagedDelivery {
+    file: File,
+    path: PathBuf,
+}
+
+impl Drop for DeliveryRegistration {
+    fn drop(&mut self) {
+        *delivery_staging() = None;
+    }
+}
+
+fn delivery_staging() -> MutexGuard<'static, Option<StagedDelivery>> {
+    DELIVERY_STAGING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn discard_delivery_staging() {
+    if DELIVERY_STAGING
+        .try_lock()
+        .is_ok_and(|active| active.is_none())
+    {
+        return;
+    }
+    let (done, discarded) = std::sync::mpsc::sync_channel(1);
+    if std::thread::Builder::new()
+        .name("grida-fx-delivery-cleanup".into())
+        .spawn(move || {
+            let staged = delivery_staging().take();
+            if let Some(staged) = staged
+                && same_file(&staged.file, &staged.path)
+            {
+                let _ = std::fs::remove_file(staged.path);
+            }
+            let _ = done.send(());
+        })
+        .is_ok()
+    {
+        // The lock may be held by a blocked file creation, and unlink can block too.
+        let _ = discarded.recv_timeout(Duration::from_millis(500));
+    }
 }
 
 /// Gives the installer the first interruption while it owns a temporary directory. Unless a
@@ -134,6 +212,8 @@ const LAST_WORD_WAIT: Duration = Duration::from_millis(500);
 /// `last_word` when there is one ([`LAST_WORD_WAIT`] at most), then exits 130. What the command
 /// printed is flushed by the exit, which never waits for a verb that holds its output.
 fn end_now(_ending: MutexGuard<'static, ()>, last_word: Option<&str>) -> ! {
+    INSTALL.store(EXITING, Ordering::SeqCst);
+    discard_delivery_staging();
     grida_fx_runtime::host::end_every_host_now();
     if let Some(text) = last_word {
         grida_fx_runtime::stderr::write_within(text, LAST_WORD_WAIT);
@@ -245,6 +325,40 @@ fn listen(ready: std::sync::mpsc::SyncSender<()>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn delivery_cleanup_unlinks_only_the_staged_file_without_waiting_for_its_writer() {
+        use std::io::Write;
+
+        let root = tempfile::tempdir().unwrap();
+        let saved = root.path().join("saved.png");
+        let output = root.path().join("output.png");
+        std::fs::write(&saved, b"saved image").unwrap();
+
+        with_delivery_staging(root.path(), |mut staged| {
+            staged.write_all(b"unpublished image")?;
+            assert!(staged.path().is_file());
+            discard_delivery_staging();
+            assert!(!staged.path().exists());
+            assert!(!output.exists());
+            Ok(())
+        })
+        .unwrap();
+
+        with_delivery_staging(root.path(), |mut staged| {
+            staged.write_all(b"published image")?;
+            let path = staged.path().to_path_buf();
+            staged.persist_noclobber(&output)?;
+            std::fs::write(&path, b"another owner's file")?;
+            discard_delivery_staging();
+            assert_eq!(std::fs::read(path)?, b"another owner's file");
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(saved).unwrap(), b"saved image");
+        assert_eq!(std::fs::read(output).unwrap(), b"published image");
+    }
 
     #[test]
     fn interrupted_template_staging_cleans_up_before_returning() {

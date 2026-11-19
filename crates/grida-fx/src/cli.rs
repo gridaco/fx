@@ -348,7 +348,7 @@ pub struct CallArgs {
     #[arg(long, value_name = "TEXT")]
     pub prompt: String,
     /// override the project's route for this capability
-    #[arg(long, value_name = "SELECTOR")]
+    #[arg(long, value_name = "SELECTOR", value_parser = clap::builder::NonEmptyStringValueParser::new())]
     pub route: Option<String>,
     /// the requested image background
     #[arg(long, value_parser = ["auto", "opaque", "transparent"])]

@@ -23,10 +23,11 @@ This command accepts text input and produces one PNG called `image`.
 
 FX finds the nearest `fx.yaml` at or above the working directory, as for other
 project commands. It reads that project's route defaults, provider preferences,
-route tables, provider declarations, budget and storage settings. An explicit
-`--route` overrides the capability's default and follows the normal
-[model selection rules](model-selection.md). When neither supplies a selector,
-the command refuses and names the ways to select a route. A qualified selector
+route tables, provider declarations, budget and storage settings. Omit
+`--route` to use the capability's default. An explicit `--route` must be
+nonempty and follows the normal [model selection rules](model-selection.md).
+When neither supplies a selector, the command refuses and names the ways to
+select a route. A qualified selector
 can select a built-in route outside a project. There FX uses its ordinary
 projectless storage defaults in the working directory.
 
@@ -68,13 +69,16 @@ different key. Pending or uncertain jobs remain visible in `jobs`.
 
 An invocation that produces an image places it at `outputs/image.png` in its
 run folder. With no `--out`, the command reports the path to this saved
-artifact. `--out` additionally delivers a copy to the named file, resolving
-relative paths from the working directory. Its parent directory must already
-exist and allow a new file. FX refuses directory-form paths and occupied
-destinations before running. It checks that the destination's parent still
-resolves to the same path before publishing the copy without replacing an
-entry created concurrently. If delivery fails, the run and its saved artifact
-remain available.
+artifact. `--out` additionally delivers a copy to the named UTF-8 file path,
+resolving relative paths from the working directory. Its parent directory
+must already exist and allow a new file. FX refuses directory-form paths and
+occupied destinations before running. After staging the copy, FX checks that
+the parent still resolves to the same path, then publishes without replacing
+an entry created concurrently. It verifies that the requested path names the
+copy before reporting delivery. If delivery fails, the run and its saved
+artifact remain available. An interrupt during delivery ends the command
+with exit 130. FX attempts to remove the unpublished staging file, with a
+bounded wait for cleanup. The saved run and any published copy remain available.
 
 ## 4. Command result
 
@@ -109,6 +113,7 @@ facts and no run, invocation ID, artifact or output.
 | `2` | `error` | Argument, setup or fatal error |
 | `130` | `cancelled` | Cancellation in the normal run lifecycle |
 
-An interrupt before the runner takes ownership, or a forced exit, can end
-the command before it prints a result. The run-control contract governs the
-recorded invocation when a run already exists.
+An interrupt before the runner takes ownership, an interrupt during output
+delivery, or a forced exit can end the command before it prints a result.
+The run-control contract governs the recorded invocation when a run already
+exists.

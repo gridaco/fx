@@ -810,8 +810,8 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
 
 - **One-shot images.** `call image.generate` uses a literal `--prompt` and the nearest `fx.yaml`'s
-  `routes.image.generate` unless `--route` selects another model and provider. Give a qualified
-  route such as `imagegen@codex` outside a project. `--background` accepts `auto`, `opaque` or
+  `routes.image.generate` when you omit `--route`. An explicit `--route` must be nonempty.
+  Give a qualified route such as `imagegen@codex` outside a project. `--background` accepts `auto`, `opaque` or
   `transparent`; `--size` accepts `auto` or `WxH` where the selected route supports it. Use
   `--dry-run` to check the request and see its forecast and configured ceiling without creating
   a run or generating. Use `--live`
@@ -820,7 +820,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   `--fresh` requires `--live` or `--stand-in` and makes a new request identity while preserving the
   normal cache entry. The command saves `outputs/image.png` in an ordinary run and reports its
   path. Use that run folder with `inspect` to see its attempts. `--out FILE` delivers a copy to
-  an unused filename under an existing writable directory. `--json` prints
+  an unused UTF-8 filename under an existing writable directory. `--json` prints
   one `fx-call-result-v1` document with the route, run, saved image and cache disposition. See the
   [call contract](https://github.com/gridaco/fx/blob/main/spec/call.md).
 - **Ceiling.** A live run needs one: `--max-usd`, else the workflow's `budget:`, else `fx.yaml`'s.
