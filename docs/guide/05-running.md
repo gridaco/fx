@@ -17,13 +17,13 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |
 | `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
-| `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--open] [--standalone]` | expand, check, price; optionally open the plan canvas. Never spends. |
+| `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--register \| [--open] [--standalone]]` | expand, check and price a plan. `--open` opens the default browser. `--register` saves the plan and returns its viewer route. Planning never spends. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
 | `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex or Grok Build) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
 | `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | check a request or generate one image without a workflow ([below](#generate-one-image)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
-| `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--open] [--standalone]` | summary; a workflow ID selects its newest-created run; `--verify` re-checks every placed file; `--open` opens its canvas |
+| `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--register \| [--open] [--standalone]]` | summarize a run. A workflow ID selects its newest-created run. `--verify` re-checks every placed file. `--open` opens the default browser. `--register` returns the saved run's viewer route. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
 | `grida fx doctor [target]` | the Python, Node, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |

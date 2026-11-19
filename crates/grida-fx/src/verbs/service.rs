@@ -703,25 +703,34 @@ pub fn logs(args: &LogsArgs) -> Result<u8, Error> {
 }
 
 /// Register before run-phase execution. Service absence never prevents recording the run.
-pub(crate) fn register_run(
-    project: &Project,
-    folder: &Path,
-    open: bool,
-) -> Result<Option<String>, Error> {
+pub(crate) fn register_run(project: &Project, folder: &Path) -> Result<Option<String>, Error> {
     let catalog = catalog(project)?;
     let entry = catalog
         .register_run(folder)
         .map_err(|error| Error::io("service run registration", &error))?;
-    registered_url(&catalog, &entry.url, open)
+    Ok(registered_url(&catalog, &entry.url))
 }
 
-pub(crate) fn register_plan(
-    project: &Project,
-    graph: &Value,
-    open: bool,
-) -> Result<Option<String>, Error> {
+pub(crate) fn register_plan(project: &Project, graph: &Value) -> Result<Option<String>, Error> {
     let (catalog, entry) = save_plan(project, graph)?;
-    registered_url(&catalog, &entry.url, open)
+    Ok(registered_url(&catalog, &entry.url))
+}
+
+/// Registers an existing run and returns its stable catalog address.
+pub(crate) fn register_run_receipt(
+    project: &Project,
+    folder: &Path,
+    plan: &Value,
+    events: &[Value],
+) -> Result<Value, Error> {
+    let first = events
+        .first()
+        .ok_or_else(|| Error::usage("The run has no complete initial event."))?;
+    let catalog = catalog(project)?;
+    let entry = catalog
+        .register_inspected_run(folder, plan, first)
+        .map_err(|error| Error::io("service run registration", &error))?;
+    Ok(registration_receipt(&catalog, entry))
 }
 
 /// Persists a plan and reports its stable catalog address without probing service readiness.
@@ -731,17 +740,22 @@ pub(crate) fn register_plan_receipt(
     plan_ok: bool,
 ) -> Result<Value, Error> {
     let (catalog, entry) = save_plan(project, graph)?;
-    Ok(json!({
-        "kind": "fx-plan-registration-v1",
+    let mut receipt = registration_receipt(&catalog, entry);
+    receipt["plan_ok"] = json!(plan_ok);
+    Ok(receipt)
+}
+
+fn registration_receipt(catalog: &Catalog, entry: Entry) -> Value {
+    json!({
+        "kind": format!("fx-{}-registration-v1", entry.kind),
         "reference": {
             "kind": "service_entry",
             "project_id": catalog.project_id(),
-            "entry_kind": "plan",
+            "entry_kind": entry.kind,
             "entry_id": entry.id,
         },
         "route": entry.url,
-        "plan_ok": plan_ok,
-    }))
+    })
 }
 
 fn save_plan(project: &Project, graph: &Value) -> Result<(Catalog, Entry), Error> {
@@ -752,16 +766,12 @@ fn save_plan(project: &Project, graph: &Value) -> Result<(Catalog, Entry), Error
     Ok((catalog, entry))
 }
 
-fn registered_url(catalog: &Catalog, path: &str, _open: bool) -> Result<Option<String>, Error> {
+fn registered_url(catalog: &Catalog, path: &str) -> Option<String> {
     let value = probe(catalog);
-    let Some(base) = value["url"]
+    let base = value["url"]
         .as_str()
-        .filter(|_| value["state"] == "running")
-    else {
-        return Ok(None);
-    };
-    let url = format!("{}{}", base.trim_end_matches('/'), path);
-    Ok(Some(url))
+        .filter(|_| value["state"] == "running")?;
+    Some(format!("{}{}", base.trim_end_matches('/'), path))
 }
 
 #[cfg(all(test, unix))]

@@ -262,6 +262,9 @@ fn service_flags_and_viewing_flags_are_parsed_before_workflow_inputs() {
         vec!["plan", "missing.yaml", "--json", "--standalone"],
         vec!["inspect", "missing", "--json", "--open"],
         vec!["inspect", "missing", "--json", "--standalone"],
+        vec!["inspect", "missing", "--register", "--open"],
+        vec!["inspect", "missing", "--register", "--standalone"],
+        vec!["inspect", "missing", "--register", "--control"],
         vec!["run", "missing.yaml", "--standalone", "--no-view"],
     ] {
         let output = execute(root.path(), &args);

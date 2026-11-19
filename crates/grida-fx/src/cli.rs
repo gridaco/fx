@@ -218,7 +218,7 @@ pub struct LogsArgs {
 pub struct PlanCommandArgs {
     #[command(flatten)]
     pub plan: PlanArgs,
-    /// plan: save the materialized plan to the project catalog without opening a browser
+    /// save the materialized plan to the project catalog and print its viewer route
     #[arg(long, conflicts_with_all = ["open", "standalone", "prepared"])]
     pub register: bool,
 }
@@ -258,7 +258,7 @@ pub struct PlanArgs {
     /// plan: exit 1 unless every step is cached
     #[arg(long = "expect-cached")]
     pub expect_cached: bool,
-    /// plan: open the materialized plan in the running project service
+    /// plan: open the materialized plan in the default browser
     #[arg(long, conflicts_with = "json")]
     pub open: bool,
     /// plan: serve this plan in a foreground viewer on an available port
@@ -606,16 +606,16 @@ pub struct FilesListArgs {
 
 #[derive(Debug, Args, Clone)]
 pub struct FilesResolveArgs {
-    /// an existing run folder or saved plan JSON file
-    #[arg(required_unless_present = "service_entry")]
+    /// a run folder or saved plan JSON file; omit for a catalog reference
+    #[arg(required_unless_present_any = ["project", "service_entry"])]
     pub target: Option<String>,
-    /// resolve the captured service entry inside the exact project binding
-    #[arg(long, conflicts_with = "target", requires = "project")]
+    /// compatibility spelling for catalog lookup
+    #[arg(long, conflicts_with = "target", requires = "project", hide = true)]
     pub service_entry: bool,
     /// captured {subject,target} JSON reference
     #[arg(long, value_name = "JSON")]
     pub reference: String,
-    /// explicit local project/catalog binding; also the default source root
+    /// local project binding and default source root; required without TARGET
     #[arg(long, value_name = "DIRECTORY")]
     pub project: Option<String>,
     /// owning workflow source root when different from the project binding
@@ -639,13 +639,16 @@ pub struct InspectArgs {
     /// re-check every placed file against its record
     #[arg(long)]
     pub verify: bool,
-    /// print the summary as JSON
+    /// print the summary or registration receipt as JSON
     #[arg(long)]
     pub json: bool,
     /// observe verified local control for an exact run folder or WORKFLOW_ID/NAME
     #[arg(long, conflicts_with_all = ["open", "standalone", "verify"])]
     pub control: bool,
-    /// open the recorded run in the running project service
+    /// register the recorded run in the project catalog and print its viewer route
+    #[arg(long, conflicts_with_all = ["open", "standalone", "control"])]
+    pub register: bool,
+    /// open the recorded run in the default browser
     #[arg(long, conflicts_with = "json")]
     pub open: bool,
     /// serve this recorded run in a foreground viewer on an available port

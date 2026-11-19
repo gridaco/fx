@@ -23,15 +23,15 @@ discussion is shorthand, not a newly installed executable alias.
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
 | `logs [--project DIRECTORY] [--lines N]` | Print a bounded tail of the service's local log. |
 | `run TARGET [--open] [--standalone]` | Execute; announce a usable run URL when inspection is available. |
-| `plan TARGET [--open \| --standalone \| --register]` | Plan without run-phase execution; optionally inspect or register the materialized graph. |
-| `inspect RUN [--open] [--standalone]` | Inspect an existing record, optionally in the browser. |
+| `plan TARGET [--register \| [--standalone] [--open]]` | Plan without run-phase execution; optionally inspect or register the materialized graph. |
+| `inspect RUN [--register \| [--standalone] [--open]]` | Inspect an existing record; optionally register it or open its viewer. |
 
 `view` remains a hidden compatibility command for independent foreground viewing
 of source targets, saved plans and saved runs. New onboarding uses the commands
 above. No service command executes workflow source or loads provider credentials.
-Browser opening is explicit through `--open`; browser failures never change the
-result of workflow execution. JSON inspection/planning output conflicts with
-browser flags that would mix a URL into machine-readable stdout.
+The `--open` flag requests a launch in the default browser. Browser failures
+leave the workflow execution result intact. JSON inspection/planning output
+conflicts with browser flags that would mix a URL into machine-readable stdout.
 
 ## 2. Projects and standalone operation
 
@@ -234,6 +234,20 @@ plan with problems still registers for inspection. The normal `--check`,
 fatal planning or registration error exits 2 without a receipt. `--register`
 conflicts with `--open` and `--standalone`. Ordinary `plan --json` still
 returns the graph and writes no catalog entry.
+
+`inspect RUN --register` registers the record selected by the normal inspect
+rules (folder, named run, or a workflow's newest run) in the current project's
+catalog. It reads recorded data and starts no service, browser, or workflow.
+Both registration commands print a `registered` line with the relative route
+after their text summary. With `--json`, inspect instead prints one
+[`fx-run-registration-v1`](schemas/fx-run-registration-v1.schema.json) receipt
+with the selected run's `service_entry` reference and `route`. Re-registering
+the same record preserves its reference and route. A missing, invalid, or
+ambiguous record, or a run replaced during inspection, returns exit 2 without
+a receipt. With `--verify`, the receipt
+includes the usual `verification` object and exits 1 if any placed file differs.
+`inspect --register` conflicts with `--open`, `--standalone`, and `--control`.
+Ordinary `inspect --json` prints the run summary without registration.
 
 `--standalone` explicitly selects the independent foreground inspection model,
 including inside a project. It changes serving lifetime, not workflow resolution,

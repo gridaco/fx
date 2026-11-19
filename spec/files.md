@@ -70,11 +70,12 @@ accepts a captured external-file reference and returns:
 }
 ```
 
-If the captured subject contains a `service_entry` reference, a native caller
-can resolve it using
-`grida-fx files resolve --service-entry --project DIRECTORY --reference JSON --json`
-with optional `--source-root DIRECTORY`. This form replaces the positional
-`TARGET` and requires the caller's exact project directory. The engine checks
+For a captured subject with a `service_entry` reference, omit the positional
+`TARGET` and use
+`grida-fx files resolve --project DIRECTORY --reference JSON --json`
+with optional `--source-root DIRECTORY`. This form requires a valid
+`service_entry` reference and the caller's exact project directory. The explicit
+`--service-entry` spelling is accepted for compatibility. The engine checks
 that the reference's project, entry kind and ID match the registered evidence.
 It reads only the selected catalog entry and needs no running service. It
 never discovers, creates, or changes catalog entries, or follows an entry to

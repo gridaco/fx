@@ -193,6 +193,15 @@ fn native_cli_refusals_are_structured_and_do_not_echo_private_paths() {
     let project = fixture();
     for arguments in [
         vec!["files", "resolve", "run", "--reference", "{", "--json"],
+        vec![
+            "files",
+            "resolve",
+            "--project",
+            ".",
+            "--reference",
+            r#"{"subject":{"kind":"run","workflow":{"id":"sample"}},"target":{"kind":"source","source":"workflow.yaml"}}"#,
+            "--json",
+        ],
         vec!["files", "list", "run", "--instance", "missing#1", "--json"],
     ] {
         let output = command(project.path()).args(arguments).output().unwrap();
@@ -228,7 +237,7 @@ fn a_registered_run_resolves_only_in_its_exact_project_even_while_stopped() {
     });
     let resolve = |root: &Path, reference: &Value| {
         command(project.path())
-            .args(["files", "resolve", "--service-entry", "--project"])
+            .args(["files", "resolve", "--project"])
             .arg(root)
             .args(["--reference", &reference.to_string(), "--json"])
             .output()
@@ -237,6 +246,26 @@ fn a_registered_run_resolves_only_in_its_exact_project_even_while_stopped() {
     let found = resolve(project.path(), &reference);
     assert!(found.status.success(), "{found:?}");
     let result = document(&found);
+    let compatibility = command(project.path())
+        .args([
+            "files",
+            "resolve",
+            "--service-entry",
+            "--project",
+            ".",
+            "--reference",
+            &reference.to_string(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert!(compatibility.status.success(), "{compatibility:?}");
+    assert_eq!(document(&compatibility), result);
+    let missing_binding = command(project.path())
+        .args(["files", "resolve", "--reference", &reference.to_string()])
+        .output()
+        .unwrap();
+    assert_eq!(missing_binding.status.code(), Some(2));
     let local_path = result["local_path"].as_str().unwrap();
     assert_eq!(fs::read(local_path).unwrap(), b"synthetic recorded bytes\n");
     fs::remove_file(local_path).unwrap();

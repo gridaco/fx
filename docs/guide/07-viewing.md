@@ -46,12 +46,23 @@ workflow processes. Restarting it restores access to retained run URLs. Closing 
 browser tab has no effect on service or execution. Service commands accept
 `--project DIRECTORY` when you are outside the project.
 
-To save a plan for later viewing without starting a service or opening a browser,
-run `grida fx plan TARGET --register --json`. Its receipt identifies the saved
-plan and its route. A host can check the exact project with
-`grida fx status --project-root DIRECTORY --json`. Use the route with the
-verified URL only when their project identities match. Restarting the service
-can change its address. The saved plan's route stays the same.
+## Register a plan or saved run
+
+When installed help lists `--register`, use it to get the exact project viewer
+route without starting a service or opening a browser:
+
+```sh
+grida fx plan workflows/gallery.yaml --inputs inputs.yaml --register
+grida fx inspect runs/example --register
+```
+
+Add `--json` for a receipt with the catalog reference and relative route. Check
+the exact project with `grida fx status --project-root DIRECTORY --json`. Resolve
+the route against the verified URL for the matching project ID. The route stays
+valid across service restarts while the saved plan or run is retained, even if
+the service address changes. Add `--verify` to saved-run registration to check
+the recorded files. The JSON receipt includes the verification result, and the
+command exits with status 1 if verification reports a problem.
 
 ## Configure canvas display
 
@@ -272,7 +283,8 @@ grida fx plan gallery --caption "A copper lantern" --open
 grida fx plan assets.py:build --arg theme=dusk --open
 ```
 
-FX plans once, saves the resulting `fx-graph-v1`, and opens its project page.
+FX plans once, saves the resulting `fx-graph-v1`, and opens its project page in
+the default browser.
 It shows dependencies, parameters, routes, identities, estimates and planning
 problems. Conditional and absent steps remain visible; values that depend on
 execution remain unresolved. Planning state `done` may describe an existing or
@@ -295,7 +307,7 @@ grida fx inspect example --open
 grida fx inspect example/baseline --open
 ```
 
-This registers and opens the selected record in the running project service.
+This registers the selected record and opens its page in the default browser.
 It reads recorded states, inputs, outputs, failures, costs and available artifacts;
 it never imports author code or calls a provider. The Python distribution uses
 exactly the same interface: `python -m grida.fx inspect runs/example --open`.

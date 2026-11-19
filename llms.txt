@@ -54,8 +54,10 @@ and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cos
   and earlier results don't carry over.
 - **`runs/` and `.fx/` belong to FX.** Read runs with `grida fx inspect` or the SDKs; never edit
   them by hand.
-- **Show the live viewer.** When the project service is running (`grida fx status --json`), give
-  the user the URL `plan --open` or `run` prints instead of describing renders yourself.
+- **Share the viewer URL.** For plans and saved runs, use `plan --register` or `inspect --register`
+  when supported, and resolve the returned route against the verified URL for the matching project
+  (`grida fx status --json`). For live runs, share the URL `run` prints. Use `--open` when the user
+  wants FX to launch the default browser.
   Look for the `f(x)` tab icon. Project tabs show the project name. Plan and Run tabs show
   the workflow's `title` after the mode, and Run tabs also show the run name. The page
   description uses the workflow's `description` when present, or a summary naming the plan
@@ -796,17 +798,17 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 
 | Command | |
 |---|---|
-| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open \| --register]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
+| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--register] [--standalone] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
 | `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
 | `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--background MODE] [--size SIZE] [--live \| --stand-in F#fn] [--max-usd N] [--out FILE] [--dry-run] [--fresh] [--json]` | generate one PNG without authoring a workflow |
-| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary and recorded call failures, including failures recovered by retry; a workflow id reads its newest run |
+| `grida fx inspect <run> [--verify] [--json] [--register] [--standalone] [--open]` | a run's summary and recorded call failures, including failures recovered by retry; a workflow id reads its newest run |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
 | `grida fx cancel <run> [--invocation ID] [--wait] [--timeout 30s] [--json]` | cancel one invocation; `inspect <run> --control --json` first |
 | `grida fx runs list [--workflow ID] [--json]` / `grida fx runs remove <run>… [--yes]` | list runs / remove runs (preview without `--yes`) |
 | `grida fx cache prune [--yes]` | remove what no remaining run names |
 | `grida fx export <run> --out DIR [--include-values] [--include-diagnostics] [--json]` | a portable copy of a finished run |
-| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON. To resolve a captured service entry, replace `<saved>` with `--service-entry` and supply the exact `--project DIR` |
+| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON. To resolve a captured service entry, omit `<saved>` and supply the exact `--project DIR` |
 | `grida fx jobs [--forget KEY]` | long provider jobs in the cache |
 | `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
@@ -919,12 +921,18 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 - **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
   element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
   the same files for a person; agents use `--deliver` or `export`.
-- **Register a plan for a host.** `grida fx plan TARGET --register --json` saves the
-  materialized plan and returns `fx-plan-registration-v1` with `reference`,
-  `route`, and `plan_ok`, without starting a service or opening a browser. Obtain
-  the current verified URL through `status --project-root DIR --json` or
-  `start --background --json` and use the receipt's route for the same project.
-  An exact status read does not discover ancestors or create service state.
+- **Register a page for a host.** `grida fx plan TARGET --register` materializes a plan and
+  `grida fx inspect RUN --register` registers the selected saved run. Both print the relative
+  viewer route without starting a service or opening a browser. Add `--json` for the
+  `fx-plan-registration-v1` or `fx-run-registration-v1` receipt with `reference` and `route`.
+  The plan receipt also reports `plan_ok`. With `inspect --register --verify --json`, the
+  receipt also includes `verification` (`verified` and `problems`). Verification problems
+  return exit status 1. Registration works while the service is stopped.
+  Use `status --project-root DIR --json` or `start --background --json` for the verified base
+  URL, and use the receipt's route for the same project. An exact status read does not
+  discover ancestors or create service state. `--register` conflicts with `--open` and
+  `--standalone`. To serve a page independently and launch the default browser, combine
+  `--standalone --open`.
 - **Viewer context and presentation.** The engine-shipped page exposes
   `window.fx_viewer.getContext()`, `.subscribe(listener)` (returns unsubscribe), and
   `.present(action)` to browser automation in that page. Context identifies the
@@ -969,6 +977,10 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
   Closure-only or namespace-ambiguous files require that explicit source-root
   binding; matching a project file's label does not establish package ownership.
   FX never infers their package base from mutable project configuration.
+  A native caller with a captured service entry can use
+  `grida fx files resolve --project DIR --reference JSON --json` without a saved-record path.
+  Pass the authorized project directory and the complete captured reference. The explicit
+  `--service-entry` flag is also accepted.
   `localPath` (`local_path`) is private native output, not viewer-message data.
   Artifacts resolve only to available verified recorded bytes. Source resolves
   the current editable file and reports match/changed/unknown where meaningful;

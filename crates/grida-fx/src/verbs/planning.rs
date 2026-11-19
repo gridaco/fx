@@ -109,7 +109,7 @@ pub fn run(verb: PlanVerb, args: &PlanArgs) -> Result<u8, Error> {
             )?;
         } else {
             super::view::report_service(
-                super::service::register_plan(&planner.project, &graph, args.open),
+                super::service::register_plan(&planner.project, &graph),
                 args.open,
                 &declarations,
             );

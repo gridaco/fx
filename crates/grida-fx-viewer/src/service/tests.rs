@@ -99,6 +99,29 @@ fn recorded_workflow_and_first_run_metadata_survive_resume_and_unavailability() 
 }
 
 #[test]
+fn inspected_run_registration_refuses_a_replaced_record() {
+    let (_directory, catalog) = catalog();
+    let fixture = Fixture::new("image/png");
+    let root = fixture.root();
+    let graph = serde_json::from_slice(&fs::read(root.join("plan.json")).unwrap()).unwrap();
+    let events = fs::read_to_string(root.join("events.jsonl")).unwrap();
+    let first = serde_json::from_str(events.lines().next().unwrap()).unwrap();
+    let original = catalog
+        .register_inspected_run(&root, &graph, &first)
+        .unwrap();
+    recorded_workflow(&fixture, "other.yaml", None, None);
+    assert!(
+        catalog
+            .register_inspected_run(&root, &graph, &first)
+            .is_err()
+    );
+    let entries = catalog.entries().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].id, original.id);
+    assert_eq!(entries[0].state, "unavailable");
+}
+
+#[test]
 fn presentation_metadata_does_not_change_run_url_identity() {
     let (_directory, catalog) = catalog();
     let fixture = Fixture::new("image/png");
