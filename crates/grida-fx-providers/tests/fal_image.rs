@@ -57,7 +57,7 @@ fn post_any(url: &str) -> Expect {
 fn send(transport: &Arc<ReplayTransport>, call: &CallRequest) -> Sent {
     let sent = block_on(adapter(transport.clone()).send(call));
     transport.assert_done();
-    sent
+    sent.into_report().0
 }
 
 fn refused(call: &CallRequest) -> String {
@@ -1097,7 +1097,7 @@ fn the_key_travels_only_as_the_post_credential() {
     let call = generate(json!({"prompt": "p"}));
     let answer = answered(block_on(images.send(&call)));
     assert_no_key(&answer.data.to_string());
-    let Sent::Failed { reason, .. } = block_on(images.send(&call)) else {
+    let Sent::Failed { reason, .. } = block_on(images.send(&call)).into_report().0 else {
         panic!("a failure")
     };
     assert_no_key(&reason);

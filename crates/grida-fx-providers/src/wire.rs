@@ -8,10 +8,11 @@
 
 use crate::adapter::{CallRequest, RequestFile};
 use crate::redact::Redactor;
-use crate::transport::HttpResponse;
+use crate::transport::{HttpResponse, TransportError, TransportErrorKind};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
 use regex::Regex;
 use serde_json::{Map, Value};
 use std::sync::LazyLock;
@@ -159,14 +160,29 @@ static SAFE_FIELD: LazyLock<Regex> =
 ///
 /// `None` when the body is not that envelope or nothing is kept. The raw message is never copied.
 pub fn safe_error_detail(body: &[u8], redactor: &Redactor) -> Option<String> {
+    filtered_error_detail(body, redactor, |_| true)
+}
+
+/// The same allowlisted detail, with fragments of submitted values withheld.
+pub(crate) fn safe_error_detail_for_call(
+    body: &[u8],
+    call: &CallRequest,
+    redactor: &Redactor,
+) -> Option<String> {
+    filtered_error_detail(body, redactor, |value| {
+        !echoes_identifier(&call.request, value)
+    })
+}
+
+fn filtered_error_detail(
+    body: &[u8],
+    redactor: &Redactor,
+    keep: impl Fn(&str) -> bool,
+) -> Option<String> {
     let error = error_envelope(body)?;
     let mut parts = Vec::new();
     if let Some(Value::String(message)) = error.get("message") {
-        let summaries: Vec<&str> = MESSAGE_SUMMARIES
-            .iter()
-            .filter(|(pattern, _)| pattern.is_match(message))
-            .map(|(_, summary)| *summary)
-            .collect();
+        let summaries: Vec<&str> = message_summaries(message).collect();
         if !summaries.is_empty() {
             parts.push(format!("message={}", summaries.join(", ")));
         }
@@ -178,7 +194,7 @@ pub fn safe_error_detail(body: &[u8], redactor: &Redactor) -> Option<String> {
             _ => continue,
         };
         let text = redactor.redact(&text);
-        if SAFE_FIELD.is_match(&text) {
+        if SAFE_FIELD.is_match(&text) && keep(&text) {
             parts.push(format!("{key}={text}"));
         }
     }
@@ -209,6 +225,170 @@ pub fn error_envelope(body: &[u8]) -> Option<Map<String, Value>> {
     Some(inner.unwrap_or_else(|| error.clone()))
 }
 
+/// Shared evidence for a failed HTTP exchange. Keep the actual status and request ID even if
+/// the body is unreadable. Structured codes are opaque. Free-form prose is only used to select
+/// a fixed summary so fragments of prompts or upstream secrets cannot become a saved message.
+pub(crate) fn http_diagnostic(
+    call: &CallRequest,
+    response: &HttpResponse,
+    redactor: &Redactor,
+) -> AdapterDiagnostic {
+    let mut diagnostic = AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Send);
+    diagnostic.http_status = Some(response.status);
+    diagnostic.request_id = request_id(response);
+    const MAX_ERROR_BYTES: usize = 64 * 1024;
+    if response.body.len() > MAX_ERROR_BYTES {
+        diagnostic.detail = DiagnosticDetail::Unreadable;
+        diagnostic.truncated = true;
+    } else if !response.body.is_empty() {
+        match serde_json::from_slice::<Value>(&response.body) {
+            Ok(payload) => read_error_fields(&payload, response.status, &mut diagnostic),
+            Err(_) => diagnostic.detail = DiagnosticDetail::Unreadable,
+        }
+    }
+    // A provider can put part of a submitted value in an identifier, including a value that
+    // happens to look like a code, rather than only echoing it in its prose.
+    for field in [
+        &mut diagnostic.code,
+        &mut diagnostic.field,
+        &mut diagnostic.request_id,
+    ] {
+        if field.as_deref().is_some_and(|value| {
+            SAFE_FIELD.is_match(value) && echoes_identifier(&call.request, value)
+        }) {
+            *field = None;
+            diagnostic.redacted = true;
+            if diagnostic.message.is_none() && diagnostic.detail == DiagnosticDetail::Unavailable {
+                diagnostic.detail = DiagnosticDetail::Withheld;
+            }
+        }
+    }
+    crate::diagnostic::sanitize(diagnostic, call, redactor)
+}
+
+fn read_error_fields(payload: &Value, status: u16, diagnostic: &mut AdapterDiagnostic) {
+    let Some(error) = payload.get("error").and_then(Value::as_object) else {
+        return;
+    };
+    let metadata = error.get("metadata");
+    let raw = metadata.and_then(|value| value.get("raw"));
+    let parsed = raw
+        .and_then(Value::as_str)
+        .and_then(|text| serde_json::from_str::<Value>(text).ok());
+    let inner = parsed
+        .as_ref()
+        .or(raw)
+        .and_then(|raw| raw.get("error"))
+        .and_then(Value::as_object);
+    let primary = inner.unwrap_or(error);
+    let scalar = |value: Option<&Value>| match value {
+        Some(Value::String(text)) => Some(text.clone()),
+        Some(Value::Number(number)) if number.is_i64() || number.is_u64() => {
+            Some(number.to_string())
+        }
+        _ => None,
+    };
+    let code = scalar(primary.get("code"));
+    let numeric_status = status.to_string();
+    diagnostic.code = code
+        .as_ref()
+        .filter(|value| *value != &numeric_status)
+        .cloned()
+        .or_else(|| scalar(metadata.and_then(|value| value.get("error_type"))))
+        .or_else(|| scalar(metadata.and_then(|value| value.get("provider_code"))))
+        .or_else(|| scalar(primary.get("type")))
+        .or(code)
+        .or_else(|| scalar(error.get("code")));
+    diagnostic.field = scalar(primary.get("param")).or_else(|| scalar(error.get("param")));
+    if diagnostic.request_id.is_none() {
+        diagnostic.request_id = scalar(error.get("request_id"));
+    }
+    if let Some(message) = primary
+        .get("message")
+        .and_then(Value::as_str)
+        .or_else(|| error.get("message").and_then(Value::as_str))
+        .filter(|value| !value.trim().is_empty())
+    {
+        let summaries: Vec<&str> = message_summaries(message).collect();
+        if summaries.is_empty() && !IMAGE_SIZE_REFUSAL.is_match(message) {
+            diagnostic.detail = DiagnosticDetail::Withheld;
+            diagnostic.redacted = true;
+        } else {
+            diagnostic.message = Some(if summaries.is_empty() {
+                "This image size is unavailable for this model.".into()
+            } else {
+                summaries.join(", ")
+            });
+            diagnostic.detail = DiagnosticDetail::Available;
+            diagnostic.redacted = diagnostic.message.as_deref() != Some(message);
+        }
+    }
+}
+
+/// Whether an identifier matches a submitted value or a fragment of one.
+pub(crate) fn echoes_identifier(request: &Value, identifier: &str) -> bool {
+    match request {
+        Value::String(text) => {
+            text.eq_ignore_ascii_case(identifier)
+                || (identifier.len() >= 4
+                    && text
+                        .as_bytes()
+                        .windows(identifier.len())
+                        .any(|fragment| fragment.eq_ignore_ascii_case(identifier.as_bytes())))
+        }
+        Value::Array(items) => items.iter().any(|item| echoes_identifier(item, identifier)),
+        Value::Object(items) => items
+            .values()
+            .any(|item| echoes_identifier(item, identifier)),
+        _ => false,
+    }
+}
+
+static IMAGE_SIZE_REFUSAL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\s*(?:this )?image size is (?:unavailable|unsupported) for (?:this|the) model[.!]?\s*$")
+        .expect("a valid pattern")
+});
+
+/// A failed exchange without a provider response carries a transport kind, not an HTTP status.
+pub(crate) fn transport_diagnostic(error: &TransportError) -> AdapterDiagnostic {
+    let mut diagnostic = AdapterDiagnostic::new(DiagnosticSource::Transport, DiagnosticPhase::Send);
+    diagnostic.code = Some(
+        match error.kind {
+            TransportErrorKind::Connect => "connection_failed",
+            TransportErrorKind::Timeout => "timeout",
+            TransportErrorKind::TooLarge => "response_too_large",
+            TransportErrorKind::Refused => "transport_refused",
+            TransportErrorKind::Other => "transport_error",
+        }
+        .into(),
+    );
+    diagnostic
+}
+
+/// Readable HTTP reason using only fields selected for the diagnostic.
+pub(crate) fn diagnosed_http_reason(
+    label: &str,
+    status: u16,
+    diagnostic: &AdapterDiagnostic,
+) -> String {
+    let mut detail = Vec::new();
+    if let Some(message) = &diagnostic.message {
+        detail.push(format!("message={message}"));
+    }
+    if let Some(code) = &diagnostic.code {
+        detail.push(format!("code={code}"));
+    }
+    if let Some(field) = &diagnostic.field {
+        detail.push(format!("param={field}"));
+    }
+    let detail = detail.join("; ");
+    let mut reason = status_reason(label, status, Some(&detail));
+    if let Some(id) = &diagnostic.request_id {
+        reason.push_str(&format!(" (request {id})"));
+    }
+    reason
+}
+
 static MESSAGE_SUMMARIES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     [
         (r"(?i)\binvalid (?:json )?schema\b", "invalid schema"),
@@ -223,6 +403,13 @@ static MESSAGE_SUMMARIES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|
     .map(|(pattern, summary)| (Regex::new(pattern).expect("a valid pattern"), summary))
     .collect()
 });
+
+fn message_summaries(message: &str) -> impl Iterator<Item = &'static str> {
+    MESSAGE_SUMMARIES
+        .iter()
+        .filter(move |(pattern, _)| pattern.is_match(message))
+        .map(|(_, summary)| *summary)
+}
 
 /// Whether the compact JSON encoding of `body` (what the transport sends) is longer than `limit`
 /// bytes. Counts without building the encoding, and stops at the limit.
@@ -1047,6 +1234,66 @@ mod tests {
             safe_error_detail(leaky.to_string().as_bytes(), &redactor),
             None
         );
+    }
+
+    #[test]
+    fn http_failure_keeps_typed_evidence_without_a_prompt_echo() {
+        let call = crate::testing::CallBuilder::new("image.generate", "img-a@acme")
+            .request(json!({"prompt": "paint PrivateFragment in blue"}))
+            .build();
+        let response = HttpResponse::json(
+            400,
+            &json!({"error": {
+                "code": 400,
+                "message": "Provider returned error",
+                "metadata": {
+                    "error_type": "content_policy_violation",
+                    "raw": {"error": {
+                        "message": "PRIVATEFRAGMENT was flagged, x-api-key: test-private-key",
+                        "param": "PRIVATEFRAGMENT"
+                    }}
+                }
+            }}),
+        )
+        .with_header("X-Request-Id", "req-7");
+        let diagnostic = http_diagnostic(&call, &response, &Redactor::default());
+        assert_eq!(diagnostic.http_status, Some(400));
+        assert_eq!(diagnostic.code.as_deref(), Some("content_policy_violation"));
+        assert_eq!(diagnostic.request_id.as_deref(), Some("req-7"));
+        assert_eq!(diagnostic.detail, DiagnosticDetail::Withheld);
+        assert_eq!(diagnostic.field, None);
+        assert_eq!(diagnostic.message, None);
+        assert!(diagnostic.redacted);
+        for text in [
+            format!("{diagnostic:?}"),
+            diagnosed_http_reason("image", 400, &diagnostic),
+        ] {
+            assert!(!text.contains("PRIVATEFRAGMENT"));
+            assert!(!text.contains("test-private-key"));
+        }
+    }
+
+    #[test]
+    fn unfamiliar_http_failure_keeps_status_and_correlation() {
+        let call = crate::testing::CallBuilder::new("image.generate", "img-a@acme").build();
+        for (body, detail) in [
+            (
+                br#"{"detail":"unknown shape"}"#.as_slice(),
+                DiagnosticDetail::Unavailable,
+            ),
+            (
+                b"<html>unreadable response".as_slice(),
+                DiagnosticDetail::Unreadable,
+            ),
+        ] {
+            let response =
+                HttpResponse::new(502, body.to_vec()).with_header("x-request-id", "req-7");
+            let diagnostic = http_diagnostic(&call, &response, &Redactor::default());
+            assert_eq!(diagnostic.http_status, Some(502));
+            assert_eq!(diagnostic.request_id.as_deref(), Some("req-7"));
+            assert_eq!(diagnostic.detail, detail);
+            assert_eq!(diagnostic.message, None);
+        }
     }
 
     #[test]

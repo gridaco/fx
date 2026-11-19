@@ -102,7 +102,7 @@ fn outcome(response: HttpResponse) -> Sent {
 }
 
 fn failed(sent: Sent) -> (String, Option<Usd>, bool) {
-    match sent {
+    match sent.into_report().0 {
         Sent::Failed {
             reason,
             cost,
@@ -1043,13 +1043,22 @@ fn moderation_is_billed_and_ends_the_call() {
             "{reason}"
         );
     }
-    let (reason, _, _) = failed(outcome(envelope(
-        400,
-        json!({"type": "image_generation_user_error", "code": "moderation_blocked"}),
-    )));
+    let sent = outcome(
+        envelope(
+            400,
+            json!({"type": "image_generation_user_error", "code": "moderation_blocked"}),
+        )
+        .with_header("x-request-id", "req-mod"),
+    );
+    let (sent, diagnostic) = sent.into_report();
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(400));
+    assert_eq!(diagnostic.code.as_deref(), Some("moderation_blocked"));
+    assert_eq!(diagnostic.request_id.as_deref(), Some("req-mod"));
+    let (reason, _, _) = failed(sent);
     assert_eq!(
         reason,
-        "OpenAI image generation returned HTTP 400: type=image_generation_user_error; code=moderation_blocked"
+        "OpenAI image generation returned HTTP 400: type=image_generation_user_error; code=moderation_blocked (request req-mod)"
     );
     // Moderation names only change a 400.
     assert_eq!(
@@ -1063,14 +1072,25 @@ fn moderation_is_billed_and_ends_the_call() {
 }
 
 #[test]
+fn reason_omits_a_provider_code_or_request_id_echoing_the_prompt() {
+    let response = envelope(400, json!({"code": "kite"})).with_header("x-request-id", "kite");
+    let (sent, diagnostic) = outcome(response).into_report();
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(400));
+    assert!(diagnostic.code.is_none());
+    assert!(diagnostic.request_id.is_none());
+    assert_eq!(failed(sent).0, "OpenAI image generation returned HTTP 400");
+}
+
+#[test]
 fn rate_limits_are_not_received_and_quota_ends_the_call() {
-    let sent = outcome(
+    let (sent, _) = outcome(
         envelope(
             429,
             json!({"message": "Rate limit reached.", "type": "requests", "code": "rate_limit_exceeded"}),
         )
         .with_header("retry-after", "20"),
-    );
+    ).into_report();
     assert!(
         matches!(&sent, Sent::NotReceived { retry_after: Some(wait), .. } if *wait == Duration::from_secs(20)),
         "{sent:?}"
@@ -1081,11 +1101,12 @@ fn rate_limits_are_not_received_and_quota_ends_the_call() {
         "OpenAI image generation returned HTTP 429: type=requests; code=rate_limit_exceeded; retry-after 20"
     );
     // An HTTP date is honoured as a wait but not shown in the reason.
-    let sent = outcome(
+    let (sent, _) = outcome(
         HttpResponse::new(429, Vec::new())
             .with_header("retry-after", "Wed, 21 Oct 2026 07:28:00 GMT")
             .with_header("x-request-id", "req_7"),
-    );
+    )
+    .into_report();
     assert!(
         matches!(
             &sent,
@@ -1191,7 +1212,7 @@ fn failing(error: TransportError) -> Sent {
     ]));
     let sent = send(&transport, &generate(json!({"prompt": "a kite"})));
     transport.assert_done();
-    sent
+    sent.into_report().0
 }
 
 #[test]
@@ -1271,7 +1292,10 @@ fn a_response_over_the_cap_is_billed_and_retryable() {
 #[test]
 fn the_network_turned_off_refuses_at_zero() {
     let images = adapter(Arc::new(Offline), test_keys());
-    match block_on(images.send(&generate(json!({"prompt": "a kite"})))) {
+    match block_on(images.send(&generate(json!({"prompt": "a kite"}))))
+        .into_report()
+        .0
+    {
         Sent::Refused { reason } => assert_eq!(
             reason,
             "OpenAI image generation was not sent: the network is off (GRIDA_FX_NETWORK=off)"
@@ -1462,9 +1486,19 @@ fn the_key_travels_only_in_the_credential() {
     }
     transport.assert_done();
 
-    for sent in &outcomes {
+    for (index, (sent, diagnostic)) in outcomes.into_iter().map(Sent::into_report).enumerate() {
+        if index < 2 {
+            assert!(diagnostic.is_none());
+        } else {
+            let diagnostic = diagnostic.unwrap();
+            assert_clean(&serde_json::to_string(&diagnostic).unwrap());
+            if index == 3 {
+                assert_eq!(diagnostic.http_status, Some(401));
+                assert!(diagnostic.request_id.is_none());
+            }
+        }
         match sent {
-            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
+            Sent::Diagnosed(..) => unreachable!("report already split"),
             Sent::Answered(answer) => {
                 assert_eq!(answer.data, Value::Null);
                 for file in answer.files.values() {
@@ -1474,12 +1508,14 @@ fn the_key_travels_only_in_the_credential() {
             Sent::Failed { reason, .. }
             | Sent::NotReceived { reason, .. }
             | Sent::Refused { reason } => {
-                assert_clean(reason);
+                assert_clean(&reason);
                 assert!(!reason.is_empty());
+                if index == 3 {
+                    assert!(reason.contains("[redacted]"));
+                }
             }
         }
     }
-    assert!(matches!(&outcomes[3], Sent::Failed { reason, .. } if reason.contains("[redacted]")));
     for request in transport.requests() {
         assert_request_clean(&request);
     }

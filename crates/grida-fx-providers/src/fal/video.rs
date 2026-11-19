@@ -65,6 +65,7 @@ use crate::transport::{
     TransportErrorKind,
 };
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
 use serde_json::{Map, Value, json};
 use std::sync::Arc;
 use std::time::Duration;
@@ -432,7 +433,7 @@ fn handle_of(queue_base: &str, body: &[u8]) -> Result<Value, String> {
 /// What one status or result read saw.
 enum Read {
     /// A JSON object.
-    Json(Map<String, Value>),
+    Json(Map<String, Value>, u16),
     /// Nothing: poll again.
     Nothing,
     /// Collecting stops here.
@@ -491,23 +492,27 @@ impl FalVideo {
             }
         };
         match client.send(request).await {
-            Ok(response) => self.submitted(&response),
-            Err(error) => submit_transport(client, &error),
+            Ok(response) => self.submitted(call, &response),
+            Err(error) => {
+                let mut diagnostic = crate::wire::transport_diagnostic(&error);
+                diagnostic.phase = DiagnosticPhase::Submit;
+                submit_transport(client, &error).with_diagnostic(diagnostic)
+            }
         }
     }
 
     /// The submit table of the module doc for an answered POST.
-    fn submitted(&self, response: &HttpResponse) -> Submitted {
+    fn submitted(&self, call: &CallRequest, response: &HttpResponse) -> Submitted {
         let client = &self.clients.queue;
         let status = response.status;
         let uncertain = |text: &str| Submitted::Uncertain {
             reason: client.reason(text),
         };
-        let text = super::status_text(SUBMIT_LABEL, response);
-        match status {
+        let text = exchange_status_text(call, SUBMIT_LABEL, response);
+        let outcome = match status {
             200..=299 => match handle_of(&client.base, &response.body) {
-                Ok(handle) => Submitted::Accepted { handle },
-                Err(sentence) => match returned_id(response) {
+                Ok(handle) => return Submitted::Accepted { handle },
+                Err(sentence) => match returned_id(call, response) {
                     Some(id) => uncertain(&format!("{sentence} (request {id})")),
                     None => uncertain(&sentence),
                 },
@@ -528,7 +533,14 @@ impl FalVideo {
             }
             300..=399 => uncertain(&format!("{SUBMIT_LABEL} was redirected (HTTP {status})")),
             _ => uncertain(&text),
+        };
+        let mut diagnostic = crate::wire::http_diagnostic(call, response, &client.redactor);
+        diagnostic.phase = DiagnosticPhase::Submit;
+        if response.is_success() {
+            diagnostic.request_id = returned_id(call, response);
+            diagnostic = crate::diagnostic::sanitize(diagnostic, call, &client.redactor);
         }
+        outcome.with_diagnostic(diagnostic)
     }
 
     async fn collect_once(&self, call: &CallRequest, handle: &Value) -> Collected {
@@ -555,20 +567,44 @@ impl FalVideo {
 
         loop {
             match self
-                .read(&credential, &job.status_path, deadline, STATUS_LABEL)
+                .read(call, &credential, &job.status_path, deadline, STATUS_LABEL)
                 .await
             {
-                Read::Json(status) => {
+                Read::Json(status, http_status) => {
                     if let Some(Value::String(id)) = status.get("request_id")
                         && *id != job.request_id
                     {
                         return unreachable(&format!("{STATUS_LABEL} answered about another job"));
                     }
                     if status.get("error").is_some_and(super::truthy) {
+                        let mut diagnostic = AdapterDiagnostic::new(
+                            DiagnosticSource::Provider,
+                            DiagnosticPhase::Poll,
+                        );
+                        diagnostic.http_status = Some(http_status);
+                        if !crate::wire::echoes_identifier(&call.request, &job.request_id) {
+                            diagnostic.task_id = Some(job.request_id.clone());
+                        }
+                        diagnostic.code = status
+                            .get("error_type")
+                            .and_then(Value::as_str)
+                            .filter(|code| {
+                                super::is_safe_id(code)
+                                    && !crate::wire::echoes_identifier(&call.request, code)
+                            })
+                            .map(str::to_string);
+                        diagnostic.detail = DiagnosticDetail::Withheld;
+                        diagnostic.redacted = true;
+                        let diagnostic =
+                            crate::diagnostic::sanitize(diagnostic, call, &client.redactor);
                         return Collected::Ended {
-                            reason: client.reason(&job_error(&status, &client.redactor)),
+                            reason: match &diagnostic.code {
+                                Some(code) => format!("fal video job failed ({code})"),
+                                None => "fal video job failed".into(),
+                            },
                             cost: None,
-                        };
+                        }
+                        .with_diagnostic(diagnostic);
                     }
                     if status.get("status").and_then(Value::as_str) == Some("COMPLETED") {
                         break;
@@ -584,10 +620,16 @@ impl FalVideo {
 
         let result = loop {
             match self
-                .read(&credential, &job.response_path, deadline, RESULT_LABEL)
+                .read(
+                    call,
+                    &credential,
+                    &job.response_path,
+                    deadline,
+                    RESULT_LABEL,
+                )
                 .await
             {
-                Read::Json(result) => break result,
+                Read::Json(result, _) => break result,
                 Read::Nothing => {}
                 Read::Stop(collected) => return collected,
             }
@@ -614,6 +656,7 @@ impl FalVideo {
     /// nothing).
     async fn read(
         &self,
+        call: &CallRequest,
         credential: &Credential,
         path: &str,
         deadline: Duration,
@@ -631,21 +674,31 @@ impl FalVideo {
         let response = match client.send(request).await {
             Ok(response) => response,
             Err(error) if error.kind == TransportErrorKind::Refused => {
-                return Read::Stop(Collected::Unreachable {
-                    reason: client.reason(&format!("{label} was not sent: {}", error.reason)),
-                });
+                let mut diagnostic = crate::wire::transport_diagnostic(&error);
+                diagnostic.phase = read_phase(label);
+                return Read::Stop(
+                    Collected::Unreachable {
+                        reason: client.reason(&format!("{label} was not sent: {}", error.reason)),
+                    }
+                    .with_diagnostic(diagnostic),
+                );
             }
             Err(_) => return Read::Nothing,
         };
-        let text = || client.reason(&super::status_text(label, &response));
+        let text = || client.reason(&exchange_status_text(call, label, &response));
+        let stop = |outcome: Collected| {
+            let mut diagnostic = crate::wire::http_diagnostic(call, &response, &client.redactor);
+            diagnostic.phase = read_phase(label);
+            Read::Stop(outcome.with_diagnostic(diagnostic))
+        };
         match response.status {
             200..=299 => match crate::wire::json_object(&response.body, label) {
-                Ok(payload) => Read::Json(payload),
+                Ok(payload) => Read::Json(payload, response.status),
                 Err(_) => Read::Nothing,
             },
             408 | 429 | 500..=599 => Read::Nothing,
-            300..=399 | 401 | 403 => Read::Stop(Collected::Unreachable { reason: text() }),
-            400..=499 => Read::Stop(Collected::Ended {
+            300..=399 | 401 | 403 => stop(Collected::Unreachable { reason: text() }),
+            400..=499 => stop(Collected::Ended {
                 reason: text(),
                 cost: None,
             }),
@@ -731,6 +784,14 @@ impl FalVideo {
     }
 }
 
+fn read_phase(label: &str) -> DiagnosticPhase {
+    if label == STATUS_LABEL {
+        DiagnosticPhase::Poll
+    } else {
+        DiagnosticPhase::Collect
+    }
+}
+
 /// The result's video URL, as fal gave it, when it is https with a host and no userinfo.
 /// Otherwise the `Ended` sentence. A declared `content_type` is not read: the bytes decide.
 fn result_video(root: &Map<String, Value>) -> Result<&str, String> {
@@ -755,7 +816,7 @@ fn result_video(root: &Map<String, Value>) -> Result<&str, String> {
 
 /// The job id a 2xx submit answer names, for an `Uncertain` reason: the body's `request_id` when
 /// it is a safe id, else the response's request-id header ([`crate::wire::request_id`]).
-fn returned_id(response: &HttpResponse) -> Option<String> {
+fn returned_id(call: &CallRequest, response: &HttpResponse) -> Option<String> {
     crate::wire::json_object(&response.body, SUBMIT_LABEL)
         .ok()
         .and_then(|payload| match payload.get("request_id") {
@@ -763,23 +824,13 @@ fn returned_id(response: &HttpResponse) -> Option<String> {
             _ => None,
         })
         .or_else(|| crate::wire::request_id(response))
+        .filter(|id| !crate::wire::echoes_identifier(&call.request, id))
 }
 
-/// `fal video job failed (<error_type>): <error>`. Each provider text is redacted **first**, then
-/// collapsed and cut (the error to 500 characters, `error_type` to 100), so a key that straddles
-/// a cut is still removed whole (spec/adapters.md §7).
-fn job_error(status: &Map<String, Value>, redactor: &crate::redact::Redactor) -> String {
-    let cut = |text: &str, max: usize| crate::redact::bounded(&redactor.redact(text), max);
-    let error = match status.get("error") {
-        Some(Value::String(text)) => text.clone(),
-        Some(other) => other.to_string(),
-        None => String::new(),
-    };
-    let error = cut(&error, 500);
-    match status.get("error_type").and_then(Value::as_str) {
-        Some(kind) => format!("fal video job failed ({}): {error}", cut(kind, 100)),
-        None => format!("fal video job failed: {error}"),
-    }
+fn exchange_status_text(call: &CallRequest, label: &str, response: &HttpResponse) -> String {
+    let id = crate::wire::request_id(response)
+        .filter(|id| !crate::wire::echoes_identifier(&call.request, id));
+    super::status_text_with_request(label, response.status, id.as_deref())
 }
 
 fn outstanding(client: &Client) -> Collected {
@@ -1133,35 +1184,5 @@ mod tests {
         }
         assert_eq!(expected_size("8k", "9:16"), None);
         assert_eq!(expected_size("720p", "1:1"), None);
-    }
-
-    #[test]
-    fn job_errors_are_cut() {
-        let redactor = crate::redact::Redactor::new(Vec::new());
-        let status = json!({"status": "COMPLETED", "error": "boom ".repeat(200), "error_type": "model_error"});
-        let reason = job_error(status.as_object().unwrap(), &redactor);
-        assert!(reason.starts_with("fal video job failed (model_error): boom boom"));
-        assert!(reason.ends_with('…'), "{reason}");
-        assert_eq!(
-            reason.chars().count(),
-            "fal video job failed (model_error): ".chars().count() + 500
-        );
-        let untyped = json!({"error": {"detail": "x"}, "error_type": 7});
-        assert_eq!(
-            job_error(untyped.as_object().unwrap(), &redactor),
-            r#"fal video job failed: {"detail":"x"}"#
-        );
-    }
-
-    #[test]
-    fn a_key_straddling_a_cut_is_redacted_whole() {
-        let key = "test-fal-key-0123456789abcdef";
-        let redactor = crate::redact::Redactor::new(vec![crate::keys::Secret::new(key)]);
-        let error = format!("x{}yyyyyyyyy{key}", " ".repeat(470));
-        let error_type = format!("{}ab{key}", "ab. ".repeat(22));
-        let status = json!({"error": error, "error_type": error_type});
-        let reason = job_error(status.as_object().unwrap(), &redactor);
-        assert!(!reason.contains(&key[..8]), "{reason}");
-        assert!(reason.contains("yyyyyyyyy[redacted]"), "{reason}");
     }
 }

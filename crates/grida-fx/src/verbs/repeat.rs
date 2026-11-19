@@ -209,7 +209,7 @@ fn is_workflow_id(id: &str) -> bool {
 
 /// A relative path as a word: `./` before one that starts with `-`, which quoting would not keep
 /// from reading as an option.
-fn path_word(path: &str) -> String {
+pub(super) fn path_word(path: &str) -> String {
     if path.starts_with('-') {
         shell_word(&format!("./{path}"))
     } else {

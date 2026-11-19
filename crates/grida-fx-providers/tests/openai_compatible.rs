@@ -640,7 +640,9 @@ fn timeouts_are_billed_and_other_statuses_keep_the_default_policy() {
     ]);
     let call = structured_call(TEXT_ROUTE, structured_contract(), colour_request());
     let adapter = serving(&registry(transport.clone()), &call);
-    let outcomes: Vec<Sent> = (0..8).map(|_| block_on(adapter.send(&call))).collect();
+    let outcomes: Vec<Sent> = (0..8)
+        .map(|_| block_on(adapter.send(&call)).into_report().0)
+        .collect();
     transport.assert_done();
     let label = "acme structured generation";
     assert!(

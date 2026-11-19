@@ -87,6 +87,15 @@ pub fn classify(
     label: &str,
     exchange: Result<HttpResponse, TransportError>,
 ) -> Sent {
+    classify_exchange(client, label, exchange, None)
+}
+
+fn classify_exchange(
+    client: &Client,
+    label: &str,
+    exchange: Result<HttpResponse, TransportError>,
+    call: Option<&CallRequest>,
+) -> Sent {
     let response = match exchange {
         Ok(response) => response,
         Err(error) => return transport_failure(client, label, &error),
@@ -109,7 +118,8 @@ pub fn classify(
             retryable: false,
         };
     }
-    let detail = detail_status(client, &response.body);
+    let detail = detail_status(client, &response.body)
+        .filter(|detail| !call.is_some_and(|call| wire::echoes_identifier(&call.request, detail)));
     let reason = wire::status_reason(label, status, detail.as_deref());
     match status {
         408 | 429 => {
@@ -199,6 +209,7 @@ pub(crate) fn float(value: f64) -> Value {
 /// exchange.
 pub(crate) async fn post(
     client: &Client,
+    call: &CallRequest,
     label: &str,
     path: &str,
     credential: crate::transport::Credential,
@@ -213,7 +224,14 @@ pub(crate) async fn post(
         .timeout(DEADLINE)
         .max_response_bytes(MAX_RESPONSE_BYTES);
     let exchange = client.send(request).await;
-    classify(client, label, exchange)
+    let diagnostic = match &exchange {
+        Ok(response) if response.is_success() => {
+            return classify_exchange(client, label, exchange, Some(call));
+        }
+        Ok(response) => wire::http_diagnostic(call, response, &client.redactor),
+        Err(error) => wire::transport_diagnostic(error),
+    };
+    classify_exchange(client, label, exchange, Some(call)).with_diagnostic(diagnostic)
 }
 
 /// A refusal before sending, redacted.

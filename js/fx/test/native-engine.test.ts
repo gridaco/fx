@@ -94,6 +94,10 @@ describe.skipIf(engine === null || HOST_SKIP !== null)("managed native operation
     expect(snapshot.events.find((event) => event.event === "node_failed")?.diagnostic).toEqual(diagnostic);
     const inspection = await inspect(rejected.runDir, { env });
     expect((inspection.run.steps[0] as unknown as Record<string, unknown>).diagnostic).toEqual(diagnostic);
+    expect(record.inspection.run.call_attempt_failures).toHaveLength(1);
+    const attempt = record.inspection.run.call_attempt_failures?.[0];
+    expect(attempt).toMatchObject({ id: "native#1", attempt: 1, send: 1, retryable: false, diagnostic });
+    expect(snapshot.events.find((event) => event.event === "call_attempt_failed")).toEqual(attempt);
     const portable = JSON.stringify(snapshot);
     for (const forbidden of [KEY, "made-up-signature", "/private/native/input.txt", "Synthetic source bytes."]) {
       expect(portable.includes(forbidden)).toBe(false);

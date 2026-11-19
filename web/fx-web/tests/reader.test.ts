@@ -72,12 +72,14 @@ test("provider evidence is preserved separately from facts and malformed diagnos
   const input = response();
   const node = input.nodes[0] as Record<string, unknown>;
   const diagnostic = { source: "provider", phase: "submit", http_status: 400,
-    code: "bad_input", field: "new_field", message: "Unsupported format", redacted: false };
+    code: "bad_input", field: "new_field", message: "Unsupported format", redacted: false,
+    thread_id: "thread-a", turn_id: "turn-a", ephemeral: true };
   node.state = "failed";
   node.diagnostic = diagnostic;
   expect(parseViewerRun(input).nodes[0].diagnostic).toEqual(diagnostic);
   for (const invalid of [null, [], { ...diagnostic, source: "unknown" },
-    { ...diagnostic, http_status: 999 }, { ...diagnostic, body: "withheld" }]) {
+    { ...diagnostic, http_status: 999 }, { ...diagnostic, ephemeral: "true" },
+    { ...diagnostic, body: "withheld" }]) {
     node.diagnostic = invalid;
     expect(() => parseViewerRun(input)).toThrow("incomplete or malformed");
   }

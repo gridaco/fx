@@ -71,9 +71,9 @@
 //! own sentences, its check's, the engine's refusals before a send ([`super::checked`]), and the
 //! engine's checks of the answer, which may quote what the provider sent back.
 //!
-//! Every hold emits `budget_reserved` and `budget_settled` through the ledger. The owner never
-//! writes a call record and never emits an event itself; the call path does both, after
-//! `Answered`.
+//! Every hold emits `budget_reserved` and `budget_settled` through the ledger. The owner also
+//! reports failed sends and collections to the call path's event log before trying again.
+//! The call path writes the successful call record after `Answered`.
 //!
 //! **Details the table leaves open.**
 //! - Each attempt's request carries its number (`CallRequest::attempt`, 1 to 6); a resend carries
@@ -95,10 +95,12 @@
 
 use super::pacing::{Admission, Slot};
 use crate::engine::Cancel;
+use crate::events::{CallAttemptFailure, CallAttemptOutcome};
 use crate::ledger::{Hold, Ledger, NotReserved, Refusal, Scopes};
 use crate::store::records::{JobRecord, JobState};
 use crate::store::{Store, StoreError};
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticPhase, DiagnosticSource};
 use grida_fx_providers::redact::Redactor;
 use grida_fx_providers::{
     Answer, BoxFuture, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted,
@@ -237,6 +239,11 @@ pub trait Waits: Send + Sync {
     fn admitted(&self);
 }
 
+/// Persists failed exchanges while the retry owner still knows which attempt made them.
+pub trait FailureLog: Send + Sync {
+    fn failed(&self, failure: CallAttemptFailure) -> Result<(), String>;
+}
+
 /// An engine-side check of an answer's canonical form ([`Attempts::check`]): a refusal is a
 /// sentence, and the attempt is failed as billed.
 pub type AnswerCheck<'a> = dyn Fn(&Answer) -> Result<(), String> + Sync + 'a;
@@ -275,6 +282,7 @@ pub struct Attempts<'a> {
     pub pacing: &'a dyn Admission,
     /// Told about each send's wait for its slot; `None` records nothing.
     pub waits: Option<&'a dyn Waits>,
+    pub failures: Option<&'a dyn FailureLog>,
     pub cancel: &'a Cancel,
     /// Invocation admission: every send/resend/collection shares cancellation acceptance.
     pub control: Option<&'a Arc<crate::run_control::RunControl>>,
@@ -309,8 +317,54 @@ pub enum Outcome {
     Cancelled,
     /// The store could not keep a job record: the run stops (spec/store.md §4).
     Store(StoreError),
-    /// The run's log could not record a reservation or a settlement: the run stops (module doc).
+    /// The run's log could not record a reservation, settlement or failure: the run stops.
     Unrecorded(String),
+}
+
+struct FailureContext<'a> {
+    attempts: &'a Attempts<'a>,
+    call: &'a CallRequest,
+    redactor: &'a Redactor,
+    diagnostic: Option<&'a AdapterDiagnostic>,
+    send: Option<u32>,
+}
+
+impl FailureContext<'_> {
+    fn record(
+        &self,
+        outcome: CallAttemptOutcome,
+        reason: &str,
+        charged_usd: Option<Usd>,
+        retryable: bool,
+    ) -> Result<(), String> {
+        let Some(log) = self.attempts.failures else {
+            return Ok(());
+        };
+        if let Some(reason) = self.attempts.book.unrecorded() {
+            return Err(reason);
+        }
+        let diagnostic = self
+            .diagnostic
+            .cloned()
+            .map(|value| grida_fx_providers::diagnostic::sanitize(value, self.call, self.redactor));
+        log.failed(CallAttemptFailure {
+            attempt: self.call.attempt,
+            send: self.send,
+            outcome,
+            reason: self.summarize(reason),
+            diagnostic,
+            charged_usd,
+            retryable,
+        })
+    }
+
+    fn summarize(&self, reason: &str) -> String {
+        // Apply the message disclosure checks to an unstructured reason copied into evidence.
+        let mut summary = AdapterDiagnostic::new(DiagnosticSource::Engine, DiagnosticPhase::Send);
+        summary.message = Some(reason.to_string());
+        let summary = grida_fx_providers::diagnostic::sanitize(summary, self.call, self.redactor);
+        summary.message.expect("sanitized reason")
+    }
 }
 
 /// Makes a plain call (module doc).
@@ -354,7 +408,15 @@ async fn plain(
                 outcome
             });
         drop(slot);
-        let reason = match sent {
+        let redactor = adapter.redactor();
+        let failure = FailureContext {
+            attempts,
+            call: &call,
+            redactor: &redactor,
+            diagnostic: diagnostic.as_ref(),
+            send: Some(sends),
+        };
+        let (reason, charged, retryable) = match sent {
             None => {
                 attempts.settle(hold, None);
                 return Outcome::Cancelled;
@@ -365,8 +427,22 @@ async fn plain(
                 retry_after,
             }) => {
                 if sends >= MAX_SENDS {
-                    attempts.settle(hold, Some(Usd::ZERO));
+                    let charged = attempts.settle(hold, Some(Usd::ZERO));
+                    if let Err(error) = failure.record(
+                        CallAttemptOutcome::NotReceived,
+                        &reason,
+                        Some(charged),
+                        false,
+                    ) {
+                        return Outcome::Unrecorded(error);
+                    }
                     return Outcome::Failed(reason);
+                }
+                if let Err(error) =
+                    failure.record(CallAttemptOutcome::NotReceived, &reason, None, true)
+                {
+                    attempts.settle(hold, Some(Usd::ZERO));
+                    return Outcome::Unrecorded(error);
                 }
                 if !attempts.wait(sends, retry_after).await {
                     attempts.settle(hold, Some(Usd::ZERO));
@@ -376,7 +452,12 @@ async fn plain(
                 continue;
             }
             Some(Sent::Refused { reason }) => {
-                attempts.settle(hold, Some(Usd::ZERO));
+                let charged = attempts.settle(hold, Some(Usd::ZERO));
+                if let Err(error) =
+                    failure.record(CallAttemptOutcome::Refused, &reason, Some(charged), false)
+                {
+                    return Outcome::Unrecorded(error);
+                }
                 return Outcome::Refused(reason);
             }
             Some(Sent::Answered(answer)) => {
@@ -390,24 +471,26 @@ async fn plain(
                             attempts: attempt,
                         };
                     }
-                    Err(reason) => {
-                        attempts.settle(hold, cost);
-                        reason
-                    }
+                    Err(reason) => (reason, attempts.settle(hold, cost), true),
                 }
             }
             Some(Sent::Failed {
                 reason,
                 cost,
                 retryable,
-            }) => {
-                attempts.settle(hold, cost);
-                if !retryable {
-                    return Outcome::Failed(reason);
-                }
-                reason
-            }
+            }) => (reason, attempts.settle(hold, cost), retryable),
         };
+        if let Err(error) = failure.record(
+            CallAttemptOutcome::Failed,
+            &reason,
+            Some(charged),
+            retryable && sends < MAX_SENDS,
+        ) {
+            return Outcome::Unrecorded(error);
+        }
+        if !retryable {
+            return Outcome::Failed(reason);
+        }
         // The attempt failed as billed: a new attempt, when sends are left.
         if let Some(outcome) = attempts.next(sends, reason).await {
             return outcome;
@@ -475,7 +558,15 @@ async fn submit(
                 outcome
             });
         drop(slot);
-        let reason = match submitted {
+        let redactor = adapter.redactor();
+        let failure = FailureContext {
+            attempts,
+            call: &call,
+            redactor: &redactor,
+            diagnostic: diagnostic.as_ref(),
+            send: Some(sends),
+        };
+        let (reason, charged, retryable) = match submitted {
             None => {
                 // It may have left: the record stays `submitting`.
                 attempts.settle(hold, None);
@@ -487,7 +578,21 @@ async fn submit(
                 retry_after,
             }) => {
                 if sends >= MAX_SENDS {
-                    return attempts.unsent(fields, hold, Outcome::Failed(reason));
+                    let outcome = attempts.unsent(fields, hold, Outcome::Failed(reason.clone()));
+                    if let Err(error) = failure.record(
+                        CallAttemptOutcome::NotReceived,
+                        &reason,
+                        Some(Usd::ZERO),
+                        false,
+                    ) {
+                        return Outcome::Unrecorded(error);
+                    }
+                    return outcome;
+                }
+                if let Err(error) =
+                    failure.record(CallAttemptOutcome::NotReceived, &reason, None, true)
+                {
+                    return attempts.unsent(fields, hold, Outcome::Unrecorded(error));
                 }
                 if !attempts.wait(sends, retry_after).await {
                     return attempts.unsent(fields, hold, Outcome::Cancelled);
@@ -496,17 +601,28 @@ async fn submit(
                 continue;
             }
             Some(Submitted::Refused { reason }) => {
-                return attempts.unsent(fields, hold, Outcome::Refused(reason));
+                let outcome = attempts.unsent(fields, hold, Outcome::Refused(reason.clone()));
+                if let Err(error) =
+                    failure.record(CallAttemptOutcome::Refused, &reason, Some(Usd::ZERO), false)
+                {
+                    return Outcome::Unrecorded(error);
+                }
+                return outcome;
             }
             Some(Submitted::Uncertain { reason }) => {
                 // The note is written redacted, before the hold is settled (spec/store.md §5).
-                let reason = adapter.redactor().reason(&reason);
-                let saved = attempts.note(fields, &reason, diagnostic.as_ref());
-                attempts.settle(hold, None);
+                let summary = failure.summarize(&reason);
+                let saved = attempts.note(fields, &summary, diagnostic.as_ref());
+                let charged = attempts.settle(hold, None);
                 if let Err(error) = saved {
                     return Outcome::Store(error);
                 }
-                return Outcome::Unsettled(reason);
+                if let Err(error) =
+                    failure.record(CallAttemptOutcome::Unsettled, &reason, Some(charged), false)
+                {
+                    return Outcome::Unrecorded(error);
+                }
+                return Outcome::Unsettled(summary);
             }
             Some(Submitted::Failed {
                 reason,
@@ -514,14 +630,11 @@ async fn submit(
                 retryable,
             }) => {
                 let saved = attempts.save(fields, JobState::Settled, None);
-                attempts.settle(hold, cost);
+                let charged = attempts.settle(hold, cost);
                 if let Err(error) = saved {
                     return Outcome::Store(error);
                 }
-                if !retryable {
-                    return Outcome::Failed(reason);
-                }
-                reason
+                (reason, charged, retryable)
             }
             Some(Submitted::Accepted { handle }) => {
                 if let Err(error) = attempts.save(fields, JobState::Submitted, Some(&handle)) {
@@ -534,12 +647,23 @@ async fn submit(
                     fields,
                     &call,
                     &handle,
-                    (hold, attempt),
+                    (hold, sends),
                     diagnostic,
                 )
                 .await;
             }
         };
+        if let Err(error) = failure.record(
+            CallAttemptOutcome::Failed,
+            &reason,
+            Some(charged),
+            retryable && sends < MAX_SENDS,
+        ) {
+            return Outcome::Unrecorded(error);
+        }
+        if !retryable {
+            return Outcome::Failed(reason);
+        }
         // The attempt failed as billed: a new attempt, when sends are left.
         if let Some(outcome) = attempts.next(sends, reason).await {
             return outcome;
@@ -578,20 +702,34 @@ async fn collect(
     }
     let mut call = attempts.call.clone();
     call.attempt = call.attempt.max(1);
-    match collect_once(adapter, attempts, &call, handle, diagnostic).await {
-        Collect::Cancelled => Outcome::Cancelled,
-        Collect::Answered(answer) => Outcome::Answered {
-            answer,
-            charged: Usd::ZERO,
-            attempts: 0,
-        },
-        Collect::Refused { reason, .. } | Collect::Ended { reason, .. } => {
-            match attempts.save(fields, JobState::Settled, Some(handle)) {
-                Ok(()) => Outcome::Failed(reason),
-                Err(error) => Outcome::Store(error),
-            }
+    let collected = collect_once(adapter, attempts, &call, handle, diagnostic).await;
+    let (outcome, reason) = match collected {
+        Collect::Cancelled => return Outcome::Cancelled,
+        Collect::Answered(answer) => {
+            return Outcome::Answered {
+                answer,
+                charged: Usd::ZERO,
+                attempts: 0,
+            };
         }
-        Collect::Unreachable(reason) => Outcome::Failed(reason),
+        Collect::Refused { reason, .. } | Collect::Ended { reason, .. } => {
+            if let Err(error) = attempts.save(fields, JobState::Settled, Some(handle)) {
+                return Outcome::Store(error);
+            }
+            (CallAttemptOutcome::Failed, reason)
+        }
+        Collect::Unreachable(reason) => (CallAttemptOutcome::Unreachable, reason),
+    };
+    let failure = FailureContext {
+        attempts,
+        call: &call,
+        redactor: &adapter.redactor(),
+        diagnostic: diagnostic.as_ref(),
+        send: None,
+    };
+    match failure.record(outcome, &reason, None, false) {
+        Ok(()) => Outcome::Failed(reason),
+        Err(error) => Outcome::Unrecorded(error),
     }
 }
 
@@ -605,43 +743,47 @@ async fn collect_held(
     held: (Hold, u32),
     diagnostic: &mut Option<grida_fx_protocol::AdapterDiagnostic>,
 ) -> Outcome {
-    let (hold, attempt) = held;
-    match collect_once(adapter, attempts, call, handle, diagnostic).await {
+    let (hold, send) = held;
+    let collected = collect_once(adapter, attempts, call, handle, diagnostic).await;
+    let (outcome, reason, charged) = match collected {
         Collect::Cancelled => {
             // Still running at the provider: the record stays `submitted`.
             attempts.settle(hold, None);
-            Outcome::Cancelled
+            return Outcome::Cancelled;
         }
         Collect::Answered(answer) => {
             let charged = attempts.settle(hold, answer.cost);
-            Outcome::Answered {
+            return Outcome::Answered {
                 answer,
                 charged,
-                attempts: attempt,
-            }
+                attempts: call.attempt,
+            };
         }
-        Collect::Refused { reason, cost } => {
+        Collect::Refused { reason, cost } | Collect::Ended { reason, cost } => {
+            // A failed answer check or an ended job settles as billed.
             let saved = attempts.save(fields, JobState::Settled, Some(handle));
-            attempts.settle(hold, cost);
-            match saved {
-                Ok(()) => Outcome::Failed(reason),
-                Err(error) => Outcome::Store(error),
+            let charged = attempts.settle(hold, cost);
+            if let Err(error) = saved {
+                return Outcome::Store(error);
             }
-        }
-        Collect::Ended { reason, cost } => {
-            // The cost the adapter reports for the ended job, else the whole hold.
-            let saved = attempts.save(fields, JobState::Settled, Some(handle));
-            attempts.settle(hold, cost);
-            match saved {
-                Ok(()) => Outcome::Failed(reason),
-                Err(error) => Outcome::Store(error),
-            }
+            (CallAttemptOutcome::Failed, reason, charged)
         }
         Collect::Unreachable(reason) => {
             // It may still be running: the record stays `submitted` for a later run.
-            attempts.settle(hold, None);
-            Outcome::Failed(reason)
+            let charged = attempts.settle(hold, None);
+            (CallAttemptOutcome::Unreachable, reason, charged)
         }
+    };
+    let failure = FailureContext {
+        attempts,
+        call,
+        redactor: &adapter.redactor(),
+        diagnostic: diagnostic.as_ref(),
+        send: Some(send),
+    };
+    match failure.record(outcome, &reason, Some(charged), false) {
+        Ok(()) => Outcome::Failed(reason),
+        Err(error) => Outcome::Unrecorded(error),
     }
 }
 
@@ -1191,6 +1333,7 @@ mod tests {
                 jobs: &Book,
                 pacing: &Book,
                 waits: None,
+                failures: None,
                 cancel: &self.cancel,
                 backoff: Backoff {
                     initial: Duration::ZERO,

@@ -42,9 +42,11 @@ use crate::adapter::{
 };
 use crate::capabilities;
 use crate::installed::{self, Picture, Program, Version, failed};
+use crate::redact::Redactor;
 use crate::registry::Adapters;
 use crate::setup::Setup;
 use crate::wire;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
 use runtime::{Connection, Note};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -148,6 +150,33 @@ const ASK_DEADLINE: Duration = Duration::from_secs(30);
 /// How long an answered turn has to end after it is interrupted, for its token usage.
 const SETTLE: Duration = Duration::from_secs(3);
 
+/// Codex owns session retention. This adapter always requests an ephemeral thread.
+const EPHEMERAL: bool = true;
+
+#[derive(Debug)]
+struct Failure {
+    reason: String,
+    code: Option<String>,
+}
+
+impl Failure {
+    fn plain(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            code: None,
+        }
+    }
+
+    fn from_codex(reason: String, code: Option<&str>) -> Self {
+        Self {
+            reason,
+            code: code
+                .and_then(|kind| installed::bounded(kind, 40, b"_"))
+                .map(str::to_owned),
+        }
+    }
+}
+
 /// Why a call ended without an image.
 #[derive(Debug)]
 enum Stop {
@@ -155,13 +184,18 @@ enum Stop {
     Refused(String),
     /// Codex rejected a request on arrival: `Sent::NotReceived`.
     NotReceived(String),
-    Failed(String),
+    Failed(Failure),
 }
 
 impl Stop {
+    fn failed(reason: impl Into<String>) -> Self {
+        Self::Failed(Failure::plain(reason))
+    }
+
     fn into_reason(self) -> String {
         match self {
-            Stop::Refused(reason) | Stop::NotReceived(reason) | Stop::Failed(reason) => reason,
+            Stop::Refused(reason) | Stop::NotReceived(reason) => reason,
+            Stop::Failed(failure) => failure.reason,
         }
     }
 
@@ -227,7 +261,14 @@ impl RequestAdapter for CodexImages {
                 Ok(drawing) => drawing,
                 Err(reason) => return Sent::Refused { reason },
             };
-            draw(&self.runtime, &drawing, self.start_deadline, self.deadline).await
+            draw(
+                &self.runtime,
+                call,
+                &drawing,
+                self.start_deadline,
+                self.deadline,
+            )
+            .await
         })
     }
 
@@ -478,6 +519,7 @@ fn toml_key(name: &str) -> String {
 /// Steps 4 and 5 (module doc) under their deadlines.
 async fn draw(
     runtime: &CodexRuntime,
+    call: &CallRequest,
     wanted: &Drawing<'_>,
     start_deadline: Duration,
     deadline: Duration,
@@ -487,33 +529,48 @@ async fn draw(
         return Sent::Refused { reason };
     }
     let mut turn: Option<Turn> = None;
-    let label = |turn: &Option<Turn>, reason: String| {
-        if turn.as_ref().is_some_and(|turn| turn.requested) {
+    let fail = |turn: Option<&Turn>, failure: Failure| {
+        let reason = failure.reason;
+        let reason = if turn.is_some_and(|turn| turn.requested) {
             format!("{LABEL} failed: {reason}")
         } else {
             format!("{LABEL} was not started: {reason}")
-        }
+        };
+        diagnose(call, turn, failed(reason), failure.code)
     };
     match tokio::time::timeout(start_deadline, begin(runtime, wanted, &mut turn)).await {
         Ok(Ok(())) => {}
-        Ok(Err(Stop::Refused(reason))) => return Sent::Refused { reason },
+        Ok(Err(Stop::Refused(reason))) => {
+            let sent = Sent::Refused { reason };
+            return if turn.is_some() {
+                diagnose(call, turn.as_ref(), sent, None)
+            } else {
+                sent
+            };
+        }
         Ok(Err(Stop::NotReceived(reason))) => {
-            return Sent::NotReceived {
+            let sent = Sent::NotReceived {
                 reason: format!("{LABEL} was not started: {reason}"),
                 retry_after: None,
             };
+            return diagnose(
+                call,
+                turn.as_ref(),
+                sent,
+                Some(protocol::OVERLOADED.to_string()),
+            );
         }
-        Ok(Err(Stop::Failed(reason))) => return failed(label(&turn, reason)),
+        Ok(Err(Stop::Failed(failure))) => return fail(turn.as_ref(), failure),
         Err(_) => {
             let reason = format!(
                 "Codex did not start the turn within {} s",
                 start_deadline.as_secs()
             );
-            return failed(label(&turn, reason));
+            return fail(turn.as_ref(), Failure::plain(reason));
         }
     }
     let Some(mut drawing) = turn else {
-        return failed(format!("{LABEL} was not started: no turn"));
+        return fail(None, Failure::plain("no turn"));
     };
     let left = deadline.saturating_sub(began.elapsed());
     match tokio::time::timeout(left, drawing.image()).await {
@@ -526,17 +583,36 @@ async fn draw(
                     .with_usage(drawing.usage()),
             )
         }
-        Ok(Err(stop)) => {
+        Ok(Err(failure)) => {
             if let Some(resets_at) = drawing.limit {
                 runtime.reached(resets_at);
             }
-            failed(label(&Some(drawing), stop.into_reason()))
+            fail(Some(&drawing), failure)
         }
         Err(_) => {
             let reason = format!("Codex did not finish within {} s", deadline.as_secs());
-            failed(label(&Some(drawing), reason))
+            fail(Some(&drawing), Failure::plain(reason))
         }
     }
+}
+
+/// Attach bounded correlation IDs from the live runtime. Raw Codex prose stays in Codex.
+fn diagnose(call: &CallRequest, turn: Option<&Turn>, sent: Sent, code: Option<String>) -> Sent {
+    let mut diagnostic = AdapterDiagnostic::new(DiagnosticSource::Adapter, DiagnosticPhase::Send);
+    if let Some(turn) = turn {
+        diagnostic.thread_id.clone_from(&turn.thread);
+        diagnostic.turn_id.clone_from(&turn.turn);
+        diagnostic.ephemeral = Some(EPHEMERAL);
+    }
+    if code.is_some() {
+        diagnostic.detail = DiagnosticDetail::Available;
+    }
+    diagnostic.code = code;
+    sent.with_diagnostic(crate::diagnostic::sanitize(
+        diagnostic,
+        call,
+        &Redactor::default(),
+    ))
 }
 
 /// The runtime's Codex, a thread, and the turn: on its way into `slot`, so a stop at any point
@@ -550,15 +626,15 @@ async fn begin(
     let folder = tempfile::Builder::new()
         .prefix("grida-fx-codex-")
         .tempdir()
-        .map_err(|error| Stop::Failed(grida_fx_core::error::io_reason(&error)))?;
-    let pictures = installed::place(&wanted.pictures, folder.path()).map_err(Stop::Failed)?;
+        .map_err(|error| Stop::failed(grida_fx_core::error::io_reason(&error)))?;
+    let pictures = installed::place(&wanted.pictures, folder.path()).map_err(Stop::failed)?;
     let text = instructions(&wanted.values, &pictures);
     let (started, notes) = connection
         .start_thread(json!({
             "cwd": folder.path().to_string_lossy(),
             "sandbox": "read-only",
             "approvalPolicy": "never",
-            "ephemeral": true,
+            "ephemeral": EPHEMERAL,
         }))
         .await?;
     let thread = protocol::text_at(&started, &["thread", "id"]);
@@ -591,7 +667,7 @@ async fn begin(
         }
     }
     let Some(thread) = thread else {
-        return Err(Stop::Failed("Codex started no thread".into()));
+        return Err(Stop::failed("Codex started no thread"));
     };
     turn.requested = true;
     let accepted = connection
@@ -630,11 +706,11 @@ struct Turn {
 
 impl Turn {
     /// The first good image of this turn; a turn that completes without one is a failure.
-    async fn image(&mut self) -> Result<Vec<u8>, Stop> {
-        let mut failure: Option<String> = None;
+    async fn image(&mut self) -> Result<Vec<u8>, Failure> {
+        let mut failure = None;
         loop {
             let Some(note) = self.notes.recv().await else {
-                return Err(Stop::Failed(self.connection.ended()));
+                return Err(Failure::plain(self.connection.ended()));
             };
             let params = &note.params;
             match note.method.as_str() {
@@ -647,7 +723,9 @@ impl Turn {
                         Ok(bytes) => return Ok(bytes),
                         Err(reason) => {
                             self.limit = self.limit.or(protocol::usage_limit(Some(item), None));
-                            failure.get_or_insert(reason);
+                            failure.get_or_insert_with(|| {
+                                Failure::from_codex(reason, item["failure"]["type"].as_str())
+                            });
                         }
                     }
                 }
@@ -655,10 +733,16 @@ impl Turn {
                 "turn/completed" if self.our_turn(&params["turn"]) => {
                     self.finished = true;
                     let turn = &params["turn"];
+                    if self.turn.is_none() {
+                        self.turn = protocol::text_at(turn, &["id"]);
+                    }
                     self.limit = self.limit.or(protocol::usage_limit(None, Some(turn)));
-                    return Err(Stop::Failed(
-                        failure.unwrap_or_else(|| protocol::turn_failure(turn)),
-                    ));
+                    return Err(failure.unwrap_or_else(|| {
+                        Failure::from_codex(
+                            protocol::turn_failure(turn),
+                            protocol::turn_failure_kind(turn),
+                        )
+                    }));
                 }
                 _ => {}
             }

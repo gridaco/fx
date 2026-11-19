@@ -25,6 +25,7 @@ use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
 use crate::transport::{HttpResponse, Phase, TransportError, TransportErrorKind};
+use crate::wire;
 use grida_fx_core::money::Usd;
 use serde_json::{Map, Value};
 use std::sync::Arc;
@@ -172,8 +173,16 @@ pub(crate) fn submit_not_received(
 /// `<label> returned HTTP <n>`, plus the provider's request id when it is a safe field. Never a
 /// response body (spec/adapters.md §7; src/fal/README.md).
 pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
-    let mut text = crate::wire::status_reason(label, response.status, None);
-    if let Some(id) = crate::wire::request_id(response) {
+    status_text_with_request(
+        label,
+        response.status,
+        wire::request_id(response).as_deref(),
+    )
+}
+
+fn status_text_with_request(label: &str, status: u16, request_id: Option<&str>) -> String {
+    let mut text = wire::status_reason(label, status, None);
+    if let Some(id) = request_id {
         text.push_str(&format!(" (request {id})"));
     }
     text
@@ -187,19 +196,24 @@ pub(crate) fn status_text(label: &str, response: &HttpResponse) -> String {
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub(crate) fn classify_run(
     client: &Client,
+    call: &CallRequest,
     label: &str,
     exchange: Result<HttpResponse, TransportError>,
 ) -> Result<HttpResponse, Sent> {
     let response = match exchange {
         Ok(response) => response,
-        Err(error) => return Err(transport_sent(client, label, &error)),
+        Err(error) => {
+            let diagnostic = wire::transport_diagnostic(&error);
+            return Err(transport_sent(client, label, &error).with_diagnostic(diagnostic));
+        }
     };
     let status = response.status;
     if response.is_success() {
         return Ok(response);
     }
-    let text = status_text(label, &response);
-    Err(match status {
+    let id = wire::request_id(&response).filter(|id| !wire::echoes_identifier(&call.request, id));
+    let text = status_text_with_request(label, status, id.as_deref());
+    let sent = match status {
         408 => not_received(client, &text, retry_after(&response)),
         429 => not_received(
             client,
@@ -223,7 +237,8 @@ pub(crate) fn classify_run(
             cost: None,
             retryable: true,
         },
-    })
+    };
+    Err(sent.with_diagnostic(wire::http_diagnostic(call, &response, &client.redactor)))
 }
 
 /// A failed plain exchange (spec/adapters.md §3.2).
@@ -362,8 +377,11 @@ mod tests {
     #[test]
     fn statuses_on_the_run_host() {
         let client = client();
+        let call = call("image.generate", json!({}));
         #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
-        let classify = |response: HttpResponse| classify_run(&client, "fal x", Ok(response));
+        let classify = |response: HttpResponse| {
+            classify_run(&client, &call, "fal x", Ok(response)).map_err(|sent| sent.into_report().0)
+        };
         assert!(classify(HttpResponse::new(200, Vec::new())).is_ok());
         assert_eq!(
             classify(HttpResponse::new(429, Vec::new()).with_header("retry-after", "12")),
@@ -405,13 +423,49 @@ mod tests {
         );
         let refused = classify_run(
             &client,
+            &call,
             "fal x",
             Err(TransportError::not_sent(
                 TransportErrorKind::Refused,
                 "the network is off",
             )),
         );
-        assert!(matches!(refused, Err(Sent::Refused { .. })));
+        let (sent, diagnostic) = refused.unwrap_err().into_report();
+        assert!(matches!(sent, Sent::Refused { .. }));
+        assert_eq!(
+            diagnostic.unwrap().code.as_deref(),
+            Some("transport_refused")
+        );
+    }
+
+    #[test]
+    fn a_failed_run_reports_the_status_and_request_id() {
+        let response = HttpResponse::new(422, b"fal-secret detail".to_vec())
+            .with_header("x-request-id", "req-7");
+        let sent = classify_run(
+            &client(),
+            &call("image.generate", json!({})),
+            "fal x",
+            Ok(response),
+        )
+        .unwrap_err();
+        let diagnostic = sent.into_report().1.unwrap();
+        assert_eq!(diagnostic.http_status, Some(422));
+        assert_eq!(diagnostic.request_id.as_deref(), Some("req-7"));
+        assert!(diagnostic.message.is_none());
+    }
+
+    #[test]
+    fn an_id_echoing_request_text_is_withheld_from_the_reason() {
+        let mut call = call("image.generate", json!({}));
+        call.request = json!({"prompt": "a private-token appears here"});
+        let response =
+            HttpResponse::new(422, Vec::new()).with_header("x-request-id", "private-token");
+        let (sent, diagnostic) = classify_run(&client(), &call, "fal x", Ok(response))
+            .unwrap_err()
+            .into_report();
+        assert!(diagnostic.unwrap().request_id.is_none());
+        assert!(matches!(sent, Sent::Failed { reason, .. } if reason == "fal x returned HTTP 422"));
     }
 
     #[test]

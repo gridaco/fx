@@ -48,7 +48,7 @@ fn post_any(url: &str) -> Expect {
 fn send(transport: &Arc<ReplayTransport>, call: &CallRequest) -> Sent {
     let sent = block_on(adapter_over(transport.clone(), test_keys()).send(call));
     transport.assert_done();
-    sent
+    sent.into_report().0
 }
 
 fn refused(call: &CallRequest) -> String {

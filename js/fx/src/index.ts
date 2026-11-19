@@ -83,6 +83,7 @@ export {
   type RunRemovalFailure, type RunRemovalSkip, type RunState,
 } from "./runs.js";
 export type {
+  CallAttemptFailed,
   Encoded,
   FileRef,
   Graph,

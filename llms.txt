@@ -717,8 +717,9 @@ standard capability's validation. See the native-operation recipe below.
 
 Failure outcomes may carry `diagnostic`: Python's `AdapterDiagnostic(source=, phase=, ...)`,
 or a TypeScript object with `source`, `phase`, `operation`, `httpStatus`, `code`, `field`,
-`message`, `requestId`, `taskId`, `detail`, `redacted` and `truncated` (all but source and phase
-optional). Wire and recorded fields use lower_snake_case. Sources are `engine`, `adapter`,
+`message`, `requestId`, `taskId`, `threadId`, `turnId`, `ephemeral`, `detail`, `redacted` and
+`truncated` (all but source and phase optional). Wire and recorded fields use lower_snake_case.
+Sources are `engine`, `adapter`,
 `transport`, `provider`; phases are `validate`, `upload`, `send`, `submit`, `poll`, `collect`,
 `download`. Detail is `available`, `unavailable`, `unreadable` or `withheld`. The engine bounds
 and redacts evidence, input echoes and local paths before recording it. Adapters extract only
@@ -730,8 +731,13 @@ event's `diagnostic`, `project` and `inspect --json`. Python also exposes
 `result.failures[id].diagnostic`; JavaScript exposes `result.steps[id].diagnostic`.
 The provider explanation is included in the human error when safe. Older adapters and records
 may have only a reason. Tripo supplies diagnostics for paid submission, upload refusals and
-terminal task failures; other built-in adapters may still give reasons without structured
-evidence. Receipt and billing remain independent: a provider rejection does not prove $0,
+terminal task failures. Built-in HTTP adapters can record observed status, safe error fields
+and whether an explanation was available. Codex records thread and turn IDs
+when received, along with the ephemeral mode. The IDs help correlate an attempt and carry no
+conversation history. `inspect --json` exposes sanitized `call_attempt_failed` events in
+`run.call_attempt_failures` when recorded, including failures a later retry recovered from.
+The text view shows those attempts too. `run` points to `inspect` for the exact failed run.
+Receipt and billing remain independent: a provider rejection does not prove $0,
 and a 5xx or unreadable paid-submit response remains uncertain. Its retained diagnostic
 survives a later `job_unsettled`; FX does not submit it again automatically.
 
@@ -782,7 +788,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 |---|---|
 | `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
 | `grida fx run <target> [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | run; free steps always run, paid calls only with `--live` |
-| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary; a workflow id reads its newest run |
+| `grida fx inspect <run> [--verify] [--json] [--open]` | a run's summary and recorded call failures, including failures recovered by retry; a workflow id reads its newest run |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
 | `grida fx cancel <run> [--invocation ID] [--wait] [--timeout 30s] [--json]` | cancel one invocation; `inspect <run> --control --json` first |

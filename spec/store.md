@@ -214,6 +214,18 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
+**Failed call attempts.** A `call_attempt_failed` event associates a sanitized failure reason
+and optional `diagnostic` with the step `id`, `capability`, `route`, and `call` key. `attempt`
+is the engine's attempt number, and `send` counts adapter send or submit invocations. A
+provably unreceived request can reuse its attempt with a new send ordinal. The `outcome` is
+`refused`, `not_received`, `failed`, `unsettled` or `unreachable`. `retryable` describes
+eligibility for another send. A later retry also needs admission and applicable budget.
+`charged_usd`, when present, is the amount FX booked at this failure. For an uncertain
+submission, actual provider charge remains unknown. A standalone collect omits `send`.
+Events survive successful retries and later invocations. `inspect --json` exposes them in
+event order in `run.call_attempt_failures` when any were recorded. The text view also shows
+them, even when a step succeeded on retry.
+
 **Layout.**
 
 ```

@@ -52,6 +52,8 @@ pub fn sanitize(
         &mut diagnostic.field,
         &mut diagnostic.request_id,
         &mut diagnostic.task_id,
+        &mut diagnostic.thread_id,
+        &mut diagnostic.turn_id,
         &mut diagnostic.operation,
     ] {
         if let Some(text) = field {
@@ -160,12 +162,16 @@ mod tests {
             diagnostic.field = Some(echo.into());
             diagnostic.request_id = Some(echo.into());
             diagnostic.task_id = Some(echo.into());
+            diagnostic.thread_id = Some(echo.into());
+            diagnostic.turn_id = Some(echo.into());
             diagnostic.operation = Some(echo.into());
             let result = sanitize(diagnostic, &call, &Redactor::default());
             assert_eq!(result.code, None);
             assert_eq!(result.field, None);
             assert_eq!(result.request_id, None);
             assert_eq!(result.task_id, None);
+            assert_eq!(result.thread_id, None);
+            assert_eq!(result.turn_id, None);
             assert_eq!(result.operation, None);
             assert!(result.redacted);
             assert_eq!(result.detail, DiagnosticDetail::Withheld);

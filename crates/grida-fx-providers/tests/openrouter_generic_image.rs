@@ -96,7 +96,7 @@ fn answered(sent: Sent) -> Answer {
 }
 
 fn failed(sent: Sent) -> (String, Option<Usd>, bool) {
-    match sent {
+    match sent.into_report().0 {
         Sent::Failed {
             reason,
             cost,
@@ -104,6 +104,32 @@ fn failed(sent: Sent) -> (String, Option<Usd>, bool) {
         } => (reason, cost, retryable),
         other => panic!("expected Failed, got {other:?}"),
     }
+}
+
+#[test]
+fn an_image_size_failure_keeps_the_reason_and_request_id() {
+    let response = HttpResponse::json(
+        400,
+        &json!({"error": {"code": 400, "message": "This image size is unavailable for this model."}}),
+    )
+    .with_header("x-request-id", "req-7");
+    let transport = Arc::new(ReplayTransport::new(vec![expect_any().reply(response)]));
+    let (outcome, diagnostic) = send(
+        &transport,
+        &call("image.generate", json!({"prompt": "a lantern on a pier"})),
+    )
+    .into_report();
+    let (reason, cost, retryable) = failed(outcome);
+    assert!(reason.contains("This image size is unavailable for this model."));
+    assert_eq!(cost, Some(Usd::ZERO));
+    assert!(!retryable);
+    let diagnostic = diagnostic.expect("HTTP failure has structured evidence");
+    assert_eq!(diagnostic.http_status, Some(400));
+    assert_eq!(diagnostic.request_id.as_deref(), Some("req-7"));
+    assert_eq!(
+        diagnostic.message.as_deref(),
+        Some("This image size is unavailable for this model.")
+    );
 }
 
 // The wire --------------------------------------------------------------------------------------

@@ -114,6 +114,9 @@ export interface AdapterDiagnostic {
   readonly message?: string | undefined;
   readonly requestId?: string | undefined;
   readonly taskId?: string | undefined;
+  readonly threadId?: string | undefined;
+  readonly turnId?: string | undefined;
+  readonly ephemeral?: boolean | undefined;
   readonly detail?: "available" | "unavailable" | "unreadable" | "withheld" | undefined;
   readonly redacted?: boolean | undefined;
   readonly truncated?: boolean | undefined;
@@ -956,7 +959,23 @@ export async function encodeOutcome(
 
 function diagnosticOf(value: unknown): Record<string, unknown> {
   if (!isPlainObject(value)) throw new TypeError("diagnostic is an object");
-  const fields: Record<string, string> = { source: "source", phase: "phase", operation: "operation", httpStatus: "http_status", code: "code", field: "field", message: "message", requestId: "request_id", taskId: "task_id", detail: "detail", redacted: "redacted", truncated: "truncated" };
+  const fields: Record<string, string> = {
+    source: "source",
+    phase: "phase",
+    operation: "operation",
+    httpStatus: "http_status",
+    code: "code",
+    field: "field",
+    message: "message",
+    requestId: "request_id",
+    taskId: "task_id",
+    threadId: "thread_id",
+    turnId: "turn_id",
+    ephemeral: "ephemeral",
+    detail: "detail",
+    redacted: "redacted",
+    truncated: "truncated",
+  };
   const wire: Record<string, unknown> = {};
   for (const [name, item] of Object.entries(value)) {
     const key = fields[name];
@@ -964,7 +983,7 @@ function diagnosticOf(value: unknown): Record<string, unknown> {
     if (item === undefined) continue;
     if (name === "httpStatus") {
       if (typeof item !== "number" || !Number.isInteger(item) || item < 100 || item > 599) throw new TypeError("diagnostic.httpStatus is an HTTP status");
-    } else if (name === "redacted" || name === "truncated") {
+    } else if (name === "ephemeral" || name === "redacted" || name === "truncated") {
       if (typeof item !== "boolean") throw new TypeError(`diagnostic.${name} is a boolean`);
     } else if (typeof item !== "string") throw new TypeError(`diagnostic.${name} is text`);
     wire[key] = item;

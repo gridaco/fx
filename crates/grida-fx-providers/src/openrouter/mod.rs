@@ -49,6 +49,7 @@ pub fn client(setup: &Setup) -> Client {
 pub fn classify(
     client: &Client,
     label: &str,
+    call: &CallRequest,
     exchange: Result<HttpResponse, TransportError>,
 ) -> Result<HttpResponse, Sent> {
     let response = match exchange {
@@ -59,7 +60,7 @@ pub fn classify(
                 Phase::AfterSend => format!("{label} failed: {}", error.reason),
             };
             let reason = client.reason(&reason);
-            return Err(match error.phase {
+            let sent = match error.phase {
                 Phase::NotSent if error.kind == TransportErrorKind::Refused => {
                     Sent::Refused { reason }
                 }
@@ -69,7 +70,8 @@ pub fn classify(
                     cost: None,
                     retryable: true,
                 },
-            });
+            };
+            return Err(sent.with_diagnostic(crate::wire::transport_diagnostic(&error)));
         }
     };
     let status = response.status;
@@ -77,11 +79,8 @@ pub fn classify(
         return Ok(response);
     }
     let envelope = crate::wire::error_envelope(&response.body).is_some();
-    let detail = crate::wire::safe_error_detail(&response.body, &client.redactor);
-    let mut reason = crate::wire::status_reason(label, status, detail.as_deref());
-    if let Some(id) = crate::wire::request_id(&response) {
-        reason.push_str(&format!(" (request {id})"));
-    }
+    let diagnostic = crate::wire::http_diagnostic(call, &response, &client.redactor);
+    let reason = crate::wire::diagnosed_http_reason(label, status, &diagnostic);
     let sent = match status {
         429 => {
             let mut reason = format!("{label} was rate limited (HTTP 429)");
@@ -123,7 +122,7 @@ pub fn classify(
             retryable: true,
         },
     };
-    Err(match sent {
+    let sent = match sent {
         Sent::NotReceived {
             reason,
             retry_after,
@@ -141,7 +140,8 @@ pub fn classify(
             retryable,
         },
         other => other,
-    })
+    };
+    Err(sent.with_diagnostic(diagnostic))
 }
 
 /// The cost a response's `usage` reports (src/openrouter/README.md, "Cost"): `usage.cost`, rounded
@@ -224,6 +224,7 @@ mod tests {
     use super::*;
     use crate::clock::SystemClock;
     use crate::keys::Keys;
+    use crate::testing::CallBuilder;
     use crate::transport::TransportErrorKind;
     use crate::transport::replay::NoNetwork;
     use serde_json::json;
@@ -237,8 +238,18 @@ mod tests {
         super::client(&setup)
     }
 
+    #[allow(clippy::result_large_err)] // Tests compare the adapter outcome directly.
+    fn classify_case(
+        client: &Client,
+        label: &str,
+        exchange: Result<HttpResponse, TransportError>,
+    ) -> Result<HttpResponse, Sent> {
+        let call = CallBuilder::new("image.generate", "acme/image-a@openrouter").build();
+        super::classify(client, label, &call, exchange).map_err(|sent| sent.into_report().0)
+    }
+
     fn sent(status: u16, body: serde_json::Value) -> Sent {
-        classify(
+        classify_case(
             &client(),
             "OpenRouter image generation",
             Ok(HttpResponse::json(status, &body)),
@@ -324,12 +335,12 @@ mod tests {
             reason,
             "OpenRouter image generation returned HTTP 401: code=400"
         );
-        assert!(classify(&client(), "X", Ok(HttpResponse::new(200, b"{}".to_vec()))).is_ok());
+        assert!(classify_case(&client(), "X", Ok(HttpResponse::new(200, b"{}".to_vec()))).is_ok());
     }
 
     #[test]
     fn transport_phases_classify() {
-        let not_sent = classify(
+        let not_sent = classify_case(
             &client(),
             "X",
             Err(TransportError::not_sent(
@@ -339,7 +350,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(not_sent, Sent::NotReceived { .. }));
-        let refused = classify(
+        let refused = classify_case(
             &client(),
             "X",
             Err(TransportError::not_sent(
@@ -354,7 +365,7 @@ mod tests {
                 reason: "X was not sent: the network is off".into()
             }
         );
-        let after = classify(
+        let after = classify_case(
             &client(),
             "X",
             Err(TransportError::after_send(
@@ -379,7 +390,7 @@ mod tests {
         let Sent::NotReceived {
             reason,
             retry_after,
-        } = classify(&client(), "X", Ok(response)).unwrap_err()
+        } = classify_case(&client(), "X", Ok(response)).unwrap_err()
         else {
             unreachable!()
         };

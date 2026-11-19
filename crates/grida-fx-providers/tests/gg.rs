@@ -4,6 +4,7 @@
 //! (`testing::media`); the clip is the committed facts vector (`spec/vectors/facts/mp4/`).
 
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::DiagnosticPhase;
 use grida_fx_providers::adapter::{
     Answer, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted, Usage,
 };
@@ -508,13 +509,13 @@ fn image_statuses_follow_gg_s_table() {
         let adapter = GgImages::new(gateway(transport.clone(), test_keys()));
         let sent = block_on(adapter.send(&image_call("image.generate", json!({"prompt": "p"}))));
         transport.assert_done();
-        sent
+        sent.into_report().0
     };
     assert_eq!(
         outcome(envelope(402, "insufficient_credit").with_header("x-request-id", "req_1")),
         Sent::Failed {
-            reason: "GG image generation returned HTTP 402: type=invalid_request_error; \
-                     code=insufficient_credit (request req_1); add Grida AI credits at \
+            reason: "GG image generation returned HTTP 402: code=insufficient_credit \
+                     (request req_1); add Grida AI credits at \
                      https://console.grida.co"
                 .into(),
             cost: Some(Usd::ZERO),
@@ -566,7 +567,9 @@ fn image_statuses_follow_gg_s_table() {
     )]);
     let adapter = GgImages::new(gateway(transport.clone(), test_keys()));
     assert!(matches!(
-        block_on(adapter.send(&image_call("image.generate", json!({"prompt": "p"})))),
+        block_on(adapter.send(&image_call("image.generate", json!({"prompt": "p"}))))
+            .into_report()
+            .0,
         Sent::NotReceived { .. }
     ));
 }
@@ -580,7 +583,7 @@ fn every_send_of_one_attempt_carries_one_key() {
     let adapter = GgImages::new(gateway(transport.clone(), test_keys()));
     let call = image_call("image.generate", json!({"prompt": "p"}));
     assert!(matches!(
-        block_on(adapter.send(&call)),
+        block_on(adapter.send(&call)).into_report().0,
         Sent::NotReceived { .. }
     ));
     assert!(matches!(block_on(adapter.send(&call)), Sent::Answered(_)));
@@ -634,7 +637,7 @@ fn a_busy_image_slot_renews_the_attempt_s_key() {
     let Sent::NotReceived {
         reason,
         retry_after,
-    } = block_on(adapter.send(&call))
+    } = block_on(adapter.send(&call)).into_report().0
     else {
         panic!("not received")
     };
@@ -644,7 +647,7 @@ fn a_busy_image_slot_renews_the_attempt_s_key() {
         "{reason}"
     );
     assert!(matches!(
-        block_on(adapter.send(&call)),
+        block_on(adapter.send(&call)).into_report().0,
         Sent::NotReceived { .. }
     ));
     assert!(matches!(block_on(adapter.send(&call)), Sent::Answered(_)));
@@ -1077,7 +1080,7 @@ fn video_submit_statuses() {
         let adapter = video_adapter(&transport, &Arc::new(FakeClock::new()));
         let outcome = block_on(adapter.submit(&video_call(json!({"prompt": "p"}))));
         transport.assert_done();
-        outcome
+        outcome.into_report().0
     };
     assert_eq!(
         submitted(Ok(
@@ -1104,7 +1107,7 @@ fn video_submit_statuses() {
     assert_eq!(
         submitted(Ok(envelope(400, "invalid_request"))),
         Submitted::Failed {
-            reason: "GG video submission returned HTTP 400: type=invalid_request_error; code=invalid_request".into(),
+            reason: "GG video submission returned HTTP 400: code=invalid_request".into(),
             cost: Some(Usd::ZERO),
             retryable: false,
         }
@@ -1276,14 +1279,17 @@ fn jobs_that_end_or_stop_collecting() {
         ),
         Collected::Ended { cost: None, .. }
     ));
-    assert!(matches!(
-        collect(
-            &replay(vec![job_get().reply(envelope(410, "job_expired"))]),
-            &clock(),
-            &call
-        ),
-        Collected::Ended { cost: None, .. }
-    ));
+    let (ended, diagnostic) = collect(
+        &replay(vec![job_get().reply(envelope(410, "job_expired"))]),
+        &clock(),
+        &call,
+    )
+    .into_report();
+    assert!(matches!(ended, Collected::Ended { cost: None, .. }));
+    let diagnostic = diagnostic.expect("the failed poll has evidence");
+    assert_eq!(diagnostic.phase, DiagnosticPhase::Poll);
+    assert_eq!(diagnostic.http_status, Some(410));
+    assert_eq!(diagnostic.code.as_deref(), Some("job_expired"));
     for status in [404, 401, 403] {
         assert!(
             matches!(
@@ -1291,7 +1297,9 @@ fn jobs_that_end_or_stop_collecting() {
                     &replay(vec![job_get().reply(envelope(status, "job_not_found"))]),
                     &clock(),
                     &call
-                ),
+                )
+                .into_report()
+                .0,
                 Collected::Unreachable { .. }
             ),
             "{status}"
@@ -1351,6 +1359,32 @@ fn a_job_still_running_at_the_deadline_is_collected_later() {
 }
 
 #[test]
+fn a_polling_deadline_keeps_the_failed_final_exchange() {
+    let polls = (video::COLLECT_DEADLINE.as_secs() / video::POLL.as_secs()) as usize;
+    let transport = replay(
+        (1..polls)
+            .map(|_| job_reply(job("running", "pending", reserved())))
+            .chain([job_get().reply(envelope(503, "temporarily_unavailable"))])
+            .collect(),
+    );
+    let (collected, diagnostic) = collect(
+        &transport,
+        &Arc::new(FakeClock::new()),
+        &video_call(json!({"prompt": "p"})),
+    )
+    .into_report();
+    assert_eq!(
+        collected,
+        Collected::Unreachable {
+            reason: OUTSTANDING.into()
+        }
+    );
+    let diagnostic = diagnostic.expect("the final poll has evidence");
+    assert_eq!(diagnostic.phase, DiagnosticPhase::Poll);
+    assert_eq!(diagnostic.http_status, Some(503));
+}
+
+#[test]
 fn downloads_that_end_or_stop_collecting() {
     let call = video_call(json!({"prompt": "p"}));
     let with_download = |reply: Result<HttpResponse, TransportError>| {
@@ -1365,14 +1399,20 @@ fn downloads_that_end_or_stop_collecting() {
         collect(&transport, &Arc::new(FakeClock::new()), &call)
     };
     for status in [403, 429, 500] {
-        let collected = with_download(Ok(HttpResponse::new(status, Vec::new())));
+        let (collected, diagnostic) =
+            with_download(Ok(HttpResponse::new(status, Vec::new()))).into_report();
         assert!(
             matches!(collected, Collected::Unreachable { .. }),
             "{status}"
         );
+        let diagnostic = diagnostic.expect("download status evidence");
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Download);
+        assert_eq!(diagnostic.http_status, Some(status));
     }
     assert_eq!(
-        with_download(Ok(HttpResponse::new(404, Vec::new()))),
+        with_download(Ok(HttpResponse::new(404, Vec::new())))
+            .into_report()
+            .0,
         Collected::Ended {
             reason: "GG output video download returned HTTP 404".into(),
             cost: Some(Usd(100_000)),
@@ -1389,14 +1429,19 @@ fn downloads_that_end_or_stop_collecting() {
         with_download(Err(TransportError::after_send(
             TransportErrorKind::Other,
             "reset"
-        ))),
+        )))
+        .into_report()
+        .0,
         Collected::Unreachable { .. }
     ));
     // The signed URL never reaches a reason.
     let Collected::Unreachable { reason } = with_download(Err(TransportError::after_send(
         TransportErrorKind::Other,
         format!("reset while reading {VIDEO_URL}"),
-    ))) else {
+    )))
+    .into_report()
+    .0
+    else {
         panic!("unreachable")
     };
     assert!(!reason.contains("sig=abc"), "{reason}");
@@ -1771,14 +1816,18 @@ fn a_doubted_model_is_refused_unless_the_request_overrides_the_check() {
     );
     let transport = replay(vec![check_post().reply(envelope(400, "invalid_request"))]);
     assert!(matches!(
-        block_on(rig_adapter(&transport).submit(&checked_rig_call(false))),
+        block_on(rig_adapter(&transport).submit(&checked_rig_call(false)))
+            .into_report()
+            .0,
         Submitted::Refused { .. }
     ));
     let transport = replay(vec![
         check_post().reply(envelope(503, "temporarily_unavailable")),
     ]);
     assert!(matches!(
-        block_on(rig_adapter(&transport).submit(&checked_rig_call(false))),
+        block_on(rig_adapter(&transport).submit(&checked_rig_call(false)))
+            .into_report()
+            .0,
         Submitted::NotReceived { .. }
     ));
     let transport = replay(vec![
@@ -1815,14 +1864,19 @@ fn a_failure_gg_accepted_costs_its_settled_charge() {
     let setup = setup_with_clock(transport.clone(), test_keys(), clock.clone());
     let adapter = GgImages::new(Gateway::with_session(&setup, SESSION));
     let call = image_call("image.generate", json!({"prompt": "p"}));
+    let (sent, diagnostic) = block_on(adapter.send(&call)).into_report();
     assert!(matches!(
-        block_on(adapter.send(&call)),
+        sent,
         Sent::Failed {
             cost: Some(Usd::ZERO),
             retryable: false,
             ..
         }
     ));
+    let diagnostic = diagnostic.expect("the failure evidence survives charge settlement");
+    assert_eq!(diagnostic.http_status, Some(502));
+    assert_eq!(diagnostic.code.as_deref(), Some("upstream_rejected"));
+    assert_eq!(diagnostic.request_id.as_deref(), Some("req_text-1"));
     transport.assert_done();
     // A 2xx that is not an answer reads its charge the same way.
     let transport = replay(vec![
@@ -1853,7 +1907,9 @@ fn a_failure_gg_accepted_costs_its_settled_charge() {
     ]);
     let adapter = GgImages::new(gateway(transport.clone(), test_keys()));
     assert!(matches!(
-        block_on(adapter.send(&image_call("image.generate", json!({"prompt": "p"})))),
+        block_on(adapter.send(&image_call("image.generate", json!({"prompt": "p"}))))
+            .into_report()
+            .0,
         Sent::Failed {
             cost: Some(Usd::ZERO),
             ..

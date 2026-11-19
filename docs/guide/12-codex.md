@@ -271,8 +271,12 @@ Codex at all: `Codex was not started: GRIDA_FX_NETWORK is off`.
 | `Codex is not signed in: …`, or `Codex is signed in with an API key, …` | Run `codex login` and sign in with ChatGPT. |
 | `Codex's MCP servers could not be listed, …` | Check that `codex mcp list` works; update Codex. |
 | `Codex image generation was not started: …` | Check that `codex app-server` starts; update Codex. |
-| `Codex image generation failed: Codex answered without an image` | Run again; rephrase a prompt Codex will not draw. |
+| `… Codex completed the turn without an image. Structured failure reason unavailable.` | Use the `grida fx inspect` command printed for the failed run. The attempt shows which details Codex returned. |
 | `Codex was not started: GRIDA_FX_NETWORK is off` | Unset `GRIDA_FX_NETWORK`. |
+
+Inspection shows the Codex thread and turn IDs when received, along with the ephemeral session
+mode. Those IDs identify the original attempt. The cause of a missing image remains unknown
+when Codex supplies no structured reason.
 
 How the route is specified, sentence by sentence, is
 [the Codex adapter's reference](../../crates/grida-fx-providers/src/codex/README.md).

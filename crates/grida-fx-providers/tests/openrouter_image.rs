@@ -110,7 +110,7 @@ fn send_one(call: &TestCall, body: Option<&Value>, reply: Reply) -> Sent {
     let sent = block_on(adapter(&transport).send(call));
     transport.assert_done();
     assert_eq!(transport.requests().len(), 1, "one send, never a retry");
-    sent
+    sent.into_report().0
 }
 
 fn refused(call: &TestCall) -> String {
@@ -379,9 +379,9 @@ fn a_fixture_exchange_plays() {
     let Sent::NotReceived {
         reason,
         retry_after,
-    } = sent
+    } = sent.into_report().0
     else {
-        panic!("expected NotReceived, got {sent:?}")
+        panic!("expected NotReceived")
     };
     // The wait the provider asked for is honoured and named (classify's sentence).
     assert_eq!(retry_after, Some(Duration::from_secs(20)));
@@ -805,7 +805,9 @@ fn a_response_over_the_cap_is_a_failed_attempt() {
 #[test]
 fn a_transport_that_refuses_the_request_is_a_refusal() {
     let adapter = adapter_over(Arc::new(Offline), test_keys());
-    let sent = block_on(adapter.send(&generate(json!({"prompt": "p"}))));
+    let sent = block_on(adapter.send(&generate(json!({"prompt": "p"}))))
+        .into_report()
+        .0;
     let Sent::Refused { reason } = sent else {
         panic!("expected Refused, got {sent:?}")
     };
@@ -1123,8 +1125,10 @@ fn the_key_never_leaves_the_credential_slot() {
         ]));
         let call = generate(json!({"prompt": "p"}));
         let sent = block_on(adapter(&transport).send(&call));
+        let (sent, diagnostic) = sent.into_report();
+        assert!(!format!("{diagnostic:?}").contains(KEY));
         let shown = match &sent {
-            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
+            Sent::Diagnosed(..) => unreachable!("the diagnostic was separated"),
             Sent::Answered(answer) => answer.data.to_string(),
             Sent::Failed { reason, .. }
             | Sent::NotReceived { reason, .. }

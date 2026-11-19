@@ -284,8 +284,12 @@ work may change. Preserve the original run as evidence.
 
 ### "Recover from failure"
 
-Inspect the explicit run and failed/skipped instances before retrying. Distinguish
-node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
+Use the `inspect` command printed after a failed run to read its recorded evidence.
+Check the call, attempt and send before retrying. `inspect --json` exposes these
+records in `run.call_attempt_failures`, including a failure recovered by retry.
+Distinguish node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
+If acceptance was uncertain, use `jobs` and the provider's records to reconcile the
+original submission before another paid attempt.
 Resume the same folder when the plan is unchanged; revise into a new folder when
 it changed. FX owns paid-call retries and settlement. Do not multiply retries in
 node code or a loop around a paid command; recorded failure is not proof that a
@@ -543,9 +547,15 @@ provider code/field/explanation and reconciliation IDs, with redaction and
 truncation flags. SDK errors, node-failure events, inspection, projection and
 observation preserve them separately from node facts. An uncertain job retains
 its diagnostic for the next invocation. Tripo's upload refusals, paid submissions
-and terminal task failures supply evidence; legacy hosts and other built-in
-adapters may still return a reason alone. Synthetic tests cover keys, input
-echoes, signed URLs, local paths, malformed bodies and uncertainty without repeat
+and terminal task failures supply evidence. Built-in HTTP adapters use shared extraction for
+safe fields and detail availability. Codex diagnostics preserve returned thread and turn IDs
+and ephemeral mode. The engine records failed managed attempts even when a retry succeeds.
+`run` points to the exact saved run and `inspect` presents the recorded attempts in text and JSON.
+Both SDKs expose them through `RunRecord.inspection`. A synthetic HTTP rejection exercises
+both commands in `crates/grida-fx/tests/model_discovery.rs`. Fake Codex turns cover ID
+availability in `crates/grida-fx-providers/tests/codex.rs`.
+Legacy hosts and some adapter paths may still return a reason alone. Synthetic tests cover
+keys, input echoes, signed URLs, local paths, malformed bodies and uncertainty without repeat
 submission (`crates/grida-fx-providers/tests/tripo_mesh.rs`,
 `crates/grida-fx-providers/src/diagnostic.rs`, and the SDK tests above).
 

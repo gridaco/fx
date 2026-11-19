@@ -665,6 +665,79 @@ fn prepared_dry_run_and_resume_keep_model_facts_after_metadata_cache_is_removed(
 }
 
 #[test]
+fn run_and_inspect_explain_a_provider_rejection_from_the_original_attempt() {
+    let root = project("openrouter");
+    let server = MetadataServer::new();
+    serve_model(&server, "openrouter", true);
+    let explanation = "This image size is unavailable for this model.";
+    server.reply_method(
+        "POST",
+        "/v1/images",
+        400,
+        json!({"error": {"code": 400, "message": explanation}}),
+    );
+    let failed = command(
+        root.path(),
+        "openrouter",
+        &server,
+        true,
+        &[
+            "run",
+            "workflow.yaml",
+            "--live",
+            "--max-usd",
+            "1",
+            "--run",
+            "runs/failed draw",
+            "--no-view",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&failed.stdout);
+    assert_eq!(failed.status.code(), Some(1), "{stdout}");
+    assert!(stdout.contains(explanation), "{stdout}");
+    assert!(
+        stdout.contains("inspect   grida-fx inspect 'runs/failed draw'"),
+        "{stdout}"
+    );
+    let inspection = document(
+        &command(
+            root.path(),
+            "openrouter",
+            &server,
+            false,
+            &["inspect", "runs/failed draw", "--json"],
+        ),
+        0,
+    );
+    let failures = inspection["run"]["call_attempt_failures"]
+        .as_array()
+        .unwrap();
+    assert_eq!(failures.len(), 1);
+    let failure = &failures[0];
+    assert_eq!(failure["id"], "draw#1");
+    assert_eq!(failure["attempt"], 1);
+    assert_eq!(failure["send"], 1);
+    assert_eq!(failure["outcome"], "failed");
+    assert_eq!(failure["retryable"], false);
+    assert_eq!(failure["charged_usd"].as_f64(), Some(0.0));
+    assert_eq!(failure["diagnostic"]["http_status"], 400);
+    assert_eq!(failure["diagnostic"]["message"], explanation);
+    let human = command(
+        root.path(),
+        "openrouter",
+        &server,
+        false,
+        &["inspect", "runs/failed draw"],
+    );
+    let stdout = String::from_utf8_lossy(&human.stdout);
+    assert!(human.status.success(), "{stdout}");
+    assert!(stdout.contains("draw#1 · attempt 1 · send 1"), "{stdout}");
+    assert!(stdout.contains("provider/send · HTTP 400"), "{stdout}");
+    assert!(stdout.contains(explanation), "{stdout}");
+    assert_eq!(server.requests().len(), 2);
+}
+
+#[test]
 fn discovered_model_runs_settles_and_replays_its_paid_call_without_a_key() {
     for priced in [false, true] {
         let root = project("openrouter");

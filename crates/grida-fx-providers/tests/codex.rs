@@ -6,6 +6,7 @@
 #![cfg(unix)]
 
 use base64::Engine;
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
 use grida_fx_providers::adapter::{Answer, Billing, RequestAdapter, Runtime, Sent};
 use grida_fx_providers::codex::{self, CodexImages, CodexRuntime};
 use grida_fx_providers::installed::{Program, Version};
@@ -245,8 +246,12 @@ fn on_a_started_codex<T, F: Future<Output = T>>(
 
 /// One call to `fake`, and the runtime shut down.
 fn send(fake: &Fake) -> Sent {
+    send_report(fake).0
+}
+
+fn send_report(fake: &Fake) -> (Sent, Option<AdapterDiagnostic>) {
     on_one_runtime(Ok(fake.program.clone()), 20, 30, |adapter| async move {
-        adapter.send(&kite().call).await
+        adapter.send(&kite().call).await.into_report()
     })
     .0
 }
@@ -536,7 +541,7 @@ fi
         (first, second)
     });
     assert_eq!(
-        sent.0,
+        sent.0.into_report().0,
         failed("Codex image generation failed: Codex exited")
     );
     assert!(matches!(sent.1, Sent::Answered(_)), "{:?}", sent.1);
@@ -660,13 +665,17 @@ fn a_usage_limit_ends_the_call_with_its_reset_time() {
             (first, adapter.send(&kite().call).await)
         });
     assert!(verified);
+    let (first, diagnostic) = sent.0.into_report();
     assert_eq!(
-        sent.0,
+        first,
         failed(&format!(
             "Codex image generation failed: the Codex usage limit is reached; it resets at unix \
              time {resets_at}"
         ))
     );
+    let diagnostic = diagnostic.expect("a usage-limit diagnostic");
+    assert_eq!(diagnostic.code.as_deref(), Some("usageLimitExceeded"));
+    assert_eq!(diagnostic.detail, DiagnosticDetail::Available);
     assert_eq!(
         sent.1,
         refused(&format!(
@@ -689,17 +698,29 @@ fn a_usage_limit_ends_the_call_with_its_reset_time() {
         let first = adapter.send(&kite().call).await;
         (first, adapter.send(&kite().call).await)
     });
-    assert!(matches!(sent.0, Sent::Failed { .. }));
+    assert!(matches!(sent.0.into_report().0, Sent::Failed { .. }));
     assert_eq!(answered(sent.1).files["image"].bytes, png);
 }
 
 #[test]
 fn a_turn_without_an_image_fails_with_codex_s_error_kind_only() {
     let script = format!("{}{}", opening(), completed_a());
+    let (sent, diagnostic) = send_report(&fake(&script));
     assert_eq!(
-        send(&fake(&script)),
-        failed("Codex image generation failed: Codex answered without an image")
+        sent,
+        failed(
+            "Codex image generation failed: Codex completed the turn without an image. Structured failure reason unavailable."
+        )
     );
+    let diagnostic = diagnostic.expect("a no-image diagnostic");
+    assert_eq!(diagnostic.source, DiagnosticSource::Adapter);
+    assert_eq!(diagnostic.phase, DiagnosticPhase::Send);
+    assert_eq!(diagnostic.thread_id.as_deref(), Some("thread-a"));
+    assert_eq!(diagnostic.turn_id.as_deref(), Some("turn-a"));
+    assert_eq!(diagnostic.ephemeral, Some(true));
+    assert_eq!(diagnostic.detail, DiagnosticDetail::Unavailable);
+    assert_eq!(diagnostic.code, None);
+    assert_eq!(diagnostic.http_status, None);
     let errored = echo(
         json!({"method": "turn/completed", "params": {"threadId": "thread-a",
         "turn": {"id": "turn-a", "status": "failed",
@@ -707,10 +728,15 @@ fn a_turn_without_an_image_fails_with_codex_s_error_kind_only() {
                 "codexErrorInfo": "serverOverloaded"}}}}),
     );
     let script = format!("{}{errored}read -r line\n", opening());
+    let (sent, diagnostic) = send_report(&fake(&script));
     assert_eq!(
-        send(&fake(&script)),
+        sent,
         failed("Codex image generation failed: Codex's turn failed (serverOverloaded)")
     );
+    let diagnostic = diagnostic.expect("a typed Codex failure diagnostic");
+    assert_eq!(diagnostic.code.as_deref(), Some("serverOverloaded"));
+    assert_eq!(diagnostic.detail, DiagnosticDetail::Available);
+    assert_eq!(diagnostic.message, None);
 }
 
 #[test]
@@ -759,10 +785,16 @@ fn nothing_is_ever_resent() {
         accepted,
         &echo(json!({"id": 4, "error": {"code": -32600, "message": "/Users/someone/x"}})),
     ) + "read -r line\n";
+    let (sent, diagnostic) = send_report(&fake(&refused_turn));
     assert_eq!(
-        send(&fake(&refused_turn)),
+        sent,
         failed("Codex image generation failed: Codex refused turn/start (error -32600)")
     );
+    let diagnostic = diagnostic.expect("a start-turn rejection diagnostic");
+    assert_eq!(diagnostic.thread_id.as_deref(), Some("thread-a"));
+    assert_eq!(diagnostic.turn_id, None);
+    assert_eq!(diagnostic.ephemeral, Some(true));
+    assert_eq!(diagnostic.code.as_deref(), Some("-32600"));
     assert_eq!(
         send(&fake(&format!("{}exit 0\n", opening()))),
         failed("Codex image generation failed: Codex exited")
@@ -786,7 +818,10 @@ fn deadlines_stop_a_call_before_and_after_its_turn_is_asked_for() {
     };
     let before = fake(&format!("{LISTING}exec sleep 30\n"));
     assert_eq!(
-        on_one_runtime(Ok(before.program.clone()), 1, 10, timed(10)).0,
+        on_one_runtime(Ok(before.program.clone()), 1, 10, timed(10))
+            .0
+            .into_report()
+            .0,
         failed("Codex image generation was not started: Codex did not start the turn within 1 s")
     );
     // The second call's turn/start was written and never answered: the turn may be running.
@@ -801,12 +836,18 @@ fn deadlines_stop_a_call_before_and_after_its_turn_is_asked_for() {
         second.replace(accepted, "")
     ));
     assert_eq!(
-        on_a_started_codex(&unanswered, 3, 15, timed(15)).0,
+        on_a_started_codex(&unanswered, 3, 15, timed(15))
+            .0
+            .into_report()
+            .0,
         failed("Codex image generation failed: Codex did not start the turn within 3 s")
     );
     let running = fake(&format!("{}{second}exec sleep 30\n", first_image(&png)));
     assert_eq!(
-        on_a_started_codex(&running, 3, 2, timed(2)).0,
+        on_a_started_codex(&running, 3, 2, timed(2))
+            .0
+            .into_report()
+            .0,
         failed("Codex image generation failed: Codex did not finish within 2 s")
     );
 }
@@ -840,7 +881,7 @@ echo $! > "$(dirname "$0")/helper.pid"
     let (sent, verified) = on_a_started_codex(&stalled, 3, 2, |adapter| async move {
         adapter.send(&kite().call).await
     });
-    assert!(matches!(sent, Sent::Failed { .. }));
+    assert!(matches!(sent.into_report().0, Sent::Failed { .. }));
     assert!(verified);
     assert!(gone(&stalled.marker("helper.pid")));
 }
@@ -940,7 +981,7 @@ fn an_overloaded_codex_did_not_receive_the_turn() {
         });
     assert!(verified);
     assert_eq!(
-        sent.0,
+        sent.0.into_report().0,
         Sent::NotReceived {
             reason: "Codex image generation was not started: Codex is overloaded (error -32001)"
                 .into(),

@@ -444,7 +444,7 @@ impl RequestAdapter for OpenRouterStructured {
                 prepared.body,
                 prepared.timeout,
             );
-            match super::classify(&self.client, LABEL, self.client.send(request).await) {
+            match super::classify(&self.client, LABEL, call, self.client.send(request).await) {
                 Ok(response) => self.parse(&response),
                 Err(sent) => sent,
             }

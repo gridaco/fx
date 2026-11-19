@@ -163,7 +163,10 @@ managed execution path, with arbitrary canonical JSON and file references.
 The diagnostic identifies its `source` (`engine`, `adapter`, `transport` or
 `provider`) and `phase` (`validate`, `upload`, `send`, `submit`, `poll`, `collect`
 or `download`). Optional members are `operation`, `http_status`, `code`, `field`,
-`message`, `request_id` and `task_id`. `detail` is `available`, `unavailable`,
+`message`, `request_id`, `task_id`, `thread_id`, `turn_id` and `ephemeral`. A thread or turn ID
+identifies an installed program's thread or turn, when returned. `ephemeral` describes its
+session mode when known. A recorded ID from an ephemeral session serves correlation. The
+diagnostic carries no transcript. `detail` is `available`, `unavailable`,
 `unreadable` or `withheld`; `redacted` and `truncated` report changes to detail.
 Provider and route attribution comes from the managed call, not a host-supplied
 credential or URL. String detail is bounded and redacted before it reaches any
@@ -180,6 +183,13 @@ The engine forwards the sanitized diagnostic in the capability error's
 also retains it beside its note, so a later `job_unsettled` preserves the
 original evidence. SDK run failures expose it independently of node facts.
 An absent diagnostic in an older record means no diagnostic was recorded.
+
+The retry owner preserves the sanitized reason and any diagnostic in each
+`call_attempt_failed` event ([store.md](store.md) §8), including failed sends that a later
+retry recovers. `run` points to the recorded run when it reports failed steps. Text and JSON
+`inspect` show the evidence without calling a provider. HTTP status identifies an observed
+response. A terminal job failure may arrive in an HTTP 200 response, and a transport failure
+may have no status. Receipt, retry eligibility and booked cost are engine facts.
 
 **Downloads.**
 - A result file at a URL MUST be fetched **once** per send or collect, at the URL exactly as the provider gave it, on the download lane: no credential, no redirects and the response cap the adapter's reference gives. A built-in adapter accepts the provider's choice of result host under its reference's URL checks; FX keeps no provider CDN catalog. A project adapter's downloads through `fetch` remain confined to its declaration's `download_hosts`, with an empty list denying every download ([providers.md](providers.md) §1; §9 below). A failed fetch is not repeated within that send or collect. An adapter does not re-serialize the URL; it parses it only to check it. The default transport sends the URL as the WHATWG URL parser (Rust `url` crate, via reqwest, which has no raw-URI path) serializes it: in an http(s) query, controls, space, `"`, `<`, `>`, `'` and non-ASCII are percent-encoded; existing `%XX` escapes are kept; a default port is dropped, the host is lowercased, and `.`/`..` path segments are resolved.

@@ -45,6 +45,7 @@ use crate::transport::{
 };
 use crate::wire;
 use grida_fx_core::money::Usd;
+use grida_fx_protocol::AdapterDiagnostic;
 use regex::Regex;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -181,7 +182,7 @@ impl Gateway {
             }
             _ => None,
         };
-        match classify(&self.client, label, exchange) {
+        match classify(call, &self.client, label, exchange) {
             Ok(response) => Ok(response),
             Err(sent) => Err(match failed {
                 Some(response) => self.charged(sent, &response).await,
@@ -194,7 +195,8 @@ impl Gateway {
     /// when it has none ([`Gateway::charge`]): GG keeps the billing of every request it accepted,
     /// failed ones included, and settles a provider's refusal at what the provider charged.
     pub async fn charged(&self, sent: Sent, response: &HttpResponse) -> Sent {
-        match sent {
+        let (sent, diagnostic) = sent.into_report();
+        let sent = match sent {
             Sent::Failed {
                 reason,
                 cost: None,
@@ -205,6 +207,10 @@ impl Gateway {
                 retryable,
             },
             other => other,
+        };
+        match diagnostic {
+            Some(diagnostic) => sent.with_diagnostic(diagnostic),
+            None => sent,
         }
     }
 
@@ -409,12 +415,8 @@ pub fn error_code(body: &[u8]) -> Option<String> {
 
 /// A refusal whose sentence names the error code, the request id and what to do (spec/adapters.md
 /// §7): `<label> returned HTTP <n>: <detail> (request <id>)`, then `; <hint>`.
-fn status_text(label: &str, response: &HttpResponse, client: &Client) -> String {
-    let detail = wire::safe_error_detail(&response.body, &client.redactor);
-    let mut text = wire::status_reason(label, response.status, detail.as_deref());
-    if let Some(id) = request_id(response) {
-        text.push_str(&format!(" (request {id})"));
-    }
+fn status_text(label: &str, response: &HttpResponse, diagnostic: &AdapterDiagnostic) -> String {
+    let mut text = wire::diagnosed_http_reason(label, response.status, diagnostic);
     let hint = match (response.status, error_code(&response.body).as_deref()) {
         (401, _) => Some("check GG_API_KEY".to_string()),
         (402, Some("insufficient_credit")) => {
@@ -456,6 +458,7 @@ fn status_text(label: &str, response: &HttpResponse, client: &Client) -> String 
 ///   request as given; any other 5xx: `Failed { None, true }`.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub fn classify(
+    call: &CallRequest,
     client: &Client,
     label: &str,
     exchange: Result<HttpResponse, TransportError>,
@@ -470,7 +473,8 @@ pub fn classify(
     let status = response.status;
     let code = error_code(&response.body);
     let envelope = wire::error_envelope(&response.body).is_some();
-    let text = status_text(label, &response, client);
+    let diagnostic = wire::http_diagnostic(call, &response, &client.redactor);
+    let text = status_text(label, &response, &diagnostic);
     let failed = |cost: Option<Usd>, retryable: bool| Sent::Failed {
         reason: client.reason(&text),
         cost,
@@ -480,7 +484,7 @@ pub fn classify(
         reason: client.reason(&text),
         retry_after: crate::adapter::retry_after(&response),
     };
-    Err(match (status, code.as_deref()) {
+    let outcome = match (status, code.as_deref()) {
         (300..=399, _) => Sent::Failed {
             reason: client.reason(&format!(
                 "{label} was redirected (HTTP {status}); check {BASE_URL_VARIABLE}"
@@ -498,12 +502,13 @@ pub fn classify(
         (400..=499, _) => failed(envelope.then_some(Usd::ZERO), false),
         (502, Some("upstream_rejected")) => failed(None, false),
         _ => failed(None, true),
-    })
+    };
+    Err(outcome.with_diagnostic(diagnostic))
 }
 
 /// A failed exchange of a synchronous request (spec/adapters.md §3.2).
 fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Sent {
-    match (error.kind, error.phase) {
+    let outcome = match (error.kind, error.phase) {
         (TransportErrorKind::Refused, Phase::NotSent) => Sent::Refused {
             reason: client.reason(&format!("{label} was not sent: {}", error.reason)),
         },
@@ -515,7 +520,8 @@ fn transport_failure(client: &Client, label: &str, error: &TransportError) -> Se
             cost: None,
             retryable: true,
         },
-    }
+    };
+    outcome.with_diagnostic(wire::transport_diagnostic(error))
 }
 
 /// GG's money: an exact decimal number of mills (`^(0|[1-9][0-9]{0,19})(\.[0-9]{1,18})?$`), as
@@ -651,11 +657,14 @@ mod tests {
 
     fn sent(status: u16, body: Value) -> Sent {
         classify(
+            &call("key", 1),
             &client(),
             "GG image generation",
             Ok(HttpResponse::json(status, &body)),
         )
         .unwrap_err()
+        .into_report()
+        .0
     }
 
     fn envelope(code: &str) -> Value {
@@ -760,22 +769,37 @@ mod tests {
             reason,
             "GG image generation was redirected (HTTP 302); check GG_BASE_URL"
         );
-        assert!(classify(&client(), "X", Ok(HttpResponse::new(200, b"{}".to_vec()))).is_ok());
+        assert!(
+            classify(
+                &call("key", 1),
+                &client(),
+                "X",
+                Ok(HttpResponse::new(200, b"{}".to_vec()))
+            )
+            .is_ok()
+        );
     }
 
     #[test]
     fn refusals_name_the_code_the_request_and_what_to_do() {
         let response = HttpResponse::json(402, &envelope("insufficient_credit"))
             .with_header("x-request-id", "req_abc-1");
-        let Sent::Failed { reason, .. } =
-            classify(&client(), "GG image generation", Ok(response)).unwrap_err()
+        let Sent::Failed { reason, .. } = classify(
+            &call("key", 1),
+            &client(),
+            "GG image generation",
+            Ok(response),
+        )
+        .unwrap_err()
+        .into_report()
+        .0
         else {
             unreachable!()
         };
         assert_eq!(
             reason,
-            "GG image generation returned HTTP 402: type=invalid_request_error; \
-             code=insufficient_credit (request req_abc-1); add Grida AI credits at \
+            "GG image generation returned HTTP 402: code=insufficient_credit \
+             (request req_abc-1); add Grida AI credits at \
              https://console.grida.co"
         );
         let Sent::Failed { reason, .. } = sent(401, envelope("invalid_api_key")) else {
@@ -786,25 +810,30 @@ mod tests {
             reason,
             retry_after,
         } = classify(
+            &call("key", 1),
             &client(),
             "X",
             Ok(HttpResponse::json(429, &envelope("rate_limit_exceeded"))
                 .with_header("retry-after", "3")),
         )
         .unwrap_err()
+        .into_report()
+        .0
         else {
             unreachable!()
         };
-        assert_eq!(
-            reason,
-            "X returned HTTP 429: type=invalid_request_error; code=rate_limit_exceeded"
-        );
+        assert_eq!(reason, "X returned HTTP 429: code=rate_limit_exceeded");
         assert_eq!(retry_after, Some(std::time::Duration::from_secs(3)));
     }
 
     #[test]
     fn transport_phases_classify() {
-        let failure = |error| classify(&client(), "X", Err(error)).unwrap_err();
+        let failure = |error| {
+            classify(&call("key", 1), &client(), "X", Err(error))
+                .unwrap_err()
+                .into_report()
+                .0
+        };
         assert!(matches!(
             failure(TransportError::not_sent(
                 TransportErrorKind::Connect,
