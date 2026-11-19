@@ -48,7 +48,8 @@
 //! 6. The summary, each label padded to 10 columns: `run       <folder as named>`, `stand-in
 //!    <source as typed>` for a stand-in run, `result    ok
 //!    | incomplete | failed   booked $<charged, 2 places>`, `failed    <id>: <error or "no reason
-//!    recorded">` per failure in order, `stopped   <message>`. An absolute path of the project,
+//!    recorded">` per failure in order, an `inspect` command for a failed run, and
+//!    `stopped   <message>`. An absolute path of the project,
 //!    the home or the store left in an error is shown relative to the project.
 //! 7. `--deliver`, after the run, request by request. First every request is matched with the
 //!    output's files (one file; else each file of a list, keyed collection or object, labelled
@@ -602,6 +603,11 @@ fn summary(
     for (id, error) in &outcome.failed {
         let error = error.as_deref().unwrap_or("no reason recorded");
         lines.push(labelled("failed", &format!("{id}: {}", scrub.apply(error))));
+    }
+    if !outcome.failed.is_empty() {
+        let command = crate::invoker::command();
+        let path = super::repeat::path_word(label);
+        lines.push(labelled("inspect", &format!("{command} inspect {path}")));
     }
     if let Some(stopped) = &outcome.stopped {
         lines.push(labelled("stopped", &scrub.apply(stopped)));
@@ -1178,6 +1184,7 @@ mod tests {
                 "result    failed   booked $0.12",
                 "failed    nope#1: refused on purpose",
                 "failed    bang#1: no reason recorded",
+                "inspect   grida-fx inspect runs/one",
             ]
         );
         let stopped = RunOutcome {

@@ -808,6 +808,9 @@ def test_diagnostics_extend_failures_without_changing_legacy_outcomes() -> None:
         field="new_field",
         message="Unsupported new_field",
         request_id="req-1",
+        thread_id="thread-a",
+        turn_id="turn-a",
+        ephemeral=True,
         detail="available",
     )
     for method, outcome in (
@@ -819,6 +822,9 @@ def test_diagnostics_extend_failures_without_changing_legacy_outcomes() -> None:
         _valid(RESULTS[method], wire)
         assert wire["diagnostic"]["request_id"] == "req-1"
         assert wire["diagnostic"]["http_status"] == 400
+        assert wire["diagnostic"]["thread_id"] == "thread-a"
+        assert wire["diagnostic"]["turn_id"] == "turn-a"
+        assert wire["diagnostic"]["ephemeral"] is True
     assert "diagnostic" not in encode(SEND, fx.Failed("legacy", retryable=False))
     with pytest.raises(ValueError, match="diagnostic.source"):
         encode(

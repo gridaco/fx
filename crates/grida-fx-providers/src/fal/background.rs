@@ -111,7 +111,7 @@ impl FalBackground {
             }
         };
         let exchange = client.send(request).await;
-        let response = match super::classify_run(client, LABEL, exchange) {
+        let response = match super::classify_run(client, call, LABEL, exchange) {
             Ok(response) => response,
             Err(sent) => return sent,
         };

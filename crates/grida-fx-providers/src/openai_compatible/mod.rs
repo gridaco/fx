@@ -165,8 +165,8 @@ static SAFE_SECONDS: LazyLock<Regex> =
 /// - any other 4xx → `Failed { cost, retryable: false }`;
 /// - 5xx, and any other status → `Failed { cost, retryable: true }`.
 ///
-/// A status's reason is `<label> returned HTTP <n>`, with the safe detail of an OpenAI-style error
-/// envelope ([`wire::safe_error_detail`]), the request id when the response carries a safe one, and
+/// A status's reason is `<label> returned HTTP <n>`, with the selected details of an OpenAI-style
+/// error envelope, the request id when the response carries a safe one, and
 /// for an unbilled 429 `; retry-after <seconds>`. Every reason is redacted.
 #[allow(clippy::result_large_err)] // `Sent` is what every caller returns at once
 pub fn classify(
@@ -184,7 +184,7 @@ pub fn classify(
                 Phase::AfterSend => format!("{label} failed: {}", error.reason),
             };
             let reason = client.reason(&reason);
-            return Err(match error.phase {
+            let sent = match error.phase {
                 Phase::NotSent if error.kind == TransportErrorKind::Refused => {
                     Sent::Refused { reason }
                 }
@@ -194,7 +194,8 @@ pub fn classify(
                     cost: None,
                     retryable: true,
                 },
-            });
+            };
+            return Err(sent.with_diagnostic(wire::transport_diagnostic(&error)));
         }
     };
     let status = response.status;
@@ -205,6 +206,7 @@ pub fn classify(
         .expect("billing was checked before sending");
     let reported = billing.response_cost(&response);
     let cost = reported.reported();
+    let diagnostic = wire::http_diagnostic(call, &response, &client.redactor);
     if (300..400).contains(&status) {
         return Err(Sent::Failed {
             reason: client.reason(&format!(
@@ -213,12 +215,11 @@ pub fn classify(
             )),
             cost,
             retryable: false,
-        });
+        }
+        .with_diagnostic(diagnostic));
     }
-    let detail = wire::safe_error_detail(&response.body, &client.redactor);
-    let reason = wire::status_reason(label, status, detail.as_deref());
-    let reason = wire::with_request_id(reason, &response);
-    Err(match status {
+    let reason = wire::diagnosed_http_reason(label, status, &diagnostic);
+    let sent = match status {
         429 if !billing.reads_cost || matches!(reported, billing::Cost::Missing) => {
             let named = response
                 .header("retry-after")
@@ -248,7 +249,8 @@ pub fn classify(
             cost,
             retryable: true,
         },
-    })
+    };
+    Err(sent.with_diagnostic(diagnostic))
 }
 
 #[cfg(test)]
@@ -290,8 +292,18 @@ mod tests {
         Provider::new(&setup, setup.declarations().get(name).unwrap())
     }
 
+    #[allow(clippy::result_large_err)] // Tests compare the adapter outcome directly.
+    fn classify_case(
+        provider: &Provider,
+        label: &str,
+        call: &CallRequest,
+        exchange: Result<HttpResponse, TransportError>,
+    ) -> Result<HttpResponse, Sent> {
+        super::classify(provider, label, call, exchange).map_err(|sent| sent.into_report().0)
+    }
+
     fn sent(status: u16, body: Value) -> Sent {
-        classify(
+        classify_case(
             &provider("acme"),
             "acme tool loop",
             &call(),
@@ -348,7 +360,7 @@ mod tests {
         let Sent::NotReceived {
             reason,
             retry_after,
-        } = classify(&provider("acme"), "acme tool loop", &call(), Ok(response)).unwrap_err()
+        } = classify_case(&provider("acme"), "acme tool loop", &call(), Ok(response)).unwrap_err()
         else {
             unreachable!()
         };
@@ -358,7 +370,7 @@ mod tests {
         );
         assert_eq!(retry_after, Some(std::time::Duration::from_secs(20)));
         assert!(
-            classify(
+            classify_case(
                 &provider("acme"),
                 "X",
                 &call(),
@@ -377,7 +389,7 @@ mod tests {
             let label = format!("{name} structured generation");
             let response = HttpResponse::new(307, Vec::new());
             assert_eq!(
-                classify(&provider(name), &label, &call(), Ok(response)).unwrap_err(),
+                classify_case(&provider(name), &label, &call(), Ok(response)).unwrap_err(),
                 Sent::Failed {
                     reason: format!("{label} was redirected (HTTP 307); check {check}"),
                     cost: None,
@@ -389,7 +401,8 @@ mod tests {
 
     #[test]
     fn transport_phases_classify() {
-        let classified = |error| classify(&provider("acme"), "X", &call(), Err(error)).unwrap_err();
+        let classified =
+            |error| classify_case(&provider("acme"), "X", &call(), Err(error)).unwrap_err();
         assert!(matches!(
             classified(TransportError::not_sent(
                 TransportErrorKind::Connect,

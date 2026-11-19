@@ -656,8 +656,13 @@ fn a_400_names_the_schema_problem_not_the_prompt() {
         json!({"system": "", "messages": [{"role": "user", "content": "secret-prompt"}],
             "tools": [render_tool()], "tool_choice": "required"}),
     );
-    let sent = block_on(adapter_over(transport.clone(), test_keys()).send(&call));
+    let (sent, diagnostic) =
+        block_on(adapter_over(transport.clone(), test_keys()).send(&call)).into_report();
     transport.assert_done();
+    assert_eq!(
+        diagnostic.unwrap().message.as_deref(),
+        Some("invalid schema")
+    );
     assert_eq!(
         sent,
         Sent::Failed {
@@ -685,7 +690,9 @@ fn statuses_and_transport_failures_follow_the_openrouter_table() {
     ]);
     let adapter = adapter_over(transport.clone(), test_keys());
     let call = turn(TEXT_ROUTE, text_contract(), simple_request());
-    let outcomes: Vec<Sent> = (0..4).map(|_| block_on(adapter.send(&call))).collect();
+    let outcomes: Vec<Sent> = (0..4)
+        .map(|_| block_on(adapter.send(&call)).into_report().0)
+        .collect();
     transport.assert_done();
     // `NotReceived` may carry more than its reason (a provider's requested wait).
     assert!(
@@ -712,7 +719,7 @@ fn statuses_and_transport_failures_follow_the_openrouter_table() {
     );
     let offline = adapter_over(Arc::new(Offline), test_keys());
     assert!(matches!(
-        block_on(offline.send(&call)),
+        block_on(offline.send(&call)).into_report().0,
         Sent::Refused { .. }
     ));
 }
@@ -740,8 +747,10 @@ fn the_key_never_reaches_a_reason_an_answer_or_a_url() {
     let call = turn(TEXT_ROUTE, text_contract(), simple_request());
     let mut seen = Vec::new();
     for _ in 0..3 {
-        match block_on(adapter.send(&call)) {
-            Sent::Diagnosed(..) => panic!("unexpected diagnostic in legacy fixture"),
+        let (sent, diagnostic) = block_on(adapter.send(&call)).into_report();
+        assert!(!format!("{diagnostic:?}").contains(KEY));
+        match sent {
+            Sent::Diagnosed(..) => unreachable!("the diagnostic was separated"),
             Sent::Answered(answer) => seen.push(answer.data.to_string()),
             Sent::Failed { reason, .. }
             | Sent::Refused { reason }

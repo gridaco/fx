@@ -66,7 +66,7 @@ files, cancellation, resume and independent call-cache replay in both SDKs.
 
 Python failure outcomes accept a keyword-only `diagnostic=AdapterDiagnostic(...)`;
 TypeScript outcomes accept `diagnostic: {source, phase, ...}` with camelCase
-`httpStatus`, `requestId` and `taskId`. Evidence is optional, independent of the
+`httpStatus`, `requestId`, `taskId`, `threadId` and `turnId`. Evidence is optional, independent of the
 outcome and sanitized by the engine. Uncaught capability errors retain it in
 `EngineError.data.diagnostic`. Recorded fields use lower_snake_case:
 Python `RunResult.failures[id].diagnostic`, JavaScript
@@ -83,7 +83,9 @@ emitted folder is resolved once against the inspection call's working directory.
 Subsequent observation uses that absolute folder, never a fresh latest-run lookup.
 
 The record exposes `inspection`, the full engine summary and optional verification
-result, and `run_dir` / `runDir`. It has no process exit code or execution ownership.
+result, and `run_dir` / `runDir`. Where recorded, `inspection.run.call_attempt_failures`
+contains the sanitized call failure events, including earlier attempts the run recovered from.
+The record has no process exit code or execution ownership.
 A verification failure returns its documented unsuccessful verification result;
 input/engine errors raise the SDK's `FxError`. Inspection does not load author
 code, run a workflow, or contact providers. Stored/placed files remain immutable.

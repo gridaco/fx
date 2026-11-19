@@ -1530,6 +1530,15 @@
         "task_id": {
           "type": "string"
         },
+        "thread_id": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        },
+        "ephemeral": {
+          "type": "boolean"
+        },
         "http_status": {
           "type": "integer",
           "minimum": 100,

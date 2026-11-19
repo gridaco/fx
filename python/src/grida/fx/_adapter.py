@@ -635,6 +635,9 @@ class AdapterDiagnostic:
     detail: str = "unavailable"
     redacted: bool = False
     truncated: bool = False
+    thread_id: str | None = None
+    turn_id: str | None = None
+    ephemeral: bool | None = None
 
     def _wire(self) -> dict[str, Any]:
         if self.source not in ("engine", "adapter", "transport", "provider"):
@@ -658,9 +661,20 @@ class AdapterDiagnostic:
         ):
             raise ValueError("diagnostic.http_status is an HTTP status")
         result = {name: value for name, value in vars(self).items() if value is not None}
-        for name in ("operation", "code", "field", "message", "request_id", "task_id"):
+        for name in (
+            "operation",
+            "code",
+            "field",
+            "message",
+            "request_id",
+            "task_id",
+            "thread_id",
+            "turn_id",
+        ):
             if name in result and not isinstance(result[name], str):
                 raise TypeError(f"diagnostic.{name} is text")
+        if self.ephemeral is not None and type(self.ephemeral) is not bool:
+            raise TypeError("diagnostic.ephemeral is a boolean")
         if type(self.redacted) is not bool or type(self.truncated) is not bool:
             raise TypeError("diagnostic redacted and truncated are booleans")
         return result

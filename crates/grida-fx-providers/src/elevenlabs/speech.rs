@@ -83,7 +83,7 @@ impl RequestAdapter for ElevenLabsSpeech {
             };
             body.extend(options);
             let path = format!("text-to-speech/{voice}");
-            post(&self.client, LABEL, &path, credential, body).await
+            post(&self.client, call, LABEL, &path, credential, body).await
         })
     }
 

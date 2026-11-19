@@ -887,6 +887,9 @@ fn every_type_validates_against_its_definition() {
     diagnostic.http_status = Some(400);
     diagnostic.code = Some("bad_input".into());
     diagnostic.message = Some("Unsupported input".into());
+    diagnostic.thread_id = Some("thread-a".into());
+    diagnostic.turn_id = Some("turn-a".into());
+    diagnostic.ephemeral = Some(true);
     diagnostic.detail = DiagnosticDetail::Available;
     s.typed("adapter_diagnostic", &diagnostic);
     s.typed(

@@ -104,6 +104,8 @@ fn sound_answered_with(response: HttpResponse) -> Sent {
         json!({"prompt": "wooden door opens"}),
     )
     .0
+    .into_report()
+    .0
 }
 
 fn reason_of(sent: &Sent) -> &str {
@@ -242,7 +244,7 @@ fn the_synthetic_fixture_replays_both_routes() {
         "language_code": "ja",
         "max_chars": 40,
     }));
-    let busy = block_on(speech.send(&call));
+    let busy = block_on(speech.send(&call)).into_report().0;
     assert_eq!(
         busy,
         Sent::NotReceived {
@@ -988,8 +990,11 @@ fn speech_statuses_carry_their_label() {
     ]));
     let adapter = speech(transport.clone(), test_keys());
     let call = speech_call(json!({"text": "hi", "voice": "v1"}));
-    let refused = block_on(adapter.send(&call));
+    let (refused, diagnostic) = block_on(adapter.send(&call)).into_report();
     assert_clean(&refused);
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(422));
+    assert!(diagnostic.message.is_none());
     assert_eq!(
         refused,
         Sent::Failed {
@@ -999,7 +1004,7 @@ fn speech_statuses_carry_their_label() {
         }
     );
     assert_eq!(
-        block_on(adapter.send(&call)),
+        block_on(adapter.send(&call)).into_report().0,
         Sent::Failed {
             reason: "ElevenLabs speech generation returned HTTP 503".into(),
             cost: None,
@@ -1011,6 +1016,14 @@ fn speech_statuses_carry_their_label() {
 
 #[test]
 fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
+    let report = |response| {
+        sound_with(
+            vec![expect_sound(DOOR).reply(response)],
+            json!({"prompt": "wooden door opens"}),
+        )
+        .0
+        .into_report()
+    };
     let sent = sound_answered_with(HttpResponse::json(
         429,
         &json!({"detail": {"message": "secret quota"}}),
@@ -1020,11 +1033,15 @@ fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
         sent,
         Sent::not_received("ElevenLabs sound generation returned HTTP 429")
     );
-    let sent = sound_answered_with(HttpResponse::json(
+    let (sent, diagnostic) = report(HttpResponse::json(
         401,
         &json!({"detail": {"status": "invalid_api_key", "message": "secret: test-elevenlabs-key is not valid"}}),
     ));
     assert_clean(&sent);
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(401));
+    assert_eq!(diagnostic.code.as_deref(), Some("invalid_api_key"));
+    assert!(diagnostic.message.is_none());
     assert_eq!(
         reason_of(&sent),
         "ElevenLabs sound generation returned HTTP 401: invalid_api_key"
@@ -1044,12 +1061,13 @@ fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
             retry_after: Some(Duration::from_secs(7)),
         }
     );
-    // A status that is not a safe field, or that is the key itself, is left out.
-    for status in ["quota exceeded", KEY, "https://x.test/?k=1", ""] {
-        let sent = sound_answered_with(HttpResponse::json(
+    // A status that is unsafe or repeats part of the submitted prompt is left out.
+    for status in ["quota exceeded", KEY, "https://x.test/?k=1", "", "door"] {
+        let (sent, diagnostic) = report(HttpResponse::json(
             403,
             &json!({"detail": {"status": status}}),
         ));
+        assert!(diagnostic.unwrap().code.is_none(), "{status}");
         assert_clean(&sent);
         assert_eq!(
             reason_of(&sent),
@@ -1091,6 +1109,8 @@ fn transport_failures_carry_their_phase() {
             vec![expect_sound(DOOR).fail(error)],
             json!({"prompt": "wooden door opens"}),
         )
+        .0
+        .into_report()
         .0
     };
     assert_eq!(
@@ -1157,6 +1177,7 @@ fn a_response_over_the_cap_is_a_retryable_failure() {
         }],
         json!({"prompt": "wooden door opens"}),
     );
+    let (sent, diagnostic) = sent.into_report();
     assert_eq!(
         sent,
         Sent::Failed {
@@ -1167,6 +1188,9 @@ fn a_response_over_the_cap_is_a_retryable_failure() {
             retryable: true,
         }
     );
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, None);
+    assert_eq!(diagnostic.code.as_deref(), Some("response_too_large"));
     assert_eq!(transport.requests().len(), 1);
 }
 
@@ -1175,7 +1199,7 @@ fn the_network_switched_off_refuses_at_no_cost() {
     let transport = Arc::new(grida_fx_providers::transport::Offline);
     let sent = block_on(sound(transport, test_keys()).send(&sound_call(json!({"prompt": "door"}))));
     assert_eq!(
-        sent,
+        sent.into_report().0,
         Sent::Refused {
             reason: "ElevenLabs sound generation was not sent: the network is off (GRIDA_FX_NETWORK=off)"
                 .into()

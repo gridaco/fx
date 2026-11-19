@@ -141,7 +141,7 @@ fn picture(bytes: Vec<u8>, cost: Usd) -> Sent {
     Sent::Answered(Answer::new(Value::Null, Some(cost)).with_file("image", "image/png", bytes))
 }
 
-/// The events of the run at `root`, by name, with each settlement's charge.
+/// The events of the run at `root`, by name and booked amount.
 fn budget(root: &Path) -> Vec<(String, Value)> {
     read_events(&root.join("events.jsonl"))
         .unwrap()
@@ -182,6 +182,7 @@ async fn a_contract_the_adapter_does_not_serve_is_refused_inside_the_attempt_at_
             [
                 ("budget_reserved".to_string(), Value::Null),
                 ("budget_settled".to_string(), json!(0)),
+                ("call_attempt_failed".to_string(), json!(0)),
             ]
         );
         assert_eq!(counter.cost(), Some(Usd::ZERO));

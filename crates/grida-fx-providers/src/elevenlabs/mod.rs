@@ -87,9 +87,24 @@ pub fn classify(
     label: &str,
     exchange: Result<HttpResponse, TransportError>,
 ) -> Sent {
+    classify_exchange(client, label, exchange, None)
+}
+
+fn classify_exchange(
+    client: &Client,
+    label: &str,
+    exchange: Result<HttpResponse, TransportError>,
+    call: Option<&CallRequest>,
+) -> Sent {
     let response = match exchange {
         Ok(response) => response,
-        Err(error) => return transport_failure(client, label, &error),
+        Err(error) => {
+            let sent = transport_failure(client, label, &error);
+            return match call {
+                Some(_) => sent.with_diagnostic(wire::transport_diagnostic(&error)),
+                None => sent,
+            };
+        }
     };
     let status = response.status;
     if response.is_success() {
@@ -100,18 +115,26 @@ pub fn classify(
             response.body,
         ));
     }
-    if (300..400).contains(&status) {
-        return Sent::Failed {
+    let detail = if (300..400).contains(&status) {
+        None
+    } else {
+        detail_status(client, &response.body).filter(|detail| {
+            call.is_none_or(|call| {
+                let redactor = crate::diagnostic::redactor_with_inputs(call, &client.redactor);
+                crate::diagnostic::identifier_is_safe(detail, &redactor)
+                    && !crate::diagnostic::identifier_echoes_input(call, detail)
+            })
+        })
+    };
+    let reason = wire::status_reason(label, status, detail.as_deref());
+    let sent = match status {
+        300..=399 => Sent::Failed {
             reason: client.reason(&format!(
                 "{label} was redirected (HTTP {status}); check {BASE_URL_VARIABLE}"
             )),
             cost: None,
             retryable: false,
-        };
-    }
-    let detail = detail_status(client, &response.body);
-    let reason = wire::status_reason(label, status, detail.as_deref());
-    match status {
+        },
         408 | 429 => {
             let wait = crate::adapter::retry_after(&response);
             let reason = match retry_after_text(&response) {
@@ -130,7 +153,18 @@ pub fn classify(
             cost: None,
             retryable: true,
         },
+    };
+    let Some(call) = call else {
+        return sent;
+    };
+    let mut diagnostic = wire::http_diagnostic(call, &response, &client.redactor);
+    // Keep the structured evidence within the shared HTTP body limit.
+    if !diagnostic.truncated
+        && let Some(code) = detail
+    {
+        diagnostic.code = Some(code);
     }
+    sent.with_diagnostic(diagnostic)
 }
 
 /// The checks after an answer (module doc), with `label` in the empty-audio sentence:
@@ -199,6 +233,7 @@ pub(crate) fn float(value: f64) -> Value {
 /// exchange.
 pub(crate) async fn post(
     client: &Client,
+    call: &CallRequest,
     label: &str,
     path: &str,
     credential: crate::transport::Credential,
@@ -212,8 +247,7 @@ pub(crate) async fn post(
         .body(Body::Json(Value::Object(body)))
         .timeout(DEADLINE)
         .max_response_bytes(MAX_RESPONSE_BYTES);
-    let exchange = client.send(request).await;
-    classify(client, label, exchange)
+    classify_exchange(client, label, client.send(request).await, Some(call))
 }
 
 /// A refusal before sending, redacted.

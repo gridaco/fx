@@ -724,14 +724,16 @@ describe("the adapter server", () => {
 
 test("diagnostics extend failures without changing legacy outcomes", async () => {
   const diagnostic = { source: "provider", phase: "submit", operation: "future_operation", httpStatus: 400,
-    code: "bad_input", field: "new_field", message: "Unsupported new_field", requestId: "req-1", detail: "available" };
+    code: "bad_input", field: "new_field", message: "Unsupported new_field", requestId: "req-1",
+    threadId: "thread-a", turnId: "turn-a", ephemeral: true, detail: "available" };
   for (const [method, outcome] of [
     [SEND, { outcome: "failed", reason: "rejected", retryable: false, diagnostic }],
     [SUBMIT, { outcome: "uncertain", reason: "unknown receipt", diagnostic }],
     [COLLECT, { outcome: "unreachable", reason: "unavailable", diagnostic }],
   ] as const) {
     const wire = await encodeOutcome(method, outcome);
-    expect(wire.diagnostic).toMatchObject({ request_id: "req-1", http_status: 400, source: "provider" });
+    expect(wire.diagnostic).toMatchObject({ request_id: "req-1", http_status: 400, source: "provider",
+      thread_id: "thread-a", turn_id: "turn-a", ephemeral: true });
   }
   expect(await encodeOutcome(SEND, { outcome: "failed", reason: "legacy", retryable: false })).not.toHaveProperty("diagnostic");
   await expect(encodeOutcome(SUBMIT, { outcome: "uncertain", reason: "unknown", diagnostic: { source: "unknown", phase: "submit" } })).rejects.toThrow("diagnostic.source");

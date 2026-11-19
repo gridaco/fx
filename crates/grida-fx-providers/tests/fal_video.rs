@@ -128,14 +128,14 @@ fn refused(call: &CallRequest, keys: Keys) -> String {
 /// The reason of an `Ended` collect that reports no cost, as every one does when no read reported
 /// a cost (src/fal/README.md).
 fn ended(collected: Collected) -> String {
-    match collected {
+    match collected.into_report().0 {
         Collected::Ended { reason, cost: None } => reason,
         other => panic!("expected Ended at no reported cost, got {other:?}"),
     }
 }
 
 fn unreachable(collected: Collected) -> String {
-    match collected {
+    match collected.into_report().0 {
         Collected::Unreachable { reason } => reason,
         other => panic!("expected Unreachable, got {other:?}"),
     }
@@ -598,7 +598,10 @@ fn submit_statuses_follow_the_queue_table() {
     ];
     for (exchange, expected) in cases {
         let transport = Arc::new(ReplayTransport::new(vec![exchange]));
-        assert_eq!(submit(&transport, &call(json!({}))), expected);
+        assert_eq!(
+            submit(&transport, &call(json!({}))).into_report().0,
+            expected
+        );
         assert_eq!(transport.requests().len(), 1);
     }
 }
@@ -791,24 +794,28 @@ fn a_job_is_collected_whatever_behaviour_its_route_names() {
 }
 
 #[test]
-fn a_failed_job_ends_with_its_cut_error() {
+fn a_terminal_job_can_fail_in_an_http_200_response() {
     let clock = Arc::new(FakeClock::new());
     let transport = Arc::new(ReplayTransport::new(vec![status_get().reply(ok(json!({
         "status": "COMPLETED", "error": "boom ".repeat(200), "error_type": "model_error"
     })))]));
-    let reason = ended(collect(&transport, &clock, &call(json!({}))));
-    assert!(
-        reason.starts_with("fal video job failed (model_error): boom boom"),
-        "{reason}"
+    let (outcome, diagnostic) = collect(&transport, &clock, &call(json!({}))).into_report();
+    assert_eq!(ended(outcome), "fal video job failed (model_error)");
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(200));
+    assert_eq!(diagnostic.code.as_deref(), Some("model_error"));
+    assert_eq!(diagnostic.task_id.as_deref(), Some("req-1"));
+    assert_eq!(
+        diagnostic.detail,
+        grida_fx_protocol::DiagnosticDetail::Withheld
     );
-    assert!(reason.chars().count() <= 500);
     let transport = Arc::new(ReplayTransport::new(vec![
         status_get().reply(ok(json!({"status": "IN_PROGRESS", "error": null}))),
         status_get().reply(ok(json!({"status": "FAILED", "error": {"message": "x"}}))),
     ]));
     assert_eq!(
         ended(collect(&transport, &clock, &call(json!({})))),
-        r#"fal video job failed: {"message":"x"}"#
+        "fal video job failed"
     );
 }
 
@@ -1230,7 +1237,7 @@ fn a_queue_reference_with_a_plain_query_is_collected() {
 }
 
 #[test]
-fn a_key_straddling_the_cut_of_a_job_error_is_redacted_whole() {
+fn a_job_error_does_not_publish_a_key_in_prose_or_in_an_unsafe_code() {
     let clock = Arc::new(FakeClock::new());
     let error = format!("x{}yyyyyyyyy{KEY}", " ".repeat(470));
     let error_type = format!("{}ab{KEY}", "ab. ".repeat(22));
@@ -1245,11 +1252,14 @@ fn a_key_straddling_the_cut_of_a_job_error_is_redacted_whole() {
     ]));
     let adapter = video(&transport, &clock);
     let call = call(json!({}));
-    let first = ended(block_on(adapter.collect(&call, &handle())));
-    assert_eq!(first, "fal video job failed: x yyyyyyyyy[redacted]");
-    let second = ended(block_on(adapter.collect(&call, &handle())));
-    assert!(!second.contains(&KEY[..6]), "{second}");
-    assert!(second.contains("ab[redacted]"), "{second}");
+    for _ in 0..2 {
+        let (outcome, diagnostic) = block_on(adapter.collect(&call, &handle())).into_report();
+        assert_eq!(ended(outcome), "fal video job failed");
+        let diagnostic = diagnostic.unwrap();
+        assert_eq!(diagnostic.code, None);
+        assert_eq!(diagnostic.message, None);
+        assert!(diagnostic.redacted);
+    }
     transport.assert_done();
 }
 
@@ -1450,7 +1460,7 @@ fn the_key_travels_only_on_queue_requests() {
     };
     assert!(!answer.data.to_string().contains(KEY));
     let reason = ended(block_on(adapter.collect(&call, &handle)));
-    assert_eq!(reason, "fal video job failed: bad key [redacted]");
+    assert_eq!(reason, "fal video job failed");
     transport.assert_done();
     for request in transport.requests() {
         assert!(!request.url.contains(KEY));

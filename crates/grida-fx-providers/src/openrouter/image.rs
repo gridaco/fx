@@ -266,7 +266,7 @@ impl RequestAdapter for OpenRouterImages {
                     };
                 }
             };
-            match classify(&self.client, LABEL, self.client.send(request).await) {
+            match classify(&self.client, LABEL, call, self.client.send(request).await) {
                 Ok(response) => self.answer(&response),
                 Err(sent) => sent,
             }

@@ -53,7 +53,7 @@ pub(super) fn message_of(value: Value) -> Result<Option<Message>, Stop> {
             },
         }),
         (None, None) if value.get("error").is_some() => {
-            return Err(Stop::Failed("Codex could not read a request".into()));
+            return Err(Stop::failed("Codex could not read a request"));
         }
         (None, None) => None,
     })
@@ -152,12 +152,7 @@ pub(super) fn usage_limit(item: Option<&Value>, turn: Option<&Value>) -> Option<
 /// Why a turn that completed without an image did: its error's kind (`codexErrorInfo`, a closed
 /// vocabulary), else its status.
 pub(super) fn turn_failure(turn: &Value) -> String {
-    let info = &turn["error"]["codexErrorInfo"];
-    let kind = match info {
-        Value::String(kind) => Some(kind.as_str()),
-        Value::Object(variant) => variant.keys().next().map(String::as_str),
-        _ => None,
-    };
+    let kind = turn_failure_kind(turn);
     match (kind, turn.get("error").filter(|e| !e.is_null())) {
         (Some("usageLimitExceeded"), _) => "the Codex usage limit is reached".to_string(),
         (Some("unauthorized"), _) => {
@@ -166,9 +161,20 @@ pub(super) fn turn_failure(turn: &Value) -> String {
         (Some(kind), _) => format!("Codex's turn failed ({})", token(kind)),
         (None, Some(_)) => "Codex's turn failed".to_string(),
         (None, None) => match turn.get("status").and_then(Value::as_str) {
-            Some("completed") | None => "Codex answered without an image".to_string(),
+            Some("completed") | None => {
+                "Codex completed the turn without an image. Structured failure reason unavailable."
+                    .into()
+            }
             Some(status) => format!("Codex's turn ended {} without an image", token(status)),
         },
+    }
+}
+
+pub(super) fn turn_failure_kind(turn: &Value) -> Option<&str> {
+    match &turn["error"]["codexErrorInfo"] {
+        Value::String(kind) => Some(kind),
+        Value::Object(variant) => variant.keys().next().map(String::as_str),
+        _ => None,
     }
 }
 
@@ -258,7 +264,7 @@ mod tests {
         );
         assert_eq!(
             turn_failure(&json!({"status": "completed", "error": null})),
-            "Codex answered without an image"
+            "Codex completed the turn without an image. Structured failure reason unavailable."
         );
         assert_eq!(
             turn_failure(&json!({"status": "interrupted", "error": null})),

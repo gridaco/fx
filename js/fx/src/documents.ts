@@ -18,6 +18,9 @@ export interface RecordedDiagnostic {
   message?: string;
   request_id?: string;
   task_id?: string;
+  thread_id?: string;
+  turn_id?: string;
+  ephemeral?: boolean;
   detail?: "available" | "unavailable" | "unreadable" | "withheld";
   redacted?: boolean;
   truncated?: boolean;
@@ -158,6 +161,27 @@ export interface RunEvent {
   [field: string]: unknown;
 }
 
+/** A managed call failure preserved from the invocation that attempted it. */
+export interface CallAttemptFailed extends RunEvent {
+  kind: "fx-run-events-v1";
+  event: "call_attempt_failed";
+  invocation_id: string;
+  plan: string;
+  offset_ms: number;
+  id: string;
+  capability: string;
+  route: string;
+  call: string;
+  attempt: number;
+  send?: number;
+  outcome: "not_received" | "refused" | "failed" | "unsettled" | "unreachable";
+  reason: string;
+  diagnostic?: RecordedDiagnostic;
+  /** Amount FX booked for this attempt, when settled. */
+  charged_usd?: number;
+  retryable: boolean;
+}
+
 /** The `run_finished` event. */
 export interface RunFinished extends RunEvent {
   event: "run_finished";
@@ -220,6 +244,8 @@ export interface Inspection {
     /** What the run was charged; null before it ended. */
     charged_usd: number | null;
     steps: InspectedStep[];
+    /** Recorded failures in event order, including those a later retry recovered. */
+    call_attempt_failures?: CallAttemptFailed[];
   };
   /** With `verify`: whether every placed file still matches its record. */
   verification?: { verified: boolean; problems: string[] };
