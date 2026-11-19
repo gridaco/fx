@@ -21,6 +21,7 @@ mod output;
 pub mod video;
 
 use crate::adapter::{Adapter, CallRequest, Identity, Sent, Submitted};
+use crate::diagnostic::identifier_echoes_input;
 use crate::keys::KeyName;
 use crate::registry::Adapters;
 use crate::setup::{Client, Setup};
@@ -211,7 +212,7 @@ pub(crate) fn classify_run(
     if response.is_success() {
         return Ok(response);
     }
-    let id = wire::request_id(&response).filter(|id| !wire::echoes_identifier(&call.request, id));
+    let id = wire::request_id(&response).filter(|id| !identifier_echoes_input(call, id));
     let text = status_text_with_request(label, status, id.as_deref());
     let sent = match status {
         408 => not_received(client, &text, retry_after(&response)),

@@ -40,7 +40,7 @@
 //! state     <run state>   <n> steps: <count state, …, sorted by state; or none>
 //! booked    $<charged, 2 places>                   (when the run finished or was cancelled)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
-//! attempt   <id> · attempt <n> [· send <n>] · <route> (each recorded call failure)
+//! attempt   <id> · attempt <n> [· send <n>] · <route> [· call <key>]
 //! differs   <id>: <relative path> is missing | differs from its recorded digest   (--verify)
 //! verified  <n> files                              (--verify, nothing differs)
 //! ```
@@ -553,6 +553,9 @@ fn append_call_attempt(lines: &mut Vec<String>, event: &Value) {
         heading.push_str(&format!(" · send {send}"));
     }
     heading.push_str(&format!(" · {route}"));
+    if let Some(call) = text(event, "call") {
+        heading.push_str(&format!(" · call {call}"));
+    }
     lines.push(labelled("attempt", &heading));
 
     if let Some(reason) = text(event, "reason") {
@@ -784,16 +787,28 @@ mod tests {
                 "thread_id": "thread-a", "turn_id": "turn-a", "ephemeral": true,
                 "detail": "unavailable"}}),
         );
+        let mut another_failure = failed.clone();
+        another_failure["call"] = json!("2".repeat(64));
         let succeeded = event("node_finished", json!({"id": "ok#1", "cache": "miss"}));
-        let view = RunView::new(&plan(), &[failed.clone(), succeeded]);
+        let view = RunView::new(
+            &plan(),
+            &[failed.clone(), another_failure.clone(), succeeded],
+        );
         let lines = text_lines(&view, "runs/one", None).join("\n");
-        assert!(lines.contains("attempt   ok#1 · attempt 1 · send 1 · imagegen@codex"));
+        for call in ["1".repeat(64), "2".repeat(64)] {
+            assert!(lines.contains(&format!(
+                "attempt   ok#1 · attempt 1 · send 1 · imagegen@codex · call {call}"
+            )));
+        }
         assert!(lines.contains("thread thread-a · turn turn-a · ephemeral session"));
         assert!(lines.contains("explanation unavailable"));
         assert!(lines.contains("no retry · $0.00 booked by FX"));
         let summary = json_document(&view, "runs/one", None);
         assert_eq!(summary["run"]["steps"][0]["state"], "succeeded");
-        assert_eq!(summary["run"]["call_attempt_failures"], json!([failed]));
+        assert_eq!(
+            summary["run"]["call_attempt_failures"],
+            json!([failed, another_failure])
+        );
     }
 
     #[test]

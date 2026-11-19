@@ -224,7 +224,7 @@ eligibility for another send. A later retry also needs admission and applicable 
 submission, actual provider charge remains unknown. A standalone collect omits `send`.
 Events survive successful retries and later invocations. `inspect --json` exposes them in
 event order in `run.call_attempt_failures` when any were recorded. The text view also shows
-them, even when a step succeeded on retry.
+them with their call keys, even when a step succeeded on retry.
 
 **Layout.**
 

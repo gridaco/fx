@@ -170,7 +170,7 @@ pub(crate) fn safe_error_detail_for_call(
     redactor: &Redactor,
 ) -> Option<String> {
     filtered_error_detail(body, redactor, |value| {
-        !echoes_identifier(&call.request, value)
+        !crate::diagnostic::identifier_echoes_input(call, value)
     })
 }
 
@@ -233,6 +233,7 @@ pub(crate) fn http_diagnostic(
     response: &HttpResponse,
     redactor: &Redactor,
 ) -> AdapterDiagnostic {
+    let redactor = crate::diagnostic::redactor_with_inputs(call, redactor);
     let mut diagnostic = AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Send);
     diagnostic.http_status = Some(response.status);
     diagnostic.request_id = request_id(response);
@@ -242,31 +243,36 @@ pub(crate) fn http_diagnostic(
         diagnostic.truncated = true;
     } else if !response.body.is_empty() {
         match serde_json::from_slice::<Value>(&response.body) {
-            Ok(payload) => read_error_fields(&payload, response.status, &mut diagnostic),
+            Ok(payload) => read_error_fields(&payload, response.status, &mut diagnostic, |code| {
+                crate::diagnostic::identifier_is_safe(code, &redactor)
+                    && !crate::diagnostic::identifier_echoes_input(call, code)
+            }),
             Err(_) => diagnostic.detail = DiagnosticDetail::Unreadable,
         }
     }
     // A provider can put part of a submitted value in an identifier, including a value that
     // happens to look like a code, rather than only echoing it in its prose.
-    for field in [
-        &mut diagnostic.code,
-        &mut diagnostic.field,
-        &mut diagnostic.request_id,
-    ] {
+    for field in [&mut diagnostic.field, &mut diagnostic.request_id] {
         if field.as_deref().is_some_and(|value| {
-            SAFE_FIELD.is_match(value) && echoes_identifier(&call.request, value)
+            crate::diagnostic::identifier_is_safe(value, &redactor)
+                && crate::diagnostic::identifier_echoes_input(call, value)
         }) {
             *field = None;
             diagnostic.redacted = true;
-            if diagnostic.message.is_none() && diagnostic.detail == DiagnosticDetail::Unavailable {
-                diagnostic.detail = DiagnosticDetail::Withheld;
-            }
         }
     }
-    crate::diagnostic::sanitize(diagnostic, call, redactor)
+    if diagnostic.redacted && diagnostic.detail == DiagnosticDetail::Unavailable {
+        diagnostic.detail = DiagnosticDetail::Withheld;
+    }
+    crate::diagnostic::sanitize_with_inputs(diagnostic, call, &redactor)
 }
 
-fn read_error_fields(payload: &Value, status: u16, diagnostic: &mut AdapterDiagnostic) {
+fn read_error_fields(
+    payload: &Value,
+    status: u16,
+    diagnostic: &mut AdapterDiagnostic,
+    keep_code: impl Fn(&str) -> bool,
+) {
     let Some(error) = payload.get("error").and_then(Value::as_object) else {
         return;
     };
@@ -290,15 +296,23 @@ fn read_error_fields(payload: &Value, status: u16, diagnostic: &mut AdapterDiagn
     };
     let code = scalar(primary.get("code"));
     let numeric_status = status.to_string();
-    diagnostic.code = code
-        .as_ref()
-        .filter(|value| *value != &numeric_status)
-        .cloned()
-        .or_else(|| scalar(metadata.and_then(|value| value.get("error_type"))))
-        .or_else(|| scalar(metadata.and_then(|value| value.get("provider_code"))))
-        .or_else(|| scalar(primary.get("type")))
-        .or(code)
-        .or_else(|| scalar(error.get("code")));
+    diagnostic.code = [
+        code.as_ref()
+            .filter(|value| *value != &numeric_status)
+            .cloned(),
+        scalar(metadata.and_then(|value| value.get("error_type"))),
+        scalar(metadata.and_then(|value| value.get("provider_code"))),
+        scalar(primary.get("type")),
+        code.filter(|value| *value == numeric_status),
+        scalar(error.get("code")),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|code| {
+        let keep = keep_code(code);
+        diagnostic.redacted |= !keep;
+        keep
+    });
     diagnostic.field = scalar(primary.get("param")).or_else(|| scalar(error.get("param")));
     if diagnostic.request_id.is_none() {
         diagnostic.request_id = scalar(error.get("request_id"));
@@ -320,27 +334,8 @@ fn read_error_fields(payload: &Value, status: u16, diagnostic: &mut AdapterDiagn
                 summaries.join(", ")
             });
             diagnostic.detail = DiagnosticDetail::Available;
-            diagnostic.redacted = diagnostic.message.as_deref() != Some(message);
+            diagnostic.redacted |= diagnostic.message.as_deref() != Some(message);
         }
-    }
-}
-
-/// Whether an identifier matches a submitted value or a fragment of one.
-pub(crate) fn echoes_identifier(request: &Value, identifier: &str) -> bool {
-    match request {
-        Value::String(text) => {
-            text.eq_ignore_ascii_case(identifier)
-                || (identifier.len() >= 4
-                    && text
-                        .as_bytes()
-                        .windows(identifier.len())
-                        .any(|fragment| fragment.eq_ignore_ascii_case(identifier.as_bytes())))
-        }
-        Value::Array(items) => items.iter().any(|item| echoes_identifier(item, identifier)),
-        Value::Object(items) => items
-            .values()
-            .any(|item| echoes_identifier(item, identifier)),
-        _ => false,
     }
 }
 
@@ -672,6 +667,18 @@ fn option_sources(call: &CallRequest) -> [(Option<&Value>, &'static str); 2] {
         ),
         (call.request.get("provider_options"), "provider_options"),
     ]
+}
+
+/// Route-level option values carried into the request. See [`provider_options`] for precedence.
+pub(crate) fn inherited_provider_options(call: &CallRequest) -> impl Iterator<Item = &Value> {
+    let [route, request] =
+        option_sources(call).map(|(options, _)| options?.get(&call.route.provider)?.as_object());
+    route
+        .into_iter()
+        .flatten()
+        .filter_map(move |(name, value)| {
+            (!request.is_some_and(|request| request.contains_key(name))).then_some(value)
+        })
 }
 
 /// The parameters an adapter adds to what it sends (spec/adapters.md §8): the route's
@@ -1271,6 +1278,40 @@ mod tests {
             assert!(!text.contains("PRIVATEFRAGMENT"));
             assert!(!text.contains("test-private-key"));
         }
+    }
+
+    #[test]
+    fn http_failure_keeps_a_fallback_code_after_submitted_option_echoes() {
+        let request_id = "request-fragment.".repeat(6);
+        let call = option_call(
+            json!({"provider_options": {"acme": {"context": "private RouteFragment value"}}}),
+            json!({"provider_options": {"acme": {
+                "style": format!("private RequestFragment@acme value {request_id}")
+            }}}),
+        );
+        let response = HttpResponse::json(
+            400,
+            &json!({"error": {
+                "code": "ROUTEFRAGMENT",
+                "type": "invalid_request_error",
+                "param": "requestfragment@acme",
+                "request_id": request_id,
+                "metadata": {"error_type": "bad_input"}
+            }}),
+        );
+        let redactor = Redactor::default();
+        let diagnostic = http_diagnostic(&call, &response, &redactor);
+
+        assert_eq!(diagnostic.http_status, Some(400));
+        assert_eq!(diagnostic.code.as_deref(), Some("bad_input"));
+        assert_eq!(diagnostic.field, None);
+        assert_eq!(diagnostic.request_id, None);
+        assert_eq!(diagnostic.detail, DiagnosticDetail::Withheld);
+        assert!(diagnostic.redacted);
+        assert_eq!(
+            safe_error_detail_for_call(&response.body, &call, &redactor).as_deref(),
+            Some("type=invalid_request_error")
+        );
     }
 
     #[test]

@@ -285,7 +285,7 @@ work may change. Preserve the original run as evidence.
 ### "Recover from failure"
 
 Use the `inspect` command printed after a failed run to read its recorded evidence.
-Check the call, attempt and send before retrying. `inspect --json` exposes these
+Check the call key, attempt and send shown in text before retrying. `inspect --json` exposes these
 records in `run.call_attempt_failures`, including a failure recovered by retry.
 Distinguish node failures, planning refusals, provider jobs, cancellation and invalid artifacts.
 If acceptance was uncertain, use `jobs` and the provider's records to reconcile the

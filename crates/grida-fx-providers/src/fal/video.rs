@@ -59,6 +59,7 @@ use super::FalClients;
 use crate::BoxFuture;
 use crate::adapter::{Answer, CallRequest, Collected, Identity, LongJob, RouteLimits, Submitted};
 use crate::clock::Clock;
+use crate::diagnostic::identifier_echoes_input;
 use crate::setup::Client;
 use crate::transport::{
     Body, Credential, HttpRequest, HttpResponse, Lane, Method, Phase, TransportError,
@@ -582,15 +583,14 @@ impl FalVideo {
                             DiagnosticPhase::Poll,
                         );
                         diagnostic.http_status = Some(http_status);
-                        if !crate::wire::echoes_identifier(&call.request, &job.request_id) {
+                        if !identifier_echoes_input(call, &job.request_id) {
                             diagnostic.task_id = Some(job.request_id.clone());
                         }
                         diagnostic.code = status
                             .get("error_type")
                             .and_then(Value::as_str)
                             .filter(|code| {
-                                super::is_safe_id(code)
-                                    && !crate::wire::echoes_identifier(&call.request, code)
+                                super::is_safe_id(code) && !identifier_echoes_input(call, code)
                             })
                             .map(str::to_string);
                         diagnostic.detail = DiagnosticDetail::Withheld;
@@ -824,12 +824,11 @@ fn returned_id(call: &CallRequest, response: &HttpResponse) -> Option<String> {
             _ => None,
         })
         .or_else(|| crate::wire::request_id(response))
-        .filter(|id| !crate::wire::echoes_identifier(&call.request, id))
+        .filter(|id| !identifier_echoes_input(call, id))
 }
 
 fn exchange_status_text(call: &CallRequest, label: &str, response: &HttpResponse) -> String {
-    let id = crate::wire::request_id(response)
-        .filter(|id| !crate::wire::echoes_identifier(&call.request, id));
+    let id = crate::wire::request_id(response).filter(|id| !identifier_echoes_input(call, id));
     super::status_text_with_request(label, response.status, id.as_deref())
 }
 

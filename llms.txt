@@ -736,7 +736,8 @@ and whether an explanation was available. Codex records thread and turn IDs
 when received, along with the ephemeral mode. The IDs help correlate an attempt and carry no
 conversation history. `inspect --json` exposes sanitized `call_attempt_failed` events in
 `run.call_attempt_failures` when recorded, including failures a later retry recovered from.
-The text view shows those attempts too. `run` points to `inspect` for the exact failed run.
+The text view shows those attempts with their call keys. `run` points to `inspect` for the
+exact failed run.
 Receipt and billing remain independent: a provider rejection does not prove $0,
 and a 5xx or unreadable paid-submit response remains uncertain. Its retained diagnostic
 survives a later `job_unsettled`; FX does not submit it again automatically.

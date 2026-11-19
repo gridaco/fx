@@ -405,8 +405,8 @@ not run again, even under `retry="engine"`.
   and each failure. Given a workflow id instead of a folder, it reads that workflow's newest run.
   `--verify` rehashes every file its steps placed and exits 1 if one differs from its record;
   `--json` prints the same summary as JSON, each step with its files. Recorded call failures
-  show the attempt and any safe provider detail, even when a later retry succeeded. In JSON,
-  they are in `run.call_attempt_failures`. A started step whose paid
+  show the call key, attempt and any safe provider detail, even when a later retry succeeded.
+  In JSON, they are in `run.call_attempt_failures`. A started step whose paid
   call is queued for its route's slot (a route with `concurrency: 1` runs one call at a time) is
   counted as `waiting`, not `running`, while it waits: `67 steps: 57 pending, 1 running,
   3 succeeded, 6 waiting`; in `--json` such a step has `waiting_for`, the route.

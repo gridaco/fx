@@ -4,7 +4,7 @@
 //! (`testing::media`); the clip is the committed facts vector (`spec/vectors/facts/mp4/`).
 
 use grida_fx_core::money::Usd;
-use grida_fx_protocol::DiagnosticPhase;
+use grida_fx_protocol::{DiagnosticDetail, DiagnosticPhase, DiagnosticSource};
 use grida_fx_providers::adapter::{
     Answer, CallRequest, Collected, LongJob, RequestAdapter, Sent, Submitted, Usage,
 };
@@ -1080,12 +1080,13 @@ fn video_submit_statuses() {
         let adapter = video_adapter(&transport, &Arc::new(FakeClock::new()));
         let outcome = block_on(adapter.submit(&video_call(json!({"prompt": "p"}))));
         transport.assert_done();
-        outcome.into_report().0
+        outcome.into_report()
     };
+    let (outcome, diagnostic) = submitted(Ok(
+        HttpResponse::json(200, &json!({"object": "job"})).with_header("x-request-id", "req_9")
+    ));
     assert_eq!(
-        submitted(Ok(
-            HttpResponse::json(200, &json!({"object": "job"})).with_header("x-request-id", "req_9")
-        )),
+        outcome,
         Submitted::Uncertain {
             reason: format!(
                 "GG took the video job but returned no job to collect it by (request req_9) \
@@ -1093,19 +1094,26 @@ fn video_submit_statuses() {
             )
         }
     );
+    let diagnostic = diagnostic.expect("the submit still has a response to correlate");
+    assert_eq!(diagnostic.source, DiagnosticSource::Provider);
+    assert_eq!(diagnostic.phase, DiagnosticPhase::Submit);
+    assert_eq!(diagnostic.http_status, Some(200));
+    assert_eq!(diagnostic.request_id.as_deref(), Some("req_9"));
+    assert_eq!(diagnostic.detail, DiagnosticDetail::Unavailable);
     assert!(matches!(
-        submitted(Ok(envelope(502, "upstream_unavailable"))),
+        submitted(Ok(envelope(502, "upstream_unavailable"))).0,
         Submitted::Uncertain { .. }
     ));
     assert!(matches!(
         submitted(Err(TransportError::after_send(
             TransportErrorKind::Timeout,
             "timed out"
-        ))),
+        )))
+        .0,
         Submitted::Uncertain { .. }
     ));
     assert_eq!(
-        submitted(Ok(envelope(400, "invalid_request"))),
+        submitted(Ok(envelope(400, "invalid_request"))).0,
         Submitted::Failed {
             reason: "GG video submission returned HTTP 400: code=invalid_request".into(),
             cost: Some(Usd::ZERO),
@@ -1113,11 +1121,11 @@ fn video_submit_statuses() {
         }
     );
     assert!(matches!(
-        submitted(Ok(envelope(429, "rate_limit_exceeded"))),
+        submitted(Ok(envelope(429, "rate_limit_exceeded"))).0,
         Submitted::NotReceived { .. }
     ));
     assert!(matches!(
-        submitted(Ok(envelope(429, "key_budget_exceeded"))),
+        submitted(Ok(envelope(429, "key_budget_exceeded"))).0,
         Submitted::Failed {
             cost: Some(Usd::ZERO),
             retryable: false,
@@ -1128,7 +1136,8 @@ fn video_submit_statuses() {
         submitted(Err(TransportError::not_sent(
             TransportErrorKind::Connect,
             "refused"
-        ))),
+        )))
+        .0,
         Submitted::NotReceived { .. }
     ));
 }
@@ -1361,27 +1370,46 @@ fn a_job_still_running_at_the_deadline_is_collected_later() {
 #[test]
 fn a_polling_deadline_keeps_the_failed_final_exchange() {
     let polls = (video::COLLECT_DEADLINE.as_secs() / video::POLL.as_secs()) as usize;
-    let transport = replay(
-        (1..polls)
-            .map(|_| job_reply(job("running", "pending", reserved())))
-            .chain([job_get().reply(envelope(503, "temporarily_unavailable"))])
-            .collect(),
-    );
-    let (collected, diagnostic) = collect(
-        &transport,
-        &Arc::new(FakeClock::new()),
-        &video_call(json!({"prompt": "p"})),
-    )
-    .into_report();
-    assert_eq!(
-        collected,
-        Collected::Unreachable {
-            reason: OUTSTANDING.into()
-        }
-    );
-    let diagnostic = diagnostic.expect("the final poll has evidence");
-    assert_eq!(diagnostic.phase, DiagnosticPhase::Poll);
-    assert_eq!(diagnostic.http_status, Some(503));
+    for (last, detail) in [
+        (
+            envelope(503, "temporarily_unavailable"),
+            DiagnosticDetail::Withheld,
+        ),
+        (
+            HttpResponse::new(200, b"<html>unreadable".to_vec()),
+            DiagnosticDetail::Unreadable,
+        ),
+        (
+            HttpResponse::json(200, &json!([])),
+            DiagnosticDetail::Unavailable,
+        ),
+    ] {
+        let status = last.status;
+        let transport = replay(
+            (1..polls)
+                .map(|_| job_reply(job("running", "pending", reserved())))
+                .chain([job_get().reply(last.with_header("x-request-id", "req_poll"))])
+                .collect(),
+        );
+        let (collected, diagnostic) = collect(
+            &transport,
+            &Arc::new(FakeClock::new()),
+            &video_call(json!({"prompt": "p"})),
+        )
+        .into_report();
+        assert_eq!(
+            collected,
+            Collected::Unreachable {
+                reason: OUTSTANDING.into()
+            }
+        );
+        let diagnostic = diagnostic.expect("the final poll has evidence");
+        assert_eq!(diagnostic.source, DiagnosticSource::Provider);
+        assert_eq!(diagnostic.phase, DiagnosticPhase::Poll);
+        assert_eq!(diagnostic.http_status, Some(status));
+        assert_eq!(diagnostic.request_id.as_deref(), Some("req_poll"));
+        assert_eq!(diagnostic.detail, detail);
+    }
 }
 
 #[test]

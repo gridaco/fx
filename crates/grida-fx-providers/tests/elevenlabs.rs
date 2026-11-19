@@ -1016,6 +1016,14 @@ fn speech_statuses_carry_their_label() {
 
 #[test]
 fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
+    let report = |response| {
+        sound_with(
+            vec![expect_sound(DOOR).reply(response)],
+            json!({"prompt": "wooden door opens"}),
+        )
+        .0
+        .into_report()
+    };
     let sent = sound_answered_with(HttpResponse::json(
         429,
         &json!({"detail": {"message": "secret quota"}}),
@@ -1025,11 +1033,15 @@ fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
         sent,
         Sent::not_received("ElevenLabs sound generation returned HTTP 429")
     );
-    let sent = sound_answered_with(HttpResponse::json(
+    let (sent, diagnostic) = report(HttpResponse::json(
         401,
         &json!({"detail": {"status": "invalid_api_key", "message": "secret: test-elevenlabs-key is not valid"}}),
     ));
     assert_clean(&sent);
+    let diagnostic = diagnostic.unwrap();
+    assert_eq!(diagnostic.http_status, Some(401));
+    assert_eq!(diagnostic.code.as_deref(), Some("invalid_api_key"));
+    assert!(diagnostic.message.is_none());
     assert_eq!(
         reason_of(&sent),
         "ElevenLabs sound generation returned HTTP 401: invalid_api_key"
@@ -1051,10 +1063,11 @@ fn the_provider_message_is_never_quoted_but_a_safe_status_is() {
     );
     // A status that is unsafe or repeats part of the submitted prompt is left out.
     for status in ["quota exceeded", KEY, "https://x.test/?k=1", "", "door"] {
-        let sent = sound_answered_with(HttpResponse::json(
+        let (sent, diagnostic) = report(HttpResponse::json(
             403,
             &json!({"detail": {"status": status}}),
         ));
+        assert!(diagnostic.unwrap().code.is_none(), "{status}");
         assert_clean(&sent);
         assert_eq!(
             reason_of(&sent),

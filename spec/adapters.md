@@ -174,9 +174,9 @@ record, event or RPC error. Only selected error fields may be extracted from a
 provider body; never attach a response body or headers. Extraction registers
 transient secrets and withholds sensitive input echoes. An unreadable body
 does not become evidence that a paid submission was not received.
-Input-echo checks apply to all diagnostic strings, including identifiers and
-operation names; an identifier-shaped echo is not safe merely because it has no
-spaces. Such optional metadata is withheld rather than partly rewritten.
+Input-echo checks cover submitted request values and route provider options.
+They apply to all diagnostic strings, including identifiers and operation
+names. Optional identifiers that echo sensitive input are withheld.
 
 The engine forwards the sanitized diagnostic in the capability error's
 `data.diagnostic` and the failed node event's `diagnostic`. An uncertain job

@@ -139,7 +139,7 @@ enum Read {
     /// The job, as GG answered it.
     Job(Map<String, Value>),
     /// Nothing: poll again.
-    Nothing(Option<AdapterDiagnostic>),
+    Nothing(AdapterDiagnostic),
     /// Collecting stops here.
     Stop(Collected),
     /// The polling deadline passed before a read could start.
@@ -274,6 +274,12 @@ impl Jobs {
     /// The submit table of the module doc for an answered POST.
     fn submitted(&self, call: &CallRequest, kind: &Kind, response: &HttpResponse) -> Submitted {
         let status = response.status;
+        let diagnose = || {
+            let mut diagnostic =
+                wire::http_diagnostic(call, response, &self.gateway.client.redactor);
+            diagnostic.phase = DiagnosticPhase::Submit;
+            diagnostic
+        };
         let uncertain = |text: &str| Submitted::Uncertain {
             reason: self.gateway.reason(&format!(
                 "{text} (Idempotency-Key {})",
@@ -283,11 +289,16 @@ impl Jobs {
         if response.is_success() {
             return match handle_of(&response.body, kind) {
                 Ok(handle) => Submitted::Accepted { handle },
-                Err(sentence) => uncertain(&super::with_request_id(sentence, response)),
+                Err(mut sentence) => {
+                    let diagnostic = diagnose();
+                    if let Some(id) = &diagnostic.request_id {
+                        sentence.push_str(&format!(" (request {id})"));
+                    }
+                    uncertain(&sentence).with_diagnostic(diagnostic)
+                }
             };
         }
-        let mut diagnostic = wire::http_diagnostic(call, response, &self.gateway.client.redactor);
-        diagnostic.phase = DiagnosticPhase::Submit;
+        let diagnostic = diagnose();
         let code = super::error_code(&response.body);
         let text = super::status_text(kind.submit_label, response, &diagnostic);
         let outcome = match (status, code.as_deref()) {
@@ -439,7 +450,7 @@ impl Jobs {
                         });
                     }
                 },
-                Read::Nothing(diagnostic) => diagnostic,
+                Read::Nothing(diagnostic) => Some(diagnostic),
                 Read::Stop(collected) => return Err(collected),
                 Read::Deadline => break self.outstanding(kind),
             };
@@ -568,24 +579,26 @@ impl Jobs {
                         .with_diagnostic(diagnostic),
                     )
                 } else {
-                    Read::Nothing(Some(diagnostic))
+                    Read::Nothing(diagnostic)
                 };
             }
         };
-        if response.is_success() {
-            return match wire::json_object(&response.body, label) {
-                Ok(job) if job.get("id").and_then(Value::as_str) == Some(id) => Read::Job(job),
-                Ok(_) => Read::Stop(Collected::Unreachable {
+        if response.is_success()
+            && let Ok(job) = wire::json_object(&response.body, label)
+        {
+            return if job.get("id").and_then(Value::as_str) == Some(id) {
+                Read::Job(job)
+            } else {
+                Read::Stop(Collected::Unreachable {
                     reason: client.reason(&format!("{label} answered about another job")),
-                }),
-                Err(_) => Read::Nothing(None),
+                })
             };
         }
         let mut diagnostic = wire::http_diagnostic(call, &response, &client.redactor);
         diagnostic.phase = DiagnosticPhase::Poll;
         let text = || client.reason(&super::status_text(label, &response, &diagnostic));
         let collected = match response.status {
-            408 | 429 | 500..=599 => return Read::Nothing(Some(diagnostic)),
+            200..=299 | 408 | 429 | 500..=599 => return Read::Nothing(diagnostic),
             410 => Collected::Ended {
                 reason: text(),
                 cost: None,

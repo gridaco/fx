@@ -732,6 +732,8 @@ fn run_and_inspect_explain_a_provider_rejection_from_the_original_attempt() {
     let stdout = String::from_utf8_lossy(&human.stdout);
     assert!(human.status.success(), "{stdout}");
     assert!(stdout.contains("draw#1 · attempt 1 · send 1"), "{stdout}");
+    let call = failure["call"].as_str().unwrap();
+    assert!(stdout.contains(&format!(" · call {call}")), "{stdout}");
     assert!(stdout.contains("provider/send · HTTP 400"), "{stdout}");
     assert!(stdout.contains(explanation), "{stdout}");
     assert_eq!(server.requests().len(), 2);
