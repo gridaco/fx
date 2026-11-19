@@ -694,6 +694,19 @@ async fn each_job_outcome_maps_and_a_handle_holds_no_key() {
             cost: Some(Usd(300_000))
         }
     );
+    assert_eq!(
+        collected(json!({
+            "outcome": "answered",
+            "files": {"frame": {"base64": "not base64!", "kind": "image/png"}},
+            "data": null,
+            "cost_usd": 0.4
+        }))
+        .await,
+        Collected::Incomplete {
+            reason: unreadable("files.frame: its bytes are not base64 with padding"),
+            cost: Some(Usd(400_000))
+        }
+    );
     assert!(matches!(
         collected(json!({"outcome": "uncertain", "reason": "x"})).await,
         Collected::Unreachable { reason } if reason.starts_with(&unreadable(""))

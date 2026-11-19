@@ -802,10 +802,13 @@ completion, FX records the result as unavailable.
 - **Be honest.** `NotReceived` only when the request provably never arrived; `Failed`, or
   `Uncertain` for a submit, whenever it may have. FX resends a `NotReceived` without a new hold,
   so a wrong one can pay twice.
-- **Anything raised** that the adapter does not catch, an outcome its method does not take, or an
-  answer FX cannot read ends the call as an unknown outcome: a send is `Failed`, billed in full
-  and not sent again; a submit is `Uncertain`; a collect is `Unreachable`. Its reason names the
-  adapter, and Python's traceback goes to standard error:
+- **Host errors.** An uncaught exception, an outcome the method does not accept, or an unreadable
+  response envelope leaves the outcome unknown. A send is `Failed`, billed in full and never
+  retried. A submit is `Uncertain`. A collect is `Unreachable`. A readable `answered` collect
+  envelope establishes completion even if a result file's base64 cannot be decoded. FX preserves
+  the task for recovery and settles any open hold at the valid reported cost or the whole hold
+  when that cost is unavailable. The error names the adapter. Python writes the traceback to
+  standard error.
 
   ```
   failed    colour#1: structured.generate on text-a@acme failed: the adapter adapters/acme.py#acme failed: KeyError: 'json'

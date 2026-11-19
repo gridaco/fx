@@ -351,8 +351,9 @@ fn prune_preserves_retained_jobs_and_their_inputs() {
     let records: Vec<_> = ["settled", "recoverable", "unavailable"]
         .into_iter()
         .map(|state| {
-            let key = sha256(state.as_bytes());
-            let input = project.file(state.as_bytes());
+            let key = sha256(format!("job-{state}").as_bytes());
+            let input = project.file(format!("input-{state}").as_bytes());
+            assert_ne!(key, input);
             let path = jobs.join(format!("{key}.json"));
             let mut record = json!({"kind": "fx-job-record-v1", "key": key, "state": state,
                 "handle": {"id": "j1"}, "capability": "video.generate",
