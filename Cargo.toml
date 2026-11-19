@@ -53,6 +53,9 @@ unsafe_code = "deny"
 dbg_macro = "warn"
 todo = "warn"
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 # A released engine carries no symbols, and its remaining paths are remapped by the release
 # workflow, so no build machine's folders ship in it.
