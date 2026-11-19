@@ -105,6 +105,18 @@ describe("arguments", () => {
     }
   });
 
+  test("recovery requires an explicit live resume", () => {
+    expect(runArgs({ live: true, resume: "one", recover: true })).toEqual([
+      "--live", "--resume=one", "--recover",
+    ]);
+    expect(runArgs({ live: true, runDir: "runs/one", recover: true })).toEqual([
+      "--live", "--run=runs/one", "--recover",
+    ]);
+    expect(() => runArgs({ live: true, name: "new", recover: true })).toThrow("recover needs live");
+    expect(() => runArgs({ resume: "one", recover: true })).toThrow("recover needs live");
+    expect(() => runArgs({ recover: 1 as unknown as boolean })).toThrow("recover is true or false");
+  });
+
   test("amounts in decimal digits, never an exponent", () => {
     expect(amountText("maxUsd", 10)).toBe("10");
     expect(amountText("maxUsd", 0.5)).toBe("0.5");

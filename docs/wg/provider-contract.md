@@ -641,8 +641,9 @@ Gate: `cargo test`, `check_spec`, `make_models.py --check`, `check_llms`.
     existing `https` checks. No built-in declaration carries a CDN catalog.
   - `wire::download_url(url, hosts)` still confines a project adapter's `fetch` to its declared
     hosts, and an empty list denies every download. No new setting or SDK operation is needed.
-  - Separate follow-ups: [recovery from retained tasks](https://github.com/gridaco/fx/issues/116)
-    and [synchronous fal delivery retries](https://github.com/gridaco/fx/issues/117).
+  - [Recovery from retained tasks](https://github.com/gridaco/fx/issues/116) is available for
+    long jobs. [Synchronous fal delivery retries](https://github.com/gridaco/fx/issues/117)
+    remain a separate follow-up.
 - [x] `doctor` lists declared providers with their key state and base-URL host.
   - After the built-in `key` lines, which are unchanged: `provider  <name> <host> <VARIABLE>
     present (environment)` (or `present (.env)`, `missing`), or `… needs no key`, `<host>` with

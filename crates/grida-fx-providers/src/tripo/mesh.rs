@@ -179,7 +179,7 @@ impl TripoMesh {
             });
         let Some(index) = chosen else {
             // The task succeeded, so Tripo charged it what the read reports.
-            return Collected::Ended {
+            return Collected::Incomplete {
                 reason: api.client.reason("the Tripo task made no model"),
                 cost: task.cost(),
             };

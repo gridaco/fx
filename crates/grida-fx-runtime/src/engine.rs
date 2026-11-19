@@ -41,6 +41,7 @@ use crate::ledger::Ledger;
 use crate::stand_in::StandIn;
 use crate::store::Store;
 use grida_fx_core::host::Language;
+use grida_fx_core::money::Usd;
 use grida_fx_core::val::FileValue;
 use grida_fx_providers::Adapters;
 use indexmap::IndexMap;
@@ -284,6 +285,11 @@ pub struct Services {
     pub invocation_id: String,
     /// Present for an invocation in the fresh cache identity domain.
     pub fresh_id: Option<String>,
+    /// Only cached calls and collection of already-submitted jobs are admitted.
+    pub recover: bool,
+    /// Booked charges in this run's earlier invocations, keyed by call key and provider task ID.
+    pub prior_call_charges:
+        std::collections::HashMap<String, std::collections::HashMap<String, Usd>>,
     /// Counts `run` requests, for unique `run_id`s.
     pub runs: std::sync::atomic::AtomicU64,
     /// Counts holds, for unique hold ids (`ledger::hold_id`).
@@ -305,6 +311,8 @@ impl Services {
             cancel,
             invocation_id: format!("plan-{}", crate::events::new_invocation_id()),
             fresh_id: None,
+            recover: false,
+            prior_call_charges: Default::default(),
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
         }
@@ -327,6 +335,8 @@ impl Services {
             cancel,
             invocation_id,
             fresh_id: None,
+            recover: false,
+            prior_call_charges: Default::default(),
             runs: std::sync::atomic::AtomicU64::new(0),
             holds: std::sync::atomic::AtomicU64::new(0),
         }

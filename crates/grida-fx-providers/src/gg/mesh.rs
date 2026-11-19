@@ -453,8 +453,12 @@ impl GgRig {
             Err(outcome) => {
                 let (outcome, diagnostic) = outcome.into_report();
                 let outcome = match outcome {
-                    Collected::Ended { reason, .. } => Submitted::Refused { reason },
-                    Collected::Unreachable { reason } => Submitted::not_received(reason),
+                    Collected::Ended { reason, .. } | Collected::Unavailable { reason, .. } => {
+                        Submitted::Refused { reason }
+                    }
+                    Collected::Unreachable { reason }
+                    | Collected::Incomplete { reason, .. }
+                    | Collected::Undetermined { reason, .. } => Submitted::not_received(reason),
                     Collected::Answered(_) => not_received("GG's rig check answered with a file"),
                     Collected::Diagnosed(..) => unreachable!("diagnostic separated above"),
                 };

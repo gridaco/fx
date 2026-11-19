@@ -18,6 +18,7 @@ import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type {
+  CallRecovery,
   Encoded,
   FileRef,
   Graph,
@@ -342,6 +343,11 @@ export class RunResult {
     return Number(this.inspection.run?.charged_usd ?? this.finished?.charged_usd ?? 0);
   }
 
+  /** Recorded provider recovery checks and results, in event order across invocations. */
+  get callRecoveries(): readonly CallRecovery[] {
+    return this.inspection.run?.call_recoveries ?? [];
+  }
+
   /** The ids of the instances that failed. */
   get failed(): string[] {
     return (this.finished?.failed ?? []).map(String);
@@ -416,6 +422,7 @@ const RUN_ONLY: readonly string[] = [
   "runDir",
   "name",
   "resume",
+  "recover",
   "deliver",
   "signal",
   "standIn",
@@ -454,7 +461,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   const own = runArgs(options);
   const signal = options.signal;
   const answerer = options.standIn === undefined ? null : new Answerer(options.standIn);
-  const resuming = options.resume !== undefined ||
+  const resuming = options.recover === true || options.resume !== undefined ||
     (options.runDir !== undefined && await mayExist(resolve(request.cwd, options.runDir)));
   // The CLI loads recorded model facts before planning an existing run.
   const planned = resuming ? null

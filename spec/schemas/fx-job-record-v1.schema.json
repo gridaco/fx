@@ -66,11 +66,13 @@
       "minItems": 1
     },
     "state": {
-      "description": "`submitting`: a request may be on its way, and nobody can say whether the provider took it. `submitted`: the provider took it under `handle`. `settled`: the job ended without a result and nothing of it is outstanding.",
+      "description": "`submitting`: a request may be on its way. `submitted`: the provider took it under `handle`. `recoverable`: the job finished and its result still needs collection. `unavailable`: the retained job cannot deliver its result. `settled`: the attempt ended without a result. A handle from an older engine or an ambiguous project adapter outcome requires an explicit recovery check.",
       "enum": [
         "submitting",
         "submitted",
-        "settled"
+        "settled",
+        "recoverable",
+        "unavailable"
       ]
     },
     "handle": {
@@ -81,8 +83,13 @@
       ]
     },
     "note": {
-      "description": "Only on a `submitting` record whose submit's outcome is unknown: the redacted reason, which names the provider's job id when one was returned (store.md \u00a75). Never a credential or a signed URL.",
+      "description": "A redacted reason for an uncertain submit, recoverable collection failure or unavailable result (store.md §5). Never a credential or a signed URL.",
       "type": "string"
+    },
+    "charged_usd": {
+      "description": "The amount booked in FX's ledger for the original submission. Omitted when that amount is unknown.",
+      "type": "number",
+      "minimum": 0
     },
     "diagnostic": {
       "type": "object",
@@ -181,7 +188,11 @@
       "if": {
         "properties": {
           "state": {
-            "const": "submitted"
+            "enum": [
+              "submitted",
+              "recoverable",
+              "unavailable"
+            ]
           }
         }
       },
@@ -216,10 +227,7 @@
       "if": {
         "properties": {
           "state": {
-            "enum": [
-              "submitted",
-              "settled"
-            ]
+            "not": {"const": "submitting"}
           }
         }
       },
@@ -228,6 +236,16 @@
           "required": [
             "diagnostic"
           ]
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["charged_usd"]
+      },
+      "then": {
+        "properties": {
+          "handle": {"type": "object"}
         }
       }
     }

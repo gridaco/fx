@@ -46,6 +46,9 @@ export interface RunOptions extends PlanOptions {
   readonly name?: string;
   /** Continue an existing named run (`--resume`) with the same target and inputs. */
   readonly resume?: string;
+  /** Collect retained provider results, including older tasks (`--recover`). Requires a live
+   * resume of an existing run. Skips new provider submissions and keeps the stored ceiling. */
+  readonly recover?: boolean;
   /** Copy outputs out after the run (`--deliver OUTPUT=PATH`): `{ output: path }`, with `{key}`
    * in the path for each element of a collection. */
   readonly deliver?: Readonly<Record<string, string>>;
@@ -142,6 +145,13 @@ export function runArgs(options: RunOptions): string[] {
   if (options.live !== undefined && typeof options.live !== "boolean") {
     throw new TypeError(`live is true or false, not ${JSON.stringify(options.live)}`);
   }
+  if (options.recover !== undefined && typeof options.recover !== "boolean") {
+    throw new TypeError("recover is true or false");
+  }
+  if (options.recover === true &&
+    (options.live !== true || (options.runDir === undefined && options.resume === undefined))) {
+    throw new TypeError("recover needs live: true and an existing runDir or resume");
+  }
   if (options.standIn !== undefined) {
     if (options.live === true) {
       throw new TypeError("a stand-in run is never live: pass live: false, or no standIn");
@@ -167,6 +177,7 @@ export function runArgs(options: RunOptions): string[] {
   }
   if (options.name !== undefined) args.push(`--name=${options.name}`);
   if (options.resume !== undefined) args.push(`--resume=${options.resume}`);
+  if (options.recover === true) args.push("--recover");
   for (const [name, path] of Object.entries(options.deliver ?? {})) {
     if (typeof path !== "string" || name === "" || path === "") {
       throw new TypeError(`deliver.${name} is a path`);

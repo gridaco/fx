@@ -1003,6 +1003,10 @@ def test_a_plan_accepts_run_only_named_options(fake: Fake, project: Path, option
         {"name": "a", "resume": "b"},
         {"run_dir": "runs/a", "name": "a"},
         {"run_dir": "runs/a", "resume": "a"},
+        {"recover": True, "resume": "a"},
+        {"recover": True, "live": True},
+        {"recover": True, "live": True, "name": "a"},
+        {"recover": 1, "live": True, "resume": "a"},
         {"run_dir": "", "name": "a"},
         {"run_dir": ""},
         {"run_dir": "a\0b"},
@@ -1017,7 +1021,7 @@ def test_a_plan_accepts_run_only_named_options(fake: Fake, project: Path, option
         {"name": Path("a")},
     ],
 )
-def test_named_run_options_are_checked_before_planning(
+def test_run_options_are_checked_before_planning(
     fake: Fake, project: Path, options: dict[str, Any]
 ) -> None:
     with pytest.raises((TypeError, ValueError)):

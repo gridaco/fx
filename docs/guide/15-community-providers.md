@@ -788,8 +788,13 @@ takes minutes is a job.
 | `send`, `submit` | `Failed` (`failed`) | the provider received it and the call failed | `cost_usd`, else the whole hold; tried again only when `retryable` |
 | `submit` | `Accepted` (`accepted`) | the provider took the job | settled when it is collected |
 | `submit` | `Uncertain` (`uncertain`) | nobody can say whether it took the job | the whole hold; the next run stops for you (`grida fx jobs`) |
-| `collect` | `Ended` (`ended`) | the job ended without a result | `cost_usd`, else the whole hold; a later run submits anew |
-| `collect` | `Unreachable` (`unreachable`) | it is not clear the job is over | the whole hold; a later run collects again |
+| `collect` | `Ended` (`ended`) | the provider ended the job without a deliverable result | `cost_usd`, else the whole hold. A retained task with unconfirmed success requires `--recover` for a collection check. |
+| `collect` | `Unreachable` (`unreachable`) | the job's status is unclear or its result could be delivered later | the whole hold. A later run collects again |
+
+Return `Unreachable` after a failed result download so FX keeps the original job for a later
+collection attempt. When the engine rejects a collected answer during validation, FX keeps its
+handle and the original booked amount for recovery. If a later `Ended` follows that confirmed
+completion, FX records the result as unavailable.
 
 - **`cost_usd`** (TypeScript `costUsd`) is the provider's own figure in dollars, rounded up to
   the micro-dollar. Leave it out when the provider reports none; give `0` only where the provider

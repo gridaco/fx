@@ -788,7 +788,7 @@ fn a_rig_answers_its_one_glb_with_the_checks_facts() {
             let h = harness(exchanges);
             assert_eq!(
                 h.collect(&rig_call(json!({})), plain_handle()),
-                Collected::Ended {
+                Collected::Incomplete {
                     reason: "the Tripo rig task made no single GLB".into(),
                     cost,
                 },
@@ -797,14 +797,14 @@ fn a_rig_answers_its_one_glb_with_the_checks_facts() {
             h.done();
         }
     }
-    // A file of the wrong kind ends the job at the same figure.
+    // A file of the wrong kind leaves the job incomplete at the same charge.
     let h = harness(vec![
         read("task2", "success", json!({"model": STORAGE}), json!(25)),
         download(STORAGE, b"PK\x03\x04rest"),
     ]);
     assert_eq!(
         h.collect(&rig_call(json!({})), plain_handle()),
-        Collected::Ended {
+        Collected::Incomplete {
             reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
             cost: Some(Usd(250_000)),
         }

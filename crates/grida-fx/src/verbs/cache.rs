@@ -8,8 +8,8 @@
 //! - **Refusals**, all checked before anything is removed, in the preview too: the store overlaps
 //!   the runs tree or `.fx/service` (`overlap`); another project, or an unknown earlier one, uses
 //!   the store (`shared_cache`; `--forget-user ID` drops a user once you know it no longer does);
-//!   a job not settled (`job_outstanding`); a runs tree, run index or catalog that cannot be read
-//!   whole (`incomplete_walk`, `foreign_run`, `unreadable_run`, `unreadable_entry`,
+//!   a job with an outstanding submission or settlement (`job_outstanding`); a runs tree, run
+//!   index or catalog that cannot be read whole (`incomplete_walk`, `foreign_run`, `unreadable_run`, `unreadable_entry`,
 //!   `unreachable_run`, `missing_run`); a run whose interrupted invocation reserved money without
 //!   naming the call (`legacy_interrupted_run`); and, with `--yes`, a store or run in use
 //!   (`cache_in_use`: its lock, a run's `run.lock` or a work claim is held) or a file system that
@@ -34,6 +34,7 @@ use grida_fx_core::money::Usd;
 use grida_fx_core::value::is_digest;
 use grida_fx_runtime::store::Store;
 use grida_fx_runtime::store::lease::{LEGACY, NotLocked, holds_anything, user_id};
+use grida_fx_runtime::store::records::JobState;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions, TryLockError};
@@ -234,17 +235,14 @@ fn checks(
     match main.jobs() {
         Ok(jobs) => {
             for job in jobs {
-                let state = job.to_value()["state"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string();
-                if state != "settled" {
+                if matches!(job.state, JobState::Submitting | JobState::Submitted) {
                     refused.push(refusal(
                         "job_outstanding",
                         format!(
-                            "job {} is {state}: run the workflow again to collect it, or \
+                            "job {} is {}: run the workflow again to collect it, or \
                              {} jobs --forget it once you have checked the provider",
                             job.key,
+                            job.state.as_str(),
                             crate::invoker::command()
                         ),
                     ));
@@ -507,12 +505,18 @@ impl Pruning {
         let mut pending: Vec<String> = roots.iter().cloned().collect();
         if let Ok(jobs) = fs::read_dir(store.root().join("jobs")) {
             for job in jobs.flatten() {
+                let name = job.file_name();
+                let Some(key) = name
+                    .to_str()
+                    .and_then(|name| name.strip_suffix(".json"))
+                    .filter(|key| is_digest(key))
+                else {
+                    continue;
+                };
                 let bytes =
                     fs::read(job.path()).map_err(|error| unreadable(&job.path(), &error))?;
                 pending.extend(tokens(&bytes));
-                if let Some(key) = job.file_name().to_string_lossy().strip_suffix(".json") {
-                    pending.push(key.to_string());
-                }
+                pending.push(key.to_string());
             }
         }
         let mut kept = BTreeSet::new();

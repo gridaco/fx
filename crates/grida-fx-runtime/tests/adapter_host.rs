@@ -671,7 +671,7 @@ async fn each_job_outcome_maps_and_a_handle_holds_no_key() {
     ));
     assert_eq!(
         collected(json!({"outcome": "ended", "reason": "the job failed", "cost_usd": 0.2})).await,
-        Collected::Ended {
+        Collected::Undetermined {
             reason: "the job failed".into(),
             cost: Some(Usd(200_000))
         }
@@ -682,14 +682,14 @@ async fn each_job_outcome_maps_and_a_handle_holds_no_key() {
             reason: "still running".into()
         }
     );
-    // A collected answer whose shape is refused ends the job, billed at its cost.
+    // A collected answer whose shape is refused retains the task, billed at its cost.
     assert_eq!(
         collected(
             json!({"outcome": "answered", "files": {"frame": {"base64": "AAE="}},
                           "data": null, "cost_usd": 0.3})
         )
         .await,
-        Collected::Ended {
+        Collected::Incomplete {
             reason: "frame has no kind, and acme.render names none for it".into(),
             cost: Some(Usd(300_000))
         }

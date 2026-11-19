@@ -17,7 +17,8 @@
 //! - [`Sent::Failed`] means the provider received the request: the attempt is billed (the
 //!   reported cost, else the whole hold) and the engine may make a new, reserved attempt;
 //! - a long job is submitted once ([`LongJob::submit`]) and then only collected by its handle
-//!   ([`LongJob::collect`]); it is never submitted again while its job record says `submitted`.
+//!   ([`LongJob::collect`]); a later collect can recover a completed job whose artifact could
+//!   not be delivered.
 //!
 //! Layout:
 //! - [`transport`]: the [`Transport`] trait, its request and response types, the default

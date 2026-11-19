@@ -85,7 +85,8 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   `Workflow` object is refused with `TypeError`: name the builder that returns it.
 - **Options.** `inputs` (a mapping, written to a temporary inputs file in `cwd`, so relative
   paths in it mean what they mean on the command line), `input_files` (`--inputs`), `routes`
-  (`--routes`), `max_usd` (`--max-usd`), `require_estimates` (`--require-estimates`); `run` adds `live`, `yes_up_to` and one of
+  (`--routes`), `max_usd` (`--max-usd`) and `require_estimates` (`--require-estimates`). The
+  `run` operation adds `live`, `recover`, `yes_up_to` and one of
   `name` (create-only), `resume` (require-existing) or `run_dir` (explicit-folder create/resume). `cwd` is
   the engine's working directory (default: the current one); every relative path is relative to
   it. A `Plan` takes no planning options when it runs: plan again to change them.
@@ -100,7 +101,13 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   `FxError` with its explanation. A failed step does not raise: check `result.ok` and
   `result.failed`. The result is read from the run folder's `events.jsonl`: `ok`, `incomplete`,
   `cost` (the folder's charge over every invocation, in US dollars), `run_dir`, `failed`,
-  `failures`, `stopped`, `stand_in`, `outputs` and `steps`.
+  `failures`, `stopped`, `stand_in`, `outputs`, `steps` and `call_recoveries`.
+- **Recovery.** Use `run` or `run_async` with `live=True, recover=True` and `resume` or an
+  existing `run_dir` to collect retained provider tasks without allowing new managed calls.
+  Supply the original planning options. Recovery needs no new dollar ceiling. The recorded
+  `call_recoveries` events include `status` and `original_charged_usd` when known. An older
+  task's booking may be unknown even when `result.cost` has the run's total spend. Recovered
+  results appear in the usual outputs and add $0 to that total.
 - **Failures.** `result.failures` holds a `Failure` for each failed instance id: its `path`,
   `message`, `code` (the protocol's name of the error, such as `node_failure` or `call_failed`;
   `None` for a timeout, an assertion or a skip), the node `facts` it reported, and `skipped` (it

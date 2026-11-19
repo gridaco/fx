@@ -242,6 +242,10 @@ fn every_type_validates_against_its_definition() {
         key: Some(DIGEST.into()),
         needed_usd: Some(0.5),
         remaining_usd: Some(0.25),
+        recovery: Some(CallRecoveryError {
+            status: RecoveryAvailability::Available,
+            original_charged_usd: Some(0.4),
+        }),
         engine_protocol: Some(PROTOCOL.into()),
         host_protocol: Some("fx-node-protocol-v2".into()),
     };

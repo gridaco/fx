@@ -202,7 +202,21 @@ impl LongJob for Redacting<dyn LongJob> {
             {
                 return Submitted::Refused { reason };
             }
-            self.inner.submit(call).await
+            let submitted = self.inner.submit(call).await;
+            let mut outcome = &submitted;
+            while let Submitted::Diagnosed(inner, _) = outcome {
+                outcome = inner;
+            }
+            if let Submitted::Accepted { handle } = outcome
+                && self
+                    .redactor
+                    .contains_secret(&grida_fx_core::value::canon(handle))
+            {
+                return Submitted::Uncertain {
+                    reason: "the provider returned a task handle containing a credential".into(),
+                };
+            }
+            submitted
         })
     }
 
@@ -362,6 +376,40 @@ mod tests {
 
     fn setup(keys: Keys) -> Setup {
         Setup::new(Arc::new(NoNetwork), keys, Arc::new(FakeClock::new()))
+    }
+
+    #[test]
+    fn a_provider_handle_containing_a_key_is_withheld() {
+        use crate::fake::FakeAdapter;
+        use crate::keys::Secret;
+        use crate::testing::{CallBuilder, block_on};
+        use serde_json::json;
+
+        let handle = json!({"task_id": "secret-test-key"});
+        let safe_handle = json!({"task_id": "task-7"});
+        let adapter = Redacting {
+            inner: Arc::new(FakeAdapter::long_job(
+                vec![
+                    Submitted::Accepted { handle },
+                    Submitted::Accepted {
+                        handle: safe_handle.clone(),
+                    },
+                ],
+                vec![],
+            )) as Arc<dyn LongJob>,
+            redactor: Redactor::new(vec![Secret::new("secret-test-key")]),
+            setup: Arc::new(setup(Keys::none())),
+        };
+        let call = CallBuilder::new("mesh.generate", "acme/tripo-3d@tripo").build();
+        let refused = block_on(adapter.submit(&call));
+        assert!(matches!(refused, Submitted::Uncertain { .. }));
+        assert!(!format!("{refused:?}").contains("secret-test-key"));
+        assert_eq!(
+            block_on(adapter.submit(&call)),
+            Submitted::Accepted {
+                handle: safe_handle
+            }
+        );
     }
 
     #[test]

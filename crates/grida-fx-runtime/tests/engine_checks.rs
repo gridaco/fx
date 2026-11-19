@@ -104,6 +104,8 @@ fn run(root: &Path, adapter: grida_fx_providers::Adapter) -> Arc<Services> {
         cancel,
         invocation_id: "inv".into(),
         fresh_id: None,
+        recover: false,
+        prior_call_charges: Default::default(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })
@@ -359,6 +361,7 @@ async fn a_submitted_job_is_collected_without_the_engines_refusals() {
             fresh_id: None,
             state: JobState::Submitted,
             handle: Some(handle.clone()),
+            charged_usd: None,
             note: None,
             diagnostic: None,
         })

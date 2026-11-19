@@ -1195,7 +1195,7 @@ fn an_answer_about_another_task_or_an_unknown_status_is_unreachable() {
 fn the_output_scan_decides_what_is_downloaded() {
     // src/tripo/README.md, "Tasks": only model fields with supported URLs are downloaded.
     // The task succeeded, so an unusable output costs what its success read reports (125 credits).
-    let ended = |reason: &str| Collected::Ended {
+    let incomplete = |reason: &str| Collected::Incomplete {
         reason: reason.into(),
         cost: Some(Usd(1_250_000)),
     };
@@ -1213,44 +1213,44 @@ fn the_output_scan_decides_what_is_downloaded() {
     let cases: Vec<(Value, Collected)> = vec![
         (
             json!({"model": "http://api.tripo3d.ai/m.glb"}),
-            ended(no_model),
+            incomplete(no_model),
         ),
         (
             json!({"model": "https://user@x.tripo3d.ai/m.glb"}),
-            ended(unsupported),
+            incomplete(unsupported),
         ),
         (
             json!({"model": "https://x.tripo3d.ai:8443/m.glb"}),
-            ended(unsupported),
+            incomplete(unsupported),
         ),
         (
             json!({"model": "https://127.0.0.1/m.glb"}),
-            ended(unsupported),
+            incomplete(unsupported),
         ),
         (
             json!({"model": "https://cdn.acme.test/m.glb#fragment"}),
-            ended(unsupported),
+            incomplete(unsupported),
         ),
         (
             json!({"models": ["https://api.tripo3d.ai/m.glb"]}),
-            ended(no_model),
+            incomplete(no_model),
         ),
         (
             json!({"pbr-model": "https://api.tripo3d.ai/m.glb"}),
-            ended(no_model),
+            incomplete(no_model),
         ),
         (
             json!({"rendered_image": "https://api.tripo3d.ai/i.png"}),
-            ended(no_model),
+            incomplete(no_model),
         ),
-        (Value::Object(nine), ended(no_model)),
+        (Value::Object(nine), incomplete(no_model)),
         (
             json!({"model": "https://api.tripo3d.ai/m\n.glb"}),
-            ended(malformed),
+            incomplete(malformed),
         ),
         (
             json!({"model": format!("https://api.tripo3d.ai/{}", "m".repeat(20_481))}),
-            ended(malformed),
+            incomplete(malformed),
         ),
     ];
     for (output, expected) in cases {
@@ -1269,7 +1269,7 @@ fn the_output_scan_decides_what_is_downloaded() {
     ]);
     assert_eq!(
         h.collect(&two_view_call(), handle("task1")),
-        Collected::Ended {
+        Collected::Incomplete {
             reason: no_model.into(),
             cost: Some(Usd(10_000)),
         }
@@ -1327,32 +1327,33 @@ fn the_output_scan_decides_what_is_downloaded() {
 fn downloads_are_fetched_once_and_capped() {
     // spec/adapters.md §7; src/tripo/README.md: downloads.
     let signed = "https://tripo-data.rg1.data.tripo3d.com/out/model.glb?sig=signed-secret";
-    let unreachable = |reason: &str| Collected::Unreachable {
+    let incomplete = |reason: &str| Collected::Incomplete {
         reason: reason.into(),
+        cost: Some(Usd(1_250_000)),
     };
     let cases: Vec<(Exchange, Collected)> = vec![
         (
             Expect::download(signed).reply(HttpResponse::new(404, Vec::new())),
-            unreachable("Tripo download HTTP 404"),
+            incomplete("Tripo download HTTP 404"),
         ),
         (
             Expect::download(signed).reply(
                 HttpResponse::new(302, Vec::new())
                     .with_header("location", "https://api.tripo3d.ai/elsewhere.glb"),
             ),
-            unreachable("Tripo download HTTP 302"),
+            incomplete("Tripo download HTTP 302"),
         ),
         (
             Expect::download(signed).reply(HttpResponse::new(500, b"secret".to_vec())),
-            unreachable("Tripo download HTTP 500"),
+            incomplete("Tripo download HTTP 500"),
         ),
         (
             Expect::download(signed).fail(after_send()),
-            unreachable("Tripo download failed; URL withheld"),
+            incomplete("Tripo download failed; URL withheld"),
         ),
         (
             Expect::download(signed).fail(network_off()),
-            unreachable("Tripo download failed; URL withheld"),
+            incomplete("Tripo download failed; URL withheld"),
         ),
         (
             Exchange {
@@ -1363,7 +1364,7 @@ fn downloads_are_fetched_once_and_capped() {
                     len: MAX_MODEL_BYTES + 1,
                 },
             },
-            unreachable("a Tripo model is larger than 150 MB"),
+            incomplete("a Tripo model is larger than 150 MB"),
         ),
         (
             // Exactly the cap is read (and then sniffed): the cap was not crossed.
@@ -1375,14 +1376,14 @@ fn downloads_are_fetched_once_and_capped() {
                     len: MAX_MODEL_BYTES,
                 },
             },
-            Collected::Ended {
+            Collected::Incomplete {
                 reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
                 cost: Some(Usd(1_250_000)),
             },
         ),
         (
             Expect::download(signed).reply(HttpResponse::new(200, b"PK\x03\x04rest".to_vec())),
-            Collected::Ended {
+            Collected::Incomplete {
                 reason: "Tripo returned a model that is neither GLB nor binary FBX".into(),
                 cost: Some(Usd(1_250_000)),
             },
@@ -1461,10 +1462,10 @@ fn an_unusable_output_costs_what_its_success_read_reports() {
                 exchanges.push(download(STORAGE, b"PK\x03\x04rest"));
             }
             let h = harness(exchanges);
-            let Collected::Ended { cost: booked, .. } =
+            let Collected::Incomplete { cost: booked, .. } =
                 h.collect(&two_view_call(), handle("task1"))
             else {
-                panic!("an unusable output ends the job");
+                panic!("an unusable output leaves the job incomplete");
             };
             assert_eq!(booked, cost, "{credits:?} {output}");
             h.done();
@@ -1520,6 +1521,56 @@ fn a_later_run_only_collects() {
         block_on(TripoApi::new(&setup).wait("../files", Duration::from_secs(10))),
         Waited::Unreachable("not a Tripo task id".into())
     );
+}
+
+#[test]
+fn a_paid_mesh_can_be_collected_again_using_the_same_task() {
+    let renewed_url = "https://cdn.acme.test/model.glb";
+    let h = harness(vec![
+        upload("image.png", "image/png", &front_png(), "image-token"),
+        image_post().reply(ok(json!({"task_id": "single-1"}))),
+        success("single-1", json!({"model": STORAGE}), json!(50)),
+        Expect::download(STORAGE).reply(HttpResponse::new(403, Vec::new())),
+        success("single-1", json!({"model": renewed_url}), json!(50)),
+        download(renewed_url, &glb(1)),
+    ]);
+    let call = single_image_call();
+    let Submitted::Accepted { handle } = h.submit(&call) else {
+        panic!("Tripo accepted the task");
+    };
+    assert_eq!(handle, json!({"task_id": "single-1"}));
+    assert_eq!(
+        h.collect(&call, handle.clone()),
+        Collected::Incomplete {
+            reason: "Tripo download HTTP 403".into(),
+            cost: Some(Usd(500_000)),
+        }
+    );
+    let answer = answered(h.collect(&call, handle));
+    assert_eq!(answer.cost, Some(Usd(500_000)));
+    assert_eq!(answer.files["model"].bytes, glb(1));
+    h.done();
+}
+
+#[test]
+fn task_not_found_is_unavailable() {
+    let h = harness(vec![read_expect("task1").reply(HttpResponse::json(
+        404,
+        &json!({"code": 2001, "message": "provider detail"}),
+    ))]);
+    let (outcome, diagnostic) =
+        block_on(h.mesh.collect(&two_view_call(), &handle("task1"))).into_report();
+    assert_eq!(
+        outcome,
+        Collected::Unavailable {
+            reason: "Tripo could not find task task1".into(),
+            cost: None,
+        }
+    );
+    let diagnostic = diagnostic.expect("Tripo reported the task was missing");
+    assert_eq!(diagnostic.task_id.as_deref(), Some("task1"));
+    assert_eq!(diagnostic.code.as_deref(), Some("2001"));
+    h.done();
 }
 
 #[test]

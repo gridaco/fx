@@ -312,7 +312,7 @@
         {
           "const": -32013,
           "title": "not_live",
-          "description": "The call is not cached and the run is not live."
+          "description": "The uncached call has no live admission or the recovery-only invocation has no retained task to collect."
         },
         {
           "const": -32014,
@@ -388,6 +388,16 @@
         "key": {"$ref": "#/$defs/digest"},
         "needed_usd": {"type": "number", "minimum": 0},
         "remaining_usd": {"type": "number"},
+        "recovery": {
+          "description": "Status of the retained provider task and the amount FX originally booked when known (store.md §5).",
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {"enum": ["available", "legacy", "unavailable"]},
+            "original_charged_usd": {"type": "number", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
         "engine_protocol": {"type": "string"},
         "host_protocol": {"type": "string"}
       },

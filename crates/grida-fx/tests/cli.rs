@@ -2144,6 +2144,7 @@ fn run_help_names_its_options() {
     let help = stdout(&output);
     for option in [
         "--live",
+        "--recover",
         "--max-usd",
         "--yes-up-to",
         "--deliver",
@@ -2160,6 +2161,30 @@ fn run_help_names_its_options() {
     ] {
         assert!(stdout(&output).contains(verb), "{verb}");
     }
+}
+
+#[test]
+fn recovery_requires_live_and_an_existing_run() {
+    let project = empty_project();
+    let output = grida_fx(
+        project.path(),
+        &["run", "case", "--recover", "--run", "runs/old"],
+    );
+    assert_eq!(status(&output), 2);
+    assert!(stderr(&output).contains("--live"));
+
+    let output = grida_fx(project.path(), &["run", "case", "--recover", "--live"]);
+    assert_eq!(status(&output), 2);
+    assert!(stderr(&output).contains("--recover needs an existing --run or --resume"));
+
+    let output = grida_fx(
+        project.path(),
+        &["run", "case", "--recover", "--live", "--run", "runs/old"],
+    );
+    assert_eq!(status(&output), 1);
+    assert_eq!(stdout(&output), "refused: runs/old does not hold a run\n");
+    assert!(!project.path().join("runs").exists());
+    assert!(!project.path().join(".fx").exists());
 }
 
 #[test]
@@ -2788,7 +2813,7 @@ fn integrated_jobs_lists_and_forgets_job_records() {
         stdout(&output),
         format!(
             "{first}  submitting  video.generate on vid@acme, take 1\n\
-             {second}  settled  video.generate on vid@acme, take 2.1\n\
+             {second}  settled  video.generate on vid@acme, take 2.1  provider task retained for a recovery check. Resume with --live --recover\n\
              {third}  submitting  video.generate on vid@acme, take 1  fal took the job but \
              returned no handle (request req-7)\n"
         )
@@ -2797,7 +2822,7 @@ fn integrated_jobs_lists_and_forgets_job_records() {
     assert_eq!(status(&output), 0, "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
-        format!("forgot job {first}; its call is submitted again on the next run\n")
+        format!("forgot job {first}. A later live run can submit and pay for new work\n")
     );
     assert!(!jobs.join(format!("{first}.json")).exists());
     let output = grida_fx(project.path(), &["jobs", "--forget", &first]);

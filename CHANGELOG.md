@@ -12,6 +12,10 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+### Fixed
+
+- Resume collecting a completed provider job after a failed download or validation without paying for generation again. Use `--recover` or the Python and JavaScript `recover` option to retry collection without authorizing new calls, including on runs from older versions that kept the task handle. [#116](https://github.com/gridaco/fx/issues/116)
+
 ## [0.11.0] - 2026-11-20
 
 ### Added

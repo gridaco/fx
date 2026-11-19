@@ -6,8 +6,8 @@
 //! `max_usd` (when given) and `live`; every path POSIX and relative to the planning project's
 //! root, each part exactly as the file system names it once symbolic links are resolved. None
 //! when the record could not repeat the invocation: workflow input flags, `--arg`,
-//! `--stand-in`, a target, inputs file or route table outside the planning project or whose path
-//! is not UTF-8, a builder run from anywhere but the planning project's root (a builder is
+//! `--stand-in`, `--recover`, a target, inputs file or route table outside the planning project
+//! or whose path is not UTF-8, a builder run from anywhere but the planning project's root (a builder is
 //! called with the working directory), or an SDK's invocation (`GRIDA_FX_CANCEL_SOURCE=sdk`,
 //! whose inputs file is temporary; spec/sdk.md).
 //!
@@ -39,7 +39,12 @@ const SDK_SOURCE: &str = "GRIDA_FX_CANCEL_SOURCE";
 /// The `repeat` of a `run` invocation, or `None` when its record could not repeat it.
 pub(crate) fn recorded(args: &RunArgs, planner: &Planner, cwd: &Path) -> Option<Value> {
     let from_sdk = std::env::var(SDK_SOURCE).as_deref() == Ok("sdk");
-    if from_sdk || !args.rest.is_empty() || !args.arg.is_empty() || args.stand_in.is_some() {
+    if from_sdk
+        || !args.rest.is_empty()
+        || !args.arg.is_empty()
+        || args.stand_in.is_some()
+        || args.recover
+    {
         return None;
     }
     let root = planner.project.root.canonicalize().ok()?;

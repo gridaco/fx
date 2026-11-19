@@ -1,6 +1,6 @@
 //! `grida-fx run <target> [inputs] [--routes f]… [--arg n=v]… [--live] [--max-usd N]
 //! [--yes-up-to N] [--deliver OUTPUT=PATH]… [--name NAME | --resume NAME | --run FOLDER]
-//! [--stand-in FILE#FUNCTION | -]`
+//! [--recover] [--stand-in FILE#FUNCTION | -]`
 //! (docs/guide/05-running.md; spec/store.md §8; spec/protocol.md §5.7).
 //!
 //! 0. A stand-in, before anything else (usage errors, exit 2): `--stand-in cannot be used with
@@ -30,9 +30,9 @@
 //!    that need it, when they are made (`<VARIABLE> is not set`, $0). A stand-in run's engine
 //!    has the stand-in store (`<cache>/stand-in`) as its store and asks the stand-in.
 //! 3. Plan through the engine ([`crate::engine::plan`]: `at: plan` steps run, `cached` is the
-//!    store's). A plan with problems prints the plan (`plan::render::render`; a stand-in run's
-//!    with `plan::render::render_stand_in`, which never warns that the ceiling stops the run nor
-//!    notes a capped route's hold) and exits 1 without creating a folder.
+//!    store's). A plan with problems prints the plan and exits 1 without creating a folder.
+//!    Stand-in and recovery-only runs use `plan::render::render_unbilled` to omit ceiling warnings
+//!    and capped-route notes.
 //! 4. The folder: `--name` atomically claims a source-scoped name; `--resume` requires its
 //!    recorded run to exist, with the current plan and mode checked by the runner. `--run` is
 //!    relative to the working directory, named as typed, and retains create/resume behavior; else
@@ -94,6 +94,11 @@ const KEY: &str = "{key}";
 
 /// Runs `grida-fx run`.
 pub fn run(args: &RunArgs) -> Result<u8, Error> {
+    if args.recover && args.run.is_none() && args.resume.is_none() {
+        return Err(Error::usage(
+            "--recover needs an existing --run or --resume",
+        ));
+    }
     for name in args.name.iter().chain(args.resume.iter()) {
         super::run_catalog::validate_name(name)?;
     }
@@ -126,6 +131,13 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         .iter()
         .map(|pair| Delivery::parse(pair))
         .collect::<Result<Vec<_>, _>>()?;
+    if args.recover
+        && let Some(folder) = &args.run
+        && !cwd.join(folder).join("plan.json").is_file()
+    {
+        print_line(&format!("refused: {folder} does not hold a run"));
+        return Ok(1);
+    }
     let request = PlanRequest {
         target: args.target.clone(),
         cwd: cwd.clone(),
@@ -234,19 +246,28 @@ fn plan_and_run(
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
     let mut plan = crate::engine::plan(engine, planner, host)?;
-    if args.require_estimates && !engine.stand_in_run() {
+    if args.require_estimates && !engine.stand_in_run() && !args.recover {
         plan.require_estimates();
     }
-    let text = if engine.stand_in_run() {
-        grida_fx_core::plan::render::render_stand_in(&plan, planner)
+    let mut text = if engine.stand_in_run() || args.recover {
+        grida_fx_core::plan::render::render_unbilled(&plan, planner)
     } else {
         grida_fx_core::plan::render::render(&plan, planner)
     };
+    if args.recover {
+        text.push('\n');
+        text.push_str(&labelled("mode", "recovery only"));
+    }
     if !plan.ok() {
         print_line(&text);
         return Ok(1);
     }
-    if let Some(message) = runner::refused(&plan, engine.live, &engine.adapters.plan_providers()) {
+    if let Some(message) = runner::refused_for_run(
+        &plan,
+        engine.live,
+        &engine.adapters.plan_providers(),
+        args.recover,
+    ) {
         // Before any folder is made.
         print_line(&text);
         print_line(&format!("refused: {message}"));
@@ -289,12 +310,13 @@ fn plan_and_run(
     print_line(&text);
     let options = RunOptions {
         require_estimates: args.require_estimates,
+        recover: args.recover,
         folder: folder.clone(),
         label: label.clone(),
         name: args.name.clone(),
         yes_up_to,
         takes_file: super::takes_file(planner),
-        existing: args.resume.is_some(),
+        existing: args.resume.is_some() || args.recover,
         index: Some(RunIndex {
             project_root: planner.project.root.clone(),
         }),
@@ -305,6 +327,7 @@ fn plan_and_run(
             .map(|_| resolved_models.clone()),
     };
     let mut viewer = None;
+    let mut invocation_id = None;
     let project = planner.project.clone();
     let ran = runner::run_with_control_ready(
         Arc::clone(engine),
@@ -313,6 +336,7 @@ fn plan_and_run(
         plan,
         options,
         |ready| {
+            invocation_id = Some(ready.invocation_id.clone());
             crate::interrupt::runner_started();
             print_line(&format!("run       {label}"));
             stderr::line(format_args!("invocation {}", ready.invocation_id));
@@ -360,10 +384,17 @@ fn plan_and_run(
     let scrub = Scrub::new(planner, &engine.store);
     // The run folder was already flushed at readiness. Keep one stable summary header;
     // dynamic invocation/control diagnostics belong to stderr.
-    for line in summary(&label, args.stand_in.as_deref(), &outcome, &scrub)
-        .into_iter()
-        .skip(1)
+    let mut lines = summary(&label, args.stand_in.as_deref(), &outcome, &scrub);
+    if let Some(invocation_id) = invocation_id.as_deref()
+        && let Ok(mut events) = super::read_log(&folder, &label, true)
     {
+        events.retain(|event| {
+            matches!(super::event_name(event), Some("call_recovery" | "call"))
+                && super::text(event, "invocation_id") == Some(invocation_id)
+        });
+        super::inspect::append_call_recoveries(&mut lines, &events);
+    }
+    for line in lines.into_iter().skip(1) {
         print_line(&line);
     }
     let delivered = deliver(deliveries, &outcome.outputs, &engine.store, cwd)?;

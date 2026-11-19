@@ -107,7 +107,9 @@ impl TripoRig {
             Waited::Ended { status, .. } => {
                 return api.refused(&format!("Tripo's riggability check ended as {status}"));
             }
-            Waited::Unreachable(reason) => return api.not_received(&reason),
+            Waited::Unavailable(reason) | Waited::Unreachable(reason) => {
+                return api.not_received(&reason);
+            }
         };
         let riggable = match checked.output.get("riggable") {
             Some(Value::Bool(riggable)) => *riggable,
@@ -163,7 +165,7 @@ impl TripoRig {
             .filter(|(kind, _)| kind == "model/gltf-binary");
         let (Some((_, bytes)), None) = (glbs.next(), glbs.next()) else {
             // The task succeeded, so Tripo charged it what the read reports.
-            return Collected::Ended {
+            return Collected::Incomplete {
                 reason: api.client.reason("the Tripo rig task made no single GLB"),
                 cost: task.cost(),
             };

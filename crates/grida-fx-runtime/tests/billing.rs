@@ -106,6 +106,8 @@ fn rig_in(root: &Path, adapters: Adapters, live: bool, ceiling: Option<Usd>) -> 
         cancel,
         invocation_id: "inv".into(),
         fresh_id: None,
+        recover: false,
+        prior_call_charges: Default::default(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     });
@@ -636,6 +638,8 @@ fn rig_with_log(root: &Path, adapters: Adapters, log: Arc<EventLog>) -> Rig {
         cancel,
         invocation_id: "inv".into(),
         fresh_id: None,
+        recover: false,
+        prior_call_charges: Default::default(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     });

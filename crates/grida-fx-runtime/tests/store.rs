@@ -157,6 +157,7 @@ fn job(key: &str, state: JobState, handle: Option<Value>) -> JobRecord {
         fresh_id: None,
         state,
         handle,
+        charged_usd: None,
         note: None,
         diagnostic: None,
     }
@@ -709,6 +710,12 @@ fn job_records_match_their_schema() {
         job(&digest_of(5), JobState::Submitted, handle()),
         job(&digest_of(5), JobState::Settled, None),
         job(&digest_of(5), JobState::Settled, handle()),
+        JobRecord {
+            charged_usd: Some(Usd(500_000)),
+            note: Some("artifact download failed".into()),
+            ..job(&digest_of(5), JobState::Recoverable, handle())
+        },
+        job(&digest_of(5), JobState::Unavailable, handle()),
     ] {
         let value = record.to_value();
         let errors: Vec<String> = validator
@@ -724,7 +731,16 @@ fn job_records_match_their_schema() {
     submitted["note"] = json!("a note");
     let mut number = noted(&digest_of(5)).to_value();
     number["note"] = json!(7);
-    for value in [settled, submitted, number] {
+    let null_handle = job(&digest_of(5), JobState::Unavailable, None).to_value();
+    let mut charge_without_handle = job(&digest_of(5), JobState::Settled, None).to_value();
+    charge_without_handle["charged_usd"] = json!(0.5);
+    for value in [
+        settled,
+        submitted,
+        number,
+        null_handle,
+        charge_without_handle,
+    ] {
         assert!(!validator.is_valid(&value), "{value}");
         assert!(JobRecord::from_value(&value).is_err(), "{value}");
     }

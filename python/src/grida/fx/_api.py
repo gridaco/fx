@@ -339,6 +339,11 @@ class RunResult:
         return float(ending.get("charged_usd") or 0) if ending is not None else 0.0
 
     @property
+    def call_recoveries(self) -> list[Mapping[str, Any]]:
+        """Recorded provider recovery checks and results, in event order across invocations."""
+        return [event for event in self.events if event.get("event") == "call_recovery"]
+
+    @property
     def failed(self) -> list[str]:
         """The ids of the instances that failed."""
         finished = self._finished()
@@ -1235,6 +1240,7 @@ async def run_async(
     run_dir: str | Path | None = None,
     name: str | None = None,
     resume: str | None = None,
+    recover: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1243,7 +1249,10 @@ async def run_async(
     """Runs ``target`` (or a plan); ``live=True`` admits paid calls, and ``stand_in`` answers
     them with a function instead, offline and for nothing (module docstring). ``name`` creates
     a named run and ``resume`` selects one to continue; each excludes ``run_dir`` and the other.
-    The engine validates names, collisions and whether a selected run can resume."""
+    The engine validates names, collisions and whether a selected run can resume.
+    ``recover=True`` retrieves retained provider results, including older tasks, without
+    submitting new provider work or changing the ceiling. It requires ``live=True`` and an
+    existing run selector."""
     if run_dir is not None:
         if not isinstance(run_dir, str | os.PathLike):
             raise TypeError("run_dir is a nonempty string or path")
@@ -1260,6 +1269,10 @@ async def run_async(
                 raise ValueError(f"{option} is nonempty and contains no NUL")
     if sum(value is not None for value in (run_dir, name, resume)) > 1:
         raise ValueError("run_dir, name and resume are mutually exclusive")
+    if not isinstance(recover, bool):
+        raise TypeError("recover is True or False")
+    if recover and (live is not True or (run_dir is None and resume is None)):
+        raise ValueError("recover needs live=True and an existing run_dir or resume")
     answerer = None if stand_in is None else _answerer(stand_in, live=live, yes_up_to=yes_up_to)
     request = _request(
         target,
@@ -1280,9 +1293,13 @@ async def run_async(
         options.append(f"--name={name}")
     if resume is not None:
         options.append(f"--resume={resume}")
+    if recover:
+        options.append("--recover")
     if answerer is not None:
         options.append("--stand-in=-")
-    resuming = resume is not None or (run_dir is not None and _may_exist(request.cwd / run_dir))
+    resuming = (
+        recover or resume is not None or (run_dir is not None and _may_exist(request.cwd / run_dir))
+    )
     if resuming:
         # The CLI loads recorded facts before planning. A fresh SDK plan would miss them.
         request = replace(request, _resolved_models=None)
@@ -1365,6 +1382,7 @@ def run(
     run_dir: str | Path | None = None,
     name: str | None = None,
     resume: str | None = None,
+    recover: bool = False,
     cwd: str | Path | None = None,
     routes: Sequence[str | Path] | None = None,
     arguments: Mapping[str, str] | None = None,
@@ -1384,6 +1402,7 @@ def run(
             run_dir=run_dir,
             name=name,
             resume=resume,
+            recover=recover,
             cwd=cwd,
             routes=routes,
             arguments=arguments,

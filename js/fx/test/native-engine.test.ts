@@ -1,9 +1,9 @@
 // The managed native path through real TypeScript hosts; no provider traffic.
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-import { cancel, FxError, inspect, loadRun, plan, run } from "../src/index.js";
+import { cancel, FxError, inspect, loadRun, plan, run, RunFile } from "../src/index.js";
 import { HOST_SKIP, makeProject } from "./host-support.js";
 import { repoRoot, SLOW, testEngine } from "./support.js";
 
@@ -21,6 +21,10 @@ function project(): string {
 function submissions(root: string): { key: string; future: number; source: string; vendor_extension: unknown }[] {
   return readFileSync(join(root, ".native-submits"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
 }
+function jobFiles(project: string): string[] {
+  return files(join(project, ".fx/cache/jobs")).filter((path) => path.endsWith(".json"));
+}
+
 function files(folder: string): string[] {
   if (!existsSync(folder)) return [];
   return readdirSync(folder).flatMap((name) => {
@@ -32,6 +36,44 @@ const invoke = (cwd: string, folder: string, inputs: Record<string, string | num
   run("native.yaml", { cwd, env, live: true, maxUsd: 1, runDir: `runs/${folder}`, inputs: { source: "source.txt", ...inputs } });
 
 describe.skipIf(engine === null || HOST_SKIP !== null)("managed native operations", () => {
+  test("recovers an older named run and preserves the original charge", async () => {
+    const cwd = project();
+    const options = { cwd, env, live: true, inputs: { source: "source.txt" } };
+    const invalid = join(cwd, ".native-invalid-answer");
+    writeFileSync(join(cwd, ".native-release"), "");
+    writeFileSync(invalid, "");
+    const first = await run("native.yaml", { ...options, maxUsd: 1, name: "keep" });
+    expect(first.ok).toBe(false);
+    expect(first.chargedUsd).toBe(0.01);
+    expect(first.callRecoveries).toHaveLength(1);
+    expect(first.callRecoveries[0]).toMatchObject({ status: "available", original_charged_usd: 0.01 });
+    const [jobFile] = jobFiles(cwd);
+    const job = JSON.parse(readFileSync(jobFile!, "utf8"));
+    expect(job.state).toBe("recoverable");
+    job.state = "settled";
+    delete job.charged_usd;
+    delete job.note;
+    writeFileSync(jobFile!, JSON.stringify(job));
+    const log = join(first.runDir, "events.jsonl");
+    const oldEvents = readFileSync(log, "utf8").trim().split("\n")
+      .filter((line) => JSON.parse(line).event !== "call_recovery");
+    writeFileSync(log, `${oldEvents.join("\n")}\n`);
+    rmSync(invalid);
+
+    const recovered = await run("native.yaml", { ...options, resume: "keep", recover: true });
+    expect(recovered.ok).toBe(true);
+    expect(recovered.chargedUsd).toBe(0.01);
+    expect(recovered.callRecoveries.at(-1)).toMatchObject({ status: "recovered" });
+    expect(recovered.callRecoveries.at(-1)?.original_charged_usd).toBeUndefined();
+    expect(recovered.stdout).toContain("collected original provider result · $0.00 additional");
+    expect(recovered.stdout).toContain("mode      recovery only");
+    expect(recovered.projection.run.run_started?.ceiling_usd).toBe(1);
+    expect(submissions(cwd)).toHaveLength(1);
+    const result = recovered.outputs.result;
+    expect(result).toBeInstanceOf(RunFile);
+    expect(JSON.parse((await (result as RunFile).read()).toString()).task_id).toBe(job.handle.task_id);
+  }, SLOW);
+
   test("arbitrary fields and files survive cancellation, collection and independent call-cache replay", async () => {
     const root = project();
     expect((await plan("native.yaml", { cwd: root, env, inputs: { source: "source.txt" } })).ok).toBe(true);
@@ -49,7 +91,7 @@ describe.skipIf(engine === null || HOST_SKIP !== null)("managed native operation
       const before = await inspect(join(root, "runs/one"), { env });
       expect(submissions(root)).toHaveLength(1);
       expect(submissions(root)[0]).toMatchObject({ future: 70000, source: "Synthetic source bytes.\n", vendor_extension: { new_feature: true } });
-      const jobs = files(join(root, ".fx/cache/jobs"));
+      const jobs = jobFiles(root);
       expect(jobs).toHaveLength(1);
       expect(JSON.parse(readFileSync(jobs[0]!, "utf8")).state).toBe("submitted");
       writeFileSync(join(root, ".native-release"), "");
@@ -57,7 +99,7 @@ describe.skipIf(engine === null || HOST_SKIP !== null)("managed native operation
       expect(resumed.ok).toBe(true);
       expect(resumed.chargedUsd).toBe(before.run.charged_usd ?? 0);
       expect(submissions(root)).toHaveLength(1);
-      expect(files(join(root, ".fx/cache/jobs"))).toHaveLength(0);
+      expect(jobFiles(root)).toHaveLength(0);
       const offlineEnv = { ...env, ACME_NATIVE_KEY: undefined };
       expect((await run("native.yaml", { cwd: root, env: offlineEnv, runDir: "runs/cached", inputs: { source: "source.txt" } })).ok).toBe(true);
       const nodes = join(root, "nodes.ts");
@@ -108,7 +150,7 @@ describe.skipIf(engine === null || HOST_SKIP !== null)("managed native operation
     const again = await invoke(root, "uncertain", { mode: "uncertain" });
     expect(again.steps["native#1"]?.diagnostic).toEqual(original);
     expect(submissions(root)).toHaveLength(2);
-    const job = files(join(root, ".fx/cache/jobs")).map((path) => JSON.parse(readFileSync(path, "utf8"))).find((job) => job.state === "submitting");
+    const job = jobFiles(root).map((path) => JSON.parse(readFileSync(path, "utf8"))).find((job) => job.state === "submitting");
     expect(job.state).toBe("submitting");
     expect(job.diagnostic).toEqual(original);
   }, SLOW);
@@ -144,7 +186,7 @@ describe.skipIf(engine === null || HOST_SKIP !== null)("native diagnostic privac
         for (const path of files(destination).filter((path) => path.endsWith(".json"))) {
           expect(readFileSync(path, "utf8")).not.toContain(payload);
         }
-        for (const path of files(join(root, ".fx/cache/jobs"))) {
+        for (const path of jobFiles(root)) {
           expect(readFileSync(path, "utf8")).not.toContain(payload);
         }
       }

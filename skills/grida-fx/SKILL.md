@@ -234,8 +234,12 @@ are not restored automatically. Put overlapping workflow inputs after `--`, for
 example `run greeting --name baseline -- --name Ada`, or use an inputs file.
 Inspect `WORKFLOW_ID/NAME` for a precise named run, or an actual folder; a workflow
 ID selects newest-created evidence and refuses ambiguous recorded sources.
-Preserve records while diagnosing failures. Do not clear caches or
-forget provider jobs merely to force another attempt.
+For a retained provider task, use `--live --recover` with the same named run or an existing
+`--run` folder. It permits collection, cached results and local work without authorizing
+new managed calls. Read `run.call_recoveries` from `inspect --json` for the recorded status
+and original amount booked, when known. Preserve job records while diagnosing failures.
+If a provider result is unavailable, get the user's authorization for a new generation
+before forgetting the job or starting new paid work.
 
 To place results in the user's destination, use `--deliver output=path` during
 `run`, or the SDK's file-copy/delivery APIs after a successful result. Store files

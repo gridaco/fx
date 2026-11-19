@@ -134,6 +134,20 @@ fn ended(collected: Collected) -> String {
     }
 }
 
+fn incomplete(collected: Collected) -> String {
+    match collected.into_report().0 {
+        Collected::Incomplete { reason, cost: None } => reason,
+        other => panic!("expected Incomplete at no reported cost, got {other:?}"),
+    }
+}
+
+fn unavailable(collected: Collected) -> String {
+    match collected.into_report().0 {
+        Collected::Unavailable { reason, cost: None } => reason,
+        other => panic!("expected Unavailable at no reported cost, got {other:?}"),
+    }
+}
+
 fn unreachable(collected: Collected) -> String {
     match collected.into_report().0 {
         Collected::Unreachable { reason } => reason,
@@ -743,9 +757,10 @@ fn an_unusable_result_costs_what_the_result_read_reports() {
         let mut exchanges = vec![completed(), result_get().reply(ok(body.clone()))];
         exchanges.extend(downloads);
         let transport = Arc::new(ReplayTransport::new(exchanges));
-        let Collected::Ended { cost: booked, .. } = collect(&transport, &clock, &call(json!({})))
+        let Collected::Incomplete { cost: booked, .. } =
+            collect(&transport, &clock, &call(json!({})))
         else {
-            panic!("an unusable result ends the job: {body}");
+            panic!("an unusable result leaves the job incomplete: {body}");
         };
         assert_eq!(booked, cost, "{body}");
     }
@@ -816,6 +831,13 @@ fn a_terminal_job_can_fail_in_an_http_200_response() {
     assert_eq!(
         ended(collect(&transport, &clock, &call(json!({})))),
         "fal video job failed"
+    );
+    let transport = Arc::new(ReplayTransport::new(vec![status_get().reply(ok(json!({
+        "status": "COMPLETED", "error_type": "request_cancelled"
+    })))]));
+    assert_eq!(
+        ended(collect(&transport, &clock, &call(json!({})))),
+        "fal video job failed (request_cancelled)"
     );
 }
 
@@ -904,7 +926,7 @@ fn status_reads_that_end_or_stop_collecting() {
         ),
         (
             HttpResponse::new(422, br#"{"detail": "secret body"}"#.to_vec()),
-            Ok("fal video job status returned HTTP 422"),
+            Err("fal video job status returned HTTP 422"),
         ),
         (
             ok(json!({"status": "IN_PROGRESS", "request_id": "req-2"})),
@@ -912,10 +934,14 @@ fn status_reads_that_end_or_stop_collecting() {
         ),
     ];
     for (response, expected) in cases {
+        let status = response.status;
         let clock = Arc::new(FakeClock::new());
         let transport = Arc::new(ReplayTransport::new(vec![status_get().reply(response)]));
         let collected = collect(&transport, &clock, &call(json!({})));
         match expected {
+            Ok(sentence) if matches!(status, 404 | 410) => {
+                assert_eq!(unavailable(collected), sentence)
+            }
             Ok(sentence) => assert_eq!(ended(collected), sentence),
             Err(sentence) => assert_eq!(unreachable(collected), sentence),
         }
@@ -952,6 +978,10 @@ fn result_reads() {
     let clock = Arc::new(FakeClock::new());
     let transport = Arc::new(ReplayTransport::new(vec![
         completed(),
+        result_get().reply(HttpResponse::json(
+            400,
+            &json!({"detail": "Request is still in progress"}),
+        )),
         result_get().reply(HttpResponse::new(502, Vec::new())),
         result_get().reply(HttpResponse::new(200, b"<html/>".to_vec())),
         result_get().reply(ok(json!({"data": {"video": {"url": VIDEO_URL}}}))),
@@ -961,7 +991,7 @@ fn result_reads() {
         panic!("an answer")
     };
     assert_eq!(answer.cost, None);
-    assert_eq!(clock.sleeps().len(), 2);
+    assert_eq!(clock.sleeps().len(), 3);
 
     let cases: Vec<(HttpResponse, Result<&str, &str>)> = vec![
         (
@@ -985,11 +1015,20 @@ fn result_reads() {
             Ok("fal video job result returned HTTP 404"),
         ),
         (
+            HttpResponse::new(422, Vec::new()),
+            Err("fal video job result returned HTTP 422"),
+        ),
+        (
+            HttpResponse::new(499, Vec::new()),
+            Err("fal video job result returned HTTP 499"),
+        ),
+        (
             HttpResponse::new(401, Vec::new()),
             Err("fal video job result returned HTTP 401"),
         ),
     ];
     for (response, expected) in cases {
+        let status = response.status;
         let clock = Arc::new(FakeClock::new());
         let transport = Arc::new(ReplayTransport::new(vec![
             completed(),
@@ -997,36 +1036,39 @@ fn result_reads() {
         ]));
         let collected = collect(&transport, &clock, &call(json!({})));
         match expected {
-            Ok(sentence) => assert_eq!(ended(collected), sentence),
+            Ok(sentence) if matches!(status, 404 | 410) => {
+                assert_eq!(unavailable(collected), sentence)
+            }
+            Ok(sentence) => assert_eq!(incomplete(collected), sentence),
             Err(sentence) => assert_eq!(unreachable(collected), sentence),
         }
     }
 }
 
 #[test]
-fn downloads_that_end_or_stop_collecting() {
+fn downloads_of_completed_jobs_that_fail_are_recoverable() {
     let not_mp4 = b"\x1a\x45\xdf\xa3 a webm head".to_vec();
-    let cases: Vec<(Exchange, Result<String, &str>)> = vec![
+    let cases: Vec<(Exchange, String)> = vec![
         (
             Expect::download(VIDEO_URL).reply(
                 HttpResponse::new(302, Vec::new()).with_header("location", "https://x.test/a.mp4"),
             ),
-            Err("fal output video download returned HTTP 302"),
+            "fal output video download returned HTTP 302".into(),
         ),
         (
             Expect::download(VIDEO_URL).reply(HttpResponse::new(403, Vec::new())),
-            Err("fal output video download returned HTTP 403"),
+            "fal output video download returned HTTP 403".into(),
         ),
         (
             Expect::download(VIDEO_URL).reply(HttpResponse::new(410, Vec::new())),
-            Ok("fal output video download returned HTTP 410".into()),
+            "fal output video download returned HTTP 410".into(),
         ),
         (
             Expect::download(VIDEO_URL).reply(
                 HttpResponse::new(200, b"\x1a\x45\xdf\xa3 webm".to_vec())
                     .with_header("content-type", "video/mp4"),
             ),
-            Ok("fal output video is not an MP4 file".into()),
+            "fal output video is not an MP4 file".into(),
         ),
         (
             Exchange {
@@ -1037,43 +1079,40 @@ fn downloads_that_end_or_stop_collecting() {
                     len: video::MAX_VIDEO_BYTES + 1,
                 },
             },
-            Ok(format!(
+            format!(
                 "fal output video download failed: the response is larger than {} bytes",
                 video::MAX_VIDEO_BYTES
-            )),
+            ),
         ),
         (
             Expect::download(VIDEO_URL)
                 .reply(HttpResponse::new(200, not_mp4).with_header("content-type", "video/mp4")),
-            Ok("fal output video is not an MP4 file".into()),
+            "fal output video is not an MP4 file".into(),
         ),
         (
             Expect::download(VIDEO_URL).reply(HttpResponse::new(200, Vec::new())),
-            Ok("fal output video download was empty".into()),
+            "fal output video download was empty".into(),
         ),
         (
             Expect::download(VIDEO_URL).reply(
                 HttpResponse::new(200, AUDIO_ONLY.to_vec())
                     .with_header("content-type", "video/mp4"),
             ),
-            Ok("the file carries no video stream".into()),
+            "the file carries no video stream".into(),
         ),
         (
             Expect::download(VIDEO_URL).fail(TransportError::not_sent(
                 TransportErrorKind::Refused,
                 "the network is off",
             )),
-            Err("fal output video download was not sent: the network is off"),
+            "fal output video download was not sent: the network is off".into(),
         ),
     ];
     for (download, expected) in cases {
         let clock = Arc::new(FakeClock::new());
         let transport = Arc::new(ReplayTransport::new(vec![completed(), result(), download]));
         let collected = collect(&transport, &clock, &call(json!({})));
-        match expected {
-            Ok(sentence) => assert_eq!(ended(collected), sentence),
-            Err(sentence) => assert_eq!(unreachable(collected), sentence),
-        }
+        assert_eq!(incomplete(collected), expected);
     }
 
     // The bytes start like an MP4 but carry no movie.
@@ -1085,7 +1124,7 @@ fn downloads_that_end_or_stop_collecting() {
             HttpResponse::new(200, media::MP4_HEAD.to_vec()).with_header("content-type", "mp4"),
         ),
     ]));
-    let reason = ended(collect(&transport, &clock, &call(json!({}))));
+    let reason = incomplete(collect(&transport, &clock, &call(json!({}))));
     assert!(
         reason.starts_with("the clip cannot be read: not an MP4 file"),
         "{reason}"
@@ -1094,8 +1133,7 @@ fn downloads_that_end_or_stop_collecting() {
 
 #[test]
 fn the_bytes_decide_the_kind_not_the_headers() {
-    // A valid MP4 is answered whatever its content-type header or declared type says: fal's
-    // README ends a job only when the bytes are not MP4.
+    // A valid MP4 is answered whatever its content-type header or declared type says.
     let results = [
         json!({"video": {"url": VIDEO_URL}}),
         json!({"video": {"url": VIDEO_URL, "content_type": "video/webm"}}),
@@ -1132,9 +1170,7 @@ fn the_bytes_decide_the_kind_not_the_headers() {
 }
 
 #[test]
-fn a_failed_download_is_unreachable_and_made_once() {
-    // spec/adapters.md §7: a result file is fetched once per collect. A failure a later collect
-    // may not repeat leaves the job `submitted`; the next collect reads the result again.
+fn a_failed_download_is_made_once_per_collect() {
     let cases: Vec<(Exchange, &str)> = vec![
         (
             Expect::download(VIDEO_URL).reply(HttpResponse::new(503, Vec::new())),
@@ -1175,7 +1211,7 @@ fn a_failed_download_is_unreachable_and_made_once() {
         let clock = Arc::new(FakeClock::new());
         let transport = Arc::new(ReplayTransport::new(vec![completed(), result(), download]));
         assert_eq!(
-            unreachable(collect(&transport, &clock, &call(json!({})))),
+            incomplete(collect(&transport, &clock, &call(json!({})))),
             sentence
         );
         let downloads = transport
@@ -1213,9 +1249,20 @@ fn a_video_url_is_fetched_byte_for_byte_and_never_quoted() {
             "error sending request for url (https://v3b.fal.media/files/clip.mp4?k=%27x%27&X-Amz-Signature=deadbeef)",
         )),
     ]));
-    let reason = unreachable(collect(&transport, &clock, &call(json!({}))));
+    let reason = incomplete(collect(&transport, &clock, &call(json!({}))));
     assert!(!reason.contains("deadbeef"), "{reason}");
     assert!(!reason.contains("v3b.fal.media/files"), "{reason}");
+
+    let transport = Arc::new(ReplayTransport::new(vec![
+        completed(),
+        result_get().reply(ok(json!({"video": {"url": signed}}))),
+        Expect::download(signed)
+            .reply(HttpResponse::new(403, Vec::new()).with_header("x-request-id", "deadbeef")),
+    ]));
+    assert_eq!(
+        incomplete(collect(&transport, &clock, &call(json!({})))),
+        "fal output video download returned HTTP 403"
+    );
 }
 
 #[test]

@@ -24,6 +24,10 @@ export const native_adapter = adapter({
   collect: async (call) => {
     writeFileSync(".native-collecting", "");
     while (!existsSync(".native-release")) await setTimeout(20, undefined, { signal: call.signal });
+    if (existsSync(".native-invalid-answer")) {
+      // An unknown capability's file needs an explicit kind. The provider still reports a charge.
+      return { outcome: "answered", files: { result: Buffer.from("Synthetic result bytes.") }, costUsd: 0.01 };
+    }
     return { outcome: "answered", data: { json: { task_id: call.handle.task_id,
       future: call.request.future_face_budget, operation: call.request.operation } }, costUsd: 0.01 };
   },
