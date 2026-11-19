@@ -98,9 +98,12 @@ def test_check_examples_covers_every_formula() -> None:
     assert kinds == {
         "fx-route-v1",
         "fx-step-v1",
+        "fx-step-fresh-v1",
         "fx-call-v1",
+        "fx-call-fresh-v1",
         "fx-node-source-v1",
         "fx-plan-v1",
+        "fx-plan-fresh-v1",
     }
     assert sum("instance_id" in e for e in EXAMPLES.values()) >= 2
 
