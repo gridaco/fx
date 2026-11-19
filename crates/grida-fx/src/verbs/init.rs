@@ -1,9 +1,9 @@
 //! `init`: start or validate a project. `add`: install an editable template as a new project
 //! (spec/service.md §2).
 //!
-//! Indexed templates are read from the FX release archive. `add` can also download a public
-//! GitHub repository at a tag or commit. Both use the shared download transport without
-//! credentials, redirects or retries. Nothing a template holds is executed.
+//! Indexed templates are read from the FX release archive. `add` can also download a GitHub
+//! repository at a tag or commit. Ordinary downloads use the shared anonymous transport.
+//! Explicitly authenticated downloads use GitHub CLI. Nothing a template holds is executed.
 
 mod community;
 
@@ -306,6 +306,11 @@ pub fn add(args: &AddArgs) -> Result<u8, Error> {
     let (indexed, repository) = if args.name.contains(['/', '@']) {
         (None, Some(community::Repository::parse(&args.name)?))
     } else {
+        if args.github_auth {
+            return Err(Error::usage(
+                "--github-auth requires a GitHub template (OWNER/REPO@REF)",
+            ));
+        }
         if args.workflow.is_some() {
             return Err(Error::usage(
                 "--workflow requires a GitHub template (OWNER/REPO@REF)",
@@ -343,13 +348,24 @@ pub fn add(args: &AddArgs) -> Result<u8, Error> {
         ));
     }
 
-    let source = Source::of(args.template_source.as_deref(), repository.as_ref())?;
-    let contents = source.acquire(location, &parent)?;
-    let source_kind = if repository.is_some() {
-        "github"
-    } else {
-        source.kind()
-    };
+    let (contents, source_kind) =
+        if let Some(repository) = repository.as_ref().filter(|_| args.github_auth) {
+            ensure_download_allowed()?;
+            let Some(archive) =
+                crate::interrupt::with_template_staging(|| repository.authenticated_archive())?
+            else {
+                return Ok(super::run::INTERRUPTED);
+            };
+            (TemplateContents::Archive(archive), "github")
+        } else {
+            let source = Source::of(args.template_source.as_deref(), repository.as_ref())?;
+            let kind = if repository.is_some() {
+                "github"
+            } else {
+                source.kind()
+            };
+            (source.acquire(location, &parent)?, kind)
+        };
     let installed = crate::interrupt::with_template_staging(|| {
         let staging = tempfile::Builder::new()
             .prefix(".fx-add-")
@@ -1191,9 +1207,7 @@ fn unpack(
     Ok(())
 }
 
-/// Fetches an archive once (spec/service.md §2.1): the download lane, no credential, no redirect,
-/// no retry; anything but 200 is refused. `GRIDA_FX_NETWORK=off` refuses it before it is sent.
-fn download(url: &str, github: bool) -> Result<Vec<u8>, Error> {
+fn ensure_download_allowed() -> Result<(), Error> {
     let network = grida_fx_providers::live::Network::from_env(&|name| std::env::var(name).ok());
     if network == grida_fx_providers::live::Network::Off {
         return Err(Error::new(
@@ -1201,6 +1215,13 @@ fn download(url: &str, github: bool) -> Result<Vec<u8>, Error> {
             "the template requires a download, and the network is off (GRIDA_FX_NETWORK=off)",
         ));
     }
+    Ok(())
+}
+
+/// Fetches an anonymous archive once (spec/service.md §2.1): the download lane, no credential,
+/// no redirect, no retry; anything but 200 is refused.
+fn download(url: &str, github: bool) -> Result<Vec<u8>, Error> {
+    ensure_download_allowed()?;
     let transport = HttpTransport::new(HttpConfig::default()).map_err(Error::internal)?;
     let request = HttpRequest {
         method: Method::Get,

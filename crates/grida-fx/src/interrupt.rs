@@ -12,10 +12,10 @@
 //!   win first and preserve the actual terminal outcome. Repeated SIGTERM stays
 //!   cooperative. A second explicit SIGINT is emergency force, with cleanup unverified.
 //!   There is no elapsed-time escalation while the runner owns cleanup.
-//! - while `add` holds a staged template, an interruption accepted before publication stops
-//!   setup after dropping staging. A second explicit SIGINT can force exit before cleanup
-//!   finishes. Repeated SIGTERM stays cooperative. Once publication starts, FX finishes the
-//!   rename and staging cleanup before resuming immediate-exit handling.
+//! - while `add` fetches an authenticated archive or holds a staged template, an interruption
+//!   accepted before publication stops setup after cleanup. A second explicit SIGINT can force
+//!   exit before cleanup finishes. Repeated SIGTERM stays cooperative. Once publication starts,
+//!   FX finishes the rename and staging cleanup before resuming immediate-exit handling.
 //! - after an inline call has recorded its run, output delivery returns to immediate-exit
 //!   handling. FX attempts to unlink the staged output without waiting for its writer and
 //!   bounds the time it waits for the destination filesystem. The run and any published output
@@ -160,8 +160,8 @@ fn discard_delivery_staging() {
     }
 }
 
-/// Gives the installer the first interruption while it owns a temporary directory. Unless a
-/// second SIGINT forces exit, the closure drops the directory before its caller returns.
+/// Gives the installer the first interruption while it owns an authenticated download or staging
+/// directory. Unless a second SIGINT forces exit, the closure cleans up before its caller returns.
 pub fn with_template_staging<T>(
     stage: impl FnOnce() -> Result<T, Error>,
 ) -> Result<Option<T>, Error> {
@@ -182,7 +182,7 @@ pub fn with_template_staging<T>(
     }
 }
 
-/// Checks for cancellation between entries while materializing a template.
+/// Checks for cancellation during an authenticated download or while materializing a template.
 pub fn check_template_staging() -> Result<(), Error> {
     if matches!(
         INSTALL.load(Ordering::SeqCst),

@@ -124,11 +124,19 @@ readiness with `grida fx doctor <target>` after setting up the prerequisites.
 preset. Edit the preset in `fox-pet`. Follow its README to set up Python and preview with the
 stand-in or draw live with signed-in Codex.
 
-`grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--json]` copies a public GitHub
+`grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` copies a GitHub
 repository with `fx.yaml` at its root. Give a tag or full 40-character commit SHA. For example,
 `grida fx add acme/studio@v1.2.0 --workflow posters` creates `./studio` and selects the workflow
 whose filename stem is `posters`. `template.name` is the full reference and `template.source`
 is `github`.
+
+For a private GitHub template, sign in with `gh auth login`, then use
+`grida fx add acme/studio@v1.2.0 --github-auth`. The GitHub CLI (`gh`) must be on `PATH` and
+authenticated to read the repository. Only GitHub template requests with `--github-auth`
+invoke `gh`. An occupied destination or `GRIDA_FX_NETWORK=off` stops the install before `gh`
+starts. If the GitHub CLI is unavailable, authentication is missing, or the repository or ref
+is inaccessible, FX exits 2 without creating the project. The archive follows the same checks
+and receipt format.
 
 A root `fx-template.json` can declare the default starter. Its required `workflow_entry` names
 the YAML workflow, and optional `inputs_file`, `required_inputs` and `prerequisites` describe the
@@ -804,7 +812,7 @@ protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
 | `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
 | `grida fx start [--background] [--port N] [--open]`, `status [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
 | `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
-| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--json]` | copy an editable template into a fresh project folder |
+| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` | copy an editable template into a fresh project folder |
 
 `<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
 `--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.

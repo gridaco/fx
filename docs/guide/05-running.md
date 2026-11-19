@@ -11,7 +11,7 @@ standalone `grida-fx` command and the source setup are in
 | Command | |
 |---|---|
 | `grida fx init [directory] [--template NAME] [--json]` | start a new project in an empty folder from the starter or a template (`--list-templates` lists them), or check an existing `fx.yaml`; never overwrites |
-| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--json]` | copy an FX example or a public GitHub template at a tag or full commit SHA into a new, editable project ([Start from a template](01-getting-started.md#start-from-a-template)) |
+| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` | copy an FX example or a GitHub template at a tag or full commit SHA into a new, editable project ([Start from a template](01-getting-started.md#start-from-a-template)) |
 | `grida fx start [--project directory] [--port N] [--background] [--open] [--json]` | serve the project's dashboard and recorded runs; foreground by default |
 | `grida fx status [--project directory] [--json]` / `stop [--project directory] [--json]` | inspect or stop that project's service |
 | `grida fx logs [--project directory] [--lines N]` | read a bounded tail of service logs |

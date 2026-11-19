@@ -1,10 +1,13 @@
-//! Public GitHub sources and their declared or discoverable starter workflows.
+//! GitHub sources and their declared or discoverable starter workflows.
 
-use super::{Starter, refused};
-use grida_fx_core::Error;
+use super::{DOWNLOAD_TIMEOUT, MAX_DOWNLOAD, Starter, refused};
+use grida_fx_core::{Error, ErrorKind};
 use std::collections::BTreeSet;
 use std::io;
 use std::path::Path;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::AsyncReadExt;
 
 const MANIFEST: &str = "fx-template.json";
 
@@ -55,17 +58,108 @@ impl<'a> Repository<'a> {
     }
 
     pub(super) fn archive_url(&self) -> String {
-        let scoped_ref = if self.reference.len() == 40
-            && self.reference.bytes().all(|byte| byte.is_ascii_hexdigit())
+        format!(
+            "https://codeload.github.com/{}/{}/tar.gz/{}",
+            self.owner,
+            self.name,
+            self.scoped_ref()
+        )
+    }
+
+    fn scoped_ref(&self) -> String {
+        if self.reference.len() == 40 && self.reference.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
             self.reference.to_ascii_lowercase()
         } else {
             format!("refs/tags/{}", self.reference)
-        };
-        format!(
-            "https://codeload.github.com/{}/{}/tar.gz/{scoped_ref}",
-            self.owner, self.name
+        }
+    }
+
+    /// GitHub's API takes a single path parameter for a fully qualified ref.
+    fn archive_endpoint(&self) -> String {
+        let reference = self.scoped_ref().replace('/', "%2F").replace('+', "%2B");
+        format!("repos/{}/{}/tarball/{reference}", self.owner, self.name)
+    }
+
+    /// Run the bounded fetch inside the installer's cooperative interrupt scope.
+    pub(super) fn authenticated_archive(&self) -> Result<Vec<u8>, Error> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| Error::io("the download", &error))?;
+        runtime.block_on(fetch_with_gh(&self.archive_endpoint()))
+    }
+}
+
+async fn fetch_with_gh(endpoint: &str) -> Result<Vec<u8>, Error> {
+    crate::interrupt::check_template_staging()?;
+    // Let gh apply its own authentication and follow the archive redirect. Its diagnostics may
+    // contain local paths or signed URLs, so only the archive is read back into FX.
+    let mut child = tokio::process::Command::new("gh")
+        .args(["api", "--hostname", "github.com", endpoint])
+        .env("GH_PROMPT_DISABLED", "1")
+        .env("GH_NO_UPDATE_NOTIFIER", "1")
+        .env_remove("GH_DEBUG")
+        .env_remove("GH_FORCE_TTY")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| {
+            let message = if error.kind() == io::ErrorKind::NotFound {
+                "--github-auth requires GitHub CLI (gh). Install gh and run gh auth login, then retry."
+            } else {
+                "could not start GitHub CLI (gh). Check that gh is executable and retry."
+            };
+            Error::new(ErrorKind::Io, message)
+        })?;
+
+    let failed = || {
+        Error::new(
+            ErrorKind::Io,
+            "could not download the template with gh. Check your GitHub CLI sign-in (gh auth login), repository read access, and the tag or commit.",
         )
+    };
+    let read_archive = async {
+        let mut archive = Vec::new();
+        child
+            .stdout
+            .take()
+            .ok_or_else(failed)?
+            .take(MAX_DOWNLOAD + 1)
+            .read_to_end(&mut archive)
+            .await
+            .map_err(|_| failed())?;
+        if archive.len() as u64 > MAX_DOWNLOAD {
+            return Err(Error::new(
+                ErrorKind::Io,
+                "the template download exceeds 64 MiB",
+            ));
+        }
+        if !child.wait().await.is_ok_and(|status| status.success()) {
+            return Err(failed());
+        }
+        Ok(archive)
+    };
+    let result = tokio::select! {
+        result = tokio::time::timeout(DOWNLOAD_TIMEOUT, read_archive) => result.unwrap_or_else(|_| {
+            Err(Error::new(ErrorKind::Io, "the template download with gh timed out"))
+        }),
+        error = wait_for_interrupt() => Err(error),
+    };
+    if result.is_err() {
+        let _ = child.kill().await;
+    }
+    result
+}
+
+async fn wait_for_interrupt() -> Error {
+    loop {
+        if let Err(error) = crate::interrupt::check_template_staging() {
+            return error;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -175,17 +269,29 @@ mod tests {
     #[test]
     fn github_urls_use_the_tag_namespace_or_the_full_commit() {
         let sha = "0123456789abcdef0123456789abcdef01234567";
-        for (reference, path) in [
-            ("v1.2.3+build", "refs/tags/v1.2.3+build"),
-            ("release/spring", "refs/tags/release/spring"),
-            ("0123456", "refs/tags/0123456"),
-            (sha, sha),
+        for (reference, path, api_ref) in [
+            (
+                "v1.2.3+build",
+                "refs/tags/v1.2.3+build",
+                "refs%2Ftags%2Fv1.2.3%2Bbuild",
+            ),
+            (
+                "release/spring",
+                "refs/tags/release/spring",
+                "refs%2Ftags%2Frelease%2Fspring",
+            ),
+            ("0123456", "refs/tags/0123456", "refs%2Ftags%2F0123456"),
+            (&sha.to_ascii_uppercase(), sha, sha),
         ] {
             let source = format!("acme/example@{reference}");
             let repository = Repository::parse(&source).unwrap();
             assert_eq!(
                 repository.archive_url(),
                 format!("https://codeload.github.com/acme/example/tar.gz/{path}")
+            );
+            assert_eq!(
+                repository.archive_endpoint(),
+                format!("repos/acme/example/tarball/{api_ref}")
             );
         }
     }

@@ -17,7 +17,7 @@ discussion is shorthand, not a newly installed executable alias.
 | `init [DIRECTORY] [--template NAME] [--json]` | Start a new project from the built-in starter or a named template, or validate an existing `fx.yaml`. |
 | `init --list-templates [--json]` | List the templates `init` can start from and identify the starters accepted by `add`. |
 | `add NAME [DESTINATION] [--json]` | Install an editable copy of an indexed starter in a new directory. |
-| `add OWNER/REPO@REF [DESTINATION] [--workflow NAME] [--json]` | Install a starter from a pinned public GitHub repository. |
+| `add OWNER/REPO@REF [DESTINATION] [--workflow NAME] [--github-auth] [--json]` | Install a starter from a pinned GitHub repository. Opt in to GitHub CLI authentication with `--github-auth`. |
 | `start [--project DIRECTORY] [--port N] [--background] [--open] [--json]` | Start the local FX service; foreground by default. |
 | `status [--project DIRECTORY] [--json]` | Inspect the selected project's service using an identity/compatibility handshake. |
 | `stop [--project DIRECTORY] [--json]` | Stop only the selected service; preserve runs, plans, cache and configuration. |
@@ -89,8 +89,9 @@ from the FX release the engine belongs to:
 gzip-compressed tar archive, whose entries lie under one top-level folder. The
 template downloads and the bounded read-only model lookups in
 [model-selection.md](model-selection.md) §3 are the engine's network exchanges outside a
-live run's provider calls. The template download goes through the providers' default transport on its download lane
-([adapters.md](adapters.md) §2): no credential, no cookie, the environment's
+live run's provider calls. Anonymous template downloads go through the providers'
+default transport on its download lane ([adapters.md](adapters.md) §2): no
+credential, no cookie, the environment's
 proxies, no redirect followed and no retry. Anything but HTTP 200 is refused,
 naming the status, as is a body over 64 MiB. With `GRIDA_FX_NETWORK=off` it is
 refused before anything is sent.
@@ -142,7 +143,7 @@ final project root, including workflow search links that will resolve once the
 project exists there. It validates the declared YAML workflow entry and verifies
 the bundled preset file when one is declared. Missing declared user-supplied inputs
 are reported on success. Prerequisites are declarations. The installer does not
-probe them, launch code, install dependencies, load credentials, or consult
+probe them, launch code, install dependencies, load provider credentials, or consult
 providers. It publishes the finished directory with one exclusive rename. If
 two installs target the same path, at most one publishes and the other fails.
 If FX accepts an interrupt before publication, it stops staging, removes the
@@ -152,14 +153,28 @@ completes once it starts.
 Template inputs in the source tree are copied as files. Canonical runs and
 downloads of separately hosted input or output files are outside this operation.
 
-**Public GitHub templates.** `add OWNER/REPO@REF` downloads the repository
-snapshot from `codeload.github.com`. `REF` is required. A complete 40-hex-digit
-commit SHA selects that revision. Other supported refs select tags through
+**GitHub templates.** `add OWNER/REPO@REF` downloads the repository snapshot
+anonymously from `codeload.github.com` by default. `REF` is required. A complete
+40-hex-digit commit SHA selects that revision. Other supported refs select tags through
 `refs/tags/` and never fall back to a branch. Tags can be moved by repository
-owners. Use a full commit SHA to pin immutable source. The same credential-free
-download and staging rules apply as for an FX release. No clone, submodule
-fetch, or private repository authentication is involved. The hidden
+owners. Use a full commit SHA to pin immutable source. The default download uses
+the same credential-free download and staging rules as an FX release. The hidden
 `--template-source` override can supply a fixture with the same archive layout.
+
+`--github-auth` opts in to fetching the same snapshot with the GitHub CLI (`gh`)
+and its existing authentication for `github.com`. The flag applies only to
+`OWNER/REPO@REF` and conflicts with the hidden `--template-source` override.
+The default download never invokes `gh`, even if an anonymous request fails.
+An occupied destination or `GRIDA_FX_NETWORK=off` stops the install before FX
+starts `gh`. The authenticated download runs without prompts and is limited to
+64 MiB and 300 seconds. An accepted interrupt stops the download and exits 130.
+FX passes the gzip-compressed tar archive through the same extractor, validation,
+and publication as the default download. The fetch uses a snapshot without
+cloning or downloading submodules.
+FX leaves credential handling to `gh` and omits tokens and signed download URLs
+from command output and the install receipt. On failure, FX exits 2 and gives
+guidance for an unavailable GitHub CLI, missing authentication, or an inaccessible
+repository or ref.
 
 Owner names have 1–39 ASCII letters, digits, or hyphens, beginning and ending
 with a letter or digit. Repository names have 1–100 ASCII letters, digits,
@@ -392,7 +407,7 @@ record. `add --json` uses the same result kind on success, with `created: true`,
 the installed `template`, and the extra members `workflow_entry`, `inputs_file`
 when declared, `missing_inputs` and `prerequisites`. File paths other than
 `project_root` are project-relative and `/`-separated. `missing_inputs` and
-`prerequisites` are arrays and may be empty. A public GitHub install reports
+`prerequisites` are arrays and may be empty. A GitHub install reports
 `template.source: github` and the supplied `OWNER/REPO@REF` in `template.name`.
 `stop --json` returns the final status document,
 whereas its private HTTP endpoint acknowledges `stopping` before shutdown completes.

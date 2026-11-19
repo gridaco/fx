@@ -1,5 +1,5 @@
 //! Project setup with `init` and `add` (spec/service.md §2). Nothing reaches beyond this
-//! machine: GitHub archives are stood in for by archives built here, sometimes served on loopback.
+//! machine: tests serve synthetic archives on loopback or through a stand-in for GitHub CLI.
 #![cfg(unix)]
 
 use serde_json::{Value, json};
@@ -1020,6 +1020,197 @@ fn an_unsafe_or_wrong_archive_is_refused_and_writes_nothing() {
 
 // --- Downloads ----------------------------------------------------------------------------------
 
+fn write_github_cli(root: &Path, body: &str) {
+    grida_fx_providers::testing::write_program(
+        &root.join("gh"),
+        &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"${{0%/*}}/gh-args\"\n{body}\n"),
+    );
+}
+
+fn github_cli_add(root: &Path, source: &str, options: &[&str]) -> Command {
+    let mut call = command(root);
+    call.env("PATH", root)
+        .env_remove("GRIDA_FX_NETWORK")
+        .args(["add", source, "--github-auth"])
+        .args(options);
+    call
+}
+
+#[test]
+fn github_auth_add_installs_the_pinned_snapshot_with_the_same_receipt() {
+    for (source, endpoint) in [
+        (
+            "acme/studio@releases/v1.2.0+studio",
+            "repos/acme/studio/tarball/refs%2Ftags%2Freleases%2Fv1.2.0%2Bstudio",
+        ),
+        (
+            "acme/studio@0123456789ABCDEF0123456789ABCDEF01234567",
+            "repos/acme/studio/tarball/0123456789abcdef0123456789abcdef01234567",
+        ),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        write_test_archive(
+            root.path(),
+            &[
+                COMMUNITY_PROJECT,
+                Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+                Item::File("studio-1.2.0/workflows/labels.yaml", COMMUNITY_WORKFLOW),
+                Item::File("studio-1.2.0/.env.local", b"# Studio local configuration\n"),
+            ],
+        );
+        write_github_cli(
+            root.path(),
+            "test \"$GH_PROMPT_DISABLED\" = 1 || exit 1\nexec /bin/cat \"${0%/*}/release.tar.gz\"",
+        );
+
+        let result = success(
+            github_cli_add(root.path(), source, &["--workflow", "posters", "--json"])
+                .output()
+                .unwrap(),
+        );
+        conforms("fx-project-init-v1", &result);
+        assert_eq!(
+            result["template"],
+            json!({"name": source, "source": "github"})
+        );
+        assert_eq!(result["workflow_entry"], "workflows/posters.yaml");
+        let project = root.path().join("studio");
+        assert_eq!(
+            result["project_root"],
+            json!(project.canonicalize().unwrap())
+        );
+        assert_eq!(
+            std::fs::read(project.join("workflows/posters.yaml")).unwrap(),
+            COMMUNITY_WORKFLOW
+        );
+        assert!(!project.join(".env.local").exists());
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("gh-args")).unwrap(),
+            format!("api\n--hostname\ngithub.com\n{endpoint}\n")
+        );
+    }
+}
+
+#[test]
+fn github_auth_add_reports_setup_and_fetch_errors_without_exposing_output() {
+    let root = tempfile::tempdir().unwrap();
+    let call = || {
+        github_cli_add(root.path(), COMMUNITY, &["--json"])
+            .output()
+            .unwrap()
+    };
+    refused(&call(), "requires GitHub CLI (gh)");
+    write_github_cli(root.path(), "exit 4");
+    refused(&call(), "gh auth login");
+
+    let private_output = "https://example.test/archive?token=fixture-not-a-credential";
+    write_github_cli(
+        root.path(),
+        &format!(
+            "printf '%s\\n' '{private_output}'\nprintf '%s\\n' '{private_output}' >&2\nexit 1"
+        ),
+    );
+    let outcome = call();
+    refused(&outcome, "repository read access");
+    assert!(!String::from_utf8_lossy(&outcome.stderr).contains(private_output));
+    assert!(outcome.stdout.is_empty());
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn github_auth_add_refuses_oversized_downloads_without_publishing() {
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(
+        root.path(),
+        "exec /usr/bin/head -c $((64 * 1024 * 1024 + 1)) /dev/zero",
+    );
+    let outcome = github_cli_add(root.path(), COMMUNITY, &[])
+        .output()
+        .unwrap();
+    refused(&outcome, "the template download exceeds 64 MiB");
+    assert!(outcome.stdout.is_empty());
+    assert!(!root.path().join("studio").exists());
+}
+
+#[test]
+fn github_auth_add_validates_before_invoking_github_cli() {
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(root.path(), "exit 1");
+    refused(
+        &github_cli_add(root.path(), COMMUNITY, &[])
+            .env("GRIDA_FX_NETWORK", "off")
+            .output()
+            .unwrap(),
+        "GRIDA_FX_NETWORK=off",
+    );
+    assert!(!root.path().join("studio").exists());
+    std::fs::create_dir(root.path().join("studio")).unwrap();
+    refused(
+        &github_cli_add(root.path(), COMMUNITY, &[])
+            .output()
+            .unwrap(),
+        "already exists",
+    );
+    refused(
+        &github_cli_add(root.path(), "pet", &[]).output().unwrap(),
+        "--github-auth requires a GitHub template",
+    );
+    assert!(!root.path().join("gh-args").exists());
+}
+
+#[test]
+fn interrupting_github_auth_add_stops_the_downloader() {
+    use rustix::process::{Pid, Signal, kill_process, test_kill_process};
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+
+    fn wait_for<T>(mut check: impl FnMut() -> Option<T>) -> Option<T> {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5) {
+            if let Some(value) = check() {
+                return Some(value);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        None
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    write_github_cli(
+        root.path(),
+        "printf '%s\\n' \"$$\" > \"${0%/*}/gh-pid\"\nexec /bin/sleep 30",
+    );
+    let mut engine = github_cli_add(root.path(), COMMUNITY, &[])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let downloader = wait_for(|| {
+        let text = std::fs::read_to_string(root.path().join("gh-pid")).ok()?;
+        Pid::from_raw(text.strip_suffix('\n')?.parse().ok()?)
+    })
+    .unwrap_or_else(|| {
+        let _ = engine.kill();
+        let _ = engine.wait();
+        panic!("the downloader did not start");
+    });
+
+    let interrupted = kill_process(Pid::from_child(&engine), Signal::INT);
+    let status = wait_for(|| engine.try_wait().unwrap());
+    if status.is_none() {
+        let _ = engine.kill();
+        let _ = engine.wait();
+    }
+    let downloader_exited = test_kill_process(downloader) == Err(rustix::io::Errno::SRCH);
+    if !downloader_exited {
+        let _ = kill_process(downloader, Signal::KILL);
+    }
+    interrupted.unwrap();
+    assert_eq!(status.and_then(|exit| exit.code()), Some(130));
+    assert!(downloader_exited, "the downloader outlived grida-fx");
+    assert_eq!(files(root.path()), vec!["gh", "gh-args", "gh-pid"]);
+}
+
 /// Serves one HTTP response on loopback and returns its URL and the request it received.
 fn serve_once(status: &str, body: Vec<u8>) -> (String, std::thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1067,6 +1258,44 @@ fn download(root: &Path, url: &str, network: bool) -> Output {
         ])
         .output()
         .unwrap()
+}
+
+#[test]
+fn ordinary_github_add_downloads_anonymously_without_invoking_github_cli() {
+    let root = tempfile::tempdir().unwrap();
+    let (url, served) = serve_once(
+        "200 OK",
+        archive(&[
+            COMMUNITY_PROJECT,
+            Item::File("studio-1.2.0/workflows/posters.yaml", COMMUNITY_WORKFLOW),
+        ]),
+    );
+    let install = |url: &str, destination: &str| {
+        command(root.path())
+            .env("PATH", root.path())
+            .env_remove("GRIDA_FX_NETWORK")
+            .args([
+                "add",
+                COMMUNITY,
+                destination,
+                "--template-source",
+                url,
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
+    let installed = success(install(&url, "public"));
+    assert_eq!(installed["workflow_entry"], "workflows/posters.yaml");
+    let request = served.join().unwrap().to_ascii_lowercase();
+    assert!(!request.contains("authorization"), "{request}");
+
+    write_github_cli(root.path(), "exit 1");
+    let (url, served) = serve_once("404 Not Found", b"no such tag".to_vec());
+    refused(&install(&url, "missing"), "returned HTTP 404");
+    served.join().unwrap();
+    assert!(!root.path().join("missing").exists());
+    assert!(!root.path().join("gh-args").exists());
 }
 
 #[test]
