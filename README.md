@@ -78,8 +78,8 @@ use `grida fx add OWNER/REPO@REF` with a tag or full commit SHA. For a private t
 npx skills add gridaco/fx
 ```
 
-[`llms.txt`](llms.txt) is the reference for agents: the whole of FX on one page, checked against
-the engine.
+[`llms.txt`](llms.txt) is the concise reference for agents, with runnable recipes checked against
+the engine and links to the detailed guides.
 
 ## Learn more
 

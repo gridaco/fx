@@ -1090,8 +1090,7 @@ and TypeScript projects. It sends a file and unknown provider fields through a
 custom operation, cancels after submission, resumes without submitting again,
 replays the call cache independently of the step cache, and checks identities
 when a field, file or operation changes. Its synthetic provider never contacts a
-service. The [llms.txt native recipe](../../llms.txt#a-provider-native-operation-outside-fxs-standard-schemas)
-is a smaller complete project.
+service.
 
 A custom operation does not disable checks on a standard capability. If an
 adapter declares `mesh.generate`, its requests still need exactly one `image` or
