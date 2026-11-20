@@ -1,1142 +1,258 @@
 # Grida FX
 
-> Grida FX is a workflow engine for generated assets (images, video, audio, 3D models, structured
-> text) and ordinary local code. You describe steps in a YAML workflow; FX resolves its models,
-> plans its price, runs only what changed, caches every result by content, reserves every paid call
-> against a ceiling, and records how each result was made. The command is `grida fx`.
+> Grida FX is a workflow engine for generating and processing assets. It combines model calls
+> for images, video, audio, 3D and structured text with local code. The command is `grida fx`.
 
 Version: 0.11.0
 
-This file is the reference for people and coding agents using FX: what exists, how to write it,
-and how to run it, as complete recipes. It is kept by hand and checked in CI against the engine
-of the release it names: every recipe below is planned, every `grida fx` command is checked
-against the command's own help, and every link resolves. When it and the guide, the README or a
-skill disagree, trust this file. Only the contracts in `spec/` (normative) and the engine itself
-rank above it. An installed FX may be older or newer than the version above: `grida fx --version`
-says which you have, and `grida fx --help` and `grida fx <verb> --help` are always right for it.
+An FX project keeps its settings in `fx.yaml`. A workflow wires inputs, steps and outputs in YAML
+or through a Python or TypeScript builder. Planning resolves the steps and model routes and
+forecasts cost before execution. A run executes the plan, reuses cached work and saves a record
+you can inspect through the CLI, SDKs or local browser viewer. For example, one workflow can draw
+an icon, check its transparency with local code, and deliver the accepted PNG.
 
-Cost forecasts are optional. A compatible new GG/OpenRouter image model may resolve without
-a price: ordinary planning succeeds and displays unknown cost. A partial estimate names its
-unpriced calls instead of presenting the known subtotal as the total. Shipped, authored and
-discovered routes use the same rule; a complete authored route may omit `price`, and `price: null`
-clears an inherited price. Existing `price.cap_usd` is a reservation allowance, not a forecast.
+## Find what you need
 
-`grida fx plan <workflow> --require-estimates` and the same option on `run` require applicable
-forecasts for uncached paid work. Python uses `require_estimates=True`; JavaScript uses
-`requireEstimates: true`. This checks coverage, not billing accuracy. Free stand-in runs are exempt. Strict planning
-checks potential calls of uncached steps; it cannot prove arbitrary node requests will all
-replay from the managed-call cache.
+- **Try FX.** [Install the CLI](#install-and-check) and [test an image workflow offline](#plan-an-icon-and-test-it-offline).
+- **Author a workflow.** See [project setup](#a-project), [workflow syntax](#the-workflow-file)
+  and [example projects](https://github.com/gridaco/fx/tree/main/examples).
+- **Use a model.** Read the [spending and credential rules](#rules-for-agents) and
+  [choose a route and provider](#routes-and-providers).
+- **Work with a run.** See [run, inspect and recover](#running),
+  [viewer and SDK access](#viewer-and-sdks) and [troubleshooting](#when-something-fails).
+- **Look up details.** Use the [guide index](https://github.com/gridaco/fx/blob/main/docs/guide/README.md)
+  for tasks and the [spec index](https://github.com/gridaco/fx/blob/main/spec/README.md) for contracts.
 
-A live unpriced call still requires approval and a ceiling. It reserves the remaining applicable
-run/step budget; competing work waits while funds are held. Reported cost releases unused funds.
-When the provider reports none, FX books the full reservation and retains unknown actual cost;
-that can exhaust the accounting budget after one call. Explicit per-call caps or step budgets
-can partition authorization. FX reservations do not guarantee the provider's final invoice.
-SDK `estimate` accessors preserve unknown totals; `forecast` exposes known subtotals and the
-unpriced call count. See the canonical [routing cases](https://github.com/gridaco/fx/tree/main/conformance/model-selection)
-and [cost cases](https://github.com/gridaco/fx/tree/main/conformance/unknown-cost).
+This index takes precedence over the guide, README and skills for the release it describes. The
+engine and spec are authoritative. For an installed CLI, use `grida fx --version`,
+`grida fx --help` and `grida fx <verb> --help` to check available commands and flags. Use
+`grida fx nodes` to list built-in types, `grida fx nodes TYPE` to inspect settings, ports and
+shipped routes, and `grida fx schema TARGET` for a workflow's inputs.
 
 ## Rules for agents
 
-- **Plan before spending.** `grida fx plan <workflow>` and
-  `grida fx call image.generate --prompt TEXT --dry-run` never make a paid model call.
-  A selected missing GG/OpenRouter image model may require a read-only provider metadata
-  lookup before the offline planner runs. Show the user the steps and estimate before spending.
-- **Spending is the user's call.** `--live` admits paid calls. Run it only with the user's go and an
-  agreed ceiling (`--max-usd`). A run on the user's own Codex or Grok Build needs no ceiling but
-  spends their subscription: ask for that too.
-- **Keys are the user's.** Never read, print, write or commit `.env`, Grida's credential file, or
-  a key. Ask the user to set keys; check what FX found with `grida fx doctor`. Grida manages
-  saved provider keys.
-- **Discover, don't guess.** `grida fx nodes`, `grida fx nodes <type>`, `grida fx schema <target>`
-  and `grida fx --help` list what this installation has.
-- **Ask before changing a route.** The route is part of a step's identity: a new route draws anew
-  and earlier results don't carry over.
-- **`runs/` and `.fx/` belong to FX.** Read runs with `grida fx inspect` or the SDKs; never edit
-  them by hand.
-- **Share the viewer URL.** For plans and saved runs, use `plan --register` or `inspect --register`
-  when supported, and resolve the returned route against the verified URL for the matching project
-  (`grida fx status --json`). For live runs, share the URL `run` prints. Use `--open` when the user
-  wants FX to launch the default browser.
-  Look for the `f(x)` tab icon. Project tabs show the project name. Plan and Run tabs show
-  the workflow's `title` after the mode, and Run tabs also show the run name. The page
-  description uses the workflow's `description` when present, or a summary naming the plan
-  or run. Viewer pages use the `no-referrer` policy.
-- **Don't retry paid calls yourself.** The engine is the only retry owner (at most 6 attempts per
-  call). A failed run is resumed or run again; cached work is not redone.
+- **Plan first.** Use `grida fx plan TARGET --check` to validate the workflow and show the user its
+  steps and forecast. Planning never makes paid model calls. It can load workflow code, run local
+  `at: plan` steps and fetch read-only metadata for a selected missing GG/OpenRouter image binding.
+- **Get approval to spend.** Pass `--live` only with the user's approval and an agreed ceiling. Runs
+  using only the user's Codex or Grok Build still need approval because they use the user's
+  subscription quota, even though FX books them at $0.
+- **Keep credentials private.** Let the user configure keys in the environment, project `.env`, or
+  Grida's credential store for eligible providers. Use `grida fx doctor TARGET` to check readiness
+  without reading key values. Keep secrets out of authoring files, prompts, provider options and run
+  records.
+- **Confirm route changes.** Ask before changing a paid route. A new route changes identity and
+  can require new generation.
+- **Let FX own retries and records.** Use the run commands and SDKs to read or resume runs. Leave
+  generated `runs/` and `.fx/` files to FX. The engine owns provider retries, accounting for each
+  attempt.
+- **Share the viewer URL.** Share the URL emitted by `run` for live work when available. For a plan
+  or saved run, register it and resolve the route against the verified service URL for that project.
+  Use `--open` when the user asks to launch the browser.
 
 ## Install and check
 
+Use Node.js 24 or later for the `grida` command.
+
 ```sh
-npm install -g grida   # the grida command, with FX as `grida fx` (Node.js 24 or later)
-pip install grida      # the Python SDK, for nodes and builders in Python (Python 3.11+, brings Pillow)
-npm install @grida/fx  # in a project: the SDK for nodes and builders in TypeScript (Node 24+ to host them)
-grida fx doctor        # the engine, Python, Node, keys, Codex/Grok Build and routes FX found
+npm install -g grida
+grida fx --version
+grida fx doctor
 ```
 
-- `npx grida fx <verb>` works without a global install. `grida-fx` (from `@grida/fx`) and
-  `python -m grida.fx` (from the Python package) are the same FX with the same verbs, project
-  files, cache and records; `--version` tells installations apart.
-- Platforms: macOS, Linux (glibc 2.28+), x64 and arm64; Windows through WSL 2.
-- **Python is needed** for your own Python nodes, builders and adapters, and for the built-in
-  local types (`image.resize`, `image.crop`, `image.pad`, `image.mirror_repeat`,
-  `image.check_alpha`, `image.check_size`, `json.merge`, `files.copy`, `package`). FX picks
-  `GRIDA_FX_PYTHON`, else the workflow project's `.venv`, else the `.venv` of the project you run
-  from, else the SDK's own Python, else `python3` on `PATH`; older than 3.11 is refused.
-- **Node 24+ is needed** for TypeScript nodes, builders, stand-ins and adapters (Bun and Deno
-  cannot host nodes). FX picks `GRIDA_FX_NODE`, else the Node running `grida fx` or the SDK, else
-  `node`.
-- Paid built-in types (`image.generate`, `structured.generate`, …) and `fx/select@1` run in the
-  engine and need neither, unless a route's provider is served by your own adapter.
+Use `npx grida fx` without a global install. The CLI supports macOS and Linux (glibc 2.28+) on x64
+and arm64, and Windows through WSL 2. Python 3.11+ with `pip install grida` is required for Python
+bodies and built-in local image, JSON and file processing. TypeScript bodies need Node 24+ and the
+project dependency `npm install @grida/fx`. Use `GRIDA_FX_PYTHON` or `GRIDA_FX_NODE` to select a
+host interpreter.
 
 ## A project
 
-```sh
-npx grida fx init my-assets       # a starter project in a new or empty folder; installs and starts nothing
-cd my-assets
-grida fx start --background       # the local viewer at http://127.0.0.1:8787/ (optional)
-grida fx plan icon -- --name "copper lantern"
-```
-
-`init` writes `fx.yaml`, `README.md`, `AGENTS.md`, the FX agent skills in `.agents/skills/`,
-`.gitignore`, `.env.example` and `workflows/icon.yaml`. `grida fx init --list-templates` lists
-templates, and `--template NAME` picks one for a new or empty folder. In a folder that already
-has an `fx.yaml`, plain `init` just checks it. `init` refuses other non-empty folders. To adopt
-one as an FX project, write `fx.yaml` yourself.
-
-`grida fx add NAME [destination]` creates an editable copy of an example in a new folder.
-The default destination is `./NAME`. Its immediate parent must exist. An occupied destination
-exits 2. The new folder has its own `fx.yaml` and can sit inside another project. Run commands
-from the new folder to use its project settings. FX reads the authored template from the
-matching release archive for its own examples. `GRIDA_FX_NETWORK=off` prevents template downloads.
-If FX accepts an interrupt before publishing the project folder, it cleans up staging and exits 130.
-A second Ctrl-C during staging cancellation can force exit and leave temporary files.
-
-Use `grida fx init --list-templates --json` to discover FX's own templates without a download. Entries
-with a `workflow_entry` can be added. On success, `add --json` emits `fx-project-init-v1` with the
-absolute `project_root`, `created: true`, `files_created`, `template`, `workflow_entry` and
-optional `inputs_file`.
-The entry and preset paths are relative to the new root. `missing_inputs` lists declared
-input file paths the user still needs to supply, and `prerequisites` lists requirements for the
-entry. FX checks the copied project configuration and advertised files before publishing.
-Dependency installation, provider access and execution are separate from setup. Check runtime
-readiness with `grida fx doctor <target>` after setting up the prerequisites.
-
-`grida fx add pet fox-pet` installs `workflows/pet.yaml` with the text-only `inputs/pebble.yaml`
-preset. Edit the preset in `fox-pet`. Follow its README to set up Python and preview with the
-stand-in or draw live with signed-in Codex.
-
-`grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` copies a GitHub
-repository with `fx.yaml` at its root. Give a tag or full 40-character commit SHA. For example,
-`grida fx add acme/studio@v1.2.0 --workflow posters` creates `./studio` and selects the workflow
-whose filename stem is `posters`. `template.name` is the full reference and `template.source`
-is `github`.
-
-For a private GitHub template, sign in with `gh auth login`, then use
-`grida fx add acme/studio@v1.2.0 --github-auth`. The GitHub CLI (`gh`) must be on `PATH` and
-authenticated to read the repository. Only GitHub template requests with `--github-auth`
-invoke `gh`. An occupied destination or `GRIDA_FX_NETWORK=off` stops the install before `gh`
-starts. If the GitHub CLI is unavailable, authentication is missing, or the repository or ref
-is inaccessible, FX exits 2 without creating the project. The archive follows the same checks
-and receipt format.
-
-A root `fx-template.json` can declare the default starter. Its required `workflow_entry` names
-the YAML workflow, and optional `inputs_file`, `required_inputs` and `prerequisites` describe the
-preset, input paths to check, and requirements. Paths are project-relative. If no starter is
-declared, FX checks direct children of `workflows/` and `fx/` for `.yaml` and `.yml` files
-declaring `fx: workflow/v1`. It selects the sole candidate or requires `--workflow NAME` to identify
-a unique filename stem. The flag also selects a workflow when the project declares a default.
-If you select the declared workflow, the metadata applies.
-
-```
-my-assets/
-  fx.yaml          # project settings: the folder that holds it is the project root
-  workflows/       # workflow files (searched recursively for `grida fx run <id>`)
-  nodes/           # your own node types (optional)
-  prompts/         # prompt templates (optional)
-  runs/            # one folder per run          (FX writes it; keep out of git)
-  .fx/cache/       # content-addressed results   (FX writes it; keep out of git)
-  .fx/models/      # optional model metadata     (FX writes it; keep out of git)
-  .fx/service/     # local service state         (FX writes it; keep out of git)
-```
-
-```yaml
-# fx.yaml
-fx: project/v1
-budget:
-  max_usd: 10                       # ceiling for any one run; --max-usd overrides it
-routes:                             # the model for each capability, where a step names none
-  image.generate: openai/gpt-image-2.5-sunburst
-  structured.generate: { route: openai/gpt-5.6-sol, concurrency: 4 }   # at most 4 calls at once
-provider_preferences:               # independent of model choice; keys alone never select it
-  image.generate: gg
-  structured.generate: gg
-viewer:
-  display:                          # project-wide canvas defaults; each defaults to true
-    workflow_inputs: true
-    workflow_outputs: true
-    notes: true
-# route_tables: [routes/prices.yaml]   # your own route tables (fx: routes/v1), read after the built-in one
-# workflows: [workflows, ../tools/art] # where a workflow id is looked for (replaces the default)
-# cache: ../shared-cache               # share a cache across projects
-# sources: [acme_lib]                  # packages whose source counts toward your nodes' identity
-# providers: { acme: … }               # providers FX does not ship (see Routes and providers)
-```
-
-A path that starts with `./` or `../` in a workflow (`uses:`, `prompt:`, `schema:`, a file in
-`with:`) is relative to the project root, the folder of the nearest `fx.yaml` above the workflow,
-whichever file it is written in. Absolute paths are refused.
+- `grida fx init my-assets` writes a starter workflow and project files in a new or empty directory.
+  In an existing FX project, plain `init` checks `fx.yaml`. For an existing non-empty folder, add
+  `fx.yaml` yourself.
+- `grida fx init --list-templates --json` lists starters. `grida fx add hello` copies a first-party
+  example into its own project. `grida fx add OWNER/REPO@REF --github-auth` copies a private GitHub
+  template at a tag or full commit SHA with authenticated `gh`. See
+  [template setup and receipts](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md#start-from-a-template).
+- FX finds the nearest `fx.yaml` above the working directory. The file declares `fx: project/v1`.
+  Workflows usually live under `workflows/`, and run records under `runs/`. Project settings include
+  `routes`, `provider_preferences`, `route_tables` and `budget.max_usd`. Workflow references
+  beginning with `./` or `../` are relative to the workflow's home project, the nearest `fx.yaml`
+  above its source file.
 
 ## The workflow file
 
-```yaml
-fx: workflow/v1          # required
-id: gallery              # required: stable; names runs/<id>/ and `grida fx run gallery`
-title: Gallery           # required
-description: …           # optional
-inputs:  { … }           # what a caller supplies
-tables:  { … }           # constant lookup tables
-let:     { … }           # named expressions
-budget:  { max_usd: 12 } # this workflow's default ceiling
-assert:  [ … ]           # plan-time checks
-notes:   { … }           # static documentation cards (root or group)
-steps:   { … }           # required: the work
-outputs: { … }           # what the workflow promises
-```
+A workflow needs `fx: workflow/v1`, a stable `id`, `title` and `steps`. Its `outputs` map declares
+what callers can use or deliver. Steps run in dependency order, in parallel when ready. Node
+behavior, declared settings, resolved inputs, routes and takes determine cache identity. Paid
+requests also have their own cache. Renaming or reordering steps alone preserves reusable results.
 
-Three ideas govern everything:
-- **A step is a pure function of what it declares.** It sees only what is wired to it.
-- **Results are kept by content.** A step runs again only when its node type, `with:` values,
-  input bytes, upstream results, route or take changed. Renaming or reordering steps reruns
-  nothing. Paid calls are also cached by their exact request.
-- **Order comes from wiring.** Steps run as soon as their inputs exist, in parallel.
-
-### Canvas notes
-
-A workflow or group may declare an ordered `notes` map. Each note has exactly one of
-`text` (inline string) or `file` (local home-project path), optional `about` (a direct step
-name in the same container), and `format: markdown | text` (default `markdown`).
-
-```yaml
-notes:
-  overview:
-    file: ./notes/overview.md
-  help:
-    about: draw
-    text: |
-      ## Reference image
-      Use a **clear silhouette**.
-  literal:
-    format: text
-    text: "${{ inputs.prompt }} is documentation here."
-```
-
-Notes never execute or evaluate expressions. The engine captures bounded UTF-8 file
-content into the plan; a missing/unreadable file or unresolved association leaves a visible
-note diagnostic and does not fail work. The viewer renders Markdown or literal text in
-content-sized cards: ordinary notes are readable in full on the canvas, while unusually long
-documents have an explicit collapsed presentation. Selecting any note opens its full text in
-the existing details panel. Card sizes are resolved before layout and the initial camera fit;
-they affect visual tracks and group bounds, never executable cells or ordering.
-Note-only document/file edits preserve plan identity, and resumed runs retain their original
-note snapshots. A fresh plan sees current
-notes. A file also used as a prompt/input/resource and edits to node source modules keep
-normal identity effects. Shared exports disclose note text only with `--include-values`.
-Python: `wf.note("help", text="## Reference", about="draw")`; groups have `.note` too,
-and `Workflow(..., notes={...})` accepts declarations. JavaScript: `workflow({..., notes:
-{help: {text: "## Reference", about: "draw"}}, steps: {...}})`; `Note` is an exported type.
-
-Viewer hosts opt into note references with `new ViewerClient({..., includeNotes: true})`.
-The context then identifies `{kind: "note", note_id, scope_id}` without note text, and
-`present({action: "reveal_note", note_id})` reveals a recorded note. Default clients keep
-legacy selection shapes; see the viewer API guide for same-realm options.
-
-### Strict YAML
-
-FX reads a strict YAML subset with one meaning everywhere. Refused with "quote it": `yes`, `no`,
-`on`, `off` (any case), `True`/`FALSE`/`Null`, leading-zero numbers (`017`), `0x1F`, `1_000`,
-`16:9`, `.inf`, dates (`2026-10-05`). Write `"16:9"`, `"on"`. Duplicate keys, anchors, aliases and
-tags are refused. `1024x1024`, `y` and `n` are plain strings.
-
-### Inputs
-
-```yaml
-inputs:
-  name:     { type: string, description: "What the item is" }
-  count:    { type: integer, default: 4, minimum: 1, maximum: 48 }
-  ratio:    { type: number }
-  draft:    { type: boolean, default: false }
-  poster:   { type: file, kind: image }            # kind: image, audio, video, text/markdown, …
-  sprites:  { type: files, kind: image, glob: true }   # many files, keyed by file stem
-  tags:     { type: list, items: { type: string }, unique_items: true }
-  layers:                                          # a list of objects: `items` is a field map
-    type: list
-    max_items: 32
-    items:
-      id:   { type: string, pattern: "^[a-z0-9_]+$" }
-      file: { type: file, kind: image }
-  canvas:                                          # a nested object: nest fields
-    width:  { type: integer }
-    height: { type: integer }
-  voices:   { type: map, values: { voice_id: { type: string } } }
-```
-
-Keywords are snake_case (`max_items`, `min_length`, `unique_items`). An optional input with no
-default is `null`. `grida fx schema <target>` prints the JSON Schema they compile to. Give inputs
-as kebab-case flags after `--` (`-- --max-entities 24 --poster art/p.png`), or in YAML files with
-`--inputs file.yaml` (repeatable, later wins; paths inside are relative to that file). Lists and
-maps need a file; a `files` input also takes a quoted glob.
-
-### Steps
-
-```yaml
-steps:
-  draw:
-    uses: fx/image.generate@1          # a built-in type, ./nodes/x.py#name, ./nodes/x.ts#name,
-                                       # or ./workflows/other.yaml (a workflow as one step)
-    with: { prompt: "A ${{ inputs.name }} icon", size: 1024x1024, background: transparent }
-```
-
-| Field | Meaning |
+| Write | Use |
 |---|---|
-| `with:` | the node type's inputs and settings |
-| `if:` | run only when true (plan-time values decide in the plan; run-time values make it *maybe*) |
-| `needs:` | order after steps without reading them (rare) |
-| `for_each:` `as:` `key:` `max:` | repeat per item; `max:` is required when the list comes from a step |
-| `matrix:` | repeat over every combination: `{ eye: [...], mouth: [...] }`, read as `matrix.eye` |
-| `steps:` | a group: nested steps that repeat or regenerate together |
-| `judges:` `on_reject:` | this step judges another (below) |
-| `regenerate:` | on a group: redo it until accepted, `{ max: 3, until: "${{ … }}" }` |
-| `takes:` `pick:` | draw several takes now; `pick: manual` (default), `first_accepted`, `best: { by: <fact>, order: lowest\|highest }` |
-| `assert:` | `[{ check: "${{ … }}", message: "…", on_fail: fail\|skip }]` |
-| `at: plan` | run this free, local, deterministic step while planning: its outputs become plan-time values |
-| `budget:` | `{ max_usd: N }` for this step, group or each repeat instance (the innermost counts) |
-| `concurrency:` | at most N instances of a repeated node step at once (no effect on groups yet) |
-| `route:` | this step's model, overriding its capability default; a canonical ID uses its provider preference, `model@provider` is exact |
-| `requires:` | features the route must support: `image_input`, `mask`, `alpha`, `exact_size` |
-| `independent_of:` | refuse a route that shares a model with these steps |
-| `timeout:` | seconds; past it the step fails and is not run again |
-| `preview:` | node steps only: `{ video: video, poster: poster }` selects own scalar video/image output ports; `poster` is optional. Literal names, never expressions, paths or URLs; recorded presentation only |
+| `inputs` | Declare scalars (`string`, `integer`, `number`, `boolean`), `file` or `files` with a `kind`, `list` with `items`, `map` with `values`, or nested field maps. Use `default`, `required`, and schema constraints such as `max_items`. An optional input without a default is null. |
+| `uses` and `with` | Select a built-in type such as `fx/image.generate@1`, a local node such as `./nodes/draw.py#draw`, or a workflow such as `./workflows/draw.yaml`. Set its inputs and settings in `with`. |
+| `${{ inputs.name }}` and `${{ steps.draw.outputs.image }}` | Read inputs and wire outputs. A whole expression keeps its type. Interpolation inside text produces a string. Also read `let`, `tables`, `item`, `matrix`, and reported facts such as `steps.review.facts.verdict`. |
+| `for_each`, `key`, `matrix`, nested `steps` | Repeat over a list or combinations, use stable keys, and group steps. Read a collection with `steps.icon.*.draw.outputs.image`. When a list comes from a run-time step, set `max` to bound the later phase. |
+| `if`, `assert`, `needs`, `at: plan` | Gate steps, assert conditions, add ordering without a data dependency, or compute values in a free deterministic step during planning. |
+| `judges`, `on_reject`, `regenerate`, `takes`, `pick` | Report an `accept` or `reject` verdict, choose how downstream work proceeds, and control alternative results. A regeneration limit includes the initial take. |
+| `route`, `requires`, `budget`, `concurrency` | Override the capability route, require features, limit authorization or limit concurrent instances of a repeated node step. |
+| `notes`, `preview` | Document the workflow or group with `notes`. A node step's `preview: { video: video, poster: poster }` selects its own video and optional image output ports for display. |
 
-### Expressions
+Use `--inputs FILE` for input YAML, required for list and map inputs. Paths inside it are relative
+to the input file. Scalar values can also be supplied after `--`, as in
+`grida fx plan icon -- --name lantern`. Quote ambiguous YAML strings such as `"on"`, `"16:9"`, and
+dates. Duplicate keys, anchors, aliases and tags are refused.
 
-`${{ … }}` works in any value. A value that is exactly one expression keeps its type (a list stays
-a list); inside other text it makes a string. There are no loops, user functions or string methods:
-write a node when you need more.
+Use `??` for a null, skipped result or missing final field. Use `facts(file)` for recorded
+properties such as image width or alpha, and `accepted(collection)` to filter judged results. See
+the [workflow reference](https://github.com/gridaco/fx/blob/main/docs/guide/02-workflow-file.md),
+[YAML rules](https://github.com/gridaco/fx/blob/main/spec/yaml.md), and
+[expression contract](https://github.com/gridaco/fx/blob/main/spec/expressions.md).
 
-| Write | Example |
-|---|---|
-| references | `inputs.poster`, `steps.draw.outputs.image`, `steps.review.facts.verdict`, `item.id`, `let.ready`, `tables.rows`, `matrix.eye` |
-| one instance | `steps.entity['harbor_keeper'].draw`, `steps.cell[item.eye]` |
-| a collection | `steps.entity.*.draw.outputs.image` (ordered like the list, keyed) |
-| fields, elements | `steps.propose.outputs.json.entities`, `inputs.layers[0]` |
-| operators | `+ - * /`, `== != < <= > >=`, `&&`, `\|\|`, `!` |
-| fallback | `a ?? b`: `b` when `a` is null, a skipped step's result, or the last field read is missing |
-| file facts | `facts(inputs.poster).width`, `.height`, `.has_alpha`, `.opaque`, `.bytes`, `.kind`; audio `.duration`; video `.width`, `.height`, `.fps`, `.duration`, `.frames` |
-| functions | `lookup(map, key)`, `min`, `max`, `len`, `contains`, `concat(a, b)`, `join(list, ", ")`, `stem(file)`, `digest(value)`, `accepted(collection)` |
+### Built-in and custom nodes
 
-Names the workflow declares are checked even under `??` (a misspelt input fails). Node facts are
-what a step reported (`ctx.fact`), read as `steps.<name>.facts.<fact>`.
+`grida fx nodes TYPE` gives the built-in type's settings, output ports and shipped routes. For
+example, `fx/image.generate@1` takes `prompt` and can take `size`, `background` and `references` on
+compatible routes. Its output is `image`. Use `fx/image.edit@1` for edits,
+`fx/structured.generate@1` for a JSON Schema answer, and local nodes such as `fx/image.resize@1`,
+`fx/image.check_alpha@1` and `fx/package@1` for processing, judging and packaging. The catalog
+includes planned types. Check the
+[node guide](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md) for execution support.
 
-### Judges, rejection and regeneration
-
-A judge is a step with `judges: <step>` that reports a `verdict` fact (`accept` or `reject`).
-Everything reading the judged step waits for its judges.
-
-| `on_reject:` | |
-|---|---|
-| `fail` (default) | the judged step fails; its dependents are skipped |
-| `continue` | keep the verdict; downstream runs (filter with `accepted(...)`) |
-| `skip` | skip downstream of the judged step; the run still succeeds |
-| `regenerate: { max: N, then: fail\|continue\|skip\|keep_best: { by: <fact>, order: lowest\|highest }, feedback: true }` | draw again until accepted; `max` counts all takes, the first included |
-
-Three failures stay apart: a failed paid call is retried by the engine (at most 6 attempts, each
-reserved and recorded); a broken node result (`ctx.fail`, wrong outputs) fails the step; a valid
-result judged wrong becomes a new take only when you asked for regeneration.
-
-### Phases
-
-A `for_each` over a list a step makes cannot be sized while planning: it starts a new phase,
-priced at `max:` in the plan and exactly once the list exists. `--yes-up-to N` stops before a
-later phase whose worst case would take the run past N; run again with a higher N to continue. To
-avoid a phase, compute the list in an `at: plan` step.
-
-## Built-in node types
-
-`grida fx nodes` lists every type; `grida fx nodes <type>` shows its settings, outputs and routes.
-Types marked *planned* plan and price but cannot run yet.
-
-| Type | Settings → outputs | Notes |
-|---|---|---|
-| `fx/image.generate@1` | `prompt`, `size` (`WxH` or `auto`), `background` (`auto`, `opaque`, `transparent`), `references`, `vars` → `image` | paid; `references` only on `imagegen@codex` (≤5) and `imagine@grok` (≤3) of the built-in routes, and on a route of your own on OpenRouter that declares `image_input` |
-| `fx/image.edit@1` | `image`, `mask`, `references`, `prompt`, `size`, `background` → `image` | paid; masks only on `gpt-image-2.5-sunburst@openai` and `openai/gpt-image-2.5/sunburst@fal` of the built-in routes |
-| `fx/structured.generate@1` | `prompt`, `system`, `context` (text, json, images), `schema`, `max_tokens`, `vars` → `json` | paid |
-| `fx/video.generate@1` | `prompt`, `first_frame`, `last_frame`, `duration`, `resolution`, `aspect_ratio` → `video` | paid, long job |
-| `fx/speech.generate@1` | `text`, `voice`, `stability`, `language_code`, `max_chars` → `audio` | paid |
-| `fx/sound.generate@1` | `prompt`, `duration`, `prompt_influence`, `loop` → `audio` | paid |
-| `fx/music.generate@1` | `prompt`, `duration` → `audio` | paid |
-| `fx/mesh.generate@1` | exactly one of `image` or `views` (`front` plus `back`, `left` or `right`), `face_limit`, `quad`, `texture`, `pbr` → `model` | paid, long job |
-| `fx/mesh.rig@1` | `model`, `rig_type`, `skeleton` → `model` (binary glTF) | paid, long job |
-| `fx/image.check_alpha@1` | `image`, `expect` (`transparent`, `opaque`) → verdict | free judge (Python) |
-| `fx/image.check_size@1` | `image`, `width`, `height` → verdict | free judge (Python) |
-| `fx/image.resize@1` | `image`, `longest_side` or `width`/`height` → `image` | free (Python) |
-| `fx/image.crop@1` | `image`, `box`, `padding`, or `region` (annotations) → `image` | free (Python) |
-| `fx/image.pad@1` | `image`, `width`, `height` → `image` | free (Python) |
-| `fx/image.mirror_repeat@1` | `image`, `axis` (`x`, `y`, `xy`) → `image` | free (Python) |
-| `fx/select@1` | `first_of: [...]` → the first that exists and was not rejected, under its own port name | free (engine) |
-| `fx/json.merge@1` | `documents` → `json` | free (Python) |
-| `fx/package@1` | `files` (`"dest/{key}.png": <collection>`), `manifest` → `files`, `manifest` | free (Python) |
-| `fx/files.copy@1` | `file` → `file` | free (Python) |
-| `fx/background.remove@1` | `image` → `image` | *planned*: no built-in route |
-| `fx/vision.annotate@1`, `fx/vision.review@1`, `fx/structured.review@1`, `fx/audio.check_duration@1` | | *planned* |
-| `fx/image.compose@1`, `key`, `sheet`, `contact_sheet`; `fx/video.probe@1`, `frames`, `encode`; `fx/audio.normalize@1`, `trim`, `concat`, `mix`; `fx/annotations.mask@1`, `filter` | | *planned* |
-
-Every paid type also takes `provider_options`: parameters FX does not expose, by provider (Routes
-and providers, below). A prompt may be a template file (`prompt: ./prompts/draw.md`), rendered with
-the step's `vars:` and the workflow's `inputs`. Until `vision.review` runs, a model's judgement is a
-`structured.generate` answer read by a judge you write (recipe below).
-
-Single-image mesh generation uses `P2-20260801@tripo`; the built-in GG mesh route
-supports named views only. The plan refuses `image` on a route without `image_input`.
-Tripo uploads the source PNG, JPEG or WebP, submits its image-to-model operation,
-and collects the same kind of long job as multiview. No second view is manufactured.
-
-The canonical [text-to-3D example](https://github.com/gridaco/fx/tree/main/examples/text-to-3d)
-provides `asset.py:generate_3d_asset(text: str)`: a Python builder that returns a two-step
-workflow for the engine to plan and run. It generates a reference image, then passes it to
-`P2-20260801@tripo` with triangle output (`quad: false`), textures and PBR enabled.
-The outputs are `reference` and `model`. The supplied image model is
-`openai/gpt-image-2.5-sunburst`, with `provider_preferences.image.generate: openrouter`, using
-`OPENROUTER_API_KEY` alongside `TRIPO_API_KEY`. OpenRouter is sample configuration, not a
-pipeline requirement: change only that preference to `openai` with `OPENAI_API_KEY`, keeping
-the model and workflow, and re-plan for its price and cache identity. FX resolves a concrete
-route before execution; credentials do not select the provider. Live execution needs explicit
-approval and a USD ceiling. The supplied routes do not use Grida Gateway.
-Its self-contained stand-in synthesizes the reference and model for offline wiring and
-cache checks without keys or provider calls. Open the producing mesh step's details to
-preview an available GLB; its producing card automatically renders a model thumbnail.
+Custom nodes declare `inputs`, `params`, `outputs` and any `resources`, `tools` or maximum `calls`
+they use. Read declared data through `ctx`, return declared outputs, and route paid work through
+FX's managed capability methods. Source changes affect identity by default. For a versioned node or
+adapter, use `grida fx lock` to track changes in `fx.lock` and bump its version for changed
+behavior. See
+[Python and TypeScript authoring](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md)
+and
+[annotations and judges](https://github.com/gridaco/fx/blob/main/docs/guide/06-annotations-and-judges.md).
 
 ## Routes and providers
 
-A concrete route is `model@provider`. In `fx.yaml`, `routes:` sets a model default per
-capability, and `provider_preferences:` independently sets one provider per capability.
-An unqualified model ID resolves through the catalog's canonical `model_id` metadata, or the
-native model exactly when metadata is absent. It needs an explicit provider preference;
-ambiguous bindings are planning errors. Missing GG/OpenRouter image bindings may be discovered
-automatically from the selected provider; other missing bindings are refused. Names are not matched fuzzily and available
-keys never choose the provider. A qualified route overrides the preference and works as before.
-
-These are defaults, not one model forced on every node. A step's `route:` can choose a different
-model using its capability's preference, or a qualified route including its own provider.
-A custom node calling one distinct capability has the same override; several calls inside it
-share that route. A node calling several capabilities uses each capability's project default;
-body calls do not override routes. Separate steps can use different image models, as the
-fallback recipe below demonstrates.
-
-The workflow source project's defaults are overlaid by the planning project's, independently
-for models and preferences; this is not user-wide configuration. Selection completes before
-pricing, approval, identity or execution. The same concrete route keeps its cache; a different
-model or provider changes the plan, so an incompatible resume is refused. No provider is tried
-as a paid fallback. `grida fx nodes <type>` lists shipped concrete routes, not every discoverable
-model. `grida fx doctor <target>` prepares missing used bindings through the same path and
-reports configuration readiness; finding metadata is not a provider health check. Without a
-target, doctor stays local.
-
-For `image.generate` and `image.edit` on GG or OpenRouter, a selected binding missing from
-the local catalog triggers a lookup of that provider's model metadata. FX admits
-only what its installed adapter supports. It does not import a model, select another provider
-or download code. Existing bindings and your own route tables remain authoritative; explicit
-`--routes` disables discovery. Other capabilities and providers retain the authored-route path.
-
-Model execution facts and cost forecasts are independent. Compatible metadata resolves even
-without a price. Forecasts may come from FX, an authored route or a supported published rate;
-missing cost stays unknown. Automatic pricing currently recognizes unconditional per-output-image
-OpenRouter rates. Illustrative scenarios apply only when their assumptions fit the request.
-Use `--require-estimates` when forecast coverage is required. Live work still needs approval
-and a ceiling; unpriced attempts reserve remaining applicable budget, and an unreported charge
-books that reservation in full while actual cost stays unknown.
-
-The optional `.fx/models/` cache holds sanitized normalized routes, never provider keys or raw
-responses. Metadata is fresh for one hour; stale metadata may be used with the network off or
-on a transient lookup failure, but an explicit missing-model response does not silently use a
-stale entry. `GRIDA_FX_NETWORK=off` forbids every metadata request. Without cached metadata or
-an authored route, a new model cannot resolve offline. An SDK `Plan` carries its resolved
-models independently of this cache; `run(plan)` does not discover them again. Prepared plans
-admit at most 128 discovered image bindings. A model-preparation error in `doctor <target>`
-appears as a `models` diagnostic after the provider report; other diagnostics continue.
-
-| Capability | Built-in routes | Key |
-|---|---|---|
-| `image.generate`, `image.edit` | `openai/gpt-image-2.5-sunburst@gg`; `gpt-image-2.5-sunburst@openai`; `openai/gpt-image-2.5-sunburst@openrouter`; `openai/gpt-image-2.5/sunburst@fal`; `imagegen@codex`; `imagine@grok` | `GG_API_KEY`, else the provider's; none for Codex and Grok Build |
-| `structured.generate`, `agent.turn` | `openai/gpt-5.6-sol@gg`, `openai/gpt-6-astra@gg`; the same models `@openrouter` | `GG_API_KEY`, else `OPENROUTER_API_KEY` |
-| `video.generate` | `alibaba/wan-3.0@gg`; `google/gemini-omni-flash/v1.1/image-to-video@fal` | `GG_API_KEY`, else `FAL_KEY` |
-| `mesh.generate`, `mesh.rig` | `tripo/p2@gg`, `tripo/rig-v1.0@gg`; `P2-20260801@tripo`, `v1.0-20240301@tripo` | `GG_API_KEY`, else `TRIPO_API_KEY` |
-| `music.generate` | `google/lyria-3-pro-preview@openrouter` | `OPENROUTER_API_KEY` |
-| `sound.generate`, `speech.generate` | `eleven_text_to_sound_v2@elevenlabs`, `eleven_v3@elevenlabs` | `ELEVENLABS_API_KEY` |
-
-- **Grida Gateway (`@gg`)**: one key, `GG_API_KEY` (from console.grida.co), for text, agent turns,
-  images, video and 3D, billed to Grida AI credits; it needs the `text` and `media` scopes.
-- **Your own Codex (`imagegen@codex`)** and **your own Grok Build (`imagine@grok`)**: images with no
-  API key, counted against the user's own subscription and booked by FX at $0. Neither takes an
-  exact `size` (leave it out and resize after) or a `mask`; Grok Build has no transparency. A run
-  whose paid calls are all on them needs no ceiling (it runs under $0 and refuses other routes).
-- **Keys.** FX uses a nonblank process environment value first, then the project's
-  `.env` for declared key and base URL names. Set `GRIDA_FX_DISABLE_DOTENV=1` to skip `.env`. Keys stay
-  out of `fx.yaml` and workflows. Paid capability calls require `--live`. A read-only metadata
-  lookup for a missing selected OpenRouter image binding may use its key. GG metadata is public.
-  `*_BASE_URL` variables point a provider at a proxy; `HTTPS_PROXY`/`ALL_PROXY` are honoured.
-  HTTPS trusts the public roots and the platform's certificate store (`SSL_CERT_FILE`/`SSL_CERT_DIR`
-  in its place when set), so a proxy whose root the machine trusts works.
-- **Saved Grida keys.** FX 0.10.0 and later check Grida's store on macOS and Linux
-  when both the environment and `.env` lack an eligible provider's key. The provider IDs are
-  `gg`, `openrouter`, `fal`, `tripo` and `elevenlabs`. The store is `providers/credentials.toml`
-  under the process `GRIDA_HOME` or `$HOME/.grida`. The home must be an absolute normalized
-  path. Grida 0.5.7 introduced `grida ai providers configure gg` and bundles FX 0.9.0. Ask the
-  user to save a standalone GG key for FX only if their installed engine supports saved keys.
-  Custom base URLs and other providers use the environment or `.env` for keys. An unsafe or
-  invalid store refuses a lookup that needs it with a safe diagnostic. `grida fx doctor` reports
-  `present (grida)` for eligible saved keys and keeps the value private. Offline plans and
-  execution and stand-in calls skip the store. An online lookup for a missing selected
-  OpenRouter image binding can use its saved key. `GRIDA_FX_DISABLE_GRIDA_STORE=1` skips the store
-  independently of `.env`.
-- **Provider result downloads:** Tripo mesh and rig results and fal image and background-removal
-  results are downloaded from the HTTPS URL their provider returns, with a DNS hostname rather
-  than an IP literal, port 443, no userinfo and no fragment. FX keeps no provider CDN catalog.
-  Downloads carry no provider key, follow no redirects, remain size- and time-bounded, and their
-  bytes must pass the adapter's output checks. Signed URLs never reach portable records or logs.
-  Long jobs with retained task handles can be collected again after a download failure.
-  Synchronous fal image and background-removal calls lack those handles and can still incur
-  another generation charge after a delivery failure (gridaco/fx#117).
-- **A provider FX does not ship**, a *community provider*, is declared under `providers:` in
-  `fx.yaml` ([Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
-  is the whole job, end to end): the variable its key comes from (sent as
-  `authorization: Bearer <key>` unless `header` and `scheme` say
-  otherwise; no `credential` for a server that needs no key), its base URL (`https` unless it is
-  this machine, with no userinfo, query or fragment) and the variable that may move it, the hosts
-  its results may be downloaded from, and either its `family` (`openai-compatible`) or its
-  `adapter` (your own, below). FX reads its variables from the environment or `.env` as it reads
-  its own, redacts its key, keeps both from Codex, Grok Build, the background service and the
-  browser opener (node hosts inherit FX's environment, as before), and `grida fx doctor` lists it
-  (`provider  acme api.acme.test ACME_API_KEY missing`). It bills dollars. A name FX ships (`gg`,
-  `openai`, `openrouter`, `fal`, `tripo`, `elevenlabs`, `codex`, `grok`), a variable already read,
-  `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables, and a default base URL that
-  breaks the address rule are refused.
-- **`family: openai-compatible`** (a server that speaks the OpenAI Chat Completions API) is all a
-  provider needs for `structured.generate` and `agent.turn`: FX's family adapters serve its routes
-  of those two capabilities, at `{base}/chat/completions`. They send the model, the messages,
-  `max_tokens`, a strict `json_schema` response format or strict function tools, and the
-  provider's member of `provider_options`, and nothing chosen for one provider; the key as
-  declared, or none for a provider declared without a `credential`. By default they read no cost,
-  so every call is booked at its whole reservation: optionally give each route a `cap_usd` to partition authorization, or supply an applicable estimate.
-  A 408 is possibly billed: book its reservation, then reserve a new attempt before retrying.
-  A 429 is sent again unbilled; another 4xx fails without retrying, and a 5xx is booked and tried again.
-  Optional route `contract` settings: `image_detail` (`auto`, `low`, `high`, `original`, absent
-  sends none), `pictures: unchanged` (structured context only, preserves original bytes instead
-  of fitting and flattening), and `token_limit_field` (`max_tokens`, the default, or
-  `max_completion_tokens`). FX owns both token-limit names and sends exactly one; reasoning
-  parameters use the provider's own names in `provider_options.<provider>`.
-  `contract.billing` may opt into `cost: usage.cost` (the provider's documented full final USD
-  charge, rounded up to micro-dollars) and `unbilled_statuses: [400, 422]` (only documented
-  unbilled refusals; distinct integers 400–499, excluding 408 and 429). A valid opted-in cost wins over
-  a status rule; missing or `null` cost permits its $0 settlement, while an invalid cost or an
-  unreadable body remains unknown and books the reservation. An empty body carries no cost.
-  Without `cost: usage.cost`, cost-looking fields are ignored.
-  With cost reading enabled, a 429 reporting a cost (zero included), an invalid cost or an
-  unreadable nonempty body is booked and retried as a new attempt too. All settings are
-  optional, `null` keeps defaults, and explicit settings enter the route fingerprint. A
-  declaration is not part of any identity, but a route on the provider whose `contract` leaves out
-  `adapter`, or names the family's adapter and leaves out `adapter_behavior`, is filled in with
-  the family's (`openai-compatible-structured`, `openai-compatible-tool-loop`, behaviour `1`), so
-  declaring or dropping the family changes those routes' identity once. A route of another
-  capability, or on a provider declared with neither a family nor an adapter, has no adapter: it
-  plans and prices, and a live call on it is refused (`no adapter serves …`).
-- **`adapter: <path>#<name>`** serves any other provider with your own code, in Python
-  (`grida.fx`) or TypeScript (`@grida/fx`): a module of the project declares
-  `adapter(requests=[…], jobs=[…], send=…, submit=…, collect=…, version=N)` (TypeScript:
-  `export const acme = adapter({ … })`), a request capability answered by `send`, a long job's by
-  `submit` and then `collect`. Planning and a dry run load it on the planning host of its
-  language, so its top-level code runs then, and one that cannot load refuses the command
-  (exit 2, `fx.yaml: providers.<name>.adapter: …`). `doctor` loads it too and prints
-  `adapter   acme adapters/acme.py#acme version 1: structured.generate (request)`, or
-  `adapter   acme adapters/acme.py#acme cannot load: <why>` and exits 1. Each of its routes'
-  `contract` gets `adapter: <path>#<name>` and `adapter_behavior`, its `version`, else
-  `source:<digest>` of the module and the project modules it imports, so moving the module or
-  renaming the export changes their identity. `grida fx lock` pins a versioned adapter in
-  `fx.lock`'s `adapters` as a node type is pinned (`--same <path>#<name>` confirms an edit). A live
-  run, with the network off too, starts one host per declaration on its first call, in the
-  project's root, with its own declaration's key and base URL variables and no other's, and
-  stops it with the run. The engine checks the request and the key before `send` or `submit` and
-  the answer after, as for FX's own adapters; the adapter returns an outcome (`Answered`,
-  `NotReceived`, `Refused`, `Failed`; `Accepted`, `Uncertain`; `Ended`, `Unreachable`; plain
-  objects named by `outcome` in TypeScript) and the call is charged the `cost_usd` it reports,
-  else the whole hold or cap. An exception, an unreadable outcome or a lost host is an unknown
-  outcome: a send is billed in full and not sent again, a submit is uncertain, a collect
-  unreachable. `await call.fetch(url, method=, json=, credential=True, lane=, timeout_s=)` makes
-  one exchange through FX (no retry, no redirect, at most 300 s and 64 MiB): the engine attaches
-  the key, only to the base URL's origin, holds downloads (`lane="download"`) to
-  `download_hosts` (an empty list permits none), and refuses everything with
-  `GRIDA_FX_NETWORK=off`; it raises `FetchError`
-  (`phase`: `refused`, `not_sent`, `after_send`). An adapter may use its own HTTP client instead,
-  sending each request once with retries off, and sending nothing when `GRIDA_FX_NETWORK` is
-  `off`, which FX cannot stop for it. A reason that holds the key reaches no record. It bills
-  dollars. The engine neither merges nor judges `provider_options` for it: the adapter reads the
-  route's in `call.route.contract` and the step's in `call.request`, each keyed by provider.
-
-```yaml
-# fx.yaml
-fx: project/v1
-routes:
-  image.generate: openai/gpt-image-2.5-sunburst@gg   # FX's own providers need no declaration
-providers:
-  acme:                                    # its routes are <model>@acme
-    credential: { variable: ACME_API_KEY } # header and scheme: authorization, Bearer
-    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
-    family: openai-compatible
-```
-- Built-in prices are planning allowances; a call is booked at what the provider reports, else at
-  its whole reservation. A route on a provider with no adapter still plans; live it is refused,
-  and so is one whose `contract` names an `adapter` FX does not have (doctor: `no adapter`).
-- **A route whose price you do not know** may omit `price`, or use `price: null` to clear an
-  inherited price. Its forecast is unknown. Optionally supply `price: { cap_usd: N }` to reserve
-  N per call instead of the remaining applicable budget. A cap is an allowance, not a forecast
-  or a provider-enforced limit. Reported cost is booked in full; without one, the whole hold is
-  booked and actual cost stays unknown. `price: {}` is invalid; `usd: 0` explicitly declares free.
-
-- **Parameters FX does not expose** go in `provider_options`, an object by provider whose members
-  are the provider's own parameters: a paid step's `with:` takes it, and so does a route's
-  `contract`. Only the member of the provider the call runs on is sent, after FX's own members; a
-  step's parameter replaces the route's of the same name, and other providers' members are kept
-  for the routes a step may fall back to. A parameter FX sets itself (`prompt`, `model`, `n`,
-  `stream`, …; each provider's list is in its adapter's reference), and a file, are refused
-  before anything is sent, at $0. Codex and Grok Build take none. Options are part of the call's
-  identity (another value is another paid call) and are recorded with the run, so never put a key
-  in them. An agent run's turns take only their route's: the engine builds each turn's request.
-
-```yaml
-    with:
-      prompt: Name a colour.
-      schema: ./schemas/colour.json
-      provider_options:
-        openrouter: { seed: 7 }   # read only when the step runs on an @openrouter route
-```
-
-- **An authored model route** remains independent of automatic image discovery. A model FX
-  does not list runs on a route of your own table, optionally with a cap to partition
-  authorization when its forecast is unknown (recipe below). On OpenRouter a new chat model needs only its id, for structured output
-  and agent turns. On OpenRouter and fal, an image route whose `contract` names no `adapter` gets
-  FX's generic image adapter: it sends the prompt, the input pictures and the
-  `provider_options`, and nothing chosen for one model, and turns the answer into a PNG. On fal the model is the endpoint id as
-  fal publishes it: the generate endpoint for `image.generate`, the edit endpoint for
-  `image.edit`. An exact `size`, a `mask` or a transparent `background` is refused there, before
-  anything is sent: give the model's own parameter in `provider_options` instead. A route that
-  `extends` a built-in OpenRouter or fal image route keeps GPT Image's adapter and its request,
-  for a GPT Image model. On GG a new model id is enough for images, video, structured output and
-  agent turns (GG checks each model's request); a 3D route also names GG's `endpoint` in its
-  `contract` (and a rig route may name a `check_endpoint`), as the built-in GG 3D routes do. A
-  video route of your own on fal draws the `resolution` tiers its price names and up to its
-  `max_units` seconds (a capped route, whose price states neither, draws `360p`, `720p`, `1080p`
-  and `4k`, from 3 to 10 seconds), and needs a first frame unless it declares
-  `features: [text_to_video]` (the built-in route does not). It sends the built-in route's
-  request (`image_url`, `end_image_url`, a whole-number `duration`, `aspect_ratio`,
-  `resolution`), so it fits only a fal endpoint that takes that shape. GG image edits take at
-  most the pictures the route declares (`max_input_pictures`; 16 on the built-in route).
-
-```yaml
-# routes/models.yaml
-fx: routes/v1
-routes:
-  - capability: image.generate
-    route: acme/img-a@openrouter         # made up: any image model OpenRouter serves
-    price: { cap_usd: 0.20 }
-    features: [image_input]              # it takes references
-    max_input_pictures: 8
-  - capability: image.edit
-    route: acme/img-a/edit@fal           # made up: fal's edit endpoint of a model
-    price: { cap_usd: 0.20 }
-    contract:
-      provider_options: { fal: { seed: 7 } }   # the model's own parameters
-```
-- **Your own route table** (`fx: routes/v1`, listed under `route_tables:` in `fx.yaml`): its entry
-  for a capability and route replaces the built-in one. An entry may `extends:` another route of
-  the same capability and provider, a built-in one (even with `--routes`) or one read before it,
-  and state only what differs: it takes the base's price, features, limits, pacing and
-  `contract`, a member it states replaces the base's, and `contract` merges member by member.
-  `extends` is not part of a route's identity, so repricing a route this way keeps every cache.
-  An optional `model_id` identifies the canonical model for unqualified selection with a
-  provider preference. It is metadata: adding it does not change the concrete route's
-  fingerprint or invalidate cached calls. Qualified routes keep the provider's native model.
-  On a provider and capability FX has an adapter for, a `contract` that leaves out `adapter` gets
-  the provider's default (the generic image adapter on OpenRouter and fal), and one that leaves
-  out `adapter_behavior` gets the behaviour of the adapter it names. The contract's `adapter`
-  picks which of FX's adapters serves the route: `fx-openrouter-image-v1` and `fx-fal-image-v1`,
-  GPT Image's, serve only a route that names them, as the built-in routes do.
-
-```yaml
-# routes/prices.yaml
-fx: routes/v1
-routes:
-  - capability: image.generate
-    route: openai/gpt-image-2.5-sunburst@gg
-    extends: openai/gpt-image-2.5-sunburst@gg   # the built-in entry, with more headroom
-    price: { low_usd: 0.09, high_usd: 0.80 }     # replaces its whole price, size tiers included
-  - capability: structured.generate
-    route: openai/gpt-5.6-sol@openrouter
-    extends: openai/gpt-5.6-sol@openrouter
-    contract:
-      provider_options: { openrouter: { seed: 7 } }   # sent with every call; part of the route's identity
-```
-
-- **Upgrading from 0.6.1:** a route of your own on a provider and capability FX has an adapter for,
-  whose `contract` left out `adapter`, or named one of FX's adapters and left out
-  `adapter_behavior`, now has them filled in, so its identity changes once: its steps and paid
-  calls run again, and resuming a run folder planned before is refused (start a new run).
-  Built-in routes keep theirs.
-  A route of your own on `fal` or `tripo` whose `contract` names an `adapter_behavior` other than
-  FX's is now refused when a call is sent, as on every other provider. A step whose `requires:`
-  names `jpeg_output`, `webp_output` or `hosted_url_reference_input` is now refused while planning
-  as no feature of its capability: drop the name, since every route answers PNG and sends input
-  pictures inline. A route whose `price` states no amount (`price: {}`, which was $0) is now
-  refused: write `usd: 0` for a free route, omit `price` for unknown cost, or supply an optional `cap_usd` allowance. A
-  route of your own whose `contract` already named `provider_options`, which most adapters ignored,
-  now sends its provider's member, or is refused when the call is sent if that member sets a
-  parameter FX owns (on Codex and Grok Build, if it is not empty); its identity is unchanged, so a
-  call cached before still replays without them (`reroll` the step for a new one). One that is not
-  an object of objects is now refused while the table is read. A route of your own on OpenRouter
-  or fal images whose `contract` named no adapter now runs on the generic adapter, which sends the
-  prompt and pictures without GPT Image's quality, sizes and moderation: to keep them, name
-  `adapter: fx-openrouter-image-v1` (or `fx-fal-image-v1`) or extend the built-in route. One on
-  OpenRouter whose `contract` states `adapter_behavior: "3"` without an `adapter` now names the
-  generic adapter with a behaviour it does not serve, and is refused when a call is sent: name
-  `adapter: fx-openrouter-image-v1` to keep GPT Image. A `contract` that names an `adapter` FX
-  does not have is now `no adapter serves …` when a call is sent, not `… is not a <capability>
-  route this adapter serves`. fal's video adapter takes the tiers and length its route's price
-  declares, and a request without a first frame on a route that declares `text_to_video`; GG
-  image edits are limited by the route's `max_input_pictures`, not by FX. The built-in OpenRouter
-  image routes now take `background: transparent` (they refused it, so a step that `requires:
-  [alpha]` now plans on them), and the built-in GG video route declares `text_to_video`. A Tripo
-  model whose address has a fragment is no longer downloaded, as a fal output's never was.
-
-### Native operations and provider diagnostics
-
-Standard capabilities have FX's schemas and answer guarantees. A project adapter may also
-serve a custom capability, called by a project node through `ctx.capability`. Its request can
-contain arbitrary canonical data and files: the engine does not copy the provider's input
-schema. Its adapter still owns uploads, submission, polling and output mapping. Routing,
-identity, cache, holds, settlement and resume work as for a standard call. `provider_options`
-adds settings to an existing operation; it does not select an arbitrary endpoint or disable a
-standard capability's validation. See the native-operation recipe below.
-
-Failure outcomes may carry `diagnostic`: Python's `AdapterDiagnostic(source=, phase=, ...)`,
-or a TypeScript object with `source`, `phase`, `operation`, `httpStatus`, `code`, `field`,
-`message`, `requestId`, `taskId`, `threadId`, `turnId`, `ephemeral`, `detail`, `redacted` and
-`truncated` (all but source and phase optional). Wire and recorded fields use lower_snake_case.
-Sources are `engine`, `adapter`,
-`transport`, `provider`; phases are `validate`, `upload`, `send`, `submit`, `poll`, `collect`,
-`download`. Detail is `available`, `unavailable`, `unreadable` or `withheld`. The engine bounds
-and redacts evidence, input echoes and local paths before recording it. Adapters extract only
-known error fields, never whole bodies or headers; they must register transient secrets or
-withhold them before returning detail.
-
-The sanitized diagnostic is in a body's `EngineError.data["diagnostic"]`, a `node_failed`
-event's `diagnostic`, `project` and `inspect --json`. Python also exposes
-`result.failures[id].diagnostic`; JavaScript exposes `result.steps[id].diagnostic`.
-The provider explanation is included in the human error when safe. Older adapters and records
-may have only a reason. Tripo supplies diagnostics for paid submission, upload refusals and
-terminal task failures. Built-in HTTP adapters can record observed status, safe error fields
-and whether an explanation was available. Codex records thread and turn IDs
-when received, along with the ephemeral mode. The IDs help correlate an attempt and carry no
-conversation history. `inspect --json` exposes sanitized `call_attempt_failed` events in
-`run.call_attempt_failures` when recorded, including failures a later retry recovered from.
-The text view shows those attempts with their call keys. `run` points to `inspect` for the
-exact failed run.
-Receipt and billing remain independent: a provider rejection does not prove $0,
-and a 5xx or unreadable paid-submit response remains uncertain. Its retained diagnostic
-survives a later `job_unsettled`; FX does not submit it again automatically.
-When a long provider job finished but FX could not deliver its result, a live resume
-can collect the original task without a new generation charge. Use `--recover` to
-allow collection and cache replay while blocking new managed calls. This also lets FX
-probe `settled` records with a handle, including older records and project adapter outcomes
-where success was unconfirmed. A provider can expire its result. `inspect --json` exposes
-the recorded status (`available`, `legacy`, `unavailable`, `recovered`) in
-`run.call_recoveries`, with `original_charged_usd` when the original amount booked by FX is known.
-Older handles may have no identifiable charge even when the run's accumulated spend is known.
-
-## Your own nodes
-
-A node type in your project is a function with a declaration. Do the work and return the declared
-outputs; never write undeclared files, read undeclared files, call providers directly, retry, or
-cache: FX does all of that. Without `version`, a node's identity follows its source (the module,
-the project modules it imports, declared `resources`), so editing it reruns it; paid calls inside
-are still cached by request. With `version=N`, only a bump reruns it; `grida fx lock` pins its
-source in `fx.lock`, and `grida fx lock --same <file>#<name>` confirms a change that keeps behaviour.
-
-Declaration fields (Python keyword arguments, TypeScript object members): `inputs` (`"image"`,
-`"image[]"` a list, `"image{}"` a keyed collection, trailing `?` optional), `params` (types, a tuple
-or list of allowed values, or a JSON Schema), `outputs` (`"image/png"`, `"json"`, `"annotations?"`),
-`calls` (`{"image.edit": 1}`: the most paid calls per run, which the plan prices; an undeclared call
-fails), `resources` (project files it reads), `tools` (external programs, checked by `doctor`;
-`GRIDA_FX_TOOL_<NAME>` picks a build), `judge` (must report a `verdict` fact), `version`, `retry`
-(`"engine"`: rerun after an exception, for providers you call your own way).
-
-What `ctx` gives (Python name; TypeScript in camelCase where it differs):
-
-| | |
-|---|---|
-| `ctx.read.image/json/text/bytes(name)` | a declared input (`image` is PIL; TypeScript has `bytes/text/json`, no image decoding) |
-| `ctx.inputs[name]` | the file: `.path`, `.kind`, `.digest`, `.key`, `.facts` |
-| `ctx.params` | settings, typed |
-| `ctx.out.png/json/text/bytes(...)` | an output value to return; `ctx.out.path(name)` + `ctx.out.file(path)` for files a tool writes |
-| `ctx.fact(name, value)` | report a node fact (`await` in TypeScript) |
-| `ctx.annotate(shape=…, label=…, …)` | add a mark to an `annotations` output |
-| `ctx.image_generate/image_edit/structured_generate(...)`, `ctx.capability(...)` | a paid call through FX: routed, priced, budgeted, cached |
-| `ctx.agent(system=…, tools=[…])` | a tool-using model loop; declare `calls={"agent.turn": N}` |
-| `ctx.tool("ffmpeg").run([...])` | a declared external program |
-| `ctx.prompt(path, **vars)` | render a declared resource with `${{ }}` |
-| `ctx.work_path(name)`, `ctx.state` | scratch space and state for this run of the node |
-| `ctx.progress(text, fraction)` | live progress |
-| `raise ctx.fail(msg)` / `throw ctx.fail(msg)` | a broken result: the step fails with your message |
-
-TypeScript nodes run on Node 24+ with types stripped: ES modules (`"type": "module"`), erasable
-syntax only (no `enum`, `namespace`, parameter properties), `.ts` in import paths, package.json
-`imports` (`#lib/x.ts`) rather than tsconfig `paths`. `tsc` checks bodies against declarations;
-FX never type checks. Return a `Map` for a keyed output. Any other language can implement the node
-protocol (JSON-RPC 2.0 over stdio, `spec/protocol.md`).
+- In `fx.yaml`, `routes` sets model defaults per capability and `provider_preferences` pairs
+  unqualified model IDs with explicit providers. A concrete `model@provider` selects an exact route
+  and overrides the preference. A step's `route` overrides the capability default. Credentials never
+  select a provider. For example, choose `openai/gpt-image-2.5-sunburst` with preference `gg`, or
+  directly choose `openai/gpt-image-2.5-sunburst@gg`.
+- For a missing GG/OpenRouter image binding, FX can look up model metadata for the selected
+  provider. `GRIDA_FX_NETWORK=off` forbids the lookup and all requests through FX's transport.
+  Explicit `--routes` turns off discovery. Use
+  [model selection](https://github.com/gridaco/fx/blob/main/spec/model-selection.md) for precedence
+  and offline behavior.
+- FX checks a nonblank process environment value, then project `.env`, then eligible saved Grida
+  keys. The [provider guide](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md)
+  lists key names and route features. `imagegen@codex` and `imagine@grok` use installed, signed-in
+  tools. Leave `size` unset on these routes and resize locally for exact dimensions. See
+  [Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and
+  [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md) for their respective
+  capabilities.
+- Use `route_tables` for additional `fx: routes/v1` tables. `extends` inherits from an earlier or
+  built-in route of the same capability and provider. Standard paid steps accept JSON options in
+  `with.provider_options.<provider>`. FX refuses files and parameters it owns. For a provider FX
+  does not ship, declare it with `family: openai-compatible` for structured generation or agent
+  turns, or use a Python or TypeScript `adapter` for other operations. Follow the
+  [community provider guide](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md)
+  for declarations, native capabilities and diagnostics.
+- A dollar-billed live run takes its ceiling from `--max-usd`, the workflow's `budget.max_usd`, or
+  the project's `budget.max_usd`, in that order. FX reserves authorization before each paid attempt,
+  waits for temporary holds, and stops admitting work when the budget is exhausted. It books
+  reported charges in full, including charges above the hold. The ceiling controls admission to FX
+  calls and cannot cap a provider invoice.
+- A complete route can omit `price` for an unknown forecast. Use `price: null` to clear an inherited
+  price. An unpriced attempt usually holds the remaining applicable budget. `price: { cap_usd: N }`
+  sets a per-call hold while keeping the forecast unknown. When actual cost goes unreported, FX
+  books the whole hold and keeps actual cost unknown. Use `--require-estimates` on `plan` or `run`
+  to require forecasts for uncached paid work. See
+  [cost and cache](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md).
 
 ## Running
 
-| Command | |
+`TARGET` is a workflow ID, YAML path, or a builder like `file.py:build` or `file.ts:build` with
+`--arg name=value`. Prefer the exact run folder or `WORKFLOW_ID/NAME` when inspecting a saved run. A
+workflow ID alone selects its latest run.
+
+| Job | Command |
 |---|---|
-| `grida fx plan <target> [--inputs f]… [--max-usd N] [--check] [--json] [--expect-cached] [--register] [--standalone] [--open]` | expand, check and price; never spends. `--check` exits 1 on problems (use it in CI) |
-| `grida fx run <target> [--live] [--recover] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name N \| --resume N \| --run DIR] [--stand-in F#fn] [--open \| --no-view]` | Runs free steps and admits paid calls with `--live`. |
-| `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--background MODE] [--size SIZE] [--live \| --stand-in F#fn] [--max-usd N] [--out FILE] [--dry-run] [--fresh] [--json]` | generate one PNG without authoring a workflow |
-| `grida fx inspect <run> [--verify] [--json] [--register] [--standalone] [--open]` | Shows a run's summary, recorded call failures and recovery history. A workflow ID selects its newest run. |
-| `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | the next take of a step / use a take from now on |
-| `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | read or repair `<id>.takes.yaml` |
-| `grida fx cancel <run> [--invocation ID] [--wait] [--timeout 30s] [--json]` | cancel one invocation; `inspect <run> --control --json` first |
-| `grida fx runs list [--workflow ID] [--json]` / `grida fx runs remove <run>… [--yes]` | list runs / remove runs (preview without `--yes`) |
-| `grida fx cache prune [--yes]` | remove what no remaining run names |
-| `grida fx export <run> --out DIR [--include-values] [--include-diagnostics] [--json]` | a portable copy of a finished run |
-| `grida fx files list <saved> [--instance ID] [--json]` / `grida fx files resolve <saved> --reference JSON [--project DIR] [--source-root DIR] [--json]` | discover recorded files / privately resolve one local path; `<saved>` is a run folder or saved plan JSON. To resolve a captured service entry, omit `<saved>` and supply the exact `--project DIR` |
-| `grida fx jobs [--forget KEY]` | Lists retained provider jobs. Forgetting one can allow a later live invocation to pay for new work. |
-| `grida fx nodes [type]`, `grida fx schema <target>`, `grida fx doctor [target]` | discovery and readiness |
-| `grida fx expand`, `identity`, `price <target>`; `grida fx project <run>`; `grida fx observe <run> [--snapshot]` | JSON for tools |
-| `grida fx start [--background] [--port N] [--open]`, `status [--project-root DIR] [--json]`, `stop`, `logs [--lines N]` | the project's local viewer service |
-| `grida fx init [dir] [--template NAME] [--list-templates]`, `grida fx lock [--same NODE]… [--check]` | project setup, node and adapter version locks |
-| `grida fx add NAME [destination] [--json]` / `grida fx add OWNER/REPO@REF [destination] [--workflow NAME] [--github-auth] [--json]` | copy an editable template into a fresh project folder |
+| Validate inputs and plan before running | `grida fx schema TARGET` and `grida fx plan TARGET --check --json`. Use `--check` to make planning problems fail the command. |
+| Preview one image call without a workflow | `grida fx call image.generate --prompt TEXT --dry-run`. Set `--route` when the project has no image default. An approved live call can copy the saved PNG with `--out FILE` to an unused destination. |
+| Run local work or admit paid calls | `grida fx run TARGET`. After approval, add `--live --max-usd N` for dollar-billed work. `--yes-up-to N` adds an approval gate for later phases. |
+| Run with simulated provider answers | `grida fx run TARGET --stand-in FILE#FUNCTION`. A stand-in runs offline, uses a separate cache, and conflicts with `--live` and `--yes-up-to`. |
+| Inspect a result and verify files | `grida fx inspect RUN --verify --json`. Use `grida fx observe RUN --snapshot` or `grida fx observe RUN --after CURSOR` to read recorded state and events. |
+| Check or cancel one exact invocation | `grida fx inspect RUN --control --json`, then `grida fx cancel RUN --invocation ID --wait --json`. Use an exact run folder or `WORKFLOW_ID/NAME`. Local completion and provider completion are separate. See [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md). |
+| Deliver or share outputs | `grida fx run TARGET --deliver output=path` copies declared outputs. Use `{key}` in the destination for keyed collections. `grida fx export RUN --out DIR --json` creates a portable export of a finished run. See [export disclosure options](https://github.com/gridaco/fx/blob/main/docs/guide/11-exports.md). |
+| Choose another result | `grida fx reroll RUN STEP` and `grida fx pick RUN STEP TAKE` change the selection for later runs. Re-plan before repeating the run because a new take or changed downstream work may cost money. |
+| Clean up | `grida fx runs list --json`, `grida fx runs remove RUN`, and `grida fx cache prune`. Removal and pruning preview until `--yes`. See [cleanup and refusals](https://github.com/gridaco/fx/blob/main/docs/guide/10-cleanup.md). |
 
-`<target>` is a workflow file, a workflow id, or a builder (`file.py:build`, `file.ts:build`, with
-`--arg name=value`). `<run>` is a run folder, a workflow id, or `WORKFLOW_ID/NAME`.
+**Resume and recover.** Create a named run with `--name NAME`. Continue with `--resume NAME` or
+reuse an explicit `--run DIR`. Repeat the original target, inputs and plan-affecting options. Resume
+requires the same plan and preserves the original spending ledger. A new run record can still reuse
+cached work.
 
-- **One-shot images.** `call image.generate` uses a literal `--prompt` and the nearest `fx.yaml`'s
-  `routes.image.generate` when you omit `--route`. An explicit `--route` must be nonempty.
-  Give a qualified route such as `imagegen@codex` outside a project. `--background` accepts `auto`, `opaque` or
-  `transparent`; `--size` accepts `auto` or `WxH` where the selected route supports it. Use
-  `--dry-run` to check the request and see its forecast and configured ceiling without creating
-  a run or generating. Use `--live`
-  to dispatch, even on Codex or Grok Build. A dollar-billed route needs `--max-usd` or the
-  project's `budget.max_usd`. `--stand-in FILE#FUNCTION` uses the offline stand-in store.
-  `--fresh` requires `--live` or `--stand-in` and makes a new request identity while preserving the
-  normal cache entry. The command saves `outputs/image.png` in an ordinary run and reports its
-  path. Use that run folder with `inspect` to see its attempts. `--out FILE` delivers a copy to
-  an unused UTF-8 filename under an existing writable directory. `--json` prints
-  one `fx-call-result-v1` document with the route, run, saved image and cache disposition. See the
-  [call contract](https://github.com/gridaco/fx/blob/main/spec/call.md).
-- **Ceiling.** A live generation run on a dollar-billed route needs a ceiling from `--max-usd`,
-  the workflow's `budget:` or `fx.yaml`, in that order.
-  Before every paid attempt FX reserves its allowance, or remaining applicable budget for
-  unpriced work. Calls wait for temporary holds; an exhausted budget stops new paid attempts.
-  Reported charges above a reservation are booked in full, so this is not a provider invoice guarantee.
-- **Runs.** Each run is a folder, `runs/<id>/<date>-<n>/`, with `events.jsonl` (the record),
-  `plan.json`, `outputs/` and `files/`. A run ends `ok`, `failed` (naming each failure) or
-  `incomplete`. `--name NAME` creates a named run once; `--resume NAME` (same target, inputs and
-  options) continues it; `--run DIR` creates or continues a folder. Finished steps come from the
-  cache and answered calls replay from the record.
-- **Recover paid results.** Repeat the same target, inputs and options with `--live --recover`
-  and `--resume NAME` or an existing `--run DIR`. This can run local work and collect retained
-  jobs while preserving the prior recorded ceiling and blocking new provider calls. Use
-  `recover=True` in Python or `recover: true` in JavaScript with the same run selector and live
-  option. A confirmed unavailable task stays recorded. If you decide to pay for a replacement,
-  use `jobs --forget KEY` and authorize a regular live run. Cache pruning preserves retained jobs.
-- **Takes.** The first result of a request is take 1. `reroll` and `pick` write
-  `<id>.takes.yaml` beside the workflow (commit it); every run reads it.
-- **Stacked cards.** A collapsed stack's front card represents the group
-  for inspection. Its presentation preference preserves canonical member order, access to
-  every member when expanded, and the workflow's actual picks and outputs. Explicit inspection
-  can bring any member forward. This establishes no universal ranking of execution states:
-  planned wiring does not prove runtime consumption, and `skipped` does not prove nonexecution.
-  The existing priorities use inspection selection, failures, active work and then confirmed
-  reads before completed-work fallbacks. A read requires execution evidence and a matching
-  recorded read; a judge examining its own subject does not count. A consumer can inspect
-  several candidates, so a representative is not labelled chosen or accepted from reads alone.
-  Complete explicit judge mappings link node draw/review decks in the same frame; selection
-  and hover raise corresponding partners. Plan-only records use deterministic fallback.
-  Badges report `1 skipped` without asserting nonexecution. Frame/workflow pairing remains deferred.
-- **Why skipped.** The engine records a structured `skip_reason` with a cause code and related
-  instance IDs for supported decisions, including an earlier accepted take, a false condition,
-  an unavailable prerequisite, a rejection policy, a skipped assertion or no selectable candidate.
-  No author-written explanation or model call is needed. The viewer explains the recorded
-  cause and links to related steps under `Why skipped`; an empty skipped preview can show the
-  same explanation. It never infers business intent or reconstructs a cause from status alone.
-  Older records without a cause say `Reason not recorded.`; unfamiliar future codes say
-  `Skip reason unavailable in this viewer.`. Existing records are not rewritten to add reasons.
-  Causes are display evidence, separate from output availability and execution success. The
-  Python and JavaScript saved-record APIs preserve them in their raw observation documents.
-- **Canvas display defaults.** In `fx.yaml`, optional `viewer.display` booleans
-  `workflow_inputs`, `workflow_outputs` and `notes` each default to `true`.
-  The first two control the displayed workflow's grouped Inputs/Outputs boundary,
-  including opened imports; `notes` controls authored note cards in all displayed owners,
-  including groups. Hidden content takes no layout space. Step sockets, effective settings,
-  media previews and hover inspection keep their behavior. Opening or refreshing the viewer
-  reads current project settings, including from an already running service, so existing
-  plans/runs need no rerun. `doctor` reports effective values and their source; unknown keys
-  and non-booleans are refused. No setting is added to workflow authoring, execution identity,
-  caches or resume. Explicit note/value reveal may temporarily show the selected item even
-  when its category is normally hidden. Visibility never withholds recorded content;
-  portable exports freeze the publishing project's display defaults independently of
-  disclosure, and older exports without them show all three categories. Export refusal
-  `invalid_viewer_config` means current project configuration cannot supply valid display
-  defaults; fix `fx.yaml` and export again, without rerunning the workflow.
-- **Visible workflow data.** FX records effective inputs (including defaults),
-  shared tables, contextual `let` results and outputs as read-only value evidence. Input and
-  output cards use labelled data sheets with monospaced binding names. Tables and `let`
-  results are available at consuming ports, without standalone cards by default.
-  The displayed workflow's input cards share an Inputs frame and its declared result
-  cards share an Outputs frame, including inside an opened imported workflow.
-  Boundary connections are hidden at rest and appear
-  on hover, keyboard focus or selection of an individual value or connected step.
-  Selection keeps those connections visible; processing connections remain visible.
-  Step cards keep bounded inline summaries for unconnected settings, including defaults
-  declared by built-in or custom Python/TypeScript nodes; a body-only fallback is unknown
-  before execution. At 75% zoom or above, hover a socket dot or label for an anchored
-  recorded-value popover. Below 75%, hover adds neither a popover nor a port-row tint.
-  Popovers anchor to the whole socket row so switching sides keeps its list clear.
-  Explicit click/tap and keyboard focus work at any zoom, with active preview feedback;
-  click/tap pins it, Escape or an outside press closes it. Only that port's connections
-  are highlighted. Pan, zoom and navigation dismiss the preview
-  without changing layout. Recorded images show a thumbnail or compact image collection
-  through verified recorded artifact inventory and existing viewer URLs; pin the image
-  preview to use the shared fullscreen control. Other media show metadata here and retain
-  existing cards/details for media inspection. Missing bytes and pending values keep
-  explicit fallbacks. Opening a preview evaluates nothing, generates no content and
-  discovers no provider data. An optional description comes from the recorded parameter JSON Schema
-  and renders as literal text; absent descriptions are never invented or read from current
-  source. Connected fields use this preview rather than repeated inline values.
-  Select text or objects for full details. Known null, pending, absent, unavailable and withheld remain
-  distinct when captured; old recordings are not backfilled. Typed media reuses previews,
-  fullscreen and file actions when recorded bytes exist. File-shaped JSON never becomes
-  media. Viewing never calls a provider or evaluates unused `let` declarations. Display
-  evidence changes no execution identities, scheduling or caches; actual data edits retain
-  their normal identity effects. Export disclosure applies to these values too. Hosts opt
-  into `{kind: "value", value_id, scope_id}` selection with `includeValues: true` on
-  `ViewerClient`, or same-realm method options, then use `{action: "reveal_value", value_id}`.
-  Explicitly revealing a normally omitted value temporarily adds that selected card;
-  changing selection removes it. Contextual occurrences retain their distinct recorded IDs.
-  Default clients see null for value selection; contexts contain references, never values.
-- **Deliver.** `--deliver icons=out/{key}.png` copies declared outputs after the run, `{key}` per
-  element; a missing one makes the command exit non-zero. The viewer's **Download all (.zip)** is
-  the same files for a person; agents use `--deliver` or `export`.
-- **Register a page for a host.** `grida fx plan TARGET --register` materializes a plan and
-  `grida fx inspect RUN --register` registers the selected saved run. Both print the relative
-  viewer route without starting a service or opening a browser. Add `--json` for the
-  `fx-plan-registration-v1` or `fx-run-registration-v1` receipt with `reference` and `route`.
-  The plan receipt reports `plan_ok`. A materialized plan can register even when it has
-  planning problems. Use `--check` to require a passing plan.
-  With `inspect --register --verify --json`, the receipt also includes `verification`
-  (`verified` and `problems`). Verification problems return exit status 1. Registration
-  works while the service is stopped.
-  Use `status --project-root DIR --json` or `start --background --json` for the verified base
-  URL, and use the receipt's route for the same project. An exact status read does not
-  discover ancestors or create service state. `--register` conflicts with `--open` and
-  `--standalone`. On `inspect`, it also conflicts with `--control`. To serve a page
-  independently and launch the default browser, combine `--standalone --open`.
-- **Viewer context and presentation.** The engine-shipped page exposes
-  `window.fx_viewer.getContext()`, `.subscribe(listener)` (returns unsubscribe), and
-  `.present(action)` to browser automation in that page. Context identifies the
-  displayed plan/run/catalog, recorded workflow scope and selection, with
-  `sampled_at` and `retained: true` when showing data after a failed read; it omits
-  values, diagnostics, media and private paths. Read it afresh when a user sends a
-  message. Actions are `reveal_instance` with a recorded `instance_id`, `open_scope`
-  with a recorded `scope_id` or `null`, `clear_selection`, and `fit`. They change
-  presentation only, never execution picks or records. No loaded evidence returns
-  `not_ready`; missing targets return `not_found`; catalog presentation is
-  `unavailable`. A successful result confirms applied state, not paint or tab activation.
-  Reveal uses the displayed stack/grid position after panning and the space left by floating panels.
-  In a wrapper, `isFxViewerDocument(document)` from `@grida/fx/viewer/client` reads
-  the v1 HTML marker for tab branding before data loads. Use context for recorded IDs.
-  Hosts with an existing window use the browser-safe `ViewerClient` from
-  `@grida/fx/viewer/client`: async `getContext`, `present`, `subscribe`, and `dispose`.
-  Use one client per window pair and recreate it after viewer navigation/reload.
-  Same-origin peers are accepted; a cross-origin peer requires trusted viewer-realm
-  code to call `window.fx_viewer.allowHost(hostWindow, exactOrigin)` (returns revoke).
-  An opener/parent is not automatically trusted. HTTP/framing policies remain unchanged.
-  The client does not launch FX, manage tabs or retry presentation on timeout.
-  See https://github.com/gridaco/fx/blob/main/spec/viewer.md for wire protocol v1.
-- **External viewer files.** Use
-  `await client.handleExternalFile(handler)` (returns detach), or synchronous
-  `window.fx_viewer.handleExternalFile(handler)` in the viewer realm. The handler
-  receives `{subject, target}` captured at activation: `target.kind` is `artifact`
-  with recorded `artifact: {digest, url, name, kind, size}`, or `source` with a
-  portable `source` and optional `symbol`/`recorded_digest`. URLs may be null.
-  One handler owns ordinary primary/keyboard file activation; existing modified
-  and middle-click asset links retain browser behavior. With no handler, asset
-  links keep normal navigation and source labels stay plain. Inline previews
-  remain viewer-owned. Failure/timeouts never retry or automatically open another
-  tab; use the explicit browser link when available. Dispose/recreate the client
-  after navigation. Older viewers return `unsupported_method`.
-  If source metadata cannot be read, `Retry source files` refreshes only that
-  metadata; it does not activate a file or retry an earlier host action.
-  A native host can use `listFiles(saved)` / `resolveFile(saved, reference)` or
-  `RunRecord.listFiles()` / `.resolveFile(reference)` from the Node SDK; Python
-  has `list_files`/`resolve_file`, record methods and async counterparts. Bind the
-  exact saved subject and supply `project` for source resolution/catalog checks,
-  plus `sourceRoot` (`source_root`) when the owning workflow home differs.
-  Closure-only or namespace-ambiguous files require that explicit source-root
-  binding; matching a project file's label does not establish package ownership.
-  FX never infers their package base from mutable project configuration.
-  A native caller with a captured service entry can use
-  `grida fx files resolve --project DIR --reference JSON --json` without a saved-record path.
-  Pass the authorized project directory and the complete captured reference. The explicit
-  `--service-entry` flag is also accepted.
-  `localPath` (`local_path`) is private native output, not viewer-message data.
-  Artifacts resolve only to available verified recorded bytes. Source resolves
-  the current editable file and reports match/changed/unknown where meaningful;
-  opening it never imports user code. Missing copies are ordinary unavailable
-  results; unrecorded targets and verifiable subject mismatches are errors.
-  No OS-specific Open/Reveal meaning is defined by FX. See
-  https://github.com/gridaco/fx/blob/main/spec/files.md and the embedding guide.
-- **Canvas previews.** A run card shows its first available image output, otherwise offers its
-  first available `video/*` output to the browser's native player. Container and codec support
-  depend on the browser. A skipped card with reserved preview space but no preview candidate
-  shows `Skipped` and its recorded causal explanation, or `Reason not recorded.` when absent.
-  It does not infer why it was skipped or whether it ran or produced output. Available previews
-  still display normally.
-  Failed or timed-out frame capture shows its reason; hover the message
-  for the native error code and optional browser diagnostic. These details stay in the browser,
-  separate from run failures. Hover playback requires a successfully captured first frame;
-  failed previews keep a stable unavailable-video icon and reason instead of a normal play
-  control. If native decoding worked but frame capture failed, use the distinct `Try playback`
-  action. The heading `Browser preview unavailable` describes a browser preview failure, not a broken
-  workflow output. Available video files keep a `Download original video` link in their details
-  for trying another player; files whose bytes are absent remain explicitly unavailable.
-  Viewing never transcodes or changes the run.
-  For a custom video poster, return an image output and set the workflow step's
-  `preview: { video: video, poster: poster }` to those own scalar output port names. `poster`
-  is optional. This overrides automatic image selection; each instance/take uses its own outputs.
-  The poster remains visible if native playback fails or an export omits the video, but never
-  enables hover playback by itself. A missing/broken poster falls back to native first-frame
-  capture when possible. Step details use the same poster and offer the original when available.
-  With a visible poster, native failure says `Browser playback unavailable`; the image preview
-  remains available. A capture-only failure retains the poster and a manual playback action.
-  Preview selectors do not create dependencies or change step/call identities. Editing them
-  changes the authored workflow and its plan digest: start a new run, which can reuse cached results.
-  Node output/body edits still follow the existing version and lock rules. Node-type defaults,
-  cross-step selectors, arbitrary URLs and callbacks are not part of this contract.
-  Portable exports retain their media allowlist; omitted files cannot be previewed.
-- **3D artifact inspection.** A card with no available image or video automatically renders
-  a thumbnail of its own recorded `model/gltf-binary` output, lazily when visible. No poster or
-  workflow setting is needed. Click anywhere on the 3D poster, or activate `Inspect 3D`, to
-  open the model in place without opening the sidebar, expanding a deck or changing selection
-  or picks. Only one media preview is interactive per canvas. The top-left `Back to poster`
-  arrow restores the still and focus. A bottom-right `Full screen` toggle, or F while the
-  player is focused, enters or leaves native fullscreen when the browser supports it.
-  Fullscreen preserves camera and animation state; Escape exits fullscreen first, then
-  returns to the poster from inline inspection. Back always returns to the poster.
-  Thumbnails use a bounded browser-local cache,
-  never a generated reference image in place of the actual mesh, and require no provider calls.
-  If all 64 cached thumbnails are needed by visible cards, additional cards offer
-  `Activate to preview this model`; panning frees space for automatic capture.
-  In step or run details, a recorded `model/gltf-binary` file
-  appears in an inline frame with orbit, pan and zoom gestures; gesture help is in its tooltip.
-  Images and models in the details sidebar share a bottom-right fullscreen toggle and F
-  shortcut, where supported. Escape returns to the sidebar first; the mounted media, model
-  camera and playback remain intact. Video retains its native player's fullscreen control.
-  Embedded textures and original materials are shown under neutral lighting. An animated model
-  starts paused and offers an icon play/pause button, plus a compact native clip selector only
-  when it has multiple clips. A static model has just the frame and quiet original-filename
-  download link. Existing details retain the run/step/take context. FX does not infer or
-  generate motion; preview controls stay inline without a dialog or modal.
-  The square frame and footer reserve their final space while the file and renderer load,
-  so loading feedback and animation controls do not move surrounding details.
-  FBX, JSON glTF, standalone motion, skeleton-only files, external resource dependencies and
-  unsupported required extensions keep an explanation and the original download when available.
-  A succeeded card without a supported preview shows `Preview unavailable` in its reserved area.
-  Models are limited to 128 MiB and checked against their recorded size and digest before
-  rendering. A preview that has not loaded within 30 seconds stops with a timeout.
-  The renderer, including Meshopt, loads on the first visible model preview; Draco/KTX2
-  decoders load when needed. All come from the installed viewer, with no CDN. Inspection
-  works on cached and exported GLBs without new generation.
-  Model camera/playback controls never change workflow picks, identities or records. Canvas
-  cards keep stills instead of one active renderer per card. Preview failure does not imply node failure or missing
-  original bytes. See https://github.com/gridaco/fx/blob/main/spec/model-previews.md.
-  The provider-free [media-preview fixture](https://github.com/gridaco/fx/blob/main/fixtures/viewer/README.md#try-all-media-previews-together)
-  brings images, native/unsupported videos, custom posters and static/animated GLBs together
-  in one locally generated saved run for development and manual inspection.
-- **Exit status.** `0` done; `1` refused or not ok (plan problems, a run not ok, a missing
-  delivery); `2` unreadable input or a usage mistake; `130` interrupted or cancelled.
-- **Offline checks.** `GRIDA_FX_NETWORK=off` refuses every request FX's transport would send
-  (FX's adapters, and a project adapter's `fetch`) before sending; a project adapter's own HTTP
-  client is not stopped, and must check the switch itself. `GRIDA_FX_DISABLE_DOTENV=1` ignores
-  `.env`. With saved-key support, offline planning and execution skip the Grida store. To skip
-  it during key diagnostics too, set `GRIDA_FX_DISABLE_GRIDA_STORE=1`.
+If FX retained a provider task handle, use `--live --recover` with the existing run selector to
+collect the original result, replay cache and run local work while blocking new paid dispatch. See
+`run.call_recoveries` and `run.call_attempt_failures` in `grida fx inspect RUN --json`.
+`grida fx jobs` lists retained jobs. Check the provider outcome and get approval for a replacement
+before using `grida fx jobs --forget KEY`. See
+[resuming and job states](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md#resuming).
 
-### From Python and JavaScript
+### Viewer and SDKs
 
-```python
-from grida.fx import plan, run
-
-planned = plan("icon", inputs={"name": "copper lantern"})
-print(planned.estimate(), planned.problems)
-result = run(planned, live=True)               # target, inputs and ceiling from the plan
-print(result.ok, result.cost, result.failures) # a failed step does not raise
-result.deliver({"icon": "out/icon.png"})
-```
-
-```ts
-import { plan, run } from "@grida/fx";
-
-const planned = await plan("icon", { inputs: { name: "copper lantern" } });
-const result = await run(planned, { live: true });
-console.log(result.ok, result.chargedUsd, result.failed);
-```
-
-Both raise `PlanRefused` for a refused plan and `FxError` for a run refused before it starts. Also:
-`run_async`, `load_run(...)`/`loadRun(...)` (saved records, `snapshot`, `events`, `follow`,
-`export`), `cancel`/`inspect_control`, `list_runs`/`remove_runs` (`listRuns`/`removeRuns`).
-Loaded records retain the resolved loading `cwd` for the publishing project's current
-`fx.yaml` display defaults on export. Relative export destinations still resolve against
-the export caller's current directory; no historical project path is inferred from a run.
+- Start the service with `grida fx start --background`. Open a plan with
+  `grida fx plan TARGET --open` or a saved run with `grida fx inspect RUN --open`. Add
+  `--standalone` for an independent viewer. `viewer.display` in `fx.yaml` controls workflow input,
+  output and note visibility. See
+  [viewing workflows and runs](https://github.com/gridaco/fx/blob/main/docs/guide/07-viewing.md).
+- For host apps, use `grida fx plan TARGET --register --json` or
+  `grida fx inspect RUN --register --json`. Registration returns a relative route and stable
+  reference. Use `grida fx status --project-root DIR --json` for the matching service URL. With a
+  plan, check `plan_ok` or pass `--check`. For selection, presentation and native file actions, see
+  the [viewer API](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md) and
+  [file resolution contract](https://github.com/gridaco/fx/blob/main/spec/files.md).
+- Python (`grida.fx`) and JavaScript (`@grida/fx`) expose `plan` and `run`. Check the plan's
+  problems and the result's `ok` and failures. A failed step can return a result. For saved runs,
+  `load_run` / `loadRun` provide a record with `snapshot`, `events`, `follow`, and `export`.
+  Recovery uses `recover=True` or `recover: true` with live mode and the existing run selector. See
+  the [SDK guide](https://github.com/gridaco/fx/blob/main/docs/guide/09-sdk-runs.md) and
+  [SDK contract](https://github.com/gridaco/fx/blob/main/spec/sdk.md).
 
 ## Recipes
 
-Each recipe is a complete project: every file is shown with its path in a comment on its first
-line (the comment is not part of the file), and CI runs the recipe's `grida fx plan` lines, and
-its `grida fx run` lines without `--live`, against those files.
+Use a fresh directory for each recipe. Save each file block to the path in its first comment,
+omitting that comment. Run the shell commands from the project root.
 
-### One transparent icon, drawn again until its background is clear
+### Plan an icon and test it offline
+
+Install the Python package with `pip install grida` on Python 3.11+. A stand-in supplies a local
+PNG in place of the provider answer, so you can test the image step and its transparency judge
+without credentials. A live run uses Grida Gateway and can draw up to three takes if the judge
+rejects an image.
 
 ```yaml
 # fx.yaml
 fx: project/v1
-budget: { max_usd: 5 }
 routes:
-  image.generate: openai/gpt-image-2.5-sunburst@gg
+  image.generate: openai/gpt-image-2.5-sunburst
+provider_preferences:
+  image.generate: gg
 ```
 
 ```yaml
 # workflows/icon.yaml
 fx: workflow/v1
 id: icon
-title: One item icon
+title: Item icon
 inputs:
-  name: { type: string, description: "What the item is" }
+  name: { type: string }
 steps:
   draw:
     uses: fx/image.generate@1
     with:
-      prompt: "A single ${{ inputs.name }} game icon, centered, no text."
-      background: transparent
+      prompt: "A ${{ inputs.name }} game icon, centered, no text."
       size: 1024x1024
-  clean:
+      background: transparent
+  check:
     uses: fx/image.check_alpha@1
     judges: draw
     with: { image: "${{ steps.draw.outputs.image }}", expect: transparent }
@@ -1146,178 +262,46 @@ outputs:
   icon: ${{ steps.draw.outputs.image }}
 ```
 
-```sh
-grida fx plan icon -- --name "copper lantern"
-grida fx run icon --live -- --name "copper lantern"
-grida fx inspect icon
-```
-
-The plan prices every take regeneration may draw. Running it again changes nothing and costs
-nothing; another `--name` draws again.
-
-### Many items from a table, sized locally, packed into a folder
-
-```yaml
-# workflows/icons.yaml
-fx: workflow/v1
-id: icons
-title: Item icons
-tables:
-  items:
-    - { id: lantern, look: "a copper lantern" }
-    - { id: rope, look: "a coil of hemp rope" }
-    - { id: map, look: "a folded sea chart" }
-steps:
-  icon:
-    for_each: ${{ tables.items }}
-    key: ${{ item.id }}
-    concurrency: 2
-    steps:
-      draw:
-        uses: fx/image.generate@1
-        route: imagegen@codex
-        with: { prompt: "A game inventory icon of ${{ item.look }}, flat style, no text.", background: transparent }
-      small:
-        uses: fx/image.resize@1
-        with: { image: "${{ steps.draw.outputs.image }}", longest_side: 256 }
-      square:
-        uses: fx/image.pad@1
-        with: { image: "${{ steps.small.outputs.image }}", width: 256, height: 256 }
-  pack:
-    uses: fx/package@1
-    with:
-      files:
-        "icons/{key}.png": ${{ steps.icon.*.square.outputs.image }}
-      manifest:
-        items: ${{ tables.items }}
-outputs:
-  icons: ${{ steps.icon.*.square.outputs.image }}
-  files: ${{ steps.pack.outputs.files }}
-```
-
-```sh
-grida fx plan icons
-grida fx run icons --live --deliver icons=out/{key}.png
-```
-
-`key:` names instances (`icon['rope']`), so takes and delivered files follow the item when the
-table changes. On `imagegen@codex` the size is the route's own: resize and pad locally for an exact
-canvas. The run needs no ceiling while every paid call is on Codex.
-
-### A model proposes a list; one image per entry (a second phase)
-
-```json
-// schemas/cast.json
-{
-  "type": "object",
-  "properties": {
-    "characters": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": { "id": { "type": "string" }, "look": { "type": "string" } },
-        "required": ["id", "look"]
-      }
-    }
-  },
-  "required": ["characters"]
-}
-```
-
-```yaml
-# workflows/cast.yaml
-fx: workflow/v1
-id: cast
-title: Cast portraits
-inputs:
-  premise: { type: string }
-  max_characters: { type: integer, default: 6, minimum: 1, maximum: 12 }
-budget: { max_usd: 8 }
-steps:
-  propose:
-    uses: fx/structured.generate@1
-    route: openai/gpt-5.6-sol@gg
-    with:
-      prompt: "Invent the cast of this story, at most ${{ inputs.max_characters }}: ${{ inputs.premise }}"
-      schema: ./schemas/cast.json
-  portrait:
-    for_each: ${{ steps.propose.outputs.json.characters }}
-    key: ${{ item.id }}
-    max: ${{ inputs.max_characters }}
-    uses: fx/image.generate@1
-    route: openai/gpt-image-2.5-sunburst@gg
-    with: { prompt: "A portrait of ${{ item.look }}, painted, plain background.", size: 1024x1024 }
-outputs:
-  cast: ${{ steps.propose.outputs.json }}
-  portraits: ${{ steps.portrait.*.outputs.image }}
-```
-
-```sh
-grida fx plan cast -- --premise "a lighthouse keeper's last winter"
-grida fx run cast --live --yes-up-to 5 -- --premise "a lighthouse keeper's last winter"
-```
-
-Phase 2 is priced at `max:` in the plan, then exactly once `propose` answers. `--yes-up-to 5`
-stops before a phase that would take the run past $5.
-
-### Your own Python node and judge
-
 ```python
-# nodes/tiles.py
-from PIL import Image, ImageOps
+# tests/stand_in.py
+import io
 
-from grida.fx import Ctx, node
+from PIL import Image
 
-
-@node("mirror_tile", inputs={"image": "image"}, outputs={"image": "image/png"})
-def mirror_tile(ctx: Ctx) -> dict:
-    src = ctx.read.image("image")
-    out = Image.new(src.mode, (src.width * 2, src.height))
-    out.paste(src, (0, 0))
-    out.paste(ImageOps.mirror(src), (src.width, 0))
-    return {"image": ctx.out.png(out)}
+from grida.fx import Answer
 
 
-@node("wide_enough", inputs={"image": "image"}, params={"min_width": int}, judge=True)
-def wide_enough(ctx: Ctx) -> dict:
-    width = ctx.inputs["image"].facts["width"]
-    ctx.fact("width", width)
-    ctx.fact("verdict", "accept" if width >= ctx.params["min_width"] else "reject")
-    return {}
-```
-
-```yaml
-# workflows/strip.yaml
-fx: workflow/v1
-id: strip
-title: Seamless strip
-inputs:
-  scene: { type: string }
-steps:
-  draw:
-    uses: fx/image.generate@1
-    route: openai/gpt-image-2.5-sunburst@gg
-    with: { prompt: "${{ inputs.scene }}, side view, flat colours", size: 1536x1024 }
-  tile:
-    uses: ./nodes/tiles.py#mirror_tile
-    with: { image: "${{ steps.draw.outputs.image }}" }
-  wide:
-    uses: ./nodes/tiles.py#wide_enough
-    judges: tile
-    with: { image: "${{ steps.tile.outputs.image }}", min_width: 2048 }
-    on_reject: continue
-outputs:
-  strip: ${{ steps.tile.outputs.image }}
+def answer(call):
+    width, height = map(int, call.request["size"].split("x"))
+    picture = Image.new("RGBA", (width, height))
+    picture.paste((180, 100, 50, 255), (width // 4, height // 4, width * 3 // 4, height * 3 // 4))
+    with io.BytesIO() as output:
+        picture.save(output, "PNG")
+        return Answer(files={"image": output.getvalue()})
 ```
 
 ```sh
-grida fx plan strip --max-usd 2 -- --scene "a harbour at dusk"
+grida fx plan icon --check -- --name "copper lantern"
+grida fx run icon --stand-in tests/stand_in.py#answer --name preview --deliver icon=lantern.png -- --name "copper lantern"
+grida fx inspect icon/preview --verify
 ```
 
-Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param declared as a type
-(`int`) is checked when the step runs.
+The plan forecasts the cost of real generation. Add `--json` to the plan command before `--` to
+see the resolved route. The offline run copies the test image to `lantern.png` and saves the run
+as `icon/preview`. The second `--name`, after `--`, sets the workflow input.
 
-### Your own TypeScript node, run offline
+To generate the real icon, have the user configure `GG_API_KEY` or a saved Grida Gateway key
+and check readiness with `grida fx doctor icon`. After approval, set `APPROVED_USD` to the agreed
+USD ceiling and give the live run its own name.
+
+```sh
+grida fx run icon --live --max-usd "$APPROVED_USD" --name final --deliver icon=lantern-live.png -- --name "copper lantern"
+```
+
+### Run a local TypeScript node
+
+Run `npm install` in this project with Node 24+ before planning. `uses` points to the named node
+export.
 
 ```json
 // package.json
@@ -1325,612 +309,58 @@ Python nodes need Python 3.11+ with `grida` (Pillow comes with it). A param decl
 ```
 
 ```ts
-// nodes/palette.ts
+// nodes/label.ts
 import { node } from "@grida/fx";
 
-export const palette = node(
-  {
-    name: "palette",
-    params: { base: "string", steps: { type: "integer", default: 4, minimum: 2 }, mood: ["warm", "cool"] },
-    outputs: { swatches: "json" },
-  },
-  async (ctx) => {
-    const swatches = Array.from({ length: ctx.params.steps }, (_, i) => `${ctx.params.base}/${ctx.params.mood}/${i}`);
-    await ctx.fact("count", swatches.length);
-    return { swatches: ctx.out.json(swatches) };
-  },
+export const label = node(
+  { name: "label", params: { name: "string" }, outputs: { label: "text/plain" } },
+  (ctx) => ({ label: ctx.out.text(`Item: ${ctx.params.name}`) }),
 );
 ```
 
 ```yaml
-# workflows/palette.yaml
+# workflows/label.yaml
 fx: workflow/v1
-id: palette
-title: A palette
-inputs:
-  base: { type: string, default: teal }
-steps:
-  colours:
-    uses: ./nodes/palette.ts#palette
-    with: { base: "${{ inputs.base }}", steps: 5, mood: cool }
-outputs:
-  swatches: ${{ steps.colours.outputs.swatches }}
-```
-
-```sh
-grida fx plan palette
-grida fx run palette -- --base coral
-```
-
-`uses:` names the export (`#palette`). Node 24+ runs the `.ts` file as it is; `npm install
-@grida/fx` puts the SDK in `node_modules`. Nothing here is paid, so the run needs no `--live`.
-
-### A builder: a workflow from your own data, in Python
-
-```python
-# build_icons.py
-from grida.fx import Workflow
-
-ITEMS = {"lantern": "a copper lantern", "rope": "a coil of hemp rope"}
-
-
-def build(theme: str = "flat") -> Workflow:
-    wf = Workflow("built-icons", title=f"Icons, {theme}")
-    icons = wf.step(
-        "icon",
-        for_each=[{"id": key, "look": look} for key, look in ITEMS.items()],
-        key="${{ item.id }}",
-        uses="fx/image.generate@1",
-        route="imagegen@codex",
-        with_={"prompt": f"A {theme} game icon of ${{{{ item.look }}}}, no text."},
-    )
-    wf.outputs(icons=icons.all.outputs.image)
-    return wf
-```
-
-```sh
-grida fx plan build_icons.py:build --arg theme=pixel
-```
-
-A builder runs while planning and returns the workflow; FX never runs arbitrary scripts to find
-one. In TypeScript: `export function build() { return workflow({ id, title, steps, outputs }) }`
-with `expr("item.id")` for expressions, planned as `grida fx plan workflows/icons.ts:build`.
-
-### Fall back to another route when a judge rejects
-
-```yaml
-# workflows/fallback.yaml
-fx: workflow/v1
-id: fallback
-title: A cut-out, from a second route if needed
-inputs:
-  subject: { type: string }
-steps:
-  first:
-    uses: fx/image.generate@1
-    route: openai/gpt-image-2.5-sunburst@gg
-    with: { prompt: "${{ inputs.subject }}, isolated", background: transparent, size: 1024x1024 }
-  clear:
-    uses: fx/image.check_alpha@1
-    judges: first
-    with: { image: "${{ steps.first.outputs.image }}", expect: transparent }
-    on_reject: continue
-  second:
-    if: ${{ steps.clear.facts.verdict == 'reject' }}
-    uses: fx/image.generate@1
-    route: imagegen@codex
-    with: { prompt: "${{ inputs.subject }}, isolated", background: transparent }
-  chosen:
-    uses: fx/select@1
-    with: { first_of: ["${{ steps.first.outputs.image }}", "${{ steps.second.outputs.image }}"] }
-outputs:
-  picture: ${{ steps.chosen.outputs.image }}
-```
-
-```sh
-grida fx plan fallback --max-usd 1 -- --subject "a brass key"
-```
-
-`second` depends on a run-time verdict, so the plan prices it as *maybe*. `select` skips
-candidates whose step was skipped or rejected; `a ?? b` does the same for a skipped step's result.
-
-### Test a workflow offline with a stand-in
-
-```python
-# tests/stand_in.py
-import io
-
-from PIL import Image
-
-from grida.fx import DECLINE, Answer
-
-
-def answer(call):
-    if call.capability != "image.generate":
-        return DECLINE
-    width, height = map(int, call.request["size"].split("x"))
-    picture = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    picture.paste((200, 120, 40, 255), (width // 4, height // 4, width * 3 // 4, height * 3 // 4))
-    out = io.BytesIO()
-    picture.save(out, "PNG")
-    return Answer(files={"image": out.getvalue()})
-```
-
-```yaml
-# workflows/icon.yaml
-fx: workflow/v1
-id: icon
-title: One item icon
+id: label
+title: Label an item
 inputs:
   name: { type: string }
 steps:
-  draw:
-    uses: fx/image.generate@1
-    route: openai/gpt-image-2.5-sunburst@gg
-    with: { prompt: "A ${{ inputs.name }} icon, no text.", background: transparent, size: 1024x1024 }
-  clean:
-    uses: fx/image.check_alpha@1
-    judges: draw
-    with: { image: "${{ steps.draw.outputs.image }}", expect: transparent }
+  label:
+    uses: ./nodes/label.ts#label
+    with: { name: "${{ inputs.name }}" }
 outputs:
-  icon: ${{ steps.draw.outputs.image }}
+  label: ${{ steps.label.outputs.label }}
 ```
 
 ```sh
-grida fx plan icon -- --name lantern
-grida fx run icon --stand-in tests/stand_in.py#answer -- --name lantern
+grida fx plan label --check -- --name lantern
+grida fx run label --deliver label=label.txt -- --name lantern
 ```
 
-A stand-in answers paid calls with your function: offline, for nothing, checked as a provider's
-answer would be (a picture of the wrong size fails the call). It keeps its own cache
-(`.fx/cache/stand-in/`), never mixes with paid answers, and cannot be combined with `--live` or
-`--yes-up-to`. Return `Answer(...)`, `DECLINE` (the call fails as not live), or raise
-`CallRefused`/`CallFailed`; anything else stops the run. From the SDKs: `run(..., stand_in=fn)` in
-Python, `run(..., { standIn: fn })` in JavaScript, in your own process.
-
-### A model FX does not list, on a provider FX speaks
-
-```yaml
-# fx.yaml
-fx: project/v1
-route_tables: [routes/models.yaml]
-```
-
-```yaml
-# routes/models.yaml
-fx: routes/v1
-routes:
-  - capability: structured.generate
-    route: acme/text-b@openrouter            # made up: a chat model OpenRouter serves
-    price: { cap_usd: 0.10 }                 # no known price: each call holds $0.10
-    contract:
-      provider_options: { openrouter: { temperature: 0.2 } }   # sent with every call
-  - capability: structured.generate
-    route: acme/text-b-mini@openrouter       # made up: its smaller sibling
-    extends: acme/text-b@openrouter          # the same contract and options
-    price: { cap_usd: 0.02 }                 # replaces the base's price
-  - capability: image.generate
-    route: acme/img-a@fal                    # made up: fal's text-to-image endpoint of a model
-    price: { cap_usd: 0.20 }
-```
-
-```json
-// schemas/colour.json
-{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
-```
-
-```yaml
-# workflows/lantern.yaml
-fx: workflow/v1
-id: lantern
-title: A lantern on models FX does not list
-steps:
-  colour:
-    uses: fx/structured.generate@1
-    route: acme/text-b-mini@openrouter
-    with:
-      prompt: Name a colour for a copper lantern.
-      schema: ./schemas/colour.json
-  draw:
-    uses: fx/image.generate@1
-    route: acme/img-a@fal
-    with:
-      prompt: "A copper lantern, glowing ${{ steps.colour.outputs.json.name }}, flat icon."
-      provider_options:
-        fal: { seed: 7 }                     # read only on an @fal route
-outputs:
-  icon: ${{ steps.draw.outputs.image }}
-```
-
-```sh
-grida fx plan lantern --max-usd 1
-grida fx doctor lantern
-grida fx run lantern --live --max-usd 1
-```
-
-The plan shows unknown forecasts and adds a reservation `note` per capped route; `doctor` says
-`no key (OPENROUTER_API_KEY)` and `no key (FAL_KEY)` for the two routes until the keys are set,
-then `servable`. The routes name no `contract` adapter, so each gets its provider's default:
-OpenRouter's chat adapter, and fal's generic image adapter, which sends the prompt, then
-`seed`. `extends` copies a route of the same capability and provider (here the sibling's contract,
-options included) and restates only what differs; it is not part of the route's identity, the
-contract is. For a GPT Image model FX does not list, extend a built-in GPT Image route instead,
-which keeps its adapter. A provider FX does not ship needs a declaration (below).
-
-### A provider FX does not ship, from a declaration alone
-
-```yaml
-# fx.yaml
-fx: project/v1
-route_tables: [routes/acme.yaml]
-providers:
-  acme:                                      # stands for your provider; its routes are <model>@acme
-    credential: { variable: ACME_API_KEY }   # sent as authorization: Bearer <key>
-    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
-    family: openai-compatible                # it speaks the OpenAI Chat Completions API
-```
-
-```yaml
-# routes/acme.yaml
-fx: routes/v1
-routes:
-  - capability: structured.generate
-    route: acme/text-a@acme        # the model id as the provider names it
-    price: { cap_usd: 0.05 }       # each attempt holds $0.05
-    contract:
-      token_limit_field: max_completion_tokens # only if this server takes that spelling
-      image_detail: high
-      pictures: unchanged
-      billing: { cost: usage.cost, unbilled_statuses: [400, 422] } # documented by this server
-  - capability: agent.turn
-    route: acme/text-a@acme
-    price: { cap_usd: 0.05 }
-```
-
-```json
-// schemas/colour.json
-{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
-```
-
-```yaml
-# workflows/colour.yaml
-fx: workflow/v1
-id: colour
-title: A colour from a declared provider
-steps:
-  name:
-    uses: fx/structured.generate@1
-    route: acme/text-a@acme
-    with:
-      prompt: Name a colour for a copper lantern.
-      schema: ./schemas/colour.json
-outputs:
-  colour: ${{ steps.name.outputs.json }}
-```
-
-```sh
-grida fx plan colour
-grida fx doctor
-grida fx run colour --live --max-usd 1
-```
-
-The plan shows an unknown forecast and notes its $0.05 reservation cap. `doctor` says `no key (ACME_API_KEY)`
-for the routes until the key is set (environment or `.env`), then `servable`. The routes name no
-`adapter` in their contracts, so each gets the family's adapter (`openai-compatible-structured`,
-`openai-compatible-tool-loop`). The structured route explicitly selects `max_completion_tokens`,
-original pictures with high detail, and this server's documented billing rules; it reads the
-final USD `usage.cost`, and an unbilled 400 or 422 settles at $0 when there is no reported cost.
-Other unknown costs book the $0.05 reservation. The agent route keeps the defaults. The strict
-schema and messages go to `https://api.acme.test/v1/chat/completions`; other model parameters go
-in `provider_options: { acme: { … } }`. A server on this machine (`http://127.0.0.1:8080/v1`)
-needs no `credential`.
-
-### A provider of your own, with an adapter in Python
-
-```yaml
-# fx.yaml
-fx: project/v1
-route_tables: [routes/acme.yaml]
-providers:
-  acme:                                      # stands for your provider; its routes are <model>@acme
-    credential: { variable: ACME_API_KEY }   # attached by FX when the adapter asks
-    base_url: { variable: ACME_BASE_URL, default: "https://api.acme.test/v1" }
-    adapter: adapters/acme.py#acme           # <module>#<name>, a module of this project
-```
-
-```yaml
-# routes/acme.yaml
-fx: routes/v1
-routes:
-  - capability: structured.generate
-    route: text-a@acme
-    price: { cap_usd: 0.05 }       # charged what the adapter reports, else the cap
-```
-
-```python
-# adapters/acme.py
-import json
-
-from grida.fx import Answered, Failed, FetchError, NotReceived, Refused, adapter
-
-
-async def send(call):  # one structured.generate request, sent once
-    request = {
-        "model": call.route.model,
-        "prompt": call.request["prompt"],
-        "schema": json.loads(call.request["schema"].read_bytes()),
-    }
-    try:
-        response = await call.fetch(
-            f"{call.base_url}/answers",
-            method="POST",
-            json=request,
-            credential=True,
-            timeout_s=60,
-        )
-    except FetchError as error:  # refused, not_sent or after_send
-        if error.phase == "refused":
-            return Refused(error.reason)
-        if error.phase == "not_sent":
-            return NotReceived(error.reason)
-        return Failed(error.reason, retryable=True)
-    if response.status != 200:
-        return Failed(f"acme returned HTTP {response.status}", retryable=response.status >= 500)
-    body = response.json()
-    return Answered.json(body["answer"], cost_usd=body.get("cost_usd"))
-
-
-acme = adapter(requests=["structured.generate"], send=send, version=1)
-```
-
-```json
-// schemas/colour.json
-{ "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }
-```
-
-```yaml
-# workflows/colour.yaml
-fx: workflow/v1
-id: colour
-title: A colour from your own adapter
-steps:
-  name:
-    uses: fx/structured.generate@1
-    route: text-a@acme
-    with:
-      prompt: Name a colour for a copper lantern.
-      schema: ./schemas/colour.json
-outputs:
-  colour: ${{ steps.name.outputs.json }}
-```
-
-```sh
-grida fx plan colour
-grida fx lock
-grida fx doctor
-GRIDA_FX_NETWORK=off grida fx run colour --live --max-usd 1
-grida fx run colour --live --max-usd 1
-```
-
-The plan loads the adapter in the project's Python, which needs `grida` (`GRIDA_FX_PYTHON`
-names another), and shows an unknown forecast with a $0.05 reservation cap. `lock` pins the adapter's source in
-`fx.lock`: commit it, and bump `version` when its behaviour changes. `doctor` says `adapter   acme
-adapters/acme.py#acme version 1: structured.generate (request)`, and `servable` for the route
-once `ACME_API_KEY` is set. With the network off, the adapter runs and its `fetch` is refused
-before it leaves: the step fails `… was refused: the network is off (GRIDA_FX_NETWORK=off)`, at
-$0, which tests everything but the provider. A long job (`video.generate`, say) goes in `jobs=`
-with `submit` returning `Accepted({…})` and `collect` polling, by its own clock, until it
-returns `Answered`, `Ended` or `Unreachable`. Failed status reads are polls that saw nothing;
-keep polling until the deadline. A failed result download returns `Unreachable`, so a later run
-collects the same job again. Check each `fetch` response's HTTP status before using its body.
-In TypeScript the module is `adapters/acme.ts`
-(`adapter: adapters/acme.ts#acme`), the outcomes are plain objects:
-
-```ts
-import { Answered, adapter, FetchError } from "@grida/fx";
-
-export const acme = adapter({
-  requests: ["structured.generate"],
-  send: async (call) => {
-    let response;
-    try {
-      response = await call.fetch(`${call.baseUrl}/answers`, {
-        method: "POST",
-        json: { model: call.route.model, prompt: String(call.request.prompt) },
-        credential: true,
-        timeoutS: 60,
-      });
-    } catch (error) {
-      if (!(error instanceof FetchError)) throw error; // an unknown outcome: billed in full
-      if (error.phase === "refused") return { outcome: "refused", reason: error.reason };
-      if (error.phase === "not_sent") return { outcome: "not_received", reason: error.reason };
-      return { outcome: "failed", reason: error.reason, retryable: true };
-    }
-    if (response.status !== 200) {
-      const reason = `acme returned HTTP ${response.status}`;
-      return { outcome: "failed", reason, retryable: response.status >= 500 };
-    }
-    const body = response.json() as { answer: { name: string }; cost_usd?: number };
-    return Answered.json(body.answer, { costUsd: body.cost_usd });
-  },
-  version: 1,
-});
-```
-
-Tripo mesh calls forward integer `face_limit` values without an FX copy of the provider's
-model/topology ranges. Provider rejections retain their explanation. Local Tripo mesh
-encoding and source-format refusals report `source: adapter`, `phase: validate`.
-Diagnostic input-echo redaction applies to identifiers and operation names as well as messages;
-unsafe optional metadata is withheld. Even exports including diagnostics keep that protection.
-
-### A provider-native operation outside FX's standard schemas
-
-This synthetic provider never opens the network. It demonstrates arbitrary fields and file
-inputs through the managed job path. Replace the adapter bodies with the provider's protocol
-for a real operation; keep retries owned by FX and distinguish uncertain receipt from refusal.
-
-```yaml
-# fx.yaml
-fx: project/v1
-route_tables: [routes.yaml]
-providers:
-  acme:
-    base_url: { default: "https://api.acme.test/v1" }
-    adapter: adapters/native.py#native_adapter
-```
-
-```yaml
-# routes.yaml
-fx: routes/v1
-routes:
-  - capability: acme.native
-    route: model-a@acme
-    price: { cap_usd: 0.05 }
-```
-
-```python
-# adapters/native.py
-from grida.fx import Accepted, Answered, adapter
-
-
-def submit(call):
-    # A real implementation uploads call.request["source"] and submits exactly once.
-    return Accepted({"task_id": call.key[:16]})
-
-
-def collect(call):
-    # A real implementation only polls/downloads; it never creates another task.
-    return Answered.json({
-        "task_id": call.handle["task_id"],
-        "future_face_budget": call.request["future_face_budget"],
-        "source_bytes": len(call.request["source"].read_bytes()),
-    }, cost_usd=0)
-
-
-native_adapter = adapter(jobs=["acme.native"], submit=submit, collect=collect, version=1)
-```
-
-```python
-# nodes/native.py
-from grida.fx import Ctx, node
-
-
-@node("native", inputs={"source": "file"}, outputs={"result": "json"},
-      calls={"acme.native": 1}, version=1)
-async def native(ctx: Ctx) -> dict:
-    answer = await ctx.capability("acme.native", source=ctx.inputs["source"],
-                                  future_face_budget=70000, new_provider_field={"enabled": True})
-    return {"result": ctx.out.json(answer.json)}
-```
-
-```text
-# source.txt
-Synthetic native input.
-```
-
-```yaml
-# workflows/native.yaml
-fx: workflow/v1
-id: native
-title: A native operation managed by FX
-steps:
-  make:
-    uses: ./nodes/native.py#native
-    route: model-a@acme
-    with: { source: ./source.txt }
-outputs:
-  result: ${{ steps.make.outputs.result }}
-```
-
-```sh
-grida fx plan native
-GRIDA_FX_NETWORK=off grida fx run native --live --max-usd 1
-```
-
-[The native harness](https://github.com/gridaco/fx/tree/main/fixtures/native) contains Python
-and TypeScript versions with real cancellation/resume, independent call-cache replay,
-changed-file/field/operation identities and redacted provider errors, tested through both SDKs.
+The local run writes `Item: lantern` to `label.txt`.
 
 ## When something fails
 
-| You see | Do |
+| Symptom | Action |
 |---|---|
-| `"title" is a required property` | a workflow needs `fx`, `id`, `title` and `steps` |
-| `plain scalar 'on' is ambiguous …; quote it` | quote the value (`"on"`, `"16:9"`, `"2026-10-05"`) |
-| `inputs: 'name' is a required property` | give the input: `-- --name …` or `--inputs file.yaml` |
-| `… is a paid call; run with --live` | the step needs a provider: ask the user, then `--live` with a ceiling |
-| `refused: a live run needs a ceiling: …` | add `--max-usd N` (agreed with the user) or a `budget:` |
-| `… was refused: GG_API_KEY is not set` (or a declared provider's variable) | ask the user to set the key in the environment or `.env`. With saved-key support, they can save an eligible key using Grida. Check with `grida fx doctor`. |
-| `Grida provider credentials: <code>` (FX builds with saved-key support) | For `store_busy`, retry after the holder finishes. For a store or home error, check the Grida home and store with Grida. An explicit key bypasses the store for its provider. To diagnose without touching the store, set `GRIDA_FX_DISABLE_GRIDA_STORE=1`. |
-| `<route> does not support exact_size` (or `alpha`, `mask`, `image_input`) | change the setting or the route; for Codex and Grok Build leave `size` out and resize after |
-| `no adapter serves <route> …` | FX cannot call that provider for that capability (a declared provider needs `family: openai-compatible`, which serves `structured.generate` and `agent.turn`, or an `adapter` that declares the capability), or the route's `contract` names an `adapter` FX does not have: pick a built-in route (`grida fx nodes <type>`), declare the family or the capability, or fix or drop `contract.adapter` |
-| `… was refused: <provider>'s generic image adapter sends no exact size: give the model's own parameter in provider_options.<provider>` (or `no mask`, `no transparent background`) | leave `size` (or `mask`, or a transparent `background`) out, and pass the model's own parameter in `provider_options` |
-| `… returned no single image` (or `OpenRouter's image is not decodable`, `… is <kind>, not a picture`) | the model answered no picture, several, or something that is not a picture, and FX takes one per call: pick another model or route |
-| `a Tripo model address must use HTTPS with a DNS host, port 443, no credentials and no fragment` (or `fal hosted output must use HTTPS with a DNS host, port 443, no credentials and no fragment`) | the provider returned a URL outside the download rules; report the unexpected response without its signed query; FX does not download from that address |
-| `<step>.with.references: <route> takes at most <n> input pictures, not <m>` | give fewer pictures, or raise the route's `max_input_pictures` when the model takes more |
-| `… was refused: this route draws from a first frame` (or `last_frame needs first_frame`, `this route draws whole seconds from 3 to <n>, not <d>`, `this route draws no <resolution> clip at <ratio>`) | a fal video route: give `first_frame` (or declare `features: [text_to_video]` on a route of your own for a model that draws from the prompt alone), or ask for a length, tier and ratio its price declares |
-| `routes.<n>.extends: no route <base> serves <capability>` | `extends` names a route of the same capability declared earlier (in the same table or one read before) or a built-in one; check the id and the order |
-| `routes.<n>.extends: <base> is not a <provider> route` | a route extends only a route of its own provider |
-| `routes.<n>.price: a price states an amount (usd, low_usd, high_usd) or a cap (cap_usd)` | omit `price` for unknown cost, supply an estimate, or optionally use `cap_usd: N` to partition authorization; an empty `price` is invalid |
-| `routes.<n>.price: {…} has more than 1 property` | `cap_usd` stands alone in `price`: drop the other members |
-| `routes.<n>.price.cap_usd: 0 is less than or equal to the minimum of 0` | a cap is more than 0: write `usd: 0` for a free route |
-| `… was refused: provider_options.<provider>.<name> is a member FX owns` (or `contract.provider_options…`) | FX sets that parameter itself: use the type's own setting, or leave it out |
-| `… was refused: provider_options.<provider>.<name> holds a file: provider options are JSON only` (or `provider_options.<provider> holds a file…`) | pass files through the type's inputs; options carry JSON only |
-| `… was refused: Codex takes no provider_options` (or `Grok Build …`) | drop `provider_options.codex` (or `.grok`); other providers' members may stay |
-| `routes.<n>.contract.provider_options.<provider>: … is not of type "object"` (or a step's `… was refused: provider_options.<provider> is an object`) | write `provider_options: { <provider>: { <parameter>: <value> } }` |
-| `… was refused: <route> is not a <capability> route this adapter serves: the contract takes no member <member>` | the route's `contract` names a member its adapter does not take; an OpenAI-compatible route takes `adapter`, `adapter_behavior`, `provider_options`, `image_detail`, `token_limit_field` and `billing`, plus `pictures` for structured output only: drop any other member |
-| `… was refused: <route> is not a <capability> route this adapter serves: token_limit_field is one of max_tokens, max_completion_tokens` (or `image_detail is one of auto, low, high, original`) | use one of the family's explicit wire settings, or leave it out for the existing default |
-| `… was refused: <route> is not a <capability> route this adapter serves: billing.cost is usage.cost` (or `billing takes no member <member>`) | billing reads only a documented final USD `usage.cost`; other cost paths and currencies need a project adapter |
-| `… was refused: <route> is not a <capability> route this adapter serves: billing.unbilled_statuses contains only integers from 400 through 499, excluding 408 and 429` (or `billing.unbilled_statuses repeats HTTP <n>`) | list only distinct documented unbilled refusal statuses; a timeout never proves an unbilled refusal |
-| `… failed: <name> structured generation returned HTTP <n>` (or `<name> tool loop …`, `… was redirected (HTTP <n>); check <VARIABLE>`) | a family call failed: check the model id, key, base URL and support for a strict schema or tools. A 408 may already be billed; retry needs a new reservation. Costs use the route's billing policy, else its hold or cap; a default 429 resends unbilled |
-| `fx.yaml: providers.<name>: <name> is a provider FX ships` | declare it under another name; FX's own providers need no declaration |
-| `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is already read for <provider>` (or `.base_url.variable`) | give the declaration a variable of its own |
-| `fx.yaml: providers.<name>.credential.variable: <VARIABLE> is reserved for FX and the programs it starts` (or `.base_url.variable`) | `GRIDA_FX_*`, proxy, certificate, `PATH` and `HOME` variables cannot hold a key or an address: name another |
-| `fx.yaml: providers.<name>.base_url.default: <name> base_url must use HTTPS unless it targets a loopback host` (or `must be an HTTP(S) URL without credentials, query, or fragment`, `must use a valid network port`) | give the default as `https://host[:port]/path`, or `http://` for this machine only (`localhost`, `127.0.0.1`) |
-| `fx.yaml: providers.<name>: a provider has a family or an adapter, not both` | keep one: `family` for an OpenAI-compatible server, `adapter` for your own code |
-| `fx.yaml: providers.<name>.adapter: <path>: <name> is not declared with adapter()` (TypeScript: `is not an export declared with adapter()`), `no file <path>`, `<path> is outside the project`, `no node host for .<suffix> modules`, `<path>#<name> declares no capability`, `<path> failed to import: …` (doctor: `adapter   <name> <path>#<name> cannot load: …`) | name a `.py`, `.ts`, `.mts`, `.js` or `.mjs` module inside the project and a top-level `adapter(...)` in it (exported in TypeScript) that names a capability; fix what its import raised |
-| `fx.yaml: providers.<name>.adapter: the project's grida <version> cannot load adapters: upgrade grida` (or `@grida/fx`) | upgrade the project's SDK, or set `GRIDA_FX_PYTHON` / `GRIDA_FX_NODE` to one that has it |
-| `… failed: the adapter <path>#<name> failed: <Type>: <message>` (or `the adapter host exited …`, `the adapter host broke the protocol: …`, `… answered something FX cannot read: …`) | your adapter raised (its traceback is on standard error; a `fetch` the SDK refuses before sending raises too: `a GET has no body`, `timeout_s is above 0 and at most 300`), returned what its method does not take, or its host stopped; the call is billed in full: fix the adapter before running again |
-| `… was refused: the adapter <path>#<name> changed since the run was planned` (or `the adapter host for <path>#<name> could not be started: …`) | the module changed, or its host could not start, after planning: run again, which plans again |
-| `FetchError` `<provider>'s credential goes only to the origin of its base URL` (or `the download is not on <provider>'s download hosts`, `a download never carries a credential`, `the <header> header is <provider>'s credential, which the engine attaches when asked`, `the network is off (GRIDA_FX_NETWORK=off)`) | build the URL on `call.base_url`, list the host under the declaration's `download_hosts`, ask for the key with `credential=True` rather than setting its header, or turn the network on |
-| `not installed (codex)` / `not installed (grok)` in doctor | install and sign in to Codex or Grok Build, or set `GRIDA_FX_TOOL_CODEX` / `GRIDA_FX_TOOL_GROK` |
-| `Codex … is older than 0.160.1` (or `too old (codex …)` in doctor) | update the Codex that doctor's `program` line names, or set `GRIDA_FX_TOOL_CODEX` to a newer one |
-| `python … too old` / `no grida` in doctor | `uv sync` or `pip install grida` in the project, or set `GRIDA_FX_PYTHON` |
-| `node … too old` / `no @grida/fx` | Node 24+, `npm install @grida/fx`, or set `GRIDA_FX_NODE` |
-| `take <n> of <path> no longer produces the picked result …` | the request changed since the pick: `grida fx pick` or `reroll` again |
-| `stopped   phase 2 may cost up to $…` | the next phase needs approval: run again with a higher `--yes-up-to` |
-| a versioned node's or adapter's source changed (`… its source changed but version <n> did not …`) | bump `version`, or `grida fx lock --same <file>#<name>` |
-| `port 8787 is in use` | `grida fx start --background --port <N>` |
-| a `submitting` job in `grida fx jobs` | check the provider's dashboard, then `grida fx jobs --forget <key>` |
-| a recoverable or settled provider task retained for collection | resume the same run with `--live --recover` |
-| original provider result unavailable | check the provider task and get authorization before forgetting it and starting another paid generation |
+| `plain scalar 'on' is ambiguous …; quote it` | Quote ambiguous YAML strings. |
+| `inputs: 'name' is a required property` | Supply `-- --name VALUE` or `--inputs FILE`. Check `grida fx schema TARGET`. |
+| `… is a paid call; run with --live` or `a live run needs a ceiling` | Plan first, then obtain approval and provide the agreed ceiling. Use a stand-in for an offline test. |
+| `… does not support exact_size`, `alpha`, `mask` or `image_input` | Remove the incompatible setting or agree on a compatible route with the user. Inspect the type with `grida fx nodes TYPE`. |
+| `no adapter serves …` or missing credentials | Use `grida fx doctor TARGET`. Check route capability, adapter declaration and host dependencies. Have the user configure the key if needed. |
+| A later phase stops at `--yes-up-to` | Show its forecast and resume the existing run with a higher approved threshold. |
+| A provider call failed | Inspect the exact run and its safe diagnostics. Check for a retained task before authorizing any replacement generation. |
 
-## Docs
+## Further reading
 
-- [The guide](https://github.com/gridaco/fx/blob/main/docs/guide/README.md): every chapter, for people
-- [Getting started](https://github.com/gridaco/fx/blob/main/docs/guide/01-getting-started.md)
-- [The workflow file](https://github.com/gridaco/fx/blob/main/docs/guide/02-workflow-file.md)
-- [Nodes](https://github.com/gridaco/fx/blob/main/docs/guide/03-nodes.md): built-in, Python, TypeScript
-- [Cost, cache and takes](https://github.com/gridaco/fx/blob/main/docs/guide/04-cost-and-cache.md)
-- [Running](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md): CLI, SDKs, keys, stand-ins
-- [AI providers](https://github.com/gridaco/fx/blob/main/docs/guide/13-providers.md)
-- [Community providers](https://github.com/gridaco/fx/blob/main/docs/guide/15-community-providers.md): a provider of your own, by declaration, the OpenAI-compatible family or an adapter
-- [Connect to the FX viewer](https://github.com/gridaco/fx/blob/main/docs/guide/16-viewer-api.md): browser automation, client SDK, selection/context, presentation and host authorization
-- [Images from your own Codex](https://github.com/gridaco/fx/blob/main/docs/guide/12-codex.md) and [Grok Build](https://github.com/gridaco/fx/blob/main/docs/guide/14-grok.md)
-- [Examples](https://github.com/gridaco/fx/tree/main/examples): complete projects
-
-## Spec
-
-- [spec/](https://github.com/gridaco/fx/blob/main/spec/README.md): the normative contracts
-- [Expressions](https://github.com/gridaco/fx/blob/main/spec/expressions.md), [YAML](https://github.com/gridaco/fx/blob/main/spec/yaml.md), [identity](https://github.com/gridaco/fx/blob/main/spec/identity.md), [providers and routes](https://github.com/gridaco/fx/blob/main/spec/providers.md), [adapters](https://github.com/gridaco/fx/blob/main/spec/adapters.md), [capabilities](https://github.com/gridaco/fx/blob/main/spec/capabilities.md)
-- [The workflow schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-workflow-v1.schema.json) and [the project schema](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-project-v1.schema.json)
-
-## Optional
-
-- [Viewing runs](https://github.com/gridaco/fx/blob/main/docs/guide/07-viewing.md), [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md), [SDK runs](https://github.com/gridaco/fx/blob/main/docs/guide/09-sdk-runs.md), [cleanup](https://github.com/gridaco/fx/blob/main/docs/guide/10-cleanup.md), [exports](https://github.com/gridaco/fx/blob/main/docs/guide/11-exports.md)
-- [The Python SDK](https://github.com/gridaco/fx/blob/main/python/README.md) and [the JavaScript SDK](https://github.com/gridaco/fx/blob/main/js/fx/README.md)
-- [The FX agent skill](https://github.com/gridaco/fx/blob/main/skills/grida-fx/SKILL.md): `npx skills add gridaco/fx`
-
-Run summaries label conservative budget accounting as `booked`. A booked reservation does not
-assert that the provider reported that amount as its final charge. Provider-reported call costs
-remain separate and may be absent.
+- [CLI and SDK examples](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md)
+- [Runnable projects](https://github.com/gridaco/fx/tree/main/examples), including
+  [batch icons](https://github.com/gridaco/fx/tree/main/examples/item-icons),
+  [phased generation](https://github.com/gridaco/fx/tree/main/examples/concept-gallery) and
+  [text to 3D](https://github.com/gridaco/fx/tree/main/examples/text-to-3d)
+- Schemas for the [workflow](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-workflow-v1.schema.json)
+  and [project](https://github.com/gridaco/fx/blob/main/spec/schemas/fx-project-v1.schema.json), and the
+  [release history](https://github.com/gridaco/fx/blob/main/CHANGELOG.md)
+- Install the [FX agent skill](https://github.com/gridaco/fx/blob/main/skills/grida-fx/SKILL.md)
+  with `npx skills add gridaco/fx`.

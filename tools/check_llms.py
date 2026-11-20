@@ -1,8 +1,10 @@
 """Holds llms.txt to the engine: what CI checks so that the file stays the reference agents can
-trust (AGENTS.md, "llms.txt").
+trust (AGENTS.md, "Maintaining llms.txt").
 
     uv run --project python python tools/check_llms.py [--command <grida-fx>]
 
+- **Size.** The UTF-8 file stays within a 96 KiB regression limit. AGENTS.md gives the lower
+  editorial target.
 - **Commands.** Every ``grida fx …`` in llms.txt, in a code block or a code span, names a verb
   the engine has, and each ``--flag`` before a bare ``--`` is one that verb's ``--help`` lists.
 - **Recipes.** Each ``###`` section under ``## Recipes`` is a project: every code block whose
@@ -41,6 +43,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LLMS = ROOT / "llms.txt"
+MAX_LLMS_BYTES = 96 * 1024
 JS_SDK = ROOT / "js" / "fx"
 ENGINE = ROOT / "python" / "src" / "grida" / "fx" / "_bin" / "grida-fx"
 REPOSITORY = "https://github.com/gridaco/fx/"
@@ -306,6 +309,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--command", help="the grida-fx engine to check against")
     options = parser.parse_args(argv)
+
+    content = LLMS.read_bytes()
+    size = len(content)
+    if size > MAX_LLMS_BYTES:
+        print(
+            f"FAIL size ({size:,} bytes): exceeds the {MAX_LLMS_BYTES:,}-byte regression limit. "
+            "Move specialized details to the guide or spec."
+        )
+        return 1
+
     command = options.command or os.environ.get("GRIDA_FX_BIN") or str(ENGINE)
     found = Path(command).resolve() if Path(command).is_file() else shutil.which(command)
     if found is None:
@@ -314,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     command = str(found)
 
     engine = Engine(command)
-    text = LLMS.read_text(encoding="utf-8")
+    text = content.decode("utf-8")
     blocks, prose = parse(text)
     failures = 0
 
@@ -322,6 +335,8 @@ def main(argv: list[str] | None = None) -> int:
         nonlocal failures
         failures += problem is not None
         print(f"ok   {name}" if problem is None else f"FAIL {name}: {problem}")
+
+    report(f"size ({size:,} bytes)", None)
 
     shown = commands(blocks, prose)
     problems = [p for p in dict.fromkeys(engine.problem(c) for c in shown) if p]

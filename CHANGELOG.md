@@ -12,6 +12,10 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+### Changed
+
+- Made `llms.txt` a shorter starting point for agents, with an introduction to FX, runnable recipes, and links organized by task.
+
 ### Fixed
 
 - Resume collecting a completed provider job after a failed download or validation without paying for generation again. Use `--recover` or the Python and JavaScript `recover` option to retry collection without authorizing new calls, including on runs from older versions that kept the task handle. [#116](https://github.com/gridaco/fx/issues/116)

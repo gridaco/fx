@@ -12,7 +12,7 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 | `crates/grida-fx-providers` | Provider adapters behind an injected transport. |
 | `crates/grida-fx` | The `grida-fx` command. |
 | `crates/grida-fx-viewer` | Read-only run projection, standalone hosting and the project service for the embedded viewer. |
-| `llms.txt` | The reference for people and agents using FX, kept by hand: rules, the workflow file, node types, routes, commands, recipes, errors. Served at grida.co/fx/llms.txt; `tools/check_llms.py` holds it to the engine. |
+| `llms.txt` | The single-file introduction and index for using FX. Served at grida.co/fx/llms.txt and checked against the engine. See [Maintaining llms.txt](#maintaining-llmstxt). |
 | `spec/` | The language-neutral contracts: schemas, identity, protocol, test vectors. Code follows `spec/`; a change to identity is a change to `spec/` first. |
 | `conformance/` | Cases that hold any implementation to the spec through the command line only. |
 | `python/` | The `grida` distribution; FX is `grida.fx`. |
@@ -47,12 +47,6 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
   `docs/wg/` are a docs source of gridaco/grida (CONTRIBUTING.md, "Docs"): their pages and
   assets live only here. Images go beside the page and use markdown syntax, at most 500 KiB,
   never video; relative links must resolve. CI's `docs` job enforces it.
-- **`llms.txt` is the user-facing source of truth.** Only `spec/` and the engine rank above it;
-  where the guide, the README, the skills or an `AGENTS.md` disagree with it, it wins and they are
-  fixed. It is written by hand, never generated. A change to anything users see (a verb, a flag, a
-  setting, a node type, a route, a message its error table quotes) updates it in the same change,
-  and a release brings it up to the version it names (RELEASING.md). Its recipes are complete
-  projects that `tools/check_llms.py` plans, so keep each one self-contained.
 - **Identifiers, comments, logs and messages are in English.**
 - **Nontrivial browser UI uses vanilla TypeScript classes.** Own canvas, viewport,
   interaction and viewer state in independently testable classes. React is a thin
@@ -61,6 +55,30 @@ Guardrails for working in this repository. [README.md](README.md) says what FX i
 - **Use Lucide package icons for browser UI chrome.** Bundle the imported icons
   with the client so installed viewers work offline. Keep workflow geometry
   (connections, sockets and frames) owned by the canvas rather than the icon library.
+
+## Maintaining llms.txt
+
+[`llms.txt`](llms.txt) takes precedence over the guide, README and skills for the behavior it
+describes. The engine and `spec/` remain authoritative. Keep it as one hand-maintained
+introduction and index for an agent starting with no FX context.
+
+- **Orient a first-time reader.** The file alone should explain what FX is for, how projects,
+  workflows, plans and runs fit together, and how to take a useful first step without spending.
+  Organize links around what the reader wants to do. Point readers with FX installed to
+  `grida fx --help`, `grida fx <verb> --help`, `grida fx nodes` and `grida fx schema` for details
+  about their installed version and workflow.
+- **Keep the essentials inline.** Cover common tasks, workflow syntax, spending and credential
+  rules, and a few self-contained recipes. Link directly to guide sections for specialized
+  tasks, to `spec/` for contract details, and to `CHANGELOG.md` for release history. For example,
+  standalone release downloads need a short pointer to their guide, which covers archive
+  selection, checksums and host setup.
+- **Review it with every user-facing change.** Update any affected summary, recipe or link in the
+  same change. If the summary still applies, update the linked guide or spec where the detail
+  belongs. Keep recipes complete and verify edits with [`tools/check_llms.py`](tools/check_llms.py).
+- **Aim for about 10,000 tokens or roughly 48 KiB.** Treat this as editorial guidance and give the
+  first-time reader the context they need. Use `wc -c llms.txt` for a quick size check. The CI
+  regression check allows up to 96 KiB. Releases also refresh the version and SDK pins
+  ([RELEASING.md](RELEASING.md#the-version)).
 
 ## Verification
 

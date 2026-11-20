@@ -14,11 +14,10 @@ Work in the user's project using installed packages. A repository clone, Rust,
 Bun, Docker, and a frontend build are not prerequisites. Preserve existing project
 structure and package-manager choices.
 
-The full reference is <https://grida.co/fx/llms.txt>: the workflow file, every
-node type, route and command, complete recipes, and what to do about each error.
-This skill says how to work; `llms.txt` says what exists, and wins where the two
-disagree. It names the FX version it describes: compare it with
-`grida fx --version`, and trust the installed `--help` for anything newer.
+The concise [FX reference](https://grida.co/fx/llms.txt) covers workflow syntax,
+common commands, runnable recipes and links to detailed guides. It takes
+precedence over this skill. Compare its version with `grida fx --version` and use
+the installed `--help` for that installation.
 
 ## Establish the installed interface
 
