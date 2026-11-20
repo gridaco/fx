@@ -503,17 +503,25 @@ fn hex(value: &str, length: usize) -> bool {
             .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
-fn validate_owner(owner: &Owner, record: &Record) -> Result<(), &'static str> {
+#[cfg(unix)]
+fn discover_owner(
+    folder: &Path,
+    folder_digest: &str,
+    plan: &str,
+    invocation: Option<&str>,
+) -> Result<(PathBuf, Owner), &'static str> {
+    let root = private::root(false)?;
+    let owner: Owner = private::read(&pointer_path(&root, folder_digest))?;
     if owner.version != 1 {
         return Err("unsupported_version");
     }
-    if owner.folder_digest != record.folder_digest
-        || owner.canonical_folder != record.folder
-        || owner.plan != record.plan
+    if owner.folder_digest != folder_digest
+        || owner.canonical_folder != folder
+        || owner.plan != plan
     {
         return Err("unauthorized");
     }
-    if Some(owner.invocation_id.as_str()) != record.invocation.as_deref() {
+    if Some(owner.invocation_id.as_str()) != invocation {
         return Err("invocation_mismatch");
     }
     if !hex(&owner.invocation_id, 16)
@@ -524,7 +532,7 @@ fn validate_owner(owner: &Owner, record: &Record) -> Result<(), &'static str> {
     {
         return Err("unauthorized");
     }
-    Ok(())
+    Ok((root, owner))
 }
 
 /// A runner-owned listener. Construction is permitted only while holding the canonical run lock,
@@ -974,6 +982,30 @@ pub fn inspect(folder: &Path) -> ControlResult {
     )
 }
 
+/// Samples whether the owner of an already observed invocation reports ongoing execution.
+/// Unsupported or unreachable owners provide no positive activity signal.
+pub fn is_executing(folder: &Path, plan: &str, invocation: &str) -> bool {
+    #[cfg(unix)]
+    {
+        let Ok(folder) = folder.canonicalize() else {
+            return false;
+        };
+        let Ok((root, owner)) =
+            discover_owner(&folder, &folder_key(&folder), plan, Some(invocation))
+        else {
+            return false;
+        };
+        exchange(&root, &owner, "inspect", "cli", TRANSPORT_TIMEOUT).is_ok_and(|reply| {
+            reply.code.is_none() && matches!(reply.phase.as_str(), "running" | "cancel_requested")
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (folder, plan, invocation);
+        false
+    }
+}
+
 /// Cancels exactly one sampled invocation. A wait never switches to a successor invocation.
 pub fn cancel(
     folder: &Path,
@@ -1021,11 +1053,12 @@ fn operate(
             result.fail("wait_timeout", explanation("wait_timeout"));
             return result;
         }
-        let discovery = private::root(false).and_then(|root| {
-            let owner: Owner = private::read(&pointer_path(&root, &record.folder_digest))?;
-            validate_owner(&owner, &record)?;
-            Ok((root, owner))
-        });
+        let discovery = discover_owner(
+            &record.folder,
+            &record.folder_digest,
+            &record.plan,
+            record.invocation.as_deref(),
+        );
         let (root, owner) = match discovery {
             Ok(found) => found,
             Err(code) => {

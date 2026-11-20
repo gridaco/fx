@@ -18,7 +18,7 @@ export interface RunSnapshot {
 }
 
 /** The loopback viewer adds a projection and a layout report of exactly the snapshot's event prefix. */
-export interface ViewerSnapshot extends RunSnapshot { view: ViewerRun; layout?: LayoutReport }
+export interface ViewerSnapshot extends RunSnapshot { view: ViewerRun; layout?: LayoutReport; run_active?: boolean }
 
 /** Recorded intent for the latest invocation, independent of owner liveness. */
 export function cancellationRequested(events: readonly RunEvent[]): boolean {
@@ -44,6 +44,9 @@ export class ObservationError extends Error {
   constructor(readonly code: string, message: string, readonly status: number) { super(message); }
   get requiresSnapshot() { return this.status === 409 && ["invalid_cursor", "run_changed"].includes(this.code); }
 }
+
+const RUN_ACTIVE_HEADER = "x-fx-run-active";
+export type ObservedInvocation = Pick<RunEvent, "plan" | "invocation_id">;
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -89,22 +92,30 @@ async function readResponse(url: string, signal: AbortSignal) {
     }
     throw new Error(`The run could not be observed (HTTP ${response.status}).`);
   }
-  return response.json() as Promise<unknown>;
+  return response;
 }
 
 export interface RunObservationReader {
   snapshot(signal: AbortSignal): Promise<ViewerSnapshot>;
-  events(after: string, signal: AbortSignal): Promise<RunEventBatch>;
+  events(after: string, signal: AbortSignal, invocation?: ObservedInvocation): Promise<RunEventBatch & { run_active?: boolean }>;
 }
 
 /** Relative HTTP endpoints keep observation independent of the worker's filesystem. */
 export function observationReader(apiBase = "/api"): RunObservationReader {
   validateViewerApiBase(apiBase);
   return {
-    async snapshot(signal) { return parseViewerSnapshot(await readResponse(`${apiBase}/snapshot`, signal), apiBase); },
-    async events(after, signal) {
+    async snapshot(signal) {
+      const response = await readResponse(`${apiBase}/snapshot`, signal);
+      return { ...parseViewerSnapshot(await response.json(), apiBase), run_active: response.headers.get(RUN_ACTIVE_HEADER) === "1" };
+    },
+    async events(after, signal, invocation) {
       const query = new URLSearchParams({ after, limit: "256" });
-      return parseRunEventBatch(await readResponse(`${apiBase}/events?${query}`, signal));
+      if (invocation) {
+        query.set("plan", invocation.plan);
+        query.set("invocation_id", invocation.invocation_id);
+      }
+      const response = await readResponse(`${apiBase}/events?${query}`, signal);
+      return { ...parseRunEventBatch(await response.json()), run_active: response.headers.get(RUN_ACTIVE_HEADER) === "1" };
     },
   };
 }
@@ -113,5 +124,6 @@ export const readObservation: RunObservationReader = observationReader();
 
 /** A saved plan's layout report; a run's arrives with its snapshot. */
 export async function readLayout(signal: AbortSignal, apiBase = "/api"): Promise<LayoutReport> {
-  return parseLayoutReport(await readResponse(`${validateViewerApiBase(apiBase)}/layout`, signal));
+  const response = await readResponse(`${validateViewerApiBase(apiBase)}/layout`, signal);
+  return parseLayoutReport(await response.json());
 }

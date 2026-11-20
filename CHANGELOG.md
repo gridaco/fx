@@ -15,6 +15,7 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 ### Changed
 
 - Made `llms.txt` a shorter starting point for agents, with an introduction to FX, runnable recipes, and links organized by task.
+- The FX Viewer favicon pulses green during active execution and stays steady with reduced motion. [#158](https://github.com/gridaco/fx/issues/158)
 
 ### Fixed
 

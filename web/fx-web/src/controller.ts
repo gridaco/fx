@@ -1,7 +1,7 @@
 import { canvasGraph, readView, type Artifact, type CanvasGraph, type CanvasStep, type LayoutReport, type ViewerView } from "./index";
 import { WorkflowNavigation, type Breadcrumb } from "./navigation";
 import { navigationScopes } from "./scopes";
-import { cancellationRequested, ObservationError, observationReader, readLayout, type RunObservationReader } from "./observation";
+import { cancellationRequested, ObservationError, observationReader, readLayout, type ObservedInvocation, type RunObservationReader } from "./observation";
 import { validateViewerApiBase } from "./route";
 import { parseViewerConfig, readViewerConfig, temporaryDisplaySelection, viewerDisplay, type ViewerConfig, type ViewerDisplay } from "./display";
 
@@ -17,6 +17,7 @@ export interface ViewerState {
   breadcrumbs: Breadcrumb[];
   scopeNode: CanvasStep | null;
   cancelling: boolean;
+  runActive: boolean;
 }
 
 export interface ViewerPollingScheduler {
@@ -44,7 +45,7 @@ const pollingScheduler: ViewerPollingScheduler = {
 
 /** Owns reads, serial observation, navigation and selection without a presentation framework. */
 export class ViewerController {
-  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, layout: null, selected: null, loading: true, error: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false };
+  private state: ViewerState = { view: null, graph: { nodes: [], edges: [] }, layout: null, selected: null, loading: true, error: null, scope: null, breadcrumbs: [{ id: null, title: "Workflow" }], scopeNode: null, cancelling: false, runActive: false };
   private navigation = new WorkflowNavigation();
   private listeners = new Set<() => void>();
   private request: AbortController | null = null;
@@ -58,6 +59,7 @@ export class ViewerController {
   private display = viewerDisplay();
   private timer: unknown = null;
   private cursor: string | null = null;
+  private invocation?: ObservedInvocation;
   private observingRun = false;
   private active = false;
   private failures = 0;
@@ -123,9 +125,9 @@ export class ViewerController {
     this.update(this.project(view));
     return true;
   }
-  private apply(view: ViewerView, layout: LayoutReport | null, cancelling = false) {
+  private apply(view: ViewerView, layout: LayoutReport | null, cancelling = false, runActive = false) {
     this.navigation.setScopes(navigationScopes(view.scopes), view.workflow.title);
-    this.update({ view, layout, ...this.project(view), cancelling, error: null });
+    this.update({ view, layout, ...this.project(view), cancelling, runActive, error: null });
   }
   private cancelTimer() {
     if (this.timer !== null) this.scheduler.cancel(this.timer);
@@ -142,7 +144,11 @@ export class ViewerController {
     const snapshot = await this.observation!.snapshot(request.signal);
     if (request.signal.aborted) return;
     this.cursor = snapshot.cursor;
-    this.apply(snapshot.view, snapshot.layout ?? this.state.layout, cancellationRequested(snapshot.events));
+    this.invocation = snapshot.view.state === "unfinished"
+      ? snapshot.events.reduce<ObservedInvocation | undefined>((latest, event) => event.event === "run_started" ? event : latest, undefined)
+      : undefined;
+    this.apply(snapshot.view, snapshot.layout ?? this.state.layout, cancellationRequested(snapshot.events),
+      this.invocation !== undefined && snapshot.run_active === true);
   }
   private async poll() {
     if (!this.active || !this.observingRun || !this.observation) return;
@@ -151,12 +157,13 @@ export class ViewerController {
     try {
       try {
         if (this.cursor === null) { await this.snapshot(request); this.failures = 0; return; }
-        const batch = await this.observation.events(this.cursor, request.signal);
+        const batch = await this.observation.events(this.cursor, request.signal, this.invocation);
         if (request.signal.aborted) return;
         if (batch.events.length > 0) await this.snapshot(request);
         else {
           this.cursor = batch.cursor;
-          if (this.state.error !== null) this.update({ error: null });
+          const runActive = this.invocation !== undefined && batch.run_active === true;
+          if (this.state.error !== null || this.state.runActive !== runActive) this.update({ error: null, runActive });
         }
       } catch (error) {
         if (!request.signal.aborted && error instanceof ObservationError && error.requiresSnapshot) await this.snapshot(request);
@@ -166,7 +173,7 @@ export class ViewerController {
     } catch (error) {
       if (!request.signal.aborted) {
         this.failures++;
-        this.update({ error: error instanceof Error ? error.message : "The run could not be observed." });
+        this.update({ error: error instanceof Error ? error.message : "The run could not be observed.", runActive: false });
       }
     } finally {
       if (!request.signal.aborted) this.schedulePoll();
@@ -179,7 +186,9 @@ export class ViewerController {
     const request = new AbortController();
     this.request = request;
     this.observingRun = false;
-    this.update({ loading: true });
+    this.cursor = null;
+    this.invocation = undefined;
+    this.update({ loading: true, runActive: false });
     try {
       const [view, config] = await Promise.all([
         this.reader(request.signal),
@@ -192,7 +201,6 @@ export class ViewerController {
       else {
         const layout = await this.readLayout(request.signal);
         if (request.signal.aborted) return;
-        this.cursor = null;
         this.apply(view, layout);
       }
       this.failures = 0;

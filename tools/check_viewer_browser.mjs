@@ -38,12 +38,30 @@ const run = {
     outputs: {}, cache: null, error: null, duration_ms: 0,
   })),
 };
+const activePath = `/p/${"a".repeat(64)}/runs/${"c".repeat(64)}/`;
+const planPath = `/p/${"a".repeat(64)}/plans/${"b".repeat(64)}/`;
+const start = { kind: "fx-run-events-v1", event: "run_started", plan: "a".repeat(64), invocation_id: "first", offset_ms: 0 };
+let activity = { active: true, state: "unfinished", events: [start] };
 const requests = [];
 const hostHtml = () => new Response("<!doctype html><title>Synthetic viewer host</title>", { headers: { "Content-Type": "text/html" } });
 const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
-  const { pathname } = new URL(request.url);
+  const { pathname, searchParams } = new URL(request.url);
   requests.push({ method: request.method, pathname });
   if (request.method !== "GET") return new Response("Read only", { status: 405 });
+  if (pathname.startsWith(activePath)) {
+    const { active, state, events } = activity;
+    const view = { ...run, state, run_name: "activity" };
+    const headers = active ? { "x-fx-run-active": "1" } : {};
+    const cursor = String(events.length);
+    if (pathname.endsWith("/api/view")) return Response.json(view);
+    if (pathname.endsWith("/api/snapshot")) return Response.json({ kind: "fx-run-snapshot-v1", cursor, plan, events, view }, { headers });
+    if (pathname.endsWith("/api/events")) {
+      const next = events.slice(Number(searchParams.get("after")));
+      const watching = searchParams.get("plan") === start.plan
+        && searchParams.get("invocation_id") === events.findLast((event) => event.event === "run_started").invocation_id;
+      return Response.json({ kind: "fx-run-event-batch-v1", cursor, events: next, has_more: false }, { headers: watching && next.length === 0 ? headers : {} });
+    }
+  }
   if (pathname.endsWith("/api/view")) return Response.json(pathname.includes("/plans/") ? plan : run);
   if (pathname.endsWith("/api/viewer_config")) return Response.json({ display: { workflow_inputs: true, workflow_outputs: true, notes: true } });
   if (pathname.endsWith("/api/snapshot")) return Response.json({ kind: "fx-run-snapshot-v1", cursor: "fixture", plan, events: [], view: run });
@@ -51,8 +69,8 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) 
   if (pathname.endsWith("/api/layout")) return new Response("No fixture report", { status: 404 });
   if (pathname === "/viewer-client.js") return new Response(clientScript, { headers: { "Content-Type": "text/javascript" } });
   if (pathname === "/host") return hostHtml();
-  const asset = /^.*\/assets\/([^/]+)$/.exec(pathname);
-  return new Response(Bun.file(asset ? resolve(assets, "assets", asset[1]) : resolve(assets, "index.html")));
+  const asset = /\/(assets\/[^/]+|favicon(?:-active(?:-dim)?)?\.svg)$/.exec(pathname);
+  return new Response(Bun.file(resolve(assets, asset?.[1] ?? "index.html")));
 } });
 const foreign = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: hostHtml });
 const origin = server.url.origin;
@@ -79,6 +97,12 @@ async function ready(page, kind = "run") {
     try { return window.fx_viewer.getContext().subject.kind === kind; } catch { return false; }
   }, kind);
   await page.getByRole("group", { name: "Workflow dependency canvas", exact: true }).waitFor();
+}
+function waitForIcon(page, name) {
+  return page.waitForFunction((name) => {
+    const link = document.querySelector('link[rel="icon"]');
+    return new URL(link.href).pathname.split("/").at(-1) === name && link.href;
+  }, name, { polling: 50 });
 }
 
 try {
@@ -174,13 +198,60 @@ try {
     const context = await client.getContext(); client.dispose(); return context;
   });
   assert.equal(fresh.selection, null);
-  await page.goto(`${origin}/p/${"a".repeat(64)}/plans/${"b".repeat(64)}/`);
+  await page.goto(origin + planPath);
   await ready(page, "plan");
   assert.equal(await page.title(), "Plan · Sample · FX Viewer");
   assert.equal(await description.getAttribute("content"), "Inspect the execution plan for Sample.");
   const scoped = await page.evaluate(() => window.fx_viewer.getContext());
   assert.equal(scoped.subject.reference.entry_id, "b".repeat(64));
   console.log("ok   reload supports a fresh client and a scoped plan exposes its recorded reference");
+
+  const activePage = await context.newPage();
+  await activePage.goto(origin + activePath);
+  await ready(activePage);
+  await Promise.all([
+    waitForIcon(other, "favicon.svg"),
+    waitForIcon(page, "favicon.svg"),
+    waitForIcon(activePage, "favicon-active.svg"),
+  ]);
+  const dim = await waitForIcon(activePage, "favicon-active-dim.svg");
+  assert.equal(await dim.jsonValue(), origin + activePath + "favicon-active-dim.svg");
+  const frame = await activePage.request.get(await dim.jsonValue());
+  assert.match(frame.headers()["content-type"], /^image\/svg\+xml\b/);
+  assert.match(await frame.text(), /prefers-color-scheme: dark/);
+
+  await activePage.emulateMedia({ reducedMotion: "reduce" });
+  await waitForIcon(activePage, "favicon-active.svg");
+  await activePage.evaluate(() => {
+    window.iconChanges = [];
+    const icon = document.querySelector('link[rel="icon"]');
+    new MutationObserver(() => window.iconChanges.push(icon.href)).observe(icon, { attributeFilter: ["href"] });
+  });
+  // Span two possible frame changes while Chrome still observes the live record.
+  await activePage.waitForTimeout(1400);
+  assert.deepEqual(await activePage.evaluate(() => window.iconChanges), []);
+
+  activity.active = false;
+  await waitForIcon(activePage, "favicon.svg");
+  activity.active = true;
+  await waitForIcon(activePage, "favicon-active.svg");
+  await activePage.emulateMedia({ reducedMotion: "no-preference" });
+  await waitForIcon(activePage, "favicon-active-dim.svg");
+  activity = { active: false, state: "succeeded", events: [...activity.events, { ...start, event: "run_finished", ok: true }] };
+  await waitForIcon(activePage, "favicon.svg");
+  activity = { active: true, state: "unfinished", events: [...activity.events, { ...start, invocation_id: "resumed" }] };
+  await waitForIcon(activePage, "favicon-active-dim.svg");
+  await activePage.evaluate(() => {
+    addEventListener("pagehide", () => {
+      sessionStorage.setItem("icon_on_exit", document.querySelector('link[rel="icon"]').href);
+    }, { once: true });
+  });
+  await activePage.goto(origin + planPath);
+  await ready(activePage, "plan");
+  await waitForIcon(activePage, "favicon.svg");
+  assert.equal(await activePage.evaluate(() => sessionStorage.getItem("icon_on_exit")), origin + activePath + "favicon.svg");
+  await activePage.close();
+  console.log("ok   active tab pulses beside a completed run and plan; reduced motion, owner loss, completion, resume and navigation");
 
   const authored = 'Prepare the "before" & "after" frames.';
   await page.route("**/plans/*/api/view", (route) => route.fulfill({ json: {

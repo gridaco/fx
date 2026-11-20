@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
 import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel } from "@grida/fx-web";
 import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Value, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
+import { RunFavicon } from "./run-favicon";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -267,7 +268,22 @@ function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
   const inventory = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
-  useEffect(() => { void controller.refresh(); return () => controller.dispose(); }, []);
+  useEffect(() => {
+    const favicon = new RunFavicon(document.querySelector<HTMLLinkElement>('link[rel="icon"]')!);
+    const unsubscribe = controller.subscribe(() => favicon.setActive(controller.getSnapshot().runActive));
+    const hide = () => { controller.dispose(); favicon.setActive(false); };
+    const show = (event: PageTransitionEvent) => { if (event.persisted) void controller.refresh(); };
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    void controller.refresh();
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+      unsubscribe();
+      controller.dispose();
+      favicon.dispose();
+    };
+  }, []);
   const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
   const [about, setAbout] = useState(false);
