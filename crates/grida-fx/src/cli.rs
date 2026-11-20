@@ -322,7 +322,7 @@ pub struct RunArgs {
     /// an argument for a builder target
     #[arg(long = "arg", value_name = "NAME=VALUE")]
     pub arg: Vec<String>,
-    /// the ceiling in US dollars; a live run needs one
+    /// the ceiling in US dollars for new paid work
     #[arg(long = "max-usd", value_name = "USD", allow_negative_numbers = true)]
     pub max_usd: Option<String>,
     /// admit paid calls; provider keys come from the environment or the project's .env
@@ -345,6 +345,9 @@ pub struct RunArgs {
     /// resume an existing named run with the same planned target and inputs
     #[arg(long, value_name = "NAME")]
     pub resume: Option<String>,
+    /// retrieve retained provider results without submitting new provider work
+    #[arg(long, requires = "live", conflicts_with_all = ["name", "stand_in"])]
+    pub recover: bool,
     /// answer paid calls with a stand-in, offline and for nothing: FILE#FUNCTION (.py, .ts, .mts,
     /// .js or .mjs), or - for a socket on standard input (SDKs); never with --live or --yes-up-to
     #[arg(long = "stand-in", value_name = "SOURCE", allow_hyphen_values = true)]

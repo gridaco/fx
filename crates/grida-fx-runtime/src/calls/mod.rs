@@ -42,9 +42,11 @@
 //!    then run grida-fx jobs --forget <key> to submit it again`, with the record's `note` (why
 //!    the submit's outcome is unknown, spec/store.md §5) as `reason` in `data` when it has one;
 //!    `submitted` is collected (`retry::collect_job`; only a long-job adapter can collect, so a
-//!    plain adapter meeting a `submitted` record is `job_unsettled` too); none or `settled` is a
-//!    new submission. A submit of this run whose outcome is unknown is `job_unsettled` with the
-//!    same message and the adapter's redacted reason as `reason` in `data`.
+//!    plain adapter meeting a `submitted` record is `job_unsettled` too). A `recoverable` job
+//!    is also collected. A legacy `settled` job with a handle needs explicit recovery, and an
+//!    `unavailable` job blocks another submission until forgotten. Without a retained task,
+//!    recovery-only runs refuse a send. A submit of this run whose outcome is unknown is
+//!    `job_unsettled` with the same message and the adapter's redacted reason in `data`.
 //! 8. the hold: the route's high price for this request (`Route::cost` over the request's members
 //!    as values), reserved per attempt by the retry owner under the run's ceiling and the
 //!    instance's step budgets. An unpriced route instead holds the remaining applicable
@@ -107,7 +109,7 @@ pub mod retry;
 
 use crate::agent::AGENT_TURN;
 use crate::engine::{Cancel, RunFiles, Services};
-use crate::events::{CallAttemptFailure, Event};
+use crate::events::{CallAttemptFailure, Event, RecoveryStatus};
 use crate::executor::stage::file_ref;
 use crate::ledger::{Hold, Ledger, NotReserved, Scopes};
 use crate::stand_in::{AnswererError, Reply, StandIn};
@@ -695,31 +697,7 @@ impl Lead<'_> {
 
         // 4. The call cache.
         if let Some(record) = store.load_call(&key) {
-            let (answered, data) = from_record(store, files, &record)?;
-            let named = emit_call(
-                services,
-                site,
-                capability,
-                &route_id,
-                &key,
-                true,
-                Some(Usd::ZERO),
-                false,
-            );
-            // A leftover job record of an answered call is stale (spec/store.md §5); a failure to
-            // remove it is harmless, since the call record answers first. It goes only once the
-            // log names the call: until then it is what keeps the answer from a prune (§9).
-            if named {
-                let _ = store.remove_job(&key);
-            }
-            return Ok(CallAnswer {
-                key,
-                cached: true,
-                cost: Some(Usd::ZERO),
-                charged: Usd::ZERO,
-                files: answered,
-                data,
-            });
+            return self.cached_answer(&record);
         }
 
         let route_ref = RouteRef {
@@ -756,7 +734,7 @@ impl Lead<'_> {
         };
 
         // 5, in a run without a ceiling: only the user's own plan.
-        if !ledger.admits(&route.provider) {
+        if !services.recover && !ledger.admits(&route.provider) {
             return Err(known.error(
                 ErrorCode::NotLive,
                 format!(
@@ -781,27 +759,52 @@ impl Lead<'_> {
             ));
         };
 
-        // 7. The job record.
+        // 7. Long jobs serialize lookup, submission, collection and publication by call key.
+        let _job_lock;
+        if matches!(adapter, Adapter::Job(_)) {
+            _job_lock = store
+                .lock_job(&key, &services.cancel)
+                .await
+                .map_err(|error| CallError::Fault(error.to_string()))?
+                .ok_or(CallError::Cancelled)?;
+            if let Some(record) = store.load_call(&key) {
+                return self.cached_answer(&record);
+            }
+        }
+
         let unsettled_text = format!(
             "{capability} on {route_id} (take {}) was being submitted when a run stopped, and \
              nobody can say whether the provider took it. Check the provider's dashboard, then \
              run grida-fx jobs --forget {key} to submit it again",
             take_text(&site.takes)
         );
-        let collect = match store.load_job(&key) {
-            Err(error) => return Err(CallError::Fault(error.to_string())),
-            Ok(None) => None,
-            Ok(Some(record)) if record.fresh_id != services.fresh_id => {
+        let existing_job = store
+            .load_job(&key)
+            .map_err(|error| CallError::Fault(error.to_string()))?;
+        let collect = if let Some(record) = &existing_job {
+            if record.fresh_id != services.fresh_id {
                 return Err(CallError::Fault(format!(
                     "job {key} has a different fresh invocation identifier"
                 )));
             }
-            Ok(Some(record)) => match record.state {
-                JobState::Settled => None,
+            if record.route.id != route_id
+                || call_key_with_fresh_id(
+                    &record.capability,
+                    &record.route.fingerprint,
+                    &record.request,
+                    &record.take,
+                    record.fresh_id.as_deref(),
+                ) != key
+            {
+                return Err(CallError::Fault(format!(
+                    "job {key} does not match the call"
+                )));
+            }
+            match record.state {
                 JobState::Submitting => {
                     let mut data = known.data();
                     let mut unsettled_text = unsettled_text;
-                    if let Some(diagnostic) = record.diagnostic {
+                    if let Some(diagnostic) = &record.diagnostic {
                         if let Some(message) = &diagnostic.message
                             && !message.is_empty()
                         {
@@ -813,20 +816,37 @@ impl Lead<'_> {
                             serde_json::to_value(diagnostic).expect("diagnostic is JSON"),
                         );
                     }
-                    if let Some(note) = record.note {
-                        data.insert("reason".into(), Value::from(note));
+                    if let Some(note) = &record.note {
+                        data.insert("reason".into(), Value::from(note.as_str()));
                     }
                     return Err(CallError::Rpc(
                         RpcError::new(ErrorCode::JobUnsettled, unsettled_text)
                             .with_data(Value::Object(data)),
                     ));
                 }
-                JobState::Submitted => match (&adapter, record.handle) {
-                    (Adapter::Job(_), Some(handle)) => Some(handle),
-                    _ => return Err(known.error(ErrorCode::JobUnsettled, unsettled_text)),
-                },
-            },
+                JobState::Unavailable => {
+                    return Err(self.recovery_error(&known, record, RecoveryStatus::Unavailable));
+                }
+                JobState::Settled if record.handle.is_none() => None,
+                JobState::Settled if !services.recover => {
+                    return Err(self.recovery_error(&known, record, RecoveryStatus::Legacy));
+                }
+                JobState::Submitted | JobState::Recoverable | JobState::Settled => {
+                    if !matches!(adapter, Adapter::Job(_)) {
+                        return Err(known.error(ErrorCode::JobUnsettled, unsettled_text));
+                    }
+                    Some(record)
+                }
+            }
+        } else {
+            None
         };
+        if services.recover && collect.is_none() {
+            return Err(known.error(
+                ErrorCode::NotLive,
+                format!("{capability} on {route_id} has no retained provider task to recover"),
+            ));
+        }
 
         // 8. The hold, and what every attempt shares.
         let Value::Object(members) = &request else {
@@ -868,6 +888,7 @@ impl Lead<'_> {
             fresh_id: services.fresh_id.clone(),
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: None,
             diagnostic: None,
         };
@@ -914,14 +935,23 @@ impl Lead<'_> {
             failures: services.events.as_ref().map(|_| &events as &dyn FailureLog),
             cancel: &services.cancel,
             backoff: Backoff::default(),
-            job: matches!(adapter, Adapter::Job(_)).then_some(job_template),
+            job: matches!(adapter, Adapter::Job(_)).then(|| {
+                collect.map_or(job_template, |record| JobRecord {
+                    charged_usd: self.original_charge(record),
+                    ..record.clone()
+                })
+            }),
             check: engine_check(capability),
         };
 
         // 9. The retry owner.
         let collected = collect.is_some();
         let outcome = match (&adapter, &collect) {
-            (Adapter::Job(job), Some(handle)) => {
+            (Adapter::Job(job), Some(record)) => {
+                let handle = record
+                    .handle
+                    .as_ref()
+                    .expect("collectible job has a handle");
                 retry::collect_job(job.as_ref(), &attempts, handle).await
             }
             (Adapter::Job(job), None) => retry::submit_job(job.as_ref(), &attempts).await,
@@ -969,6 +999,22 @@ impl Lead<'_> {
         let answer = match ended {
             Ok(answer) => answer,
             Err(mut error) => {
+                if let CallError::Rpc(rpc) = &mut error
+                    && matches!(adapter, Adapter::Job(_))
+                    && let Some(record) = store
+                        .load_job(&key)
+                        .map_err(|error| CallError::Fault(error.to_string()))?
+                    && let Some(status) = match record.state {
+                        JobState::Recoverable => Some(RecoveryStatus::Available),
+                        JobState::Unavailable => Some(RecoveryStatus::Unavailable),
+                        JobState::Settled if record.handle.is_some() => {
+                            Some(RecoveryStatus::Legacy)
+                        }
+                        _ => None,
+                    }
+                {
+                    self.add_recovery(rpc, &record, status);
+                }
                 if let (Some(diagnostic), CallError::Rpc(rpc)) = (diagnostic, &mut error) {
                     if let Some(message) = &diagnostic.message
                         && !message.is_empty()
@@ -1012,12 +1058,22 @@ impl Lead<'_> {
             .usage
             .as_ref()
             .map(|usage| usage.to_value(adapter.billing()));
-        let record = self.publish(request, route_entry, answer, reported, usage)?;
+        let record = self
+            .publish(request, route_entry, answer, reported, usage)
+            .inspect_err(|_| {
+                if matches!(adapter, Adapter::Job(_)) {
+                    let original = collect.map_or(Some(charged), |job| self.original_charge(job));
+                    self.emit_recovery(RecoveryStatus::Available, original);
+                }
+            })?;
         if let Some(reason) = unrecorded {
             return Err(CallError::Fault(reason));
         }
         // The caller gets what a replay of the record gives (module doc, step 9).
         let (answered, data) = from_record(store, files, &replayed(&record)?)?;
+        if let Some(job) = collect {
+            self.emit_recovery(RecoveryStatus::Recovered, self.original_charge(job));
+        }
         let named = emit_call(
             services, site, capability, &route_id, &key, false, cost, false,
         );
@@ -1036,9 +1092,99 @@ impl Lead<'_> {
             data,
         })
     }
+
+    fn original_charge(&self, job: &JobRecord) -> Option<Usd> {
+        job.charged_usd.or_else(|| {
+            let handle = job.handle.as_ref()?;
+            let charges = self.services.prior_call_charges.get(&job.key)?;
+            ["task_id", "job_id", "request_id"]
+                .into_iter()
+                .filter_map(|member| handle[member].as_str())
+                .find_map(|id| charges.get(id).copied())
+        })
+    }
+
+    fn emit_recovery(&self, status: RecoveryStatus, original_charged_usd: Option<Usd>) {
+        if let Some(events) = &self.services.events {
+            let _ = events.emit(&Event::CallRecovery {
+                id: self.site.instance_id.clone(),
+                capability: self.capability.to_string(),
+                route: self.route.id(),
+                call: self.key.to_string(),
+                status,
+                original_charged_usd,
+            });
+        }
+    }
+
+    fn recovery_error(
+        &self,
+        known: &Known<'_>,
+        job: &JobRecord,
+        status: RecoveryStatus,
+    ) -> CallError {
+        let mut rpc = RpcError::new(
+            ErrorCode::CallFailed,
+            format!("{} on {}", self.capability, self.route.id()),
+        )
+        .with_data(Value::Object(known.data()));
+        if let Some(note) = &job.note {
+            rpc.message.push_str(" failed: ");
+            rpc.message.push_str(note);
+        }
+        self.add_recovery(&mut rpc, job, status);
+        CallError::Rpc(rpc)
+    }
+
+    fn add_recovery(&self, rpc: &mut RpcError, job: &JobRecord, status: RecoveryStatus) {
+        let original = self.original_charge(job);
+        self.emit_recovery(status, original);
+        let message = match status {
+            RecoveryStatus::Available => "resume the run to retry collection of the original task".to_string(),
+            RecoveryStatus::Legacy => "the retained task's result is unknown. Resume with --recover to check the original task".to_string(),
+            RecoveryStatus::Unavailable => "the original task's result is unavailable. Forget the retained job before authorizing a new generation".to_string(),
+            RecoveryStatus::Recovered => unreachable!("a recovered call has no RPC error"),
+        };
+        rpc.message.push_str(". ");
+        rpc.message.push_str(&message);
+        let mut recovery = Map::new();
+        recovery.insert("status".into(), Value::from(status.as_str()));
+        if let Some(original) = original {
+            recovery.insert("original_charged_usd".into(), original.to_value());
+        }
+        if let Some(Value::Object(data)) = &mut rpc.data {
+            data.insert("recovery".into(), Value::Object(recovery));
+        }
+    }
 }
 
 impl Lead<'_> {
+    fn cached_answer(&self, record: &CallRecord) -> Result<CallAnswer, CallError> {
+        let store = &self.services.engine.store;
+        let (files, data) = from_record(store, self.files, record)?;
+        if emit_call(
+            self.services,
+            self.site,
+            self.capability,
+            &self.route.id(),
+            self.key,
+            true,
+            Some(Usd::ZERO),
+            false,
+        ) {
+            // The call event now roots this answer, so a leftover job may be removed.
+            let _ = store.remove_job(self.key);
+        }
+        Ok(CallAnswer {
+            key: self.key.to_string(),
+            cached: true,
+            cost: Some(Usd::ZERO),
+            charged: Usd::ZERO,
+            files,
+            data,
+        })
+    }
+
     /// Stores an answer's files and then its call record (spec/store.md §6), with `cost_usd`
     /// `reported`; the record as written.
     fn publish(

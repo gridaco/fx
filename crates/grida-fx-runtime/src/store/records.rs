@@ -486,6 +486,8 @@ pub enum JobState {
     Submitting,
     Submitted,
     Settled,
+    Recoverable,
+    Unavailable,
 }
 
 impl JobState {
@@ -494,6 +496,8 @@ impl JobState {
             JobState::Submitting => "submitting",
             JobState::Submitted => "submitted",
             JobState::Settled => "settled",
+            JobState::Recoverable => "recoverable",
+            JobState::Unavailable => "unavailable",
         }
     }
 
@@ -502,6 +506,8 @@ impl JobState {
             "submitting" => Some(JobState::Submitting),
             "submitted" => Some(JobState::Submitted),
             "settled" => Some(JobState::Settled),
+            "recoverable" => Some(JobState::Recoverable),
+            "unavailable" => Some(JobState::Unavailable),
             _ => None,
         }
     }
@@ -517,11 +523,11 @@ pub struct JobRecord {
     pub take: Vec<u32>,
     pub fresh_id: Option<String>,
     pub state: JobState,
-    /// `None` while `submitting`; an object once `submitted`.
+    /// The adapter's safe handle, absent before acceptance or after a generation failure.
     pub handle: Option<Value>,
-    /// Why a `submitting` record's submit has an unknown outcome: the redacted reason, naming the
-    /// provider's job id when one was returned (spec/store.md §5). Only a `submitting` record
-    /// carries one.
+    /// The amount booked against the submission, if known.
+    pub charged_usd: Option<Usd>,
+    /// A redacted reason for an uncertain submit or an unsuccessful collection.
     pub note: Option<String>,
     /// Safe evidence retained with an uncertain submission.
     pub diagnostic: Option<grida_fx_protocol::AdapterDiagnostic>,
@@ -541,6 +547,9 @@ impl JobRecord {
         }
         map.insert("state".into(), Value::from(self.state.as_str()));
         map.insert("handle".into(), self.handle.clone().unwrap_or(Value::Null));
+        if let Some(charged) = self.charged_usd {
+            map.insert("charged_usd".into(), charged.to_value());
+        }
         if let Some(diagnostic) = &self.diagnostic {
             map.insert(
                 "diagnostic".into(),
@@ -570,20 +579,20 @@ impl JobRecord {
                 "state",
                 "handle",
             ],
-            &["note", "diagnostic", "fresh_id"],
+            &["note", "diagnostic", "fresh_id", "charged_usd"],
         )?;
         let state = map["state"]
             .as_str()
             .and_then(JobState::parse)
             .ok_or_else(|| {
                 format!(
-                    "the state of {what} is {}, not submitting, submitted or settled",
+                    "the state of {what} is {}, expected submitting, submitted, settled, recoverable or unavailable",
                     shown(&map["state"])
                 )
             })?;
         let handle = match (&map["handle"], state) {
-            (Value::Null, JobState::Submitted) => {
-                return Err(format!("{what} is submitted and has no handle"));
+            (Value::Null, JobState::Submitted | JobState::Recoverable | JobState::Unavailable) => {
+                return Err(format!("{what} is {} and has no handle", state.as_str()));
             }
             (Value::Null, _) => None,
             (Value::Object(_), JobState::Submitting) => {
@@ -599,7 +608,10 @@ impl JobRecord {
         };
         let note = match (map.get("note"), state) {
             (None, _) => None,
-            (Some(Value::String(note)), JobState::Submitting) => Some(note.clone()),
+            (
+                Some(Value::String(note)),
+                JobState::Submitting | JobState::Recoverable | JobState::Unavailable,
+            ) => Some(note.clone()),
             (Some(Value::String(_)), state) => {
                 return Err(format!("{what} is {} and has a note", state.as_str()));
             }
@@ -610,6 +622,10 @@ impl JobRecord {
         if map.contains_key("diagnostic") && state != JobState::Submitting {
             return Err(format!("{what} is {} and has a diagnostic", state.as_str()));
         }
+        let charged_usd = map.get("charged_usd").map(Usd::from_value).transpose()?;
+        if charged_usd.is_some() && handle.is_none() {
+            return Err(format!("{what} has a charge but no handle"));
+        }
         let record = JobRecord {
             key: digest_member(map, "key", what)?,
             capability: capability_member(map, what)?,
@@ -619,6 +635,7 @@ impl JobRecord {
             fresh_id: fresh_id_member(map, what)?,
             state,
             handle,
+            charged_usd,
             note,
             diagnostic: map
                 .get("diagnostic")
@@ -982,6 +999,7 @@ mod tests {
             fresh_id: call.fresh_id,
             state: JobState::Submitted,
             handle: Some(json!({"job": "job-1"})),
+            charged_usd: None,
             note: None,
             diagnostic: None,
         };

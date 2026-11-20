@@ -109,7 +109,7 @@ use grida_fx_core::plan::output::pending_document;
 use grida_fx_core::project::Planner;
 use grida_fx_core::val::Val;
 use indexmap::IndexMap;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
@@ -130,6 +130,8 @@ pub struct RunOptions {
     pub yes_up_to: Option<Usd>,
     /// Require applicable forecasts for uncached chargeable work, including new expansions.
     pub require_estimates: bool,
+    /// Permit only call cache hits and collection of retained jobs.
+    pub recover: bool,
     /// The workflow's takes file, project-relative (recorded in `plan.json`).
     pub takes_file: String,
     /// The folder holds a run already (`--resume`): one removed in the meantime is refused, never
@@ -249,8 +251,18 @@ fn on_the_users_plan(plan: &Plan, plan_providers: &BTreeSet<String>) -> bool {
 /// environment: a command checks them before it makes a new folder, so a refused run leaves
 /// nothing behind.
 pub fn refused(plan: &Plan, live: bool, plan_providers: &BTreeSet<String>) -> Option<String> {
+    refused_for_run(plan, live, plan_providers, false)
+}
+
+/// Checks admission for a run, including a recovery-only invocation that cannot reserve budget.
+pub fn refused_for_run(
+    plan: &Plan,
+    live: bool,
+    plan_providers: &BTreeSet<String>,
+    recover: bool,
+) -> Option<String> {
     let env = |name: &str| std::env::var(name).ok();
-    refusal(plan, live, plan_providers, &env)
+    refusal(plan, live && !recover, plan_providers, &env)
 }
 
 /// The refusals that come before anything is written (module doc, 1 to 3). `env` reads the
@@ -423,6 +435,26 @@ fn existing_outputs(outputs: &IndexMap<String, Val>) -> IndexMap<String, Val> {
         .collect()
 }
 
+/// Correlate old charges with provider task IDs. A call key can outlive several submissions,
+/// so a ledger entry for the same key alone cannot tell us what a retained task cost.
+fn prior_call_charges(prior: &[serde_json::Value]) -> HashMap<String, HashMap<String, Usd>> {
+    let mut charges: HashMap<String, HashMap<String, Usd>> = HashMap::new();
+    for event in prior {
+        if event["event"] == "call_attempt_failed"
+            && event["send"].as_u64().is_some()
+            && let Some(call) = event["call"].as_str()
+            && let Some(task) = event["diagnostic"]["task_id"].as_str()
+            && let Ok(charged) = Usd::from_value(&event["charged_usd"])
+        {
+            charges
+                .entry(call.to_string())
+                .or_default()
+                .insert(task.to_string(), charged);
+        }
+    }
+    charges
+}
+
 /// One invocation, before the host pool is shut down.
 fn invoke(
     engine: &Arc<Engine>,
@@ -432,7 +464,13 @@ fn invoke(
     options: &RunOptions,
     ready: impl FnOnce(&ReadyRun, &Arc<RunControl>),
 ) -> Result<RunOutcome, RunError> {
-    let env = |name: &str| std::env::var(name).ok();
+    if options.recover
+        && (!engine.live || engine.stand_in_run() || !options.existing || options.name.is_some())
+    {
+        return Err(RunError::Refused(
+            "--recover needs --live and an existing run, without --stand-in".into(),
+        ));
+    }
     let plan_providers = engine.adapters.plan_providers();
     let normalize_plan_routes = planner
         .routes
@@ -446,10 +484,10 @@ fn invoke(
         plan.expansion = expand(planner, host).map_err(RunError::Fatal)?;
     }
     plan.apply_plan_billing(&plan_providers);
-    if options.require_estimates && !engine.stand_in_run() {
+    if options.require_estimates && !engine.stand_in_run() && !options.recover {
         plan.require_estimates();
     }
-    if let Some(refused) = refusal(&plan, engine.live, &plan_providers, &env) {
+    if let Some(refused) = refused_for_run(&plan, engine.live, &plan_providers, options.recover) {
         return Err(RunError::Refused(refused));
     }
     let digest = grida_fx_core::plan::output::plan_digest(&plan, planner).ok_or_else(|| {
@@ -523,7 +561,16 @@ fn invoke(
         }
     };
     let first = expand(planner, host);
-    let mut ledger = Ledger::new(ceiling(&plan, engine.live), Some(Arc::clone(&log)));
+    let mut run_ceiling = ceiling(&plan, engine.live);
+    if options.recover
+        && let Some(started) = prior
+            .iter()
+            .rev()
+            .find(|event| event["event"] == "run_started")
+    {
+        run_ceiling = Usd::from_value(&started["ceiling_usd"]).ok();
+    }
+    let mut ledger = Ledger::new(run_ceiling, Some(Arc::clone(&log)));
     if engine.live && plan.ceiling.is_none() {
         ledger = ledger.only_on(engine.adapters.plan_providers());
     }
@@ -538,6 +585,8 @@ fn invoke(
         cancel.clone(),
     );
     services.fresh_id.clone_from(&planner.fresh_id);
+    services.recover = options.recover;
+    services.prior_call_charges = prior_call_charges(&prior);
     let services = Arc::new(services);
     let workflow = planner.workflow.workflow.id.clone();
     let captured_value_views = captured_value_views(&folder, &prior);
@@ -1088,7 +1137,10 @@ impl Scheduler<'_> {
                 Some(expansion) => expansion,
                 None => expand(self.planner, self.host)?,
             };
-            if self.options.require_estimates && !self.engine.stand_in_run() {
+            if self.options.require_estimates
+                && !self.engine.stand_in_run()
+                && !self.options.recover
+            {
                 let strict = Plan {
                     expansion: expansion.clone(),
                     problems: Vec::new(),
@@ -1145,7 +1197,7 @@ impl Scheduler<'_> {
                 &expansion,
                 &self.planner.results,
                 &self.ledger,
-                self.options.yes_up_to,
+                self.options.yes_up_to.filter(|_| !self.options.recover),
             );
             for planned in &check.planned {
                 self.emit(planned)?;

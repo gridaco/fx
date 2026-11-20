@@ -29,6 +29,7 @@
         "node_retry",
         "call",
         "call_attempt_failed",
+        "call_recovery",
         "call_waiting",
         "call_admitted",
         "budget_reserved",
@@ -187,7 +188,7 @@
       "pattern": "^.+@[a-z0-9._-]+$"
     },
     "call": {
-      "description": "The call key (identity.md \u00a79). On `call`, the call the event reports; on `budget_reserved`, the call the hold is for, written before anything is sent (absent in older records and for a hold of no call); on `call_waiting` and `call_admitted`, the call whose wait they record.",
+      "description": "The call key (identity.md §9). On `budget_reserved`, the call the hold is for, written before anything is sent (absent in older records and for a hold of no call).",
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
@@ -214,6 +215,11 @@
       "minimum": 0
     },
     "charged_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "original_charged_usd": {
+      "description": "On `call_recovery`, the amount FX originally booked for the retained provider task, when known.",
       "type": "number",
       "minimum": 0
     },
@@ -855,6 +861,29 @@
           "reason",
           "retryable"
         ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "const": "call_recovery"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "capability",
+          "route",
+          "call",
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": ["available", "legacy", "unavailable", "recovered"]
+          }
+        }
       }
     },
     {

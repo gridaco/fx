@@ -50,6 +50,13 @@ adds no charge. These are accounting fixtures, not provider prices.
 - They distinguish result-cache reuse from call-cache replay by changing the node
   version while preserving the request. Changing the unknown field, source bytes
   or operation name produces a different call key and exactly one new submission.
+- `.native-invalid-answer` makes a completed synthetic task return an answer the engine
+  rejects. After the marker is removed, the CLI and SDK tests recover the output from the
+  original task and verify one submission and one booked charge. They also exercise an
+  older `settled` record with a retained handle.
+- In the Python fixture, `.native-unavailable-result` makes collection report a terminal
+  result after the first validation failure. Resuming keeps the original booking and blocks
+  a replacement until the caller explicitly forgets the job.
 - They compare SDK, CLI inspection and observation diagnostics, verify redaction,
   and rerun an uncertain call without submitting it a second time. Both SDKs also inject
   file echoes into every optional diagnostic metadata field and verify that diagnostic-enabled

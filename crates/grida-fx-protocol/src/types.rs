@@ -228,12 +228,32 @@ pub struct ErrorData {
     /// `ceiling_exceeded`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remaining_usd: Option<f64>,
+    /// Recovery evidence for a retained provider task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<CallRecoveryError>,
     /// `protocol_mismatch`: the protocol the engine speaks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine_protocol: Option<String>,
     /// `protocol_mismatch`: the protocol the host speaks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_protocol: Option<String>,
+}
+
+/// What FX knows about a retained task that could not be collected.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CallRecoveryError {
+    pub status: RecoveryAvailability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_charged_usd: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecoveryAvailability {
+    Available,
+    Legacy,
+    Unavailable,
 }
 
 #[cfg(test)]

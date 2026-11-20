@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from grida.fx import Accepted, AdapterDiagnostic, Answered, Failed, Uncertain, adapter
+from grida.fx import Accepted, AdapterDiagnostic, Answered, Ended, Failed, Uncertain, adapter
 
 
 def submit(call):
@@ -45,6 +45,12 @@ async def collect(call):
     Path(".native-collecting").touch()
     while not Path(".native-release").exists():
         await asyncio.sleep(0.02)
+    if Path(".native-unavailable-result").exists():
+        return Ended("The fixture no longer serves the completed result")
+    if Path(".native-invalid-answer").exists():
+        # A file on an unknown capability must declare its kind. This is a completed result
+        # with a shape the engine refuses, and the provider still reports its charge.
+        return Answered(files={"result": b"Synthetic result bytes."}, cost_usd=0.01)
     return Answered.json(
         {
             "task_id": call.handle["task_id"],

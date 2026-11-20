@@ -55,15 +55,16 @@
 //! - `Failed`: the record becomes `settled`, settle as billed, new attempt when retryable;
 //! - `Accepted { handle }`: the record becomes `submitted` with the handle, then the job is
 //!   collected under the same hold ([`collect_job`] rules, but the hold is settled: the reported
-//!   cost of the answer, or the cost the adapter reports for a job that `Ended`, else in full);
+//!   cost of the answer or collection outcome, else in full);
 //! - cancelled while the submit is in flight: the record stays `submitting`, settle in full,
 //!   `Cancelled`; cancelled while collecting: the record stays `submitted`, settle in full.
 //!
-//! **Collecting** ([`collect_job`], a `submitted` record found before the call): no hold, no new
-//! submit, nothing billed (`charged` 0). `Answered` → the caller publishes the call record and then
-//! removes the job record; a check that refuses the answer settles the record and fails the call;
-//! `Ended` → the record becomes `settled`, `Failed`, whatever cost it reports; `Unreachable` → the
-//! record stays `submitted`, `Failed`; cancelled → the record stays `submitted`, `Cancelled`.
+//! **Collecting** ([`collect_job`], a retained task found before the call): no hold, no submit,
+//! nothing billed. An answer or proof that the provider finished leaves the job `recoverable`
+//! until the caller publishes the answer and records the call. A known generation failure
+//! becomes `settled` without a handle. Conclusive loss during recovery of a successful or
+//! legacy task leaves it `unavailable`. An inconclusive collection or cancellation leaves
+//! the previous state in place.
 //!
 //! **Reasons.** Every reason an outcome carries (`Refused`, `Failed`, `Unsettled`) passes through
 //! the adapter's redactor last (`RequestAdapter::redactor`, `LongJob::redactor`; spec/adapters.md
@@ -89,7 +90,7 @@
 //! - While a long job's submit waits to be resent after `NotReceived`, its record stays
 //!   `submitting` (a crash then asks a person, never submits twice); a cancellation during that
 //!   wait removes it, since nothing is outstanding.
-//! - A `settled` record keeps the job's handle when it had one, so a person can find the job.
+//! - A retained job keeps its original booked charge when known.
 //! - A long-job call given no job record fields ([`Attempts::job`] `None`) is an engine fault:
 //!   `Store`, before anything is reserved or sent.
 
@@ -703,23 +704,6 @@ async fn collect(
     let mut call = attempts.call.clone();
     call.attempt = call.attempt.max(1);
     let collected = collect_once(adapter, attempts, &call, handle, diagnostic).await;
-    let (outcome, reason) = match collected {
-        Collect::Cancelled => return Outcome::Cancelled,
-        Collect::Answered(answer) => {
-            return Outcome::Answered {
-                answer,
-                charged: Usd::ZERO,
-                attempts: 0,
-            };
-        }
-        Collect::Refused { reason, .. } | Collect::Ended { reason, .. } => {
-            if let Err(error) = attempts.save(fields, JobState::Settled, Some(handle)) {
-                return Outcome::Store(error);
-            }
-            (CallAttemptOutcome::Failed, reason)
-        }
-        Collect::Unreachable(reason) => (CallAttemptOutcome::Unreachable, reason),
-    };
     let failure = FailureContext {
         attempts,
         call: &call,
@@ -727,10 +711,7 @@ async fn collect(
         diagnostic: diagnostic.as_ref(),
         send: None,
     };
-    match failure.record(outcome, &reason, None, false) {
-        Ok(()) => Outcome::Failed(reason),
-        Err(error) => Outcome::Unrecorded(error),
-    }
+    finish_collection(fields, handle, collected, &failure, None)
 }
 
 /// Collects the job just accepted under its attempt's `hold`, and settles the hold.
@@ -745,35 +726,6 @@ async fn collect_held(
 ) -> Outcome {
     let (hold, send) = held;
     let collected = collect_once(adapter, attempts, call, handle, diagnostic).await;
-    let (outcome, reason, charged) = match collected {
-        Collect::Cancelled => {
-            // Still running at the provider: the record stays `submitted`.
-            attempts.settle(hold, None);
-            return Outcome::Cancelled;
-        }
-        Collect::Answered(answer) => {
-            let charged = attempts.settle(hold, answer.cost);
-            return Outcome::Answered {
-                answer,
-                charged,
-                attempts: call.attempt,
-            };
-        }
-        Collect::Refused { reason, cost } | Collect::Ended { reason, cost } => {
-            // A failed answer check or an ended job settles as billed.
-            let saved = attempts.save(fields, JobState::Settled, Some(handle));
-            let charged = attempts.settle(hold, cost);
-            if let Err(error) = saved {
-                return Outcome::Store(error);
-            }
-            (CallAttemptOutcome::Failed, reason, charged)
-        }
-        Collect::Unreachable(reason) => {
-            // It may still be running: the record stays `submitted` for a later run.
-            let charged = attempts.settle(hold, None);
-            (CallAttemptOutcome::Unreachable, reason, charged)
-        }
-    };
     let failure = FailureContext {
         attempts,
         call,
@@ -781,7 +733,92 @@ async fn collect_held(
         diagnostic: diagnostic.as_ref(),
         send: Some(send),
     };
-    match failure.record(outcome, &reason, Some(charged), false) {
+    finish_collection(fields, handle, collected, &failure, Some(hold))
+}
+
+/// Record the submission's charge once and preserve its result until the call is published.
+fn finish_collection(
+    fields: &JobRecord,
+    handle: &Value,
+    collected: Collect,
+    failure: &FailureContext<'_>,
+    hold: Option<Hold>,
+) -> Outcome {
+    let cost = match &collected {
+        Collect::Answered(answer) => answer.cost,
+        Collect::Incomplete { cost, .. }
+        | Collect::Ended { cost, .. }
+        | Collect::Undetermined { cost, .. }
+        | Collect::Unavailable { cost, .. } => *cost,
+        Collect::Cancelled | Collect::Unreachable(_) => None,
+    };
+    let charged = hold.map(|hold| failure.attempts.settle(hold, cost));
+    let state = match &collected {
+        Collect::Answered(_) | Collect::Incomplete { .. } => JobState::Recoverable,
+        Collect::Unavailable { .. } => JobState::Unavailable,
+        Collect::Undetermined { .. } if fields.state == JobState::Recoverable => {
+            JobState::Unavailable
+        }
+        Collect::Undetermined { .. } => JobState::Settled,
+        Collect::Ended { .. }
+            if charged.is_none()
+                && matches!(fields.state, JobState::Recoverable | JobState::Settled) =>
+        {
+            JobState::Unavailable
+        }
+        Collect::Ended { .. } => JobState::Settled,
+        Collect::Cancelled | Collect::Unreachable(_) if charged.is_some() => JobState::Submitted,
+        Collect::Cancelled | Collect::Unreachable(_) => fields.state,
+    };
+    if charged.is_some() || !matches!(collected, Collect::Cancelled | Collect::Unreachable(_)) {
+        let keep_handle =
+            state != JobState::Settled || matches!(collected, Collect::Undetermined { .. });
+        let note = match &collected {
+            Collect::Incomplete { reason, .. }
+            | Collect::Unavailable { reason, .. }
+            | Collect::Undetermined { reason, .. }
+            | Collect::Ended { reason, .. }
+                if matches!(state, JobState::Recoverable | JobState::Unavailable) =>
+            {
+                Some(failure.summarize(reason))
+            }
+            _ => None,
+        };
+        if let Err(error) = failure.attempts.jobs.save_job(&JobRecord {
+            state,
+            handle: keep_handle.then(|| handle.clone()),
+            charged_usd: if keep_handle {
+                charged.or(fields.charged_usd)
+            } else {
+                None
+            },
+            note,
+            diagnostic: None,
+            ..fields.clone()
+        }) {
+            return Outcome::Store(error);
+        }
+    }
+    let (outcome, reason) = match collected {
+        Collect::Cancelled => return Outcome::Cancelled,
+        Collect::Answered(answer) => {
+            return Outcome::Answered {
+                answer,
+                charged: charged.unwrap_or(Usd::ZERO),
+                attempts: if charged.is_some() {
+                    failure.call.attempt
+                } else {
+                    0
+                },
+            };
+        }
+        Collect::Incomplete { reason, .. }
+        | Collect::Ended { reason, .. }
+        | Collect::Undetermined { reason, .. }
+        | Collect::Unavailable { reason, .. } => (CallAttemptOutcome::Failed, reason),
+        Collect::Unreachable(reason) => (CallAttemptOutcome::Unreachable, reason),
+    };
+    match failure.record(outcome, &reason, charged, false) {
         Ok(()) => Outcome::Failed(reason),
         Err(error) => Outcome::Unrecorded(error),
     }
@@ -790,13 +827,21 @@ async fn collect_held(
 /// What one collect came to, its answer checked.
 enum Collect {
     Answered(Answer),
-    /// The adapter's check refused the answer; `cost` is what the provider reported.
-    Refused {
+    /// The provider finished and its result could not be collected or accepted.
+    Incomplete {
         reason: String,
         cost: Option<Usd>,
     },
     /// The job ended without a result; `cost` is what the adapter reported for it.
     Ended {
+        reason: String,
+        cost: Option<Usd>,
+    },
+    Undetermined {
+        reason: String,
+        cost: Option<Usd>,
+    },
+    Unavailable {
         reason: String,
         cost: Option<Usd>,
     },
@@ -830,10 +875,13 @@ async fn collect_once(
             let cost = answer.cost;
             match attempts.accept(call, answer, |call, answer| adapter.check(call, answer)) {
                 Ok(answer) => Collect::Answered(answer),
-                Err(reason) => Collect::Refused { reason, cost },
+                Err(reason) => Collect::Incomplete { reason, cost },
             }
         }
         Some(Collected::Ended { reason, cost }) => Collect::Ended { reason, cost },
+        Some(Collected::Undetermined { reason, cost }) => Collect::Undetermined { reason, cost },
+        Some(Collected::Incomplete { reason, cost }) => Collect::Incomplete { reason, cost },
+        Some(Collected::Unavailable { reason, cost }) => Collect::Unavailable { reason, cost },
         Some(Collected::Unreachable { reason }) => Collect::Unreachable(reason),
     }
 }
@@ -1056,6 +1104,7 @@ impl Attempts<'_> {
         self.jobs.save_job(&JobRecord {
             state,
             handle: handle.cloned(),
+            charged_usd: None,
             note: None,
             diagnostic: None,
             ..fields.clone()
@@ -1073,6 +1122,7 @@ impl Attempts<'_> {
         self.jobs.save_job(&JobRecord {
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: Some(note.to_string()),
             diagnostic: diagnostic.cloned(),
             ..fields.clone()
@@ -1290,6 +1340,7 @@ mod tests {
             fresh_id: None,
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: None,
             diagnostic: None,
         }

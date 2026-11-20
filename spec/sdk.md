@@ -43,6 +43,13 @@ checks. Deleting the optional metadata cache or removing a provider key does not
 rediscovery before a resume that can use recorded facts and cached results. An engine
 refusal before execution raises `FxError`; SDKs do not repeat discovery to diagnose it.
 
+Pass `recover=True` in Python or `{ recover: true }` in JavaScript with `live` and
+an existing `resume` or explicit folder. This enables [recovery-only execution](store.md#5-long-jobs),
+including collection of settled jobs whose handles are still in the store.
+It can replay cached answers, run local steps and contact the original provider
+to collect. It preserves the prior recorded ceiling and sends no new managed work.
+Ordinary live execution also retries collection for jobs already known to have finished.
+
 SDKs start `run` with `GRIDA_FX_CANCEL_SOURCE=sdk` in the engine's environment. Besides naming
 the source of a signal's cancellation, it tells the engine that the invocation's inputs file is
 temporary: its `run_started` records no `repeat` ([store.md](store.md) §8, "Repeating a run"),
@@ -54,6 +61,10 @@ cleanup under [control.md](control.md). They return execution results. They do n
 start a viewer, return an early URL, or offer a readiness handle.
 Existing result construction reads the folder after the child exits; it is not
 an atomic invocation capture when another process immediately resumes that folder.
+`RunResult.call_recoveries` / `RunResult.callRecoveries` contains the recorded recovery events.
+The event's optional `original_charged_usd` is the amount FX booked for the original task.
+Older records can lack the evidence needed to identify that amount, even when the run's
+accumulated spend is available. Recovery adds zero to that accumulated spend.
 
 ## Provider-native calls and diagnostics
 
@@ -85,6 +96,7 @@ Subsequent observation uses that absolute folder, never a fresh latest-run looku
 The record exposes `inspection`, the full engine summary and optional verification
 result, and `run_dir` / `runDir`. Where recorded, `inspection.run.call_attempt_failures`
 contains the sanitized call failure events, including earlier attempts the run recovered from.
+`inspection.run.call_recoveries` contains the recovery events, when present.
 The record has no process exit code or execution ownership.
 A verification failure returns its documented unsuccessful verification result;
 input/engine errors raise the SDK's `FxError`. Inspection does not load author

@@ -2,24 +2,23 @@
 //!
 //! The store is the cache of the project found from the working directory. Lists its job records
 //! (`Store::jobs`, sorted by key), one line each: `<key>  <state>  <capability> on <route id>,
-//! take <take joined by .>`, then, for a `submitting` record with a note, `  <note>`: why its
-//! submit's outcome is unknown, naming the provider's job id when one was returned (spec/store.md
-//! §5), its control characters and runs of whitespace shown as one space. `settled` records are
-//! listed too (a settled job is submitted anew by the next run, and its record may be removed at
-//! any time). An empty or missing `jobs/` prints nothing. An unreadable record is an error (exit
-//! 2) naming `jobs/<key>.json`.
+//! take <take joined by .>`, then the original booked charge, recovery advice and a note where
+//! available (spec/store.md §5). Control characters and runs of whitespace in notes are shown
+//! as one space. An empty or missing `jobs/` prints nothing. An unreadable record is an error
+//! (exit 2) naming `jobs/<key>.json`.
 //!
 //! `--forget <key>`: the key must be 64 lowercase hex (`not a digest: <key>`, exit 2, checked
 //! before the store is touched); no such record: `the cache holds no job <key>` (exit 2); else the
-//! record is removed and `forgot job <key>; its call is submitted again on the next run` printed.
-//! A person forgets a `submitting` job once they have checked the provider's dashboard.
+//! record is removed while holding the cache exclusively. A later live run can submit paid work
+//! again. A person forgets a job once they have checked the provider's dashboard.
 
 use crate::cli::JobsArgs;
 use crate::print::print_line;
 use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_runtime::store::Store;
-use grida_fx_runtime::store::records::JobRecord;
+use grida_fx_runtime::store::lease::NotLocked;
+use grida_fx_runtime::store::records::{JobRecord, JobState};
 
 /// Runs `grida-fx jobs`.
 pub fn run(args: &JobsArgs) -> Result<u8, Error> {
@@ -39,9 +38,16 @@ pub fn run(args: &JobsArgs) -> Result<u8, Error> {
     if store.load_job(key)?.is_none() {
         return Err(Error::usage(format!("the cache holds no job {key}")));
     }
+    store.lock_exclusive().map_err(|error| match error {
+        NotLocked::Held => Error::usage("the cache is in use. Forget the job after the run ends"),
+        NotLocked::Unsupported(error) => Error::io("cache lock", &error),
+    })?;
+    if store.load_job(key)?.is_none() {
+        return Err(Error::usage(format!("the cache holds no job {key}")));
+    }
     store.remove_job(key)?;
     print_line(&format!(
-        "forgot job {key}; its call is submitted again on the next run"
+        "forgot job {key}. A later live run can submit and pay for new work"
     ));
     Ok(0)
 }
@@ -70,6 +76,21 @@ fn job_line(job: &JobRecord) -> String {
         job.capability,
         job.route.id
     );
+    if let Some(charged) = job.charged_usd {
+        line.push_str(&format!("  originally booked {}", charged.dollars_2()));
+    }
+    match job.state {
+        JobState::Settled if job.handle.is_some() => {
+            line.push_str(
+                "  provider task retained for a recovery check. Resume with --live --recover",
+            );
+        }
+        JobState::Recoverable => {
+            line.push_str("  resume with --live --recover to retry collection")
+        }
+        JobState::Unavailable => line.push_str("  original result unavailable"),
+        _ => {}
+    }
     if let Some(note) = &job.note {
         // One line, whatever the record holds.
         let words: Vec<&str> = note
@@ -87,7 +108,7 @@ fn job_line(job: &JobRecord) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use grida_fx_runtime::store::records::{JobState, RouteEntry};
+    use grida_fx_runtime::store::records::RouteEntry;
     use serde_json::json;
 
     #[test]
@@ -104,6 +125,7 @@ mod tests {
             fresh_id: None,
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: None,
             diagnostic: None,
         };
@@ -120,7 +142,9 @@ mod tests {
             handle: Some(json!({"job": "j-1"})),
             ..job
         };
-        assert!(job_line(&settled).ends_with("  settled  video.generate on vid@acme, take 1"));
+        assert!(job_line(&settled).ends_with(
+            "  settled  video.generate on vid@acme, take 1  provider task retained for a recovery check. Resume with --live --recover"
+        ));
     }
 
     #[test]
@@ -137,6 +161,7 @@ mod tests {
             fresh_id: None,
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: Some("fal took the job but returned no handle (request req-7)".into()),
             diagnostic: None,
         };

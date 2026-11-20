@@ -1286,15 +1286,18 @@ fn jobs_that_end_or_stop_collecting() {
             &clock(),
             &call
         ),
-        Collected::Ended { cost: None, .. }
+        Collected::Unavailable { cost: None, .. }
     ));
-    let (ended, diagnostic) = collect(
+    let (unavailable, diagnostic) = collect(
         &replay(vec![job_get().reply(envelope(410, "job_expired"))]),
         &clock(),
         &call,
     )
     .into_report();
-    assert!(matches!(ended, Collected::Ended { cost: None, .. }));
+    assert!(matches!(
+        unavailable,
+        Collected::Unavailable { cost: None, .. }
+    ));
     let diagnostic = diagnostic.expect("the failed poll has evidence");
     assert_eq!(diagnostic.phase, DiagnosticPhase::Poll);
     assert_eq!(diagnostic.http_status, Some(410));
@@ -1413,7 +1416,7 @@ fn a_polling_deadline_keeps_the_failed_final_exchange() {
 }
 
 #[test]
-fn downloads_that_end_or_stop_collecting() {
+fn downloads_of_completed_jobs_that_fail_are_recoverable() {
     let call = video_call(json!({"prompt": "p"}));
     let with_download = |reply: Result<HttpResponse, TransportError>| {
         let download = match reply {
@@ -1430,7 +1433,13 @@ fn downloads_that_end_or_stop_collecting() {
         let (collected, diagnostic) =
             with_download(Ok(HttpResponse::new(status, Vec::new()))).into_report();
         assert!(
-            matches!(collected, Collected::Unreachable { .. }),
+            matches!(
+                collected,
+                Collected::Incomplete {
+                    cost: Some(Usd(100_000)),
+                    ..
+                }
+            ),
             "{status}"
         );
         let diagnostic = diagnostic.expect("download status evidence");
@@ -1441,14 +1450,14 @@ fn downloads_that_end_or_stop_collecting() {
         with_download(Ok(HttpResponse::new(404, Vec::new())))
             .into_report()
             .0,
-        Collected::Ended {
+        Collected::Incomplete {
             reason: "GG output video download returned HTTP 404".into(),
             cost: Some(Usd(100_000)),
         }
     );
     assert_eq!(
         with_download(Ok(HttpResponse::new(200, b"not a clip".to_vec()))),
-        Collected::Ended {
+        Collected::Incomplete {
             reason: "GG output video is not an MP4 file".into(),
             cost: Some(Usd(100_000)),
         }
@@ -1460,19 +1469,55 @@ fn downloads_that_end_or_stop_collecting() {
         )))
         .into_report()
         .0,
-        Collected::Unreachable { .. }
+        Collected::Incomplete {
+            cost: Some(Usd(100_000)),
+            ..
+        }
     ));
     // The signed URL never reaches a reason.
-    let Collected::Unreachable { reason } = with_download(Err(TransportError::after_send(
+    let Collected::Incomplete { reason, .. } = with_download(Err(TransportError::after_send(
         TransportErrorKind::Other,
         format!("reset while reading {VIDEO_URL}"),
     )))
     .into_report()
     .0
     else {
-        panic!("unreachable")
+        panic!("incomplete")
     };
     assert!(!reason.contains("sig=abc"), "{reason}");
+
+    let (_, diagnostic) = with_download(Ok(HttpResponse::json(
+        403,
+        &json!({"error": {"code": "abc"}}),
+    )
+    .with_header("x-request-id", "abc")))
+    .into_report();
+    let diagnostic = diagnostic.expect("download status evidence");
+    assert_eq!(diagnostic.http_status, Some(403));
+    assert_eq!(diagnostic.code, None);
+    assert_eq!(diagnostic.request_id, None);
+}
+
+#[test]
+fn a_failed_download_keeps_the_charge_that_settles_later() {
+    let transport = replay(vec![
+        job_reply(job("succeeded", "available", reserved())),
+        Expect::download(VIDEO_URL).reply(HttpResponse::new(503, Vec::new())),
+        job_reply(job("succeeded", "available", settled("100"))),
+    ]);
+    let collected = collect(
+        &transport,
+        &Arc::new(FakeClock::new()),
+        &video_call(json!({"prompt": "p"})),
+    );
+    assert!(matches!(
+        collected.into_report().0,
+        Collected::Incomplete {
+            cost: Some(Usd(100_000)),
+            ..
+        }
+    ));
+    transport.assert_done();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1562,14 +1607,14 @@ fn a_mesh_sends_its_views_as_parts_and_answers_with_the_glb() {
         json!({"facts": {"model_kind": "model/gltf-binary"}})
     );
     assert_eq!(answer.cost, Some(Usd(1_500_000)));
-    // A model that is not a GLB ends the job, at its charge.
+    // FX retains the job and its charge when the model fails validation.
     let transport = replay(vec![
         job_reply(model_job("succeeded", "available", settled("1500"))),
         Expect::download(MODEL_URL).reply(HttpResponse::new(200, media::FBX.to_vec())),
     ]);
     assert_eq!(
         block_on(mesh_adapter(&transport).collect(&call, &json!({"job_id": JOB}))),
-        Collected::Ended {
+        Collected::Incomplete {
             reason: "GG output model is not a GLB file".into(),
             cost: Some(Usd(1_500_000)),
         }

@@ -45,15 +45,12 @@
 //! `adapter`, or a handle this adapter did not write, is `Unreachable` with nothing requested; the
 //! route's `adapter_behavior` is not read, as up to FX 0.6.1. Failed status and result reads (a
 //! transport failure, 408, 429, a 5xx, a body that is not a JSON object) are polls that saw
-//! nothing. A 401, 403 or 3xx is `Unreachable`; another 4xx is `Ended`; a status with a truthy
-//! `error` is `Ended`; the deadline is `Unreachable`. A result without an https video is `Ended`.
-//! The download is made once: a transport failure, a 3xx, 401, 403, 408, 429, a 5xx or another
-//! status outside 2xx and 4xx is `Unreachable` (a later collect reads the result and downloads
-//! again); another 4xx, a body over the cap, empty or without the MP4 signature, or a clip with no
-//! video stream is `Ended`. An `Ended` after the result read comes from a job fal finished, so it
-//! costs that read's `usage.cost`, as an answer would; every other `Ended` reports no cost
-//! (`None`), so the run that submitted the job charges its whole hold. The bytes decide the kind: a
-//! `content-type` header and the result's `content_type` are not read.
+//! nothing. The result endpoint can return HTTP 400 while the result is still pending. A 404 or
+//! 410 is `Unavailable`. A queue status reporting an error is `Ended`. Other status or
+//! result read errors and the polling deadline are `Unreachable`.
+//! After a successful result read, any failure to retrieve or validate the file is `Incomplete`,
+//! at the result's `usage.cost` when available. The download is made once. A later collect reads
+//! the result again before downloading. The bytes determine the media type.
 
 use super::FalClients;
 use crate::BoxFuture;
@@ -577,7 +574,12 @@ impl FalVideo {
                     {
                         return unreachable(&format!("{STATUS_LABEL} answered about another job"));
                     }
-                    if status.get("error").is_some_and(super::truthy) {
+                    if status.get("error").is_some_and(super::truthy)
+                        || status
+                            .get("error_type")
+                            .and_then(Value::as_str)
+                            .is_some_and(|code| !code.is_empty())
+                    {
                         let mut diagnostic = AdapterDiagnostic::new(
                             DiagnosticSource::Provider,
                             DiagnosticPhase::Poll,
@@ -643,7 +645,7 @@ impl FalVideo {
         let url = match result_video(super::answer_root(&result)) {
             Ok(url) => url,
             Err(sentence) => {
-                return Collected::Ended {
+                return Collected::Incomplete {
                     reason: client.reason(&sentence),
                     cost,
                 };
@@ -696,12 +698,13 @@ impl FalVideo {
                 Ok(payload) => Read::Json(payload, response.status),
                 Err(_) => Read::Nothing,
             },
+            400 if label == RESULT_LABEL => Read::Nothing,
             408 | 429 | 500..=599 => Read::Nothing,
-            300..=399 | 401 | 403 => stop(Collected::Unreachable { reason: text() }),
-            400..=499 => stop(Collected::Ended {
+            404 | 410 => stop(Collected::Unavailable {
                 reason: text(),
                 cost: None,
             }),
+            300..=499 => stop(Collected::Unreachable { reason: text() }),
             _ => Read::Nothing,
         }
     }
@@ -716,25 +719,20 @@ impl FalVideo {
         Ok(())
     }
 
-    /// The clip download, made once, and its answer (module doc). A failure a later collect may
-    /// not repeat is `Unreachable`: the record stays `submitted`, and the next collect reads the
-    /// result again and downloads once more. The bytes decide what the file is.
+    /// Download and validate the clip once after a successful result read.
     async fn download(&self, url: &str, deadline: Duration, cost: Option<Usd>) -> Collected {
         let client = &self.clients.queue;
         let mut redactor = client.redactor.with(url);
         if let Ok(parsed) = url::Url::parse(url) {
             redactor = redactor.with(parsed.as_str());
         }
-        let ended = |text: &str| Collected::Ended {
+        let incomplete = |text: &str| Collected::Incomplete {
             reason: redactor.reason(text),
             cost,
         };
-        let unreachable = |text: &str| Collected::Unreachable {
-            reason: redactor.reason(text),
-        };
         let remaining = deadline.saturating_sub(self.clock.now());
         if remaining.is_zero() {
-            return outstanding(client);
+            return incomplete("fal output video download reached its deadline");
         }
         // The provider's text, byte for byte (spec/adapters.md §7).
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
@@ -742,34 +740,31 @@ impl FalVideo {
             .max_response_bytes(MAX_VIDEO_BYTES);
         let response = match client.send(request).await {
             Ok(response) => response,
-            Err(error) if error.kind == TransportErrorKind::TooLarge => {
-                return ended(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
-            }
             Err(error) if error.kind == TransportErrorKind::Refused => {
-                return unreachable(&format!("{DOWNLOAD_LABEL} was not sent: {}", error.reason));
+                return incomplete(&format!("{DOWNLOAD_LABEL} was not sent: {}", error.reason));
             }
             Err(error) => {
-                return unreachable(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
+                return incomplete(&format!("{DOWNLOAD_LABEL} failed: {}", error.reason));
             }
         };
-        match response.status {
-            200..=299 => {}
-            400..=499 if !matches!(response.status, 401 | 403 | 408 | 429) => {
-                return ended(&super::status_text(DOWNLOAD_LABEL, &response));
-            }
-            _ => return unreachable(&super::status_text(DOWNLOAD_LABEL, &response)),
+        if !response.is_success() {
+            return incomplete(&crate::wire::status_reason(
+                DOWNLOAD_LABEL,
+                response.status,
+                None,
+            ));
         }
         let bytes = response.body;
         if bytes.is_empty() {
-            return ended("fal output video download was empty");
+            return incomplete("fal output video download was empty");
         }
         if bytes.len() as u64 > MAX_VIDEO_BYTES {
-            return ended(&format!(
+            return incomplete(&format!(
                 "{DOWNLOAD_LABEL} failed: the response is larger than {MAX_VIDEO_BYTES} bytes"
             ));
         }
         if !crate::wire::matches_signature("video/mp4", &bytes) {
-            return ended("fal output video is not an MP4 file");
+            return incomplete("fal output video is not an MP4 file");
         }
         match ClipFacts::of_mp4(&bytes) {
             Ok(facts) => Collected::Answered(
@@ -779,7 +774,7 @@ impl FalVideo {
                     bytes,
                 ),
             ),
-            Err(sentence) => ended(&sentence),
+            Err(sentence) => incomplete(&sentence),
         }
     }
 }

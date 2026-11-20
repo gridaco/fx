@@ -18,7 +18,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx inspect RUN --control [--json]` | observe an exact invocation's local control availability |
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--register \| [--open] [--standalone]]` | expand, check and price a plan. `--open` opens the default browser. `--register` saves the plan and returns its viewer route. Planning never spends. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
-| `grida fx run <target> [inputs] [--routes file]… [--live] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | run; `--live` admits paid calls, needs a ceiling (unless every call is on your own Codex or Grok Build) and reads the provider keys; `--name` creates a named run, `--resume` continues it, `--run` selects a folder; `--stand-in` answers paid calls with your function instead, offline ([below](#stand-ins-testing-without-a-provider)) |
+| `grida fx run <target> [inputs] [--routes file]… [--live] [--recover] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | Runs the workflow. `--live` admits paid calls with a ceiling unless every call is on your own Codex or Grok Build. `--recover` restricts an existing live run to collection and local work ([Resuming](04-cost-and-cache.md#resuming)). Use `--name` to create a named run, `--resume` to continue it, and `--run` to select a folder. Use `--stand-in` to answer paid calls with your function offline ([below](#stand-ins-testing-without-a-provider)). |
 | `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | check a request or generate one image without a workflow ([below](#generate-one-image)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
@@ -89,6 +89,11 @@ letters, digits, underscores or hyphens. They are scoped to one project and
 recorded workflow ID/source. Inspection refuses an ID shared by several sources;
 use an actual run folder to select one precisely. A changed workflow definition
 or inputs needs a fresh run, and stays under the same workflow in the index.
+
+To collect a retained provider job without authorizing new managed calls, use
+`--live --recover` with `--resume NAME` or `--run PATH` for an existing run. In Python,
+pass `live=True, recover=True`. In JavaScript, pass `live: true, recover: true`. Use the
+same target, run selector and planning options. See [Resuming](04-cost-and-cache.md#resuming).
 
 Put workflow inputs that overlap CLI options after `--`, or use `--inputs FILE`:
 `grida fx run greeting --name baseline -- --name Ada`. Plan commands still accept
@@ -460,8 +465,8 @@ not run again, even under `retry="engine"`.
   `--inputs` and `--routes` files (relative to where you are), `--max-usd`, and `--live` only
   when that run's latest invocation was live: a run resumed without `--live` repeats without it.
   It leaves out `--run`, `--name` and `--resume` (a run of another take is a new run), and
-  `--deliver` and `--yes-up-to`. A run given workflow input flags or `--arg`, a file outside the
-  project, a builder run from anywhere but the project's root, or a run started from an SDK
+  `--deliver` and `--yes-up-to`. A run given workflow input flags, `--arg` or `--recover`, a file
+  outside the project, a builder run from anywhere but the project's root, or a run started from an SDK
   cannot be repeated from its record; then the line says `next      run icon again with the same
   inputs and options`. So does a run whose project's run index does not record its folder (a
   copied folder), and one whose target is a workflow id, a JSON workflow file or a builder, read
@@ -473,9 +478,10 @@ not run again, even under `retry="engine"`.
   `<step-path>  take <n>[  <digest>]`; `takes mv <target> <old> <new>` moves an entry to a step's
   new path and refuses to overwrite another entry. Neither takes a builder target.
 - **`grida fx jobs`:** the cache's long provider jobs, one line each: `<key>  <state>  <capability>
-  on <route>, take <n>`. A `submitting` job FX could not confirm ends with why, naming the
-  provider's job id when it returned one. `--forget <key>` removes one, so the next run submits
-  its call anew.
+  on <route>, take <n>`. The line includes the original booked charge when known, recovery
+  status, and the recorded reason when FX cannot confirm submission or collect a result. After checking
+  with the provider, use `--forget <key>` to remove the record if you intend to authorize a
+  replacement. An ordinary live run with spending approval can then submit and pay for new work.
 
 ## Delivering outputs
 

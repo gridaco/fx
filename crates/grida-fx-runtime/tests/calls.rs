@@ -15,7 +15,10 @@ use grida_fx_core::value::{digest, file_digest};
 use grida_fx_protocol::{ErrorCode, RetryMode, RpcError, StandInAnswerParams};
 use grida_fx_providers::fake::{FakeAdapter, FakeCall};
 use grida_fx_providers::testing::media;
-use grida_fx_providers::{Adapters, Answer, AnsweredFile, Collected, Sent, Submitted};
+use grida_fx_providers::{
+    Adapter, Adapters, Answer, AnsweredFile, BoxFuture, CallRequest, Collected, LongJob, Sent,
+    Submitted,
+};
 use grida_fx_runtime::calls::pacing::Pacing;
 use grida_fx_runtime::calls::{CallAnswer, CallCounter, CallError, CallSite, call};
 use grida_fx_runtime::engine::{Cancel, Engine, RunFiles, Services};
@@ -136,6 +139,8 @@ fn live_with(
         cancel,
         invocation_id: "inv".into(),
         fresh_id: None,
+        recover: false,
+        prior_call_charges: Default::default(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     })
@@ -1238,6 +1243,7 @@ async fn a_recorded_call_replays_offline_without_adapters() {
             fresh_id: None,
             state: JobState::Submitting,
             handle: None,
+            charged_usd: None,
             note: None,
             diagnostic: None,
         })
@@ -1760,6 +1766,7 @@ fn job_record(state: JobState, handle: Option<Value>) -> JobRecord {
         fresh_id: None,
         state,
         handle,
+        charged_usd: None,
         note: None,
         diagnostic: None,
     }
@@ -2004,6 +2011,242 @@ async fn an_unreadable_job_record_stops_the_run() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[tokio::test]
+async fn a_completed_job_rejected_by_the_engine_is_collected_without_a_second_charge() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = json!({"request_id": "R1"});
+    let good = json!({"text": "ready", "tool_calls": []});
+    let price = Usd(500_000);
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::Accepted {
+            handle: handle.clone(),
+        }],
+        vec![
+            Collected::Answered(Answer::new(json!({"text": 42}), Some(price))),
+            Collected::Answered(Answer::new(good.clone(), Some(price))),
+        ],
+    );
+    let mut adapters = Adapters::new();
+    adapters.register("agent.turn", "acme", fake.as_job());
+    let engine = engine(dir.path(), adapters, true);
+    let site = site(
+        vec![route("agent.turn", "llm-a", "acme", price.0)],
+        &[("agent.turn", 1)],
+    );
+    let files = RunFiles::new();
+    let first = live(Arc::clone(&engine), Some(price));
+    let error = rpc(call(
+        &first,
+        &site,
+        &CallCounter::new(),
+        &files,
+        "agent.turn",
+        json!({}),
+    )
+    .await);
+    assert_eq!(error.code, ErrorCode::CallFailed.code());
+    let data = error.data.unwrap();
+    assert_eq!(
+        data["recovery"],
+        json!({"status": "available", "original_charged_usd": 0.5})
+    );
+    assert_eq!(first.ledger.as_ref().unwrap().charged(), price);
+    let key = data["key"].as_str().unwrap();
+    let job = engine.store.load_job(key).unwrap().unwrap();
+    assert_eq!(job.state, JobState::Recoverable);
+    assert_eq!(job.handle, Some(handle.clone()));
+    assert_eq!(job.charged_usd, Some(price));
+
+    let log_path = dir.path().join("recovery.jsonl");
+    let log = Arc::new(EventLog::open(&log_path, "second", "plan").unwrap());
+    let ledger = Arc::new(Ledger::new(Some(Usd::ZERO), Some(Arc::clone(&log))));
+    let resumed = live_with(Arc::clone(&engine), Arc::clone(&ledger), Some(log));
+    let answer = call(
+        &resumed,
+        &site,
+        &CallCounter::new(),
+        &files,
+        "agent.turn",
+        json!({}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(answer.data, good);
+    assert_eq!(answer.cost, Some(Usd::ZERO));
+    assert_eq!(ledger.charged(), Usd::ZERO);
+    assert_eq!(engine.store.load_job(key).unwrap(), None);
+    assert!(
+        matches!(&fake.log()[..], [FakeCall::Submit(_), FakeCall::Collect(_, collected), FakeCall::Collect(_, recovered)] if *collected == handle && *recovered == handle)
+    );
+    let events = read_events(&log_path).unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event"], "call_recovery");
+    assert_eq!(events[0]["status"], "recovered");
+    assert_eq!(events[0]["original_charged_usd"], json!(0.5));
+    assert_eq!(events[1]["event"], "call");
+    assert_eq!(events[1]["cost_usd"], json!(0));
+}
+
+#[tokio::test]
+async fn concurrent_invocations_share_one_long_job_submission() {
+    struct GatedSubmit {
+        fake: FakeAdapter,
+        entered: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+    }
+
+    impl LongJob for GatedSubmit {
+        fn submit<'a>(&'a self, call: &'a CallRequest) -> BoxFuture<'a, Submitted> {
+            Box::pin(async move {
+                self.entered.notify_one();
+                self.release.notified().await;
+                self.fake.submit(call).await
+            })
+        }
+
+        fn collect<'a>(
+            &'a self,
+            call: &'a CallRequest,
+            handle: &'a Value,
+        ) -> BoxFuture<'a, Collected> {
+            self.fake.collect(call, handle)
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeAdapter::long_job(
+        vec![Submitted::Accepted {
+            handle: json!({"request_id": "R1"}),
+        }],
+        vec![Collected::Answered(answered(b"image", Some(Usd(20_000))))],
+    );
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let mut adapters = Adapters::new();
+    adapters.register(
+        "image.generate",
+        "acme",
+        Adapter::Job(Arc::new(GatedSubmit {
+            fake: fake.clone(),
+            entered: Arc::clone(&entered),
+            release: Arc::clone(&release),
+        })),
+    );
+    let engine = engine(dir.path(), adapters, true);
+    let site = site(vec![img_a()], &[("image.generate", 1)]);
+    let files = RunFiles::new();
+    let first = live(Arc::clone(&engine), Some(Usd(100_000)));
+    let second = live(Arc::clone(&engine), Some(Usd(100_000)));
+    let call_once = |services: Arc<Services>| {
+        let site = &site;
+        let files = &files;
+        async move {
+            call(
+                &services,
+                site,
+                &CallCounter::new(),
+                files,
+                "image.generate",
+                lantern_request(),
+            )
+            .await
+        }
+    };
+    let first_answer = call_once(Arc::clone(&first));
+    let second_answer = call_once(Arc::clone(&second));
+    tokio::pin!(first_answer, second_answer);
+    tokio::select! {
+        () = entered.notified() => {}
+        result = &mut first_answer => panic!("initial submit returned early: {result:?}"),
+    }
+    tokio::select! {
+        () = tokio::time::sleep(std::time::Duration::from_millis(20)) => {}
+        result = &mut second_answer => panic!("other invocation did not wait for the job: {result:?}"),
+    }
+    release.notify_one();
+    let (first_answer, second_answer) = tokio::join!(first_answer, second_answer);
+    assert!(!first_answer.unwrap().cached);
+    assert!(second_answer.unwrap().cached);
+    assert!(matches!(
+        &fake.log()[..],
+        [FakeCall::Submit(_), FakeCall::Collect(..)]
+    ));
+    assert_eq!(first.ledger.as_ref().unwrap().charged(), Usd(20_000));
+    assert_eq!(second.ledger.as_ref().unwrap().charged(), Usd::ZERO);
+}
+
+#[tokio::test]
+async fn legacy_and_unavailable_jobs_block_paid_submission() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = json!({"request_id": "R1"});
+    let fake = FakeAdapter::long_job(
+        Vec::new(),
+        vec![Collected::Ended {
+            reason: "the provider no longer serves this task".into(),
+            cost: None,
+        }],
+    );
+    let mut adapters = Adapters::new();
+    adapters.register("image.generate", "acme", fake.as_job());
+    let engine = engine(dir.path(), adapters, true);
+    engine
+        .store
+        .save_job(&job_record(JobState::Settled, Some(handle.clone())))
+        .unwrap();
+    let site = site(vec![img_a()], &[("image.generate", 1)]);
+    let files = RunFiles::new();
+    let call_once = |services: Arc<Services>| {
+        let site = &site;
+        let files = &files;
+        async move {
+            rpc(call(
+                &services,
+                site,
+                &CallCounter::new(),
+                files,
+                "image.generate",
+                lantern_request(),
+            )
+            .await)
+        }
+    };
+    let cap = Some(Usd(1_000_000));
+    let mut normal = live(Arc::clone(&engine), cap);
+    Arc::get_mut(&mut normal)
+        .unwrap()
+        .prior_call_charges
+        .insert(
+            LANTERN_KEY.to_string(),
+            [("different-task".into(), Usd(900_000))].into(),
+        );
+    let error = call_once(normal).await;
+    assert_eq!(error.data.unwrap()["recovery"], json!({"status": "legacy"}));
+    assert!(fake.log().is_empty());
+
+    let mut explicit = live(Arc::clone(&engine), Some(Usd::ZERO));
+    let options = Arc::get_mut(&mut explicit).unwrap();
+    options.recover = true;
+    options.prior_call_charges.insert(
+        LANTERN_KEY.to_string(),
+        [("R1".into(), Usd(500_000))].into(),
+    );
+    let error = call_once(explicit).await;
+    assert_eq!(
+        error.data.unwrap()["recovery"],
+        json!({"status": "unavailable", "original_charged_usd": 0.5})
+    );
+    assert!(matches!(&fake.log()[..], [FakeCall::Collect(_, collected)] if *collected == handle));
+
+    let error = call_once(live(Arc::clone(&engine), cap)).await;
+    assert_eq!(error.data.unwrap()["recovery"]["status"], "unavailable");
+    assert!(error.message.contains("Forget the retained job"));
+    let retained = engine.store.load_job(LANTERN_KEY).unwrap().unwrap();
+    assert_eq!(retained.state, JobState::Unavailable);
+    assert_eq!(retained.handle, Some(handle));
+    assert_eq!(retained.charged_usd, Some(Usd(500_000)));
+    assert_eq!(fake.log().len(), 1);
 }
 
 #[tokio::test]

@@ -341,6 +341,44 @@ fn what_a_prune_cannot_see_whole_refuses_it() {
 }
 
 #[test]
+fn prune_preserves_retained_jobs_and_their_inputs() {
+    let project = Project::new();
+    let orphan = project.file(b"orphan");
+    let jobs = project.store().join("jobs");
+    fs::create_dir_all(&jobs).unwrap();
+    let lock = jobs.join(format!("{orphan}.lock"));
+    fs::write(&lock, &orphan).unwrap();
+    let records: Vec<_> = ["settled", "recoverable", "unavailable"]
+        .into_iter()
+        .map(|state| {
+            let key = sha256(format!("job-{state}").as_bytes());
+            let input = project.file(format!("input-{state}").as_bytes());
+            assert_ne!(key, input);
+            let path = jobs.join(format!("{key}.json"));
+            let mut record = json!({"kind": "fx-job-record-v1", "key": key, "state": state,
+                "handle": {"id": "j1"}, "capability": "video.generate",
+                "route": {"id": "vid-a@acme", "fingerprint": sha256(b"route")},
+                "request": {"input": {"digest": input}}, "take": [1]});
+            if state != "settled" {
+                record["charged_usd"] = json!(0.5);
+            }
+            fs::write(&path, record.to_string()).unwrap();
+            (path, input)
+        })
+        .collect();
+
+    let output = project.prune(&["--yes"]);
+    assert_eq!(status(&output), 0, "{}", text(&output.stdout));
+    conforms(&json_of(&output));
+    assert!(!project.present("files", &orphan));
+    assert!(lock.is_file());
+    for (path, input) in records {
+        assert!(path.is_file());
+        assert!(project.present("files", &input));
+    }
+}
+
+#[test]
 fn a_cache_or_run_in_use_is_refused() {
     let project = Project::new();
     let file = project.file(b"orphan");

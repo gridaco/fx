@@ -182,6 +182,22 @@ export interface CallAttemptFailed extends RunEvent {
   retryable: boolean;
 }
 
+/** Recovery of a retained provider task, as reported by a run invocation. */
+export interface CallRecovery extends RunEvent {
+  kind: "fx-run-events-v1";
+  event: "call_recovery";
+  invocation_id: string;
+  plan: string;
+  offset_ms: number;
+  id: string;
+  capability: string;
+  route: string;
+  call: string;
+  status: "available" | "legacy" | "unavailable" | "recovered";
+  /** Amount FX booked for the original submission, where known. */
+  original_charged_usd?: number;
+}
+
 /** The `run_finished` event. */
 export interface RunFinished extends RunEvent {
   event: "run_finished";
@@ -246,6 +262,8 @@ export interface Inspection {
     steps: InspectedStep[];
     /** Recorded failures in event order, including those a later retry recovered. */
     call_attempt_failures?: CallAttemptFailed[];
+    /** Recorded recovery checks and results, in event order. */
+    call_recoveries?: CallRecovery[];
   };
   /** With `verify`: whether every placed file still matches its record. */
   verification?: { verified: boolean; problems: string[] };

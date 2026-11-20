@@ -158,6 +158,8 @@ async fn play_with_contract(
         cancel,
         invocation_id: "inv".into(),
         fresh_id: None,
+        recover: false,
+        prior_call_charges: Default::default(),
         runs: AtomicU64::new(0),
         holds: AtomicU64::new(0),
     };

@@ -151,7 +151,8 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   is still checked again.
 - `expand`, `identity`, `price`: the documents of `grida-fx expand`, `identity` and `price`.
 - `run(target | plan, options)`: plans new runs first (problems reject with `PlanRefused`),
-  runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`.
+  runs, and reads the run back: `ok`, `incomplete`, `chargedUsd`, `failed`, `outputs`, `steps`,
+  `callRecoveries`.
   Named resumes and existing `runDir` folders are planned directly by the engine using their
   recorded model facts, including when passed a `Plan`; an engine refusal rejects with
   `FxError` and its explanation.
@@ -196,11 +197,17 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
 A target is a workflow file, a workflow id, or a builder: `file.ts:function`
 ([Builders](#builders)) or `file.py:function`. Options: `inputs` (values), `inputFiles`,
 `routes`, `args` (a builder's arguments), `maxUsd`, `requireEstimates`, `cwd`, `env` (for example `GRIDA_FX_PYTHON`
-or `GRIDA_FX_NODE`) and `signal` (an `AbortSignal`); `run` also takes `live`, `yesUpTo`,
+or `GRIDA_FX_NODE`) and `signal` (an `AbortSignal`). The `run` operation also takes `live`, `recover`, `yesUpTo`,
 `deliver`, `standIn` (a function that answers the run's paid calls, [Stand-ins](#stand-ins)), and
 one of `name` (create-only), `resume` (require-existing), or `runDir` (explicit-folder
 create/resume). Relative paths start at `cwd`. The engine's errors reject with `FxError`, which
 carries its `exitCode` and `stderr`.
+
+Use `live: true, recover: true` with `resume` or an existing `runDir` and the original planning
+options to collect retained provider tasks without allowing new managed calls. Recovery needs
+no new dollar ceiling. The recorded `callRecoveries` events include the `status` and
+`original_charged_usd` when known. An older task's booking may be unknown even when `chargedUsd`
+has the run's total spend. Recovered results appear in the usual outputs and add $0 to that total.
 
 The engine reads model selections and `provider_preferences` from `fx.yaml`. They are defaults:
 a structured-generation step's `route: "openai/gpt-6-astra"` selects another model with its

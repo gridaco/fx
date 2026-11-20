@@ -16,12 +16,11 @@
 //!   the first. `{calls}` is `{lo} provider calls`, or `{lo}–{hi} provider calls` (no spaces
 //!   around the dash) when the counts differ.
 //! - `{money}` is `$lo` when both ends are equal, else `$lo – $hi` (spaces around the dash).
-//! - The ceiling warning appears when a ceiling exists and the estimate's high end exceeds it,
-//!   except in a stand-in run ([`render_stand_in`]): it bills nothing, so the ceiling stops
-//!   nothing there (the ceiling itself is still shown).
+//! - The ceiling warning appears when a ceiling exists and the estimate's high end exceeds it.
+//!   [`render_unbilled`] omits it for stand-in and recovery-only runs (the ceiling itself is
+//!   still shown).
 //! - `note` lines are the plan's warnings, then its capped-route notes ([`Plan::capped_notes`])
-//!   except in a stand-in run, which holds and charges no cap; `refused` lines are its problems,
-//!   all in order.
+//!   for runs that can reserve budget. `refused` lines are the plan's problems, in order.
 //!
 //! Amounts are shown with two decimals the way Python's `f"${x:.2f}"` shows a
 //! float: the amount as the nearest double, correctly rounded (Rust's `{:.2}` rounds the same
@@ -48,6 +47,11 @@ pub fn render(plan: &Plan, planner: &Planner) -> String {
 
 /// The plan of a stand-in run as text: no ceiling warning and no capped-route notes (module doc).
 pub fn render_stand_in(plan: &Plan, planner: &Planner) -> String {
+    render_unbilled(plan, planner)
+}
+
+/// The plan of a run that cannot reserve new budget, without ceiling warnings or capped-route notes.
+pub fn render_unbilled(plan: &Plan, planner: &Planner) -> String {
     render_as(plan, planner, false)
 }
 
@@ -78,7 +82,7 @@ struct Summary<'a> {
     known: usize,
     estimate: Estimate,
     ceiling: Option<Usd>,
-    /// Whether the run bills its calls, so the ceiling can stop it (not a stand-in run).
+    /// Whether the run can reserve budget for its calls, so the ceiling can stop it.
     billed: bool,
     warnings: &'a [String],
     problems: &'a [Problem],

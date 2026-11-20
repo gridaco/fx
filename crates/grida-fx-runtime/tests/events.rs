@@ -5,8 +5,8 @@ use grida_fx_core::money::Usd;
 use grida_fx_core::val::{Collection, FileValue, Val};
 use grida_fx_core::value::canon;
 use grida_fx_runtime::events::{
-    EVENTS_KIND, Event, EventLog, NodeDisplay, decode, encode, new_invocation_id, read_events,
-    read_events_tolerant,
+    EVENTS_KIND, Event, EventLog, NodeDisplay, RecoveryStatus, decode, encode, new_invocation_id,
+    read_events, read_events_tolerant,
 };
 use grida_fx_runtime::store::Store;
 use indexmap::IndexMap;
@@ -233,6 +233,14 @@ fn every_event() -> Vec<Event> {
             cached: false,
             cost_usd: Some(Usd::ZERO),
             stand_in: true,
+        },
+        Event::CallRecovery {
+            id: "a#1".into(),
+            capability: "image.generate".into(),
+            route: "img-a@acme".into(),
+            call: CALL.into(),
+            status: RecoveryStatus::Recovered,
+            original_charged_usd: Some(Usd(500_000)),
         },
         Event::ScopesUpdated {
             scopes: json!([]),
@@ -503,7 +511,12 @@ fn members_follow_the_schema_names() {
         json!({"id": "a#1", "capability": "image.generate", "route": "img-a@acme", "call": CALL,
                "cached": false, "cost_usd": 0, "stand_in": true})
     );
-    let snapshot = fields(&events[22]);
+    assert_eq!(
+        fields(&events[22]),
+        json!({"id": "a#1", "capability": "image.generate", "route": "img-a@acme", "call": CALL,
+               "status": "recovered", "original_charged_usd": 0.5})
+    );
+    let snapshot = fields(&events[23]);
     let mut members: Vec<&str> = snapshot
         .as_object()
         .unwrap()

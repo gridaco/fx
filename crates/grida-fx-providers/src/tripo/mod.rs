@@ -23,14 +23,13 @@
 //!   reason names it so a person can find the task;
 //! - collecting: a status read that fails is a poll that saw nothing, except a credential or proxy
 //!   problem (401, 403, a 3xx) or a transport refusal, which end polling at once as `Unreachable`;
-//!   a terminal status other than `success`, an unusable output and a file of the wrong kind are
-//!   `Ended`; still running at the deadline, an answer about another task, an unknown status and a
-//!   download that fails or is over the cap are `Unreachable`. An `Ended` for `failed` or
-//!   `cancelled`, whose frozen credits Tripo returns ([`UNBILLED`]), costs the credits the read
-//!   reports, `Some(0)` when it reports none; an unusable output or a file of
-//!   the wrong kind comes from a task that succeeded, so it costs what that success read reports,
-//!   as an answer would ([`Task::cost`]); `banned` and `expired` cost `None`. A figure that
-//!   cannot be read is `None` throughout.
+//!   a terminal status other than `success` is `Ended`; a documented task-not-found response
+//!   is `Unavailable`. Still running at the deadline, an answer about another task and an
+//!   unknown status are `Unreachable`. An `Ended` for `failed` or `cancelled`, whose frozen
+//!   credits Tripo returns ([`UNBILLED`]), costs the credits the read reports, `Some(0)` when it
+//!   reports none. A collection failure after success is `Incomplete` and costs what that read
+//!   reports, as an answer would ([`Task::cost`]); `banned` and `expired` cost `None`. A figure
+//!   that cannot be read is `None` throughout.
 //!
 //! A model URL is downloaded at Tripo's text, byte for byte; the riggability check's `rig_type`
 //! reaches a handle or an answer only as a short plain string, else `null`; and a [`Task`]'s
@@ -88,18 +87,20 @@ pub const UNBILLED: [&str; 2] = ["failed", "cancelled"];
 /// Free-phase statuses that are deterministic refusals (src/tripo/README.md, "Free phase").
 const FREE_REFUSED: [u16; 7] = [400, 401, 403, 404, 413, 415, 422];
 
-/// The ` (code <n>)` a refusal names (src/tripo/README.md, "The envelope"): the integer
-/// `code` of a JSON object body, which says why Tripo refused; nothing else of the body is read.
-fn error_code(body: &[u8]) -> String {
-    match serde_json::from_slice::<Value>(body) {
-        Ok(Value::Object(envelope)) => match envelope.get("code") {
-            Some(Value::Number(code)) if code.is_i64() || code.is_u64() => {
-                format!(" (code {code})")
-            }
-            _ => String::new(),
-        },
-        _ => String::new(),
+/// A request-level error's integer `code`.
+fn response_error_code(body: &[u8]) -> Option<serde_json::Number> {
+    let Value::Object(mut envelope) = serde_json::from_slice::<Value>(body).ok()? else {
+        return None;
+    };
+    match envelope.remove("code") {
+        Some(Value::Number(code)) if code.is_i64() || code.is_u64() => Some(code),
+        _ => None,
     }
+}
+
+/// The ` (code <n>)` a refusal names.
+fn error_code(body: &[u8]) -> String {
+    response_error_code(body).map_or_else(String::new, |code| format!(" (code {code})"))
 }
 
 /// Select only documented Tripo error fields. Never retain the envelope or wire inputs.
@@ -239,6 +240,8 @@ pub enum Waited {
         error_code: Option<String>,
         error_message: Option<String>,
     },
+    /// The provider reports that it has no such task.
+    Unavailable(String),
     /// Still `queued`/`running` at the deadline, or every read failed until it, or an answer for
     /// another task or with an unknown status: the reason.
     Unreachable(String),
@@ -248,6 +251,7 @@ impl std::fmt::Debug for Waited {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Done(task) => f.debug_tuple("Done").field(task).finish(),
+            Self::Unavailable(reason) => f.debug_tuple("Unavailable").field(reason).finish(),
             Self::Unreachable(reason) => f.debug_tuple("Unreachable").field(reason).finish(),
             Self::Ended {
                 status,
@@ -361,8 +365,8 @@ impl TripoApi {
     ///
     /// The first read always happens. A read that fails (a transport failure, a 429, a 5xx, an
     /// unreadable envelope) is a poll that saw nothing; after each read the deadline is checked,
-    /// then the clock sleeps [`POLL`]. A 401, a 403, a 3xx or a transport refusal ends polling at
-    /// once, since reading again cannot help (spec/adapters.md §6).
+    /// then the clock sleeps [`POLL`]. A task-not-found response (HTTP 404, code 2001), a 401,
+    /// a 403, a 3xx or a transport refusal ends polling at once (spec/adapters.md §6).
     pub async fn wait(&self, task_id: &str, deadline: Duration) -> Waited {
         if !TASK_ID.is_match(task_id) {
             return Waited::Unreachable("not a Tripo task id".into());
@@ -397,6 +401,16 @@ impl TripoApi {
                     ));
                 }
                 Ok(response) => {
+                    // Tripo distinguishes a missing task (2001) from a missing endpoint (4001).
+                    if response.status == 404
+                        && response_error_code(&response.body).and_then(|code| code.as_u64())
+                            == Some(2001)
+                    {
+                        return Waited::Unavailable(
+                            self.client
+                                .reason(&format!("Tripo could not find task {task_id}")),
+                        );
+                    }
                     if let Ok(mut data) = Self::data(&response) {
                         let same_task =
                             data.get("task_id").and_then(Value::as_str) == Some(task_id);
@@ -475,38 +489,30 @@ impl TripoApi {
         Ok(found.into_iter().map(|(url, field)| (field, url)).collect())
     }
 
-    /// Downloads one model from the provider-returned URL and sniffs its kind: `Ok((kind, bytes))`;
-    /// `Err(Download::…)` says whether the job is over (`Ended`) or may be collected again
-    /// (`Unreachable`).
-    pub async fn download(&self, url: &str) -> Result<(String, Vec<u8>), Download> {
-        check_model_url(url).map_err(|reason| Download::Ended(reason.into()))?;
+    /// Downloads one model from the provider-returned URL and sniffs its kind.
+    async fn download(&self, url: &str) -> Result<(String, Vec<u8>), String> {
+        check_model_url(url)?;
         let redactor = self.client.redactor.with(url);
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
             .timeout(READ_DEADLINE)
             .max_response_bytes(MAX_MODEL_BYTES);
-        let too_large = || Download::Unreachable("a Tripo model is larger than 150 MB".into());
+        let too_large = || "a Tripo model is larger than 150 MB".into();
         let response = match self.send(request).await {
             Ok(response) => response,
             Err(error) if error.kind == TransportErrorKind::TooLarge => return Err(too_large()),
             Err(_) => {
-                return Err(Download::Unreachable(
-                    redactor.reason("Tripo download failed; URL withheld"),
-                ));
+                return Err(redactor.reason("Tripo download failed; URL withheld"));
             }
         };
         if response.status != 200 {
-            return Err(Download::Unreachable(
-                redactor.reason(&format!("Tripo download HTTP {}", response.status)),
-            ));
+            return Err(redactor.reason(&format!("Tripo download HTTP {}", response.status)));
         }
         if response.body.len() as u64 > MAX_MODEL_BYTES {
             return Err(too_large());
         }
         match crate::wire::sniff_model(&response.body) {
             Some(kind) => Ok((kind.to_string(), response.body)),
-            None => Err(Download::Ended(
-                "Tripo returned a model that is neither GLB nor binary FBX".into(),
-            )),
+            None => Err("Tripo returned a model that is neither GLB nor binary FBX".into()),
         }
     }
 
@@ -688,26 +694,30 @@ impl TripoApi {
                 }
                 .with_diagnostic(diagnostic));
             }
+            Waited::Unavailable(reason) => {
+                use grida_fx_protocol::{AdapterDiagnostic, DiagnosticPhase, DiagnosticSource};
+                let mut diagnostic =
+                    AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Collect);
+                diagnostic.operation = Some("tasks".into());
+                diagnostic.task_id = Some(task_id.into());
+                diagnostic.http_status = Some(404);
+                diagnostic.code = Some("2001".into());
+                return Err(Collected::Unavailable { reason, cost: None }
+                    .with_diagnostic(sanitize_error(diagnostic, call, &self.client.redactor)));
+            }
             Waited::Unreachable(reason) => return Err(Collected::Unreachable { reason }),
         };
         // From here the task succeeded, so Tripo charged it: an unusable output costs what the
         // success read reports, as an answer would ([`Task::cost`]).
         let cost = task.cost();
-        let urls = Self::model_urls(&task.output).map_err(|reason| Collected::Ended {
+        let incomplete = |reason: String| Collected::Incomplete {
             reason: self.client.reason(&reason),
             cost,
-        })?;
+        };
+        let urls = Self::model_urls(&task.output).map_err(incomplete)?;
         let mut models = Vec::with_capacity(urls.len());
         for (_, url) in &urls {
-            match self.download(url).await {
-                Ok(model) => models.push(model),
-                Err(Download::Ended(reason)) => {
-                    return Err(Collected::Ended { reason, cost });
-                }
-                Err(Download::Unreachable(reason)) => {
-                    return Err(Collected::Unreachable { reason });
-                }
-            }
+            models.push(self.download(url).await.map_err(incomplete)?);
         }
         Ok((task, models))
     }
@@ -758,16 +768,6 @@ impl TripoApi {
             reason: self.client.reason(reason),
         }
     }
-}
-
-/// Why a download failed.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Download {
-    /// The task's output is unusable: `Collected::Ended` at the finished task's own reported
-    /// cost ([`Task::cost`]), since the task succeeded and was charged.
-    Ended(String),
-    /// Try again in a later collect: `Collected::Unreachable`.
-    Unreachable(String),
 }
 
 impl std::fmt::Debug for TripoApi {

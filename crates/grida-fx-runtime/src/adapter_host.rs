@@ -34,7 +34,7 @@
 //! and every reason is redacted with the invocation's keys and the URLs the call downloaded
 //! through `fetch`. An answer is held to its shape first, as a stand-in's
 //! (`grida_fx_providers::stand_in::shape`): a refusal fails the attempt as billed and may be
-//! retried, as a check's refusal (`Sent::Failed { retryable: true }`, `Collected::Ended`), at the
+//! retried, as a check's refusal (`Sent::Failed { retryable: true }`, `Collected::Incomplete`), at the
 //! reported cost. An accepted handle whose text holds a key's value is `Uncertain`. The host lost
 //! while the call is pending, an error answer, or a result FX cannot read ends the call as an
 //! unknown outcome demands: a send `Failed { cost: None, retryable: false }`, a submit
@@ -265,7 +265,7 @@ enum Asked {
 
 /// A refusal of an answer: one FX cannot read, or one whose shape is refused (billed at `cost`).
 enum Refusal {
-    Unreadable(String),
+    Unreadable { place: String, cost: Option<Usd> },
     Shape { reason: String, cost: Option<Usd> },
 }
 
@@ -563,15 +563,15 @@ impl AdapterHost {
 
     /// An answered outcome as the answer to check and store, its shape held first (module doc).
     fn answer(&self, call: &CallRequest, wire: AdapterAnswer) -> Result<Answer, Refusal> {
-        let cost = cost(wire.cost_usd).map_err(Refusal::Unreadable)?;
+        let cost =
+            cost(wire.cost_usd).map_err(|place| Refusal::Unreadable { place, cost: None })?;
         let mut files = IndexMap::with_capacity(wire.files.len());
         for (name, file) in wire.files {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(file.base64.as_bytes())
-                .map_err(|_| {
-                    Refusal::Unreadable(format!(
-                        "files.{name}: its bytes are not base64 with padding"
-                    ))
+                .map_err(|_| Refusal::Unreadable {
+                    place: format!("files.{name}: its bytes are not base64 with padding"),
+                    cost,
                 })?;
             files.insert(
                 name,
@@ -611,7 +611,7 @@ impl AdapterHost {
         let outcome = match result {
             AdapterSendResult::Answered(answer) => match self.answer(call, answer) {
                 Ok(answer) => Sent::Answered(answer),
-                Err(Refusal::Unreadable(place)) => lost(self.unreadable(&place)),
+                Err(Refusal::Unreadable { place, .. }) => lost(self.unreadable(&place)),
                 Err(Refusal::Shape { reason, cost }) => Sent::Failed {
                     reason: redactor.reason(&reason),
                     cost,
@@ -730,8 +730,11 @@ impl AdapterHost {
         let outcome = match result {
             AdapterCollectResult::Answered(answer) => match self.answer(call, answer) {
                 Ok(answer) => Collected::Answered(answer),
-                Err(Refusal::Unreadable(place)) => lost(self.unreadable(&place)),
-                Err(Refusal::Shape { reason, cost }) => Collected::Ended {
+                Err(Refusal::Unreadable { place, cost }) => Collected::Incomplete {
+                    reason: redactor.reason(&self.unreadable(&place)),
+                    cost,
+                },
+                Err(Refusal::Shape { reason, cost }) => Collected::Incomplete {
                     reason: redactor.reason(&reason),
                     cost,
                 },
@@ -741,7 +744,7 @@ impl AdapterHost {
                 cost_usd,
                 ..
             } => match (reason(text), cost(cost_usd)) {
-                (Ok(reason), Ok(cost)) => Collected::Ended { reason, cost },
+                (Ok(reason), Ok(cost)) => Collected::Undetermined { reason, cost },
                 (Err(place), _) | (_, Err(place)) => lost(self.unreadable(&place)),
             },
             AdapterCollectResult::Unreachable { reason: text, .. } => match reason(text) {

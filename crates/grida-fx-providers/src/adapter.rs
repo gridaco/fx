@@ -449,13 +449,19 @@ pub enum Collected {
     Diagnosed(Box<Collected>, Box<grida_fx_protocol::AdapterDiagnostic>),
     /// The job's answer.
     Answered(Answer),
-    /// The job ended without a result: the record becomes `settled`, the call fails
-    /// `call_failed`, and a later run submits it anew. `cost` is what the ended job costs
-    /// (spec/adapters.md §6): the provider's own figure for it, as for an answer when the job
-    /// finished with an unusable result; `Some(0)` only where its reference says so
-    /// (spec/providers.md §2); `None` otherwise, and the run that submitted the job then charges
-    /// its whole hold.
+    /// The provider ended the job without successfully generating a result. The job is settled
+    /// at the reported cost, at zero when the provider documents that no charge applies, or at
+    /// the hold when the charge is unknown.
     Ended { reason: String, cost: Option<Usd> },
+    /// The provider finished generating the result, but FX could not retrieve or validate it.
+    /// The job is settled as billed and can be collected again with the same handle.
+    Incomplete { reason: String, cost: Option<Usd> },
+    /// The provider says it no longer has the result or the job. Keep the handle and settle as
+    /// billed without automatically replacing the job.
+    Unavailable { reason: String, cost: Option<Usd> },
+    /// A project adapter's historical `ended` reply has no evidence distinguishing a failed
+    /// generation from an unavailable or unusable result. Retain the handle for explicit recovery.
+    Undetermined { reason: String, cost: Option<Usd> },
     /// Collecting failed and the job may still be running: the record stays `submitted`, the
     /// call fails `call_failed`, and a later run collects again.
     Unreachable { reason: String },

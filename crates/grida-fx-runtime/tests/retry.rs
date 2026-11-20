@@ -172,15 +172,12 @@ impl JobBook for Jobs {
         assert_eq!(record.key, key());
         assert_eq!(record.capability, "video.generate");
         self.fails(&format!("jobs/{}.json", record.key))?;
-        let op = match &record.note {
-            Some(note) => {
-                assert_eq!(
-                    (record.state, &record.handle),
-                    (JobState::Submitting, &None)
-                );
+        let op = match (&record.note, record.state) {
+            (Some(note), JobState::Submitting) => {
+                assert_eq!(record.handle, None);
                 JobOp::Noted(note.clone())
             }
-            None => JobOp::Saved(record.state, record.handle.clone()),
+            _ => JobOp::Saved(record.state, record.handle.clone()),
         };
         lock(&self.ops).push(op);
         Ok(())
@@ -386,8 +383,9 @@ fn job_fields() -> JobRecord {
         request: json!({"prompt": "a lantern by the river"}),
         take: vec![1],
         fresh_id: None,
-        state: JobState::Settled,
-        handle: None,
+        state: JobState::Submitted,
+        handle: Some(handle()),
+        charged_usd: None,
         note: None,
         diagnostic: None,
     }
@@ -1182,6 +1180,10 @@ fn settled(handle: Option<Value>) -> JobOp {
     JobOp::Saved(JobState::Settled, handle)
 }
 
+fn recoverable() -> JobOp {
+    JobOp::Saved(JobState::Recoverable, Some(handle()))
+}
+
 #[tokio::test(start_paused = true)]
 async fn an_accepted_job_is_collected_under_its_hold() {
     let rig = Rig::new();
@@ -1200,8 +1202,8 @@ async fn an_accepted_job_is_collected_under_its_hold() {
     );
     assert_eq!(
         rig.jobs.ops(),
-        vec![submitting(), submitted()],
-        "the call path, not the owner, removes the record after the call record"
+        vec![submitting(), submitted(), recoverable()],
+        "the call path removes the record after publishing the answer"
     );
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), Some(COST))]);
     let mut sent = request("video.generate");
@@ -1253,7 +1255,7 @@ async fn a_submit_not_received_is_resent_under_the_same_hold() {
     assert!(matches!(outcome, Outcome::Answered { attempts: 1, .. }));
     assert_eq!(
         rig.jobs.ops(),
-        vec![submitting(), submitting(), submitted()]
+        vec![submitting(), submitting(), submitted(), recoverable()]
     );
     assert_eq!(rig.book.holds(), vec![hold_name(1)]);
     assert_eq!(attempt_numbers(&fake), vec![1, 1, 1]);
@@ -1396,7 +1398,13 @@ async fn a_failed_submit_is_settled_and_a_new_attempt_submits_anew() {
     ));
     assert_eq!(
         rig.jobs.ops(),
-        vec![submitting(), settled(None), submitting(), submitted()]
+        vec![
+            submitting(),
+            settled(None),
+            submitting(),
+            submitted(),
+            recoverable()
+        ]
     );
     assert_eq!(
         rig.book.settlements(),
@@ -1462,7 +1470,7 @@ async fn a_collected_answer_its_check_refuses_settles_the_record_as_billed() {
     assert_eq!(outcome, Outcome::Failed("the answer is bad".into()));
     assert_eq!(
         rig.jobs.ops(),
-        vec![submitting(), submitted(), settled(Some(handle()))]
+        vec![submitting(), submitted(), recoverable()]
     );
     assert_eq!(
         rig.book.settlements(),
@@ -1489,7 +1497,7 @@ async fn a_job_that_ended_without_a_result_is_settled_in_full() {
     assert_eq!(outcome, Outcome::Failed("the job failed".into()));
     assert_eq!(
         rig.jobs.ops(),
-        vec![submitting(), submitted(), settled(Some(handle()))]
+        vec![submitting(), submitted(), settled(None)]
     );
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
 }
@@ -1510,7 +1518,7 @@ async fn a_job_that_ended_at_a_reported_cost_is_settled_at_it() {
         assert_eq!(outcome, Outcome::Failed("the job was cancelled".into()));
         assert_eq!(
             rig.jobs.ops(),
-            vec![submitting(), submitted(), settled(Some(handle()))]
+            vec![submitting(), submitted(), settled(None)]
         );
         assert_eq!(rig.book.settlements(), vec![(hold_name(1), Some(cost))]);
         assert_eq!(fake.log().len(), 2, "an ended job is not submitted again");
@@ -1531,7 +1539,7 @@ async fn an_unreachable_job_stays_submitted_and_is_settled_in_full() {
     attempts.failures = Some(&failures);
     let outcome = submit_job(&fake, &attempts).await;
     assert_eq!(outcome, Outcome::Failed("collect timed out".into()));
-    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted()]);
+    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted(), submitted()]);
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
     assert_eq!(
         *lock(&failures.0),
@@ -1569,7 +1577,7 @@ async fn cancelled_while_collecting_keeps_submitted_and_settles_in_full() {
     let outcome = submit_job(&hang, &rig.long()).await;
     assert_eq!(outcome, Outcome::Cancelled);
     assert_eq!(hang.hung.load(Ordering::SeqCst), 1);
-    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted()]);
+    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted(), submitted()]);
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
 }
 
@@ -1583,7 +1591,7 @@ async fn cancelled_before_collecting_keeps_submitted_and_settles_in_full() {
     );
     let outcome = submit_job(&fake, &rig.long()).await;
     assert_eq!(outcome, Outcome::Cancelled);
-    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted()]);
+    assert_eq!(rig.jobs.ops(), vec![submitting(), submitted(), submitted()]);
     assert_eq!(rig.book.settlements(), vec![(hold_name(1), None)]);
     assert_eq!(fake.log().len(), 1);
 }
@@ -1762,10 +1770,7 @@ async fn collecting_reserves_nothing_and_charges_nothing() {
     );
     assert!(rig.book.holds().is_empty());
     assert!(rig.book.settlements().is_empty());
-    assert!(
-        rig.jobs.ops().is_empty(),
-        "the call path removes the record"
-    );
+    assert_eq!(rig.jobs.ops(), vec![recoverable()]);
     let mut sent = request("video.generate");
     sent.attempt = 1;
     assert_eq!(fake.log(), vec![FakeCall::Collect(sent, handle())]);
@@ -1779,7 +1784,7 @@ async fn a_collected_answer_its_check_refuses_settles_the_record() {
         .with_check(refuse_bad());
     let outcome = collect_job(&fake, &rig.long(), &handle()).await;
     assert_eq!(outcome, Outcome::Failed("the answer is bad".into()));
-    assert_eq!(rig.jobs.ops(), vec![settled(Some(handle()))]);
+    assert_eq!(rig.jobs.ops(), vec![recoverable()]);
     assert!(rig.book.holds().is_empty());
 }
 
@@ -1798,7 +1803,7 @@ async fn a_collected_job_that_ended_is_settled() {
         );
         let outcome = collect_job(&fake, &rig.long(), &handle()).await;
         assert_eq!(outcome, Outcome::Failed("the job expired".into()));
-        assert_eq!(rig.jobs.ops(), vec![settled(Some(handle()))]);
+        assert_eq!(rig.jobs.ops(), vec![settled(None)]);
         assert!(rig.book.holds().is_empty());
         assert!(rig.book.settlements().is_empty());
     }
@@ -1935,5 +1940,5 @@ async fn the_store_keeps_the_job_states() {
         .expect("a readable job record")
         .expect("a job record");
     assert_eq!(record.state, JobState::Settled);
-    assert_eq!(record.handle, Some(handle()));
+    assert_eq!(record.handle, None);
 }

@@ -100,9 +100,9 @@ Pruning refuses, and removes nothing, while it cannot be sure what is still need
   recorded its users (`legacy`), pruning from one project could delete what the other needs. Once
   that project is gone or uses a cache of its own, pass `--forget-user ID`, with the id the refusal
   names.
-- **Something is running**, a provider job is not collected yet (run the workflow again, or
-  `grida fx jobs --forget` it once you have checked the provider), a run cannot be read, or a run
-  was interrupted by an engine older than this one. The refusal says which and what to do.
+- **Something is running**, a provider job is `submitting` or `submitted`, a run cannot be read,
+  or a run was interrupted by an older engine. The refusal says which and what to do. Retained
+  completed tasks and settled job handles survive pruning along with the files they name.
 - **Upgrade first.** Runs and plans of this version hold the cache's lock while they write it,
   and a prune waits for none of them. An older FX engine running at the same time is seen only
   through its run folder; upgrade every engine that writes the cache, including ones an SDK

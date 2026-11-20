@@ -211,20 +211,37 @@ refuses a collision; omitting all three options creates another run record.
 Finished steps come from the cache, and paid calls already answered are replayed
 from the record. Resume preserves history, creation time and accumulated spending.
 
-A long provider job that was submitted but not collected (rigging, video) is collected, not
-submitted again. If FX can't tell whether a submission reached the provider, it fails that step
-rather than risk paying twice, and the rest of the run goes on: check the provider's dashboard,
-then clear the job with `grida fx jobs --forget <key>` so the next run submits it.
+A live resume collects a long provider job (mesh, rig or video) by its original task handle.
+If the provider finished but FX could not download or validate the result, FX keeps the task
+and records the original charge. If the provider can still deliver the result, collection
+adds $0 to the run. For recovery only, repeat the same target, inputs and options with
+`--live --recover` and the existing run selector.
 
-`grida fx jobs` lists every job record in the cache, one line each (its key, its state, the
-capability and route, the take, and why a submission could not be confirmed, with the provider's
-job id when it returned one, so you can find the job on its dashboard):
+```sh
+grida fx run make-mesh --run runs/mesh-demo --live --recover
+grida fx inspect runs/mesh-demo --json
+```
 
-- `submitting`: nobody can say whether the provider took it; the next run will not send it until
-  you forget it;
-- `submitted`: the provider took it; the next run collects it, billing nothing new;
-- `settled`: it ended without a result (the provider reported it failed); the next run submits the
-  call anew, as a new attempt.
+You can use `--resume NAME` for a named run. Recovery can replay cached work and run local
+steps. It keeps the prior run's ceiling and can check any `settled` task with a retained
+handle, including ones written by older FX versions. `inspect --json` reports the recovery
+status and original amount booked when known in `run.call_recoveries`. An older task's booking
+can be unknown even when you can see the run's total spend.
+
+`grida fx jobs` lists each retained record by call key, capability, route, take and state.
+
+- `submitting` means FX could not confirm receipt. Check the provider's dashboard before
+  deciding what to do with the record.
+- `submitted` means the provider accepted the job. A live run collects it without a new charge.
+- `recoverable` means generation finished and FX still needs a usable result. A live run
+  tries collection again. Use `--recover` to restrict the invocation to recovery and local work.
+- `unavailable` means the provider task cannot deliver a result. FX keeps the record and waits
+  for an explicit decision before permitting a replacement.
+- `settled` with a handle requires `--recover` because generation success is unconfirmed.
+  A settled record without a handle allows ordinary live execution to submit a new attempt.
+
+If the original result is unavailable and you choose to pay for a replacement, run
+`grida fx jobs --forget <key>` and authorize an ordinary live run.
 
 ## The cache
 
@@ -238,7 +255,8 @@ job id when it returned one, so you can find the job on its dashboard):
     files/<digest[:2]>/<digest>          # every file, by the SHA-256 of its bytes
     results/<id[:2]>/<id>.json           # a step's result, by the step's identity
     calls/<key[:2]>/<key>.json           # a paid call's answer, by its request
-    jobs/<key>.json                      # a long provider job's handle: collected, never resubmitted
+    jobs/<key>.json                      # a long provider job's handle and status
+    jobs/<key>.lock                      # empty lock used for the job across runs
     stand-in/                            # what stand-in runs keep: files/, results/, calls/
   ```
 

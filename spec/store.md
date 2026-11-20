@@ -34,6 +34,7 @@ paid answers or credentials.
   results/<i[:2]>/<i>.json     fx-result-record-v1          i = step_identity
   calls/<k[:2]>/<k>.json       fx-call-record-v1            k = call_key
   jobs/<k>.json                fx-job-record-v1             k = the call_key it answers
+  jobs/<k>.lock                empty long-job lock         k = call_key
   stand-in/                    the stand-in store: files/, results/ and calls/ as above, never jobs/ (§8)
   lock                         the store's lock (§6)
   projects/<p>                 the planning projects that wrote the store (§6)
@@ -58,7 +59,7 @@ Every record is a JSON object whose `kind` names its schema. It is written as `c
 |---|---|
 | result | What one step identity produced: its `outputs` by port, the `facts` the node reported, its `read` set, and `cost_usd`: the budget amount booked for the step's calls (including full reservations when no charge was reported), null when it booked none (calls answered from the cache cost nothing). |
 | call | One paid call's answer: the `files` and `data` the provider returned and `cost_usd` (null when the provider reported none), with the `capability`, `route` (id and fingerprint), canonical `request` and `take` it is keyed by. An optional `usage` says what else the call consumed, as its adapter reported it ([adapters.md](adapters.md) §5): `billing` (`dollars`, or `plan` for a call on the user's own plan, whose dollar cost is unknown), and, when known, the `runtime` that served it with its version, the `agent_model` it ran, and `input_tokens`, `cached_input_tokens` and `output_tokens`. `usage` is not part of the key. |
-| job | A long provider job of one call that is not answered yet: its `state` and `handle`, with the same key fields as the call record. |
+| job | A long provider job of one call that is not answered yet: its `state` and `handle`, with the same key fields as the call record. An optional `charged_usd` records the amount FX originally booked for the job. |
 
 **Outputs** in a result record are encoded as:
 - a file: `{"file": {"digest", "kind", "name", "size", "key"?}}`, with `key` only for a keyed collection's item;
@@ -100,19 +101,30 @@ A capability whose provider job outlives one request (a video, a rig) keeps a jo
 | `state` | Written | What the next run does |
 |---|---|---|
 | `submitting` | before the submit request may leave; `handle` is null | Stops for a person: nobody can say whether the provider took the job, or billed it. `grida-fx jobs` lists such jobs and forgets one once a person has checked the provider. |
-| `submitted` | once the provider acknowledged the job, with the `handle` that collecting needs | Collects the job by its handle, and never submits it again. Collecting bills nothing new: the run that submitted it was charged its hold. |
-| `settled` | when the job ended without a result and nothing of it is outstanding, such as a job the provider reported failed | Submits the call anew, as a new attempt. |
+| `submitted` | once the provider acknowledged the job, with the `handle` that collecting needs | Collects the job by its handle. Collecting makes no new reservation or charge. |
+| `recoverable` | the provider finished the job, but FX could not collect, validate, or publish the result. FX retains the `handle` | On a live invocation, collects the original job without a new reservation or charge. |
+| `unavailable` | recovery established that the retained job cannot deliver a result. FX retains the `handle` | Reports that recovery is unavailable. A person may explicitly forget the record and separately authorize another live generation. |
+| `settled` | a genuine provider terminal failure or a submission that ended without an accepted job has no `handle`. A project adapter's ambiguous `ended` outcome retains the handle, as older engines did. | With no handle, ordinary live execution can submit anew. A retained handle requires explicit `--recover` before FX will try collecting it. |
 
-A `submitting` record MAY carry `note`: when the submit's outcome is unknown, the redacted reason, which names the provider's job id when one was returned, so a person can find the job. No other record carries one. `grida-fx jobs` shows it, and a later run's `job_unsettled` carries it as `reason` in `data`.
+A `submitting` record MAY carry `note`: when the submit's outcome is unknown, the redacted reason, which names the provider's job id when one was returned, so a person can find the job. `grida-fx jobs` shows it, and a later run's `job_unsettled` carries it as `reason` in `data`. A `recoverable` or `unavailable` record MAY also carry a redacted `note` for the collection failure or unavailability.
 
-Once the call is answered, its call record is published, the run's log names the call (its `call` event), and then its job record is removed; while that event cannot be written, the job record stays, so the paid answer is always named by one of them (§9, *Pruning a store*). A trusted call record also removes a leftover job record with its key, once its `call` event is written. A `settled` record MAY be removed at any time.
+A record with a handle MAY carry `charged_usd` once the original hold was booked. This is the amount settled in FX's ledger, which can be the entire hold if the provider did not report a charge. For a legacy record without this field, FX may use a booked charge from a recorded failure of the same call when a safe task or request identifier in its diagnostic matches the retained handle. A call key or the run's accumulated spend alone cannot identify the submission. Without matching evidence, the original booked amount stays unknown. Recovery does not rewrite past budget events or add another hold or charge.
+
+A `settled` record with a handle leaves generation success unconfirmed. It can come from an older engine or a project adapter whose `ended` outcome could mean either failed generation or an unusable result. `--recover` may collect it through its original adapter. Successful collection must pass the normal answer checks. An inconclusive read preserves the record for another recovery attempt. A confirmed finished job whose delivery still fails becomes `recoverable`. A conclusive failure or a provider result that is permanently unavailable becomes `unavailable`. An `ended` from a project adapter moves a previously confirmed completed task to `unavailable`. A recovery invocation never uses a failed probe as permission to submit. A `settled` record without a handle MAY be removed at any time.
+
+Once the call is answered, its call record is published, the run's log names the call (its `call` event), and then its job record is removed. If the event cannot be written, the job record stays and continues to name the paid answer (§9, *Pruning a store*). A trusted call record also removes a leftover job record with its key, once its `call` event is written.
+
+`grida-fx jobs --forget KEY` explicitly removes a job under the store's exclusive lock. It
+refuses while the store is in use. A later regular live invocation may submit and pay for new
+work for that call key.
 
 ## 6. Writing
 
 - **Atomic publish.** Every file and record MUST be written to a temporary name in its destination folder (a name that is never a digest), flushed to disk, and then renamed over its final name. A reader sees the whole content or nothing.
 - **Bytes first.** A record is published only after every file it names: a call record after its files, a result record after its output files. A job record is removed only after the call record is published. A crash therefore never leaves a record whose bytes are missing.
 - **No rewrites.** A file that is present is not written again.
-- **Concurrent writers.** Two writers of one name each publish a whole record; the last rename wins, and either is a valid record.
+- **Concurrent writers.** Two writers of one name each publish a whole record. The last rename wins. Long-job transitions also use the per-call lock below, because atomic replacement alone cannot prevent two submissions.
+- **Per-call lock for a long job.** Under the store's shared lease, acquire an exclusive operating-system lock on `jobs/<key>.lock` before reading a retained job or starting a submission. Check the call cache again after acquiring it. Hold the lock through the job transition, collection and publication of any answer. Another invocation with the same key waits or is cancelled. If the lock cannot be opened or the file system does not support it, the call fails before contacting the provider. The lock file holds no data and keeps its name after release, so separate invocations lock the same file. Listing and pruning jobs skip these empty lock files.
 - **The lock.** `lock` holds an operating-system file lock (`flock` on POSIX). An engine process holds it shared from its first write to the store (a file, a record, a job record removed, a work claim, the leftover sweep below) until the process ends, and a run takes it before it locks its folder; reading takes no lock. Pruning (§9) holds it exclusively. A writer that finds it held exclusively waits up to a minute, saying so once on stderr, and then fails ("the cache is being pruned"); a run is then refused before anything of it is written. Where the file system cannot lock, a writer goes on without the lock and says so once; pruning such a store is refused. The lock binds only engines that take it: a process of an engine older than the lock is seen by pruning only through the run folders and work claims it holds (§9), so every engine that writes a store is upgraded before the store is pruned. A stand-in store has a `lock` of its own.
 - **Users.** A process that takes the lock of its planning project's store, or of the stand-in store in it, records the project in `projects/<p>`, where `<p>` is the SHA-256 of the project root's canonical path: an empty file, made or touched, whose modification time is the project's last use. It holds no path. The engine that first makes `projects/` in a store already holding a file, record or job also writes `projects/legacy`: whoever wrote the store before is unknown.
 - **Leftovers.** A writer that stopped (a killed run) may leave a temporary file behind. A temporary name is never read as a record, and a run removes the temporary files it finds in the store once they are an hour old, since one that is still being written is changed far more often. An engine that keeps scratch space under the store root (work dirs) removes what an invocation that no longer runs left there.
@@ -192,8 +204,8 @@ names it once symbolic links are resolved. It holds nothing else: `--run`,
 `--name` and `--resume` choose the folder, and a run of another take is another plan, so it
 needs a new one; `--yes-up-to`, `--deliver` and the viewer options belong to the invocation.
 A `run_started` records no `repeat` when its record could not repeat the invocation: workflow
-input flags or `--arg` were given, a stand-in answered its paid calls, the target, an inputs
-file or a route table lies outside the planning project or has a path that is not UTF-8, the
+input flags, `--arg` or `--recover` were given, a stand-in answered its paid calls, the target,
+an inputs file or a route table lies outside the planning project or has a path that is not UTF-8, the
 target is a builder and the working directory is not the planning project's root (a builder is
 called with the working directory), or an SDK started it (its inputs file is temporary;
 [sdk.md](sdk.md)).
@@ -218,6 +230,8 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
+**Recovery only.** `run TARGET --live --recover` requires `--resume NAME` or `--run FOLDER` for an existing run, with the usual plan and mode checks. It reuses cached work, can execute local steps, and may read existing provider jobs. It cannot send a new managed provider call or submit a new provider job. It keeps the prior invocation's recorded ceiling and needs no new dollar ceiling or forecast. Later phases do not require a budget approval threshold. An uncached call with no job to collect fails. Its invocation has no automatic repeat command.
+
 **Failed call attempts.** A `call_attempt_failed` event associates a sanitized failure reason
 and optional `diagnostic` with the step `id`, `capability`, `route`, and `call` key. `attempt`
 is the engine's attempt number, and `send` counts adapter send or submit invocations. A
@@ -229,6 +243,8 @@ submission, actual provider charge remains unknown. A standalone collect omits `
 Events survive successful retries and later invocations. `inspect --json` exposes them in
 event order in `run.call_attempt_failures` when any were recorded. The text view also shows
 them with their call keys, even when a step succeeded on retry.
+
+**Call recovery.** A `call_recovery` event identifies the instance `id`, `capability`, `route` and `call` key. Its `status` is `available` for a completed job whose result can be tried again, `legacy` for a retained task whose outcome requires an explicit recovery check, `unavailable` when the retained task cannot deliver a result, or `recovered` after the validated answer is published. The optional `original_charged_usd` identifies the original amount booked in FX. A recovered call's ordinary `call` event reports `cost_usd: 0` for the current invocation. `inspect --json` exposes the historical events in `run.call_recoveries` when recorded.
 
 **Layout.**
 
@@ -438,7 +454,7 @@ It is refused, before anything is removed and in the preview too, when:
 
 A folder at a run's place that holds files but no `plan.json` refuses nothing: what its `events.jsonl` names stays, in both stores. The `legacy` user also stands for this project's run folders outside its runs folder from before the run index, which pruning cannot see. A confirmed prune holds `.fx/runs/lock` while it reads the runs, so no removal runs meanwhile, and records its project among the store's users.
 
-**What stays.** Every run's `plan.json` and `events.jsonl` name what it needs: file digests, step identities and call keys, each 64 lowercase hexadecimal characters. Every such token names what stays: the result record, call record or file of that name, in the run's store (the stand-in store for a stand-in run). So do the tokens of every record that stays and of every job record, until nothing new is named. A file the store holds that is linked from anywhere else (a link count above one, such as a run folder outside the project's knowledge) stays, with every record that names it. Every `budget_reserved` names the key of the call it holds money for (fx-run-events-v1), written before anything is sent, so a paid answer is named even when its `call` event never got written.
+**What stays.** Every run's `plan.json` and `events.jsonl` name what it needs: file digests, step identities and call keys, each 64 lowercase hexadecimal characters. Every such token names what stays: the result record, call record or file of that name, in the run's store (the stand-in store for a stand-in run). So do the tokens of every record that stays and of every job record, until nothing new is named. This includes `recoverable`, `unavailable` and `settled` job records. A file the store holds that is linked from anywhere else (a link count above one, such as a run folder outside the project's knowledge) stays, with every record that names it. Every `budget_reserved` names the key of the call it holds money for (fx-run-events-v1), written before anything is sent, so a paid answer is named even when its `call` event never got written.
 
 **What goes.** Every other result record, call record and file under `results/`, `calls/` and `files/`, records before files, and the leftovers of §6. Nothing else under the store root is touched: not `jobs/`, `projects/`, `lock` or a name that is not a digest. With `--yes` the stores are locked exclusively first, and everything above is checked and counted again under the lock.
 

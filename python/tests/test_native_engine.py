@@ -8,6 +8,7 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 import zlib
 from pathlib import Path
 
@@ -56,6 +57,121 @@ def run(root: Path, folder: str, **inputs) -> fx.RunResult:
         max_usd=1,
         inputs={"source": "source.txt", **inputs},
     )
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_paid_result_recovery_through_cli_and_python(native: Path, legacy: bool) -> None:
+    (native / ".native-release").touch()
+    invalid = native / ".native-invalid-answer"
+    invalid.touch()
+    first = subprocess.run(
+        [
+            str(ENGINE),
+            "run",
+            "native.yaml",
+            "--inputs",
+            "inputs.yaml",
+            "--run",
+            "runs/recover",
+            "--live",
+            "--max-usd",
+            "1",
+            "--no-view",
+        ],
+        cwd=native,
+        env={**os.environ, "GRIDA_FX_PYTHON": sys.executable},
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert first.returncode == 1, first.stdout + first.stderr
+    assert "completed provider task retained for collection" in first.stdout
+    assert "$0.01 originally booked by FX" in first.stdout
+    invalid.unlink()
+    key = submitted(native)[0]["key"]
+    folder = native / "runs/recover"
+    job_file = native / ".fx/cache/jobs" / f"{key}.json"
+    job = json.loads(job_file.read_text())
+    assert job["state"] == "recoverable" and job["charged_usd"] == 0.01
+    assert job["handle"] == {"task_id": f"task-{key[:16]}"}
+    if legacy:
+        # FX before retained-result recovery recorded the handle and settlement, but no
+        # collection status. Strip the new evidence from the job and run to model an upgrade.
+        job["state"] = "settled"
+        job.pop("charged_usd")
+        job.pop("note", None)
+        job_file.write_text(json.dumps(job))
+        log = folder / "events.jsonl"
+        log.write_text(
+            "".join(
+                line + "\n"
+                for line in log.read_text().splitlines()
+                if json.loads(line)["event"] != "call_recovery"
+            )
+        )
+        blocked = run(native, "recover")
+        assert not blocked.ok
+        assert blocked.call_recoveries[-1]["status"] == "legacy"
+        assert len(submitted(native)) == 1
+        recovered = asyncio.run(
+            fx.run_async(
+                "native.yaml",
+                cwd=native,
+                run_dir="runs/recover",
+                live=True,
+                recover=True,
+                inputs={"source": "source.txt"},
+            )
+        )
+    else:
+        recovered = run(native, "recover")
+    assert recovered.ok, recovered.failures
+    assert recovered.cost == 0.01
+    assert len(submitted(native)) == 1
+    started = next(event for event in reversed(recovered.events) if event["event"] == "run_started")
+    assert started["ceiling_usd"] == 1
+    assert [
+        event["charged_usd"] for event in recovered.events if event["event"] == "budget_settled"
+    ] == [0.01]
+    assert json.loads(recovered.outputs["result"].read_bytes())["task_id"] == f"task-{key[:16]}"
+    readable = fx.load_run(folder, cwd=native)
+    assert readable.inspection["run"]["call_recoveries"] == recovered.call_recoveries
+    assert recovered.call_recoveries[-1]["status"] == "recovered"
+    if legacy:
+        assert "original_charged_usd" not in recovered.call_recoveries[-1]
+    else:
+        assert recovered.call_recoveries[-1]["original_charged_usd"] == 0.01
+
+
+def test_unavailable_result_stays_blocked_until_explicitly_forgotten(native: Path) -> None:
+    (native / ".native-release").touch()
+    invalid = native / ".native-invalid-answer"
+    invalid.touch()
+    first = run(native, "gone")
+    assert first.call_recoveries[-1]["status"] == "available"
+    invalid.unlink()
+    unavailable = native / ".native-unavailable-result"
+    unavailable.touch()
+
+    for _ in range(2):
+        next_run = run(native, "gone")
+        assert not next_run.ok
+        assert next_run.call_recoveries[-1]["status"] == "unavailable"
+        assert next_run.cost == 0.01
+        assert len(submitted(native)) == 1
+
+    subprocess.run(
+        [str(ENGINE), "jobs", "--forget", submitted(native)[0]["key"]],
+        cwd=native,
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    unavailable.unlink()
+    replacement = run(native, "gone")
+    assert replacement.ok
+    assert replacement.cost == 0.02
+    assert len(submitted(native)) == 2
 
 
 def test_native_files_arbitrary_fields_cancel_resume_and_both_caches(

@@ -97,6 +97,25 @@ impl CallAttemptOutcome {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryStatus {
+    Available,
+    Legacy,
+    Unavailable,
+    Recovered,
+}
+
+impl RecoveryStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Available => "available",
+            Self::Legacy => "legacy",
+            Self::Unavailable => "unavailable",
+            Self::Recovered => "recovered",
+        }
+    }
+}
+
 /// One event's own fields (module doc). Names and members follow fx-run-events-v1.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -217,6 +236,15 @@ pub enum Event {
         call: String,
         failure: CallAttemptFailure,
     },
+    /// Collection evidence for a retained provider task, without a new charge.
+    CallRecovery {
+        id: String,
+        capability: String,
+        route: String,
+        call: String,
+        status: RecoveryStatus,
+        original_charged_usd: Option<Usd>,
+    },
     /// A call that could not take its route's slot at once, written before it waits
     /// (spec/store.md §8, "Waiting for a route").
     CallWaiting {
@@ -312,6 +340,7 @@ impl Event {
             Event::NodeRetry { .. } => "node_retry",
             Event::Call { .. } => "call",
             Event::CallAttemptFailed { .. } => "call_attempt_failed",
+            Event::CallRecovery { .. } => "call_recovery",
             Event::CallWaiting { .. } => "call_waiting",
             Event::CallAdmitted { .. } => "call_admitted",
             Event::BudgetReserved { .. } => "budget_reserved",
@@ -609,6 +638,23 @@ impl Event {
                     fields.money("charged_usd", charged);
                 }
                 fields.put("retryable", Value::Bool(failure.retryable));
+            }
+            Event::CallRecovery {
+                id,
+                capability,
+                route,
+                call,
+                status,
+                original_charged_usd,
+            } => {
+                fields.text("id", id);
+                fields.text("capability", capability);
+                fields.text("route", route);
+                fields.text("call", call);
+                fields.text("status", status.as_str());
+                if let Some(charged) = original_charged_usd {
+                    fields.money("original_charged_usd", *charged);
+                }
             }
             Event::BudgetReserved {
                 node_id,

@@ -84,6 +84,7 @@ export {
 } from "./runs.js";
 export type {
   CallAttemptFailed,
+  CallRecovery,
   Encoded,
   FileRef,
   Graph,

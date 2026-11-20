@@ -788,8 +788,13 @@ takes minutes is a job.
 | `send`, `submit` | `Failed` (`failed`) | the provider received it and the call failed | `cost_usd`, else the whole hold; tried again only when `retryable` |
 | `submit` | `Accepted` (`accepted`) | the provider took the job | settled when it is collected |
 | `submit` | `Uncertain` (`uncertain`) | nobody can say whether it took the job | the whole hold; the next run stops for you (`grida fx jobs`) |
-| `collect` | `Ended` (`ended`) | the job ended without a result | `cost_usd`, else the whole hold; a later run submits anew |
-| `collect` | `Unreachable` (`unreachable`) | it is not clear the job is over | the whole hold; a later run collects again |
+| `collect` | `Ended` (`ended`) | the provider ended the job without a deliverable result | `cost_usd`, else the whole hold. A retained task with unconfirmed success requires `--recover` for a collection check. |
+| `collect` | `Unreachable` (`unreachable`) | the job's status is unclear or its result could be delivered later | the whole hold. A later run collects again |
+
+Return `Unreachable` after a failed result download so FX keeps the original job for a later
+collection attempt. When the engine rejects a collected answer during validation, FX keeps its
+handle and the original booked amount for recovery. If a later `Ended` follows that confirmed
+completion, FX records the result as unavailable.
 
 - **`cost_usd`** (TypeScript `costUsd`) is the provider's own figure in dollars, rounded up to
   the micro-dollar. Leave it out when the provider reports none; give `0` only where the provider
@@ -797,10 +802,13 @@ takes minutes is a job.
 - **Be honest.** `NotReceived` only when the request provably never arrived; `Failed`, or
   `Uncertain` for a submit, whenever it may have. FX resends a `NotReceived` without a new hold,
   so a wrong one can pay twice.
-- **Anything raised** that the adapter does not catch, an outcome its method does not take, or an
-  answer FX cannot read ends the call as an unknown outcome: a send is `Failed`, billed in full
-  and not sent again; a submit is `Uncertain`; a collect is `Unreachable`. Its reason names the
-  adapter, and Python's traceback goes to standard error:
+- **Host errors.** An uncaught exception, an outcome the method does not accept, or an unreadable
+  response envelope leaves the outcome unknown. A send is `Failed`, billed in full and never
+  retried. A submit is `Uncertain`. A collect is `Unreachable`. A readable `answered` collect
+  envelope establishes completion even if a result file's base64 cannot be decoded. FX preserves
+  the task for recovery and settles any open hold at the valid reported cost or the whole hold
+  when that cost is unavailable. The error names the adapter. Python writes the traceback to
+  standard error.
 
   ```
   failed    colour#1: structured.generate on text-a@acme failed: the adapter adapters/acme.py#acme failed: KeyError: 'json'

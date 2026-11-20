@@ -28,11 +28,10 @@
 //! with nothing requested. A read that fails (a transport failure, 408, 429, a 5xx, a body that is
 //! not a JSON object) saw nothing, and polling goes on. A 3xx, 401, 403, 404, another 4xx, a job
 //! with another id, a status GG does not document and the deadline are `Unreachable`: the job may
-//! still run. A 410 (`job_expired`) is `Ended`. A job that `succeeded` or `failed` with its result
-//! `unavailable` or `expired` is `Ended`, at its settled charge, else none. The download is made
-//! once: a transport failure, a 3xx, 401, 403, 408, 429 or 5xx is `Unreachable` (a later collect
-//! reads the job and downloads again); another 4xx, an empty body, one over the cap or bytes the
-//! kind refuses is `Ended`, at the job's settled charge, else none.
+//! still run. A 410 (`job_expired`) or a succeeded job whose result is `unavailable` or `expired`
+//! is `Unavailable`; a failed job whose result is unavailable or expired is `Ended`. An
+//! unusable result reference, failed download or invalid file is `Incomplete`. These outcomes
+//! carry the settled charge when known. Each collect downloads the file at most once.
 
 use super::Gateway;
 use crate::adapter::{Answer, CallRequest, Collected, Submitted};
@@ -42,7 +41,7 @@ use crate::transport::{
 };
 use crate::wire;
 use grida_fx_core::money::Usd;
-use grida_fx_protocol::{AdapterDiagnostic, DiagnosticPhase};
+use grida_fx_protocol::{AdapterDiagnostic, DiagnosticPhase, DiagnosticSource};
 use regex::Regex;
 use serde_json::{Map, Value, json};
 use std::sync::{Arc, LazyLock};
@@ -70,8 +69,13 @@ static JOB_ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$").expect("a valid pattern"));
 
 /// What a collected file's bytes become: the answer (its file and data, without a cost), or the
-/// sentence that ends the job.
+/// sentence explaining why it could not be collected.
 pub type Deliver = fn(Vec<u8>) -> Result<Answer, String>;
+
+struct DownloadFailure {
+    reason: String,
+    diagnostic: Option<Box<AdapterDiagnostic>>,
+}
 
 /// What differs between GG's jobs (module doc).
 #[derive(Debug, Clone, Copy)]
@@ -155,6 +159,8 @@ pub enum Stage {
     Available,
     /// Ended without a result; the sentence.
     Ended(String),
+    /// Succeeded, but GG no longer has the result.
+    Unavailable(String),
     /// Not something FX can collect; the sentence.
     Unknown(String),
 }
@@ -174,7 +180,10 @@ pub fn stage(job: &Map<String, Value>, label: &str) -> Stage {
     }
     match result_status {
         "available" => Stage::Available,
-        "unavailable" | "expired" if matches!(status, "succeeded" | "failed") => {
+        "unavailable" | "expired" if status == "succeeded" => {
+            Stage::Unavailable(job_error(job, label, status, result_status))
+        }
+        "unavailable" | "expired" if status == "failed" => {
             Stage::Ended(job_error(job, label, status, result_status))
         }
         "pending" | "unavailable" | "expired" => Stage::Waiting,
@@ -183,7 +192,7 @@ pub fn stage(job: &Map<String, Value>, label: &str) -> Stage {
 }
 
 /// The URL of the result's file, when it is https with a host, no userinfo and no fragment.
-/// Otherwise the `Ended` sentence. A declared `media_type` is not read: the bytes decide.
+/// Otherwise a collection failure. The bytes determine the media type.
 pub fn result_file<'a>(job: &'a Map<String, Value>, kind: &Kind) -> Result<&'a str, String> {
     let url = job
         .get("result")
@@ -398,31 +407,34 @@ impl Jobs {
             Ok(job) => job,
             Err(collected) => return collected,
         };
-        let url = match result_file(&job, kind) {
-            Ok(url) => url.to_string(),
-            Err(sentence) => {
-                return Collected::Ended {
-                    reason: self.gateway.reason(&sentence),
-                    cost: billing(&job),
-                };
-            }
+        let downloaded = match result_file(&job, kind) {
+            Ok(url) => self.download(url, deadline, kind).await,
+            Err(reason) => Err(DownloadFailure {
+                reason: self.gateway.reason(&reason),
+                diagnostic: None,
+            }),
         };
-        let mut answer = match self
-            .download(call, &url, deadline, billing(&job), kind)
-            .await
-        {
-            Ok(answer) => answer,
-            Err(collected) => return collected,
-        };
-        answer.cost = self
+        let cost = self
             .settled(call, &credential, id, deadline, &job, kind)
             .await;
-        Collected::Answered(answer)
+        match downloaded {
+            Ok(mut answer) => {
+                answer.cost = cost;
+                Collected::Answered(answer)
+            }
+            Err(DownloadFailure { reason, diagnostic }) => {
+                let outcome = Collected::Incomplete { reason, cost };
+                match diagnostic {
+                    Some(diagnostic) => Collected::Diagnosed(Box::new(outcome), diagnostic),
+                    None => outcome,
+                }
+            }
+        }
     }
 
     /// Reads job `id` every [`POLL`] until GG has its result document, which is returned; or the
-    /// job ends without one (`Ended`, at its settled charge), or cannot be collected now
-    /// (`Unreachable`, at `deadline` too).
+    /// job ends without one (`Ended` or `Unavailable`, at its settled charge), or cannot be
+    /// collected now (`Unreachable`, at `deadline` too).
     #[allow(clippy::result_large_err)] // `Collected` is what every caller returns at once
     pub async fn await_result(
         &self,
@@ -440,6 +452,12 @@ impl Jobs {
                     Stage::Available => return Ok(job),
                     Stage::Ended(sentence) => {
                         return Err(Collected::Ended {
+                            reason: self.gateway.reason(&sentence),
+                            cost: billing(&job),
+                        });
+                    }
+                    Stage::Unavailable(sentence) => {
+                        return Err(Collected::Unavailable {
                             reason: self.gateway.reason(&sentence),
                             cost: billing(&job),
                         });
@@ -599,7 +617,7 @@ impl Jobs {
         let text = || client.reason(&super::status_text(label, &response, &diagnostic));
         let collected = match response.status {
             200..=299 | 408 | 429 | 500..=599 => return Read::Nothing(diagnostic),
-            410 => Collected::Ended {
+            410 => Collected::Unavailable {
                 reason: text(),
                 cost: None,
             },
@@ -624,33 +642,26 @@ impl Jobs {
         }
     }
 
-    /// The file's download, made once, and what its bytes become (module doc). A failure a later
-    /// collect may not repeat is `Unreachable`; one it would repeat is `Ended` at `cost`.
-    #[allow(clippy::result_large_err)] // `Collected` is what the caller returns at once
+    /// The file's download, made once, and what its bytes become.
     async fn download(
         &self,
-        call: &CallRequest,
         url: &str,
         deadline: Duration,
-        cost: Option<Usd>,
         kind: &Kind,
-    ) -> Result<Answer, Collected> {
+    ) -> Result<Answer, DownloadFailure> {
         let label = kind.download_label;
         let client = &self.gateway.client;
         let mut redactor = client.redactor.with(url);
         if let Ok(parsed) = url::Url::parse(url) {
             redactor = redactor.with(parsed.as_str());
         }
-        let ended = |text: &str| Collected::Ended {
+        let failure = |text: &str, diagnostic: Option<AdapterDiagnostic>| DownloadFailure {
             reason: redactor.reason(text),
-            cost,
-        };
-        let unreachable = |text: &str| Collected::Unreachable {
-            reason: redactor.reason(text),
+            diagnostic: diagnostic.map(Box::new),
         };
         let remaining = deadline.saturating_sub(self.clock.now());
         if remaining.is_zero() {
-            return Err(self.outstanding(kind));
+            return Err(failure(&format!("{label} reached its deadline"), None));
         }
         // The provider's text, byte for byte (spec/adapters.md §7).
         let request = HttpRequest::new(Method::Get, url, Lane::Download)
@@ -659,41 +670,39 @@ impl Jobs {
         let response = match client.send(request).await {
             Ok(response) => response,
             Err(error) => {
-                let collected = match error.kind {
-                    TransportErrorKind::TooLarge => {
-                        ended(&format!("{label} failed: {}", error.reason))
-                    }
+                let text = match error.kind {
                     TransportErrorKind::Refused => {
-                        unreachable(&format!("{label} was not sent: {}", error.reason))
+                        format!("{label} was not sent: {}", error.reason)
                     }
-                    _ => unreachable(&format!("{label} failed: {}", error.reason)),
+                    _ => format!("{label} failed: {}", error.reason),
                 };
                 let mut diagnostic = wire::transport_diagnostic(&error);
                 diagnostic.phase = DiagnosticPhase::Download;
-                return Err(collected.with_diagnostic(diagnostic));
+                return Err(failure(&text, Some(diagnostic)));
             }
         };
         if !response.is_success() {
-            let mut diagnostic = wire::http_diagnostic(call, &response, &redactor);
-            diagnostic.phase = DiagnosticPhase::Download;
+            // A file host can echo fragments of its signed URL as error fields.
+            let mut diagnostic =
+                AdapterDiagnostic::new(DiagnosticSource::Provider, DiagnosticPhase::Download);
+            diagnostic.http_status = Some(response.status);
             let text = wire::status_reason(label, response.status, None);
-            let collected = match response.status {
-                400..=499 if !matches!(response.status, 401 | 403 | 408 | 429) => ended(&text),
-                _ => unreachable(&text),
-            };
-            return Err(collected.with_diagnostic(diagnostic));
+            return Err(failure(&text, Some(diagnostic)));
         }
         let bytes = response.body;
         if bytes.is_empty() {
-            return Err(ended(&format!("{label} was empty")));
+            return Err(failure(&format!("{label} was empty"), None));
         }
         if bytes.len() as u64 > kind.max_bytes {
-            return Err(ended(&format!(
-                "{label} failed: the response is larger than {} bytes",
-                kind.max_bytes
-            )));
+            return Err(failure(
+                &format!(
+                    "{label} failed: the response is larger than {} bytes",
+                    kind.max_bytes
+                ),
+                None,
+            ));
         }
-        (kind.deliver)(bytes).map_err(|sentence| ended(&sentence))
+        (kind.deliver)(bytes).map_err(|sentence| failure(&sentence, None))
     }
 }
 

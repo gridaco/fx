@@ -11,9 +11,9 @@
 //! `--check`, `--json`, `--expect-cached` and `--register` are options of `plan` only:
 //! after `expand`, `identity` or `price` they are workflow input flags like any other. `run` takes
 //! the planning verbs' value options plus its own: `--yes-up-to`, `--deliver`, `--name`,
-//! `--resume` and `--run` with a
-//! value, and the flags `--live`, `--no-view` and `--open`; `plan`'s flags are input flags
-//! after `run`. Arguments of any other verb, and of no verb, all stay for clap.
+//! `--resume` and `--run` with a value, and flags including `--live`, `--recover`, `--no-view`
+//! and `--open`. The `plan` flags become input flags after `run`. Arguments of any other verb,
+//! and of no verb, all stay for clap.
 //! `view` takes the planning value options
 //! plus `--run`, `--plan`, `--port`, and `--open` (`--no-open` is kept for compatibility);
 //! saved-file modes reject input flags.
@@ -53,8 +53,9 @@ const RUN_VALUE_OPTIONS: [&str; 6] = [
     "--resume",
 ];
 /// Flags of `run` alone.
-const RUN_FLAGS: [&str; 5] = [
+const RUN_FLAGS: [&str; 6] = [
     "--live",
+    "--recover",
     "--no-view",
     "--open",
     "--standalone",

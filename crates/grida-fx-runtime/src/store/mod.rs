@@ -6,6 +6,7 @@
 //! <cache>/results/<i[:2]>/<i>.json   fx-result-record-v1
 //! <cache>/calls/<k[:2]>/<k>.json     fx-call-record-v1
 //! <cache>/jobs/<k>.json              fx-job-record-v1
+//! <cache>/jobs/<k>.lock              serializes long-job work for this call key
 //! <cache>/work/                      the engine's scratch (work dirs); not part of the contract
 //! ```
 //!
@@ -383,6 +384,44 @@ impl Store {
             return Err(unreadable(format!("it holds the job {}", record.key)));
         }
         Ok(Some(record))
+    }
+
+    /// Serializes long-job work for a call key across invocations. The empty lock file has a
+    /// stable inode so another invocation can open it while this one still holds the lock.
+    pub(crate) async fn lock_job(
+        &self,
+        key: &str,
+        cancel: &crate::engine::Cancel,
+    ) -> Result<Option<File>, StoreError> {
+        if !is_digest(key) {
+            return Err(StoreError::NotADigest(key.to_string()));
+        }
+        if cancel.is_cancelled() {
+            return Ok(None);
+        }
+        self.leased()?;
+        fs::create_dir_all(self.root.join("jobs")).map_err(|error| io_error("jobs", &error))?;
+        let relative = format!("jobs/{key}.lock");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(self.root.join(&relative))
+            .map_err(|error| io_error(&relative, &error))?;
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Some(file)),
+                Err(fs::TryLockError::Error(error)) => return Err(io_error(relative, &error)),
+                Err(fs::TryLockError::WouldBlock) => {
+                    tokio::select! {
+                        biased;
+                        () = cancel.cancelled() => return Ok(None),
+                        () = tokio::time::sleep(Duration::from_millis(100)) => {}
+                    }
+                }
+            }
+        }
     }
 
     /// Writes a job record (atomically, replacing the last state).

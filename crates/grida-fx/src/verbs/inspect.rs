@@ -27,6 +27,8 @@
 //! `spent` is the `charged_usd` of the last `run_finished` or `run_cancelled`.
 //! Failed managed attempts are read in event order, including failures from earlier invocations
 //! and failures followed by a successful retry.
+//! The text shows the latest recovery report for each call that is still pending recovery or
+//! was recovered. JSON includes the full history.
 //!
 //! A succeeded step's files are where the run placed them (spec/store.md §8 "One file or
 //! several": `files/<step>/<port><suffix>` for a port holding one file, else
@@ -41,11 +43,13 @@
 //! booked    $<charged, 2 places>                   (when the run finished or was cancelled)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
 //! attempt   <id> · attempt <n> [· send <n>] · <route> [· call <key>]
+//! recovery  <id> · <status> · <original booked charge, when known>
 //! differs   <id>: <relative path> is missing | differs from its recorded digest   (--verify)
 //! verified  <n> files                              (--verify, nothing differs)
 //! ```
 //! `--json`: `{"run": {workflow, folder, state, charged_usd, steps: [{id, path, state, error?,
-//! cache?, waiting_for?, files: [{path, digest, size}]}], call_attempt_failures?, stand_in?},
+//! cache?, waiting_for?, files: [{path, digest, size}]}], call_attempt_failures?,
+//! call_recoveries?, stand_in?},
 //! "verification"?: {verified,
 //! problems}}`, where `folder` is the folder as named, `charged_usd` is null before the run ended
 //! and `waiting_for` is the route a `waiting` step waits for (when recorded). A
@@ -102,7 +106,7 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             .next_back()
             .map(|c| c.as_os_str().to_string_lossy().into_owned())
             .unwrap_or_else(|| label.clone());
-        for line in text_lines(&view, &name, verification.as_ref()) {
+        for line in text_lines(&view, &name, verification.as_ref(), &events) {
             print_line(&line);
         }
         if let Some(receipt) = receipt {
@@ -207,6 +211,7 @@ struct RunView {
     charged: Option<Value>,
     steps: Vec<StepView>,
     call_attempt_failures: Vec<Value>,
+    call_recoveries: Vec<Value>,
 }
 
 /// What the plan and the log say about one instance.
@@ -247,6 +252,7 @@ impl RunView {
         let mut charged = None;
         let mut stand_in = holds_stand_in(plan);
         let mut call_attempt_failures = Vec::new();
+        let mut call_recoveries = Vec::new();
         for event in events {
             match event_name(event) {
                 Some("run_started") => {
@@ -293,6 +299,7 @@ impl RunView {
                     }
                 }
                 Some("call_attempt_failed") => call_attempt_failures.push(event.clone()),
+                Some("call_recovery") => call_recoveries.push(event.clone()),
                 Some(name @ ("call_waiting" | "call_admitted")) => {
                     // Only a step's start in progress waits for a route.
                     let Some(entry) =
@@ -336,6 +343,7 @@ impl RunView {
             charged,
             steps,
             call_attempt_failures,
+            call_recoveries,
         }
     }
 }
@@ -517,6 +525,7 @@ fn text_lines(
     view: &RunView,
     folder_name: &str,
     verification: Option<&Verification>,
+    events: &[Value],
 ) -> Vec<String> {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for step in &view.steps {
@@ -554,6 +563,7 @@ fn text_lines(
     for event in &view.call_attempt_failures {
         append_call_attempt(&mut lines, event);
     }
+    append_call_recoveries(&mut lines, events);
     if let Some(verification) = verification {
         if verification.problems.is_empty() {
             lines.push(labelled(
@@ -567,6 +577,68 @@ fn text_lines(
         }
     }
     lines
+}
+
+/// Show the latest recorded recovery result and next action for each call.
+pub(super) fn append_call_recoveries(lines: &mut Vec<String>, events: &[Value]) {
+    let mut latest = IndexMap::new();
+    for event in events {
+        let Some(call) = text(event, "call") else {
+            continue;
+        };
+        match event_name(event) {
+            Some("call_recovery") => {
+                latest.insert(call, event);
+            }
+            Some("call")
+                if latest
+                    .get(call)
+                    .is_some_and(|event| text(event, "status") != Some("recovered")) =>
+            {
+                // A later answer for this key resolves the call, including after a replacement.
+                latest.shift_remove(call);
+            }
+            _ => {}
+        }
+    }
+    for (call, event) in latest {
+        let Some(id) = text(event, "id") else {
+            continue;
+        };
+        let status = text(event, "status");
+        let description = match status {
+            Some("available") => "completed provider task retained for collection",
+            Some("legacy") => "provider task retained for a recovery check",
+            Some("unavailable") => "original provider result unavailable",
+            Some("recovered") => "collected original provider result · $0.00 additional",
+            _ => continue,
+        };
+        let charge = event
+            .get("original_charged_usd")
+            .and_then(|value| Usd::from_value(value).ok())
+            .map_or_else(
+                || "original booking unknown".to_string(),
+                |amount| format!("{} originally booked by FX", amount.dollars_2()),
+            );
+        lines.push(labelled(
+            "recovery",
+            &format!("{id} · {description} · {charge}"),
+        ));
+        match status {
+            Some("available" | "legacy") => lines.push(labelled(
+                "next",
+                "resume with --live --recover to collect retained results",
+            )),
+            Some("unavailable") if grida_fx_core::value::is_digest(call) => {
+                let command = crate::invoker::command();
+                lines.push(labelled(
+                    "next",
+                    &format!("review the provider task, then use {command} jobs --forget {call} if you intend to authorize a new generation"),
+                ));
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Describe one recorded failure independently of the step's final state.
@@ -734,6 +806,9 @@ fn json_document(view: &RunView, folder: &str, verification: Option<&Verificatio
     if !view.call_attempt_failures.is_empty() {
         document["run"]["call_attempt_failures"] = json!(view.call_attempt_failures);
     }
+    if !view.call_recoveries.is_empty() {
+        document["run"]["call_recoveries"] = json!(view.call_recoveries);
+    }
     if let Some(verification) = verification {
         document["verification"] = verification.document();
     }
@@ -817,11 +892,9 @@ mod tests {
         let mut another_failure = failed.clone();
         another_failure["call"] = json!("2".repeat(64));
         let succeeded = event("node_finished", json!({"id": "ok#1", "cache": "miss"}));
-        let view = RunView::new(
-            &plan(),
-            &[failed.clone(), another_failure.clone(), succeeded],
-        );
-        let lines = text_lines(&view, "runs/one", None).join("\n");
+        let events = [failed.clone(), another_failure.clone(), succeeded];
+        let view = RunView::new(&plan(), &events);
+        let lines = text_lines(&view, "runs/one", None, &events).join("\n");
         for call in ["1".repeat(64), "2".repeat(64)] {
             assert!(lines.contains(&format!(
                 "attempt   ok#1 · attempt 1 · send 1 · imagegen@codex · call {call}"
@@ -836,6 +909,39 @@ mod tests {
             summary["run"]["call_attempt_failures"],
             json!([failed, another_failure])
         );
+    }
+
+    #[test]
+    fn inspect_stops_advising_recovery_when_the_call_has_an_answer() {
+        let call = "1".repeat(64);
+        let unavailable = event(
+            "call_recovery",
+            json!({"id": "ok#1", "call": call, "status": "unavailable", "original_charged_usd": 0.5}),
+        );
+        let answered = event("call", json!({"call": call, "cost_usd": 0.5}));
+        let mut recovered = unavailable.clone();
+        recovered["status"] = json!("recovered");
+        let free = event("call", json!({"call": call, "cost_usd": 0}));
+
+        let events = [unavailable.clone()];
+        let view = RunView::new(&plan(), &events);
+        let lines = text_lines(&view, "runs/one", None, &events).join("\n");
+        assert!(lines.contains("original provider result unavailable"));
+        assert!(lines.contains(&format!("jobs --forget {call}")));
+
+        let events = [unavailable.clone(), answered];
+        let view = RunView::new(&plan(), &events);
+        let lines = text_lines(&view, "runs/one", None, &events).join("\n");
+        assert!(!lines.contains("recovery"));
+        assert_eq!(
+            json_document(&view, "runs/one", None)["run"]["call_recoveries"],
+            json!([unavailable])
+        );
+
+        let events = [recovered, free];
+        let view = RunView::new(&plan(), &events);
+        let lines = text_lines(&view, "runs/one", None, &events).join("\n");
+        assert!(lines.contains("collected original provider result · $0.00 additional"));
     }
 
     #[test]
@@ -954,7 +1060,7 @@ mod tests {
         let view = RunView::new(&plan(), &events);
         assert_eq!(view.steps[5].state, "pending");
         assert_eq!(
-            text_lines(&view, "w1", None)[1],
+            text_lines(&view, "w1", None, &events)[1],
             "state     unfinished   6 steps: 2 pending, 1 running, 1 succeeded, 2 waiting"
         );
         let steps = json_document(&view, "w1", None)["run"]["steps"].clone();
@@ -988,8 +1094,9 @@ mod tests {
 
     #[test]
     fn the_text_summary() {
-        let view = RunView::new(&plan(), &finished_run());
-        let lines = text_lines(&view, "f1", None);
+        let events = finished_run();
+        let view = RunView::new(&plan(), &events);
+        let lines = text_lines(&view, "f1", None, &events);
         assert_eq!(
             lines,
             [
@@ -1009,7 +1116,8 @@ mod tests {
                 Some(&Verification {
                     files: 0,
                     problems: vec![]
-                })
+                }),
+                &[]
             ),
             [
                 "case  \u{b7}  p4",
@@ -1022,7 +1130,9 @@ mod tests {
             problems: vec!["ok#1: files/ok/text.txt is missing".into()],
         };
         assert_eq!(
-            text_lines(&empty, "p4", Some(&problems)).last().unwrap(),
+            text_lines(&empty, "p4", Some(&problems), &[])
+                .last()
+                .unwrap(),
             "differs   ok#1: files/ok/text.txt is missing"
         );
     }
