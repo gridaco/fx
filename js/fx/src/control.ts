@@ -18,7 +18,7 @@ export interface RunControlResult {
     | "completed"
     | "error";
   readonly request_status: "accepted" | "not_accepted" | "unknown";
-  readonly recorded_state: "planned" | "unfinished" | "succeeded" | "failed" | "cancelled" | "unknown";
+  readonly recorded_state: "planned" | "unfinished" | "awaiting" | "succeeded" | "failed" | "cancelled" | "unknown";
   readonly cleanup: "pending" | "complete" | "unknown";
   readonly external_completion: "not_verified";
   readonly code?: string;
@@ -80,7 +80,7 @@ const ERROR_STATUS: Readonly<Record<string, number>> = {
 const ENUMS: Readonly<Record<string, readonly string[]>> = {
   outcome: ["inspected", "accepted", "already_requested", "already_terminal", "finishing", "completed", "error"],
   request_status: ["accepted", "not_accepted", "unknown"],
-  recorded_state: ["planned", "unfinished", "succeeded", "failed", "cancelled", "unknown"],
+  recorded_state: ["planned", "unfinished", "awaiting", "succeeded", "failed", "cancelled", "unknown"],
   cleanup: ["pending", "complete", "unknown"],
   external_completion: ["not_verified"],
 };
@@ -147,7 +147,7 @@ function parseResult(done: Exit, operation: "inspect" | "cancel", wait: boolean)
     throw new Error("unknown result enum");
   }
   if (data.outcome === "completed" && (data.invocation_id === null || data.cleanup !== "complete"
-    || !["succeeded", "failed", "cancelled"].includes(data.recorded_state as string))) {
+    || !["awaiting", "succeeded", "failed", "cancelled"].includes(data.recorded_state as string))) {
     throw new Error("completion lacks invocation, cleanup or terminal evidence");
   }
   if (operation === "inspect") {

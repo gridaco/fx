@@ -309,6 +309,7 @@ fn plan_and_run(
     };
     print_line(&text);
     let options = RunOptions {
+        wait_for_answers: args.wait_for_answers,
         require_estimates: args.require_estimates,
         recover: args.recover,
         folder: folder.clone(),
@@ -339,6 +340,13 @@ fn plan_and_run(
             invocation_id = Some(ready.invocation_id.clone());
             crate::interrupt::runner_started();
             print_line(&format!("run       {label}"));
+            if args.wait_for_answers {
+                stderr::line(format_args!(
+                    "requests  {} inspect {} --requests --json",
+                    crate::invoker::command(),
+                    super::repeat::path_word(&label),
+                ));
+            }
             stderr::line(format_args!("invocation {}", ready.invocation_id));
             stderr::line(if ready.control_available {
                 "control   available"
@@ -388,6 +396,22 @@ fn plan_and_run(
     if let Some(invocation_id) = invocation_id.as_deref()
         && let Ok(mut events) = super::read_log(&folder, &label, true)
     {
+        if events.iter().any(|event| {
+            super::event_name(event) == Some("run_finished")
+                && super::text(event, "invocation_id") == Some(invocation_id)
+                && event["awaiting"]
+                    .as_array()
+                    .is_some_and(|ids| !ids.is_empty())
+        }) {
+            lines.push(labelled(
+                "requests",
+                &format!(
+                    "{} inspect {} --requests --json",
+                    crate::invoker::command(),
+                    super::repeat::path_word(&label)
+                ),
+            ));
+        }
         events.retain(|event| {
             matches!(super::event_name(event), Some("call_recovery" | "call"))
                 && super::text(event, "invocation_id") == Some(invocation_id)

@@ -53,9 +53,10 @@ const RUN_VALUE_OPTIONS: [&str; 6] = [
     "--resume",
 ];
 /// Flags of `run` alone.
-const RUN_FLAGS: [&str; 6] = [
+const RUN_FLAGS: [&str; 7] = [
     "--live",
     "--recover",
+    "--wait-for-answers",
     "--no-view",
     "--open",
     "--standalone",

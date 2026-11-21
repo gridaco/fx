@@ -28,12 +28,20 @@ export function canvasPreviewReserved(node: CanvasStep) {
 /** A preview frame's height for its width: 16:9, the commonest shape of what steps make. */
 const PREVIEW_ASPECT = 9 / 16;
 
+/** A waiting card's footer occupies its own band below ports, settings and any preview. */
+export function reviewFooter(node: CanvasStep) {
+  const pending = node.review_action === "review" || (node.state === "awaiting" && !node.review_action);
+  if (node.kind || (!pending && !node.review_action)) return undefined;
+  return { pending, height: pending ? 66 : 48 };
+}
+
 /**
  * Geometry depends on declarations, never on media loading or measured DOM text. The preview
  * frame spans the card less 16 on each side.
  */
 export function canvasNodeGeometry(node: CanvasStep) {
-  const width = node.ports ? 360 : 250;
+  const review = reviewFooter(node);
+  const width = node.ports || review ? 360 : 250;
   if (node.value) {
     const lines = valuePreviewLines(valueStateLabel(node.value)).lines.length;
     const preview_y = 80 + Math.max(1, lines) * 18;
@@ -41,13 +49,15 @@ export function canvasNodeGeometry(node: CanvasStep) {
     return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 14 : 0) + 24, preview_y, preview_height, settings_y: 60 };
   }
   const preview_height = Math.round((width - 32) * PREVIEW_ASPECT);
-  if (!node.ports) return { width, height: node.preview ? 61 + preview_height + 45 : 106, preview_y: 61, preview_height, settings_y: 0 };
+  // The media count sits above a review footer, clear of the message and action.
+  const footer = review ? review.height + (node.preview ? 20 : 0) : undefined;
+  if (!node.ports) return { width, height: node.preview ? 61 + preview_height + (footer ?? 45) : 75 + (footer ?? 31), preview_y: 61, preview_height, settings_y: 0 };
   const rows = Math.max(node.ports.inputs.length, node.ports.outputs.length);
   const settings_y = 83 + Math.max(1, rows) * PORT_ROW;
   const summaryRows = node.summaries?.length ?? 0;
   const summaryHeight = summaryRows ? 20 + summaryRows * 34 + ((node.summary_count ?? 0) > summaryRows ? 18 : 0) : node.ports.settings.length ? 29 : 5;
   const preview_y = settings_y + summaryHeight + (node.route_label ? 20 : 0);
-  return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 16 : 0) + (node.kind === "workflow" ? 70 : 42), preview_y, preview_height, settings_y };
+  return { width, height: preview_y + (canvasPreviewReserved(node) ? preview_height + 16 : 0) + (footer ?? (node.kind === "workflow" ? 70 : 42)), preview_y, preview_height, settings_y };
 }
 export function canvasNodeSize(node: CanvasStep) {
   const { width, height } = canvasNodeGeometry(node);

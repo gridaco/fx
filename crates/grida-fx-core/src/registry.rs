@@ -171,6 +171,11 @@ pub struct ResolvedType {
 }
 
 impl ResolvedType {
+    /// A workflow-authored waiting step, owned by the scheduler.
+    pub fn is_await(&self) -> bool {
+        matches!(&self.origin, TypeOrigin::Builtin { name, major: 1 } if name == "await")
+    }
+
     /// Whether this is the engine's `fx/select@1`. FX keys native select on the built-in, not on
     /// any type named `select`.
     pub fn is_select(&self) -> bool {

@@ -43,6 +43,18 @@ function runFromPlan(plan: GraphDocument): ViewerRun {
 }
 
 describe("named port boundary", () => {
+  test("accepts polymorphic value declarations only on output ports", () => {
+    for (const type of ["value", "value?"]) {
+      const plan = portGraph();
+      plan.types!.source.ports = { inputs: {}, outputs: { selected: type }, params: {} };
+      expect(parseGraph(plan)).toEqual(plan);
+      const run = runFromPlan(plan);
+      expect(parseViewerRun(run)).toEqual(run);
+      expect(isNodePorts({ ...outputPorts, inputs: { input: type } })).toBeFalse();
+    }
+    for (const type of ["value/png", "value[]", "value{}", "value[]?", "value??"])
+      expect(isNodePorts({ ...outputPorts, outputs: { selected: type } })).toBeFalse();
+  });
   test("accepts complete declarations and rejects invalid names, types, schemas and binding duplicates", () => {
     expect(isNodePorts(outputPorts)).toBeTrue();
     for (const ports of [

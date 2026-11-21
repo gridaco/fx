@@ -286,6 +286,7 @@ fn ready(instance: &Instance, planner: &Planner) -> bool {
         && instance.state == State::Planned
         && !instance.with.values().any(|v| v.contains_pending())
         && !instance.ty.spec.paid()
+        && !instance.ty.is_await()
         && !planner.results.contains_key(&instance.id)
 }
 
@@ -354,6 +355,7 @@ pub fn make_plan(
                     i.at_plan
                         && i.state == State::Planned
                         && !i.ty.spec.paid()
+                        && !i.ty.is_await()
                         && !planner.results.contains_key(&i.id)
                 })
                 .map(|i| {
@@ -371,7 +373,7 @@ pub fn make_plan(
     let cached = expansion
         .ordered()
         .filter(|i| i.state.is_live())
-        .filter(|i| i.identity.is_some() && cache.has_result(i))
+        .filter(|i| !i.ty.is_await() && i.identity.is_some() && cache.has_result(i))
         .map(|i| i.id.clone())
         .collect();
     Ok(Plan {

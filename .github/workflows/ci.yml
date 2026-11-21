@@ -67,6 +67,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv sync --project python --locked
       - run: bun --no-env-file run test:viewer:notes-browser
+      - run: bun --no-env-file run test:viewer:waiting-browser
 
   # docs/guide and docs/wg are published on grida.co/docs (a docs source, see
   # gridaco/docs); this runs that site's rules on them: links, assets, markdown.
@@ -242,6 +243,7 @@ jobs:
           --command "$PWD/python/src/grida/fx/_bin/grida-fx"
       - run: uv run --locked --project python python tools/check_observation.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
       - run: uv run --locked --project python python tools/check_control.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
+      - run: uv run --locked --project python python tools/check_waiting.py --command "$PWD/python/src/grida/fx/_bin/grida-fx"
 
   # `grida fx`, as the npm grida command carries it (spec/distribution.md): @grida/fx and this
   # machine's engine package, packed from a fresh build, installed beside the host fixture, and

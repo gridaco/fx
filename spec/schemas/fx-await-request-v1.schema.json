@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-await-request-v1",
+  "title": "Durable external answer request",
+  "type": "object",
+  "required": ["kind", "plan", "run", "request"],
+  "properties": {
+    "kind": { "const": "fx-await-request-v1" },
+    "plan": { "$ref": "#/$defs/digest" },
+    "run": { "type": "string", "pattern": "^[a-f0-9]{16}$" },
+    "request": { "$ref": "#/$defs/request" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "request": {
+      "type": "object",
+      "required": ["id", "step", "schema", "show", "on_timeout", "opened_at", "state"],
+      "properties": {
+        "id": { "$ref": "#/$defs/digest" },
+        "step": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "schema": { "type": ["object", "boolean"] },
+        "show": {},
+        "choices": { "type": "object", "minProperties": 1 },
+        "choice_field": { "type": "string", "minLength": 1 },
+        "timeout_seconds": { "type": "integer", "minimum": 1 },
+        "on_timeout": { "enum": ["fail", "continue"] },
+        "opened_at": { "$ref": "#/$defs/timestamp" },
+        "deadline": { "$ref": "#/$defs/timestamp" },
+        "state": {
+          "oneOf": [
+            { "type": "object", "properties": { "status": { "const": "pending" } }, "required": ["status"], "additionalProperties": false },
+            {
+              "type": "object",
+              "properties": {
+                "status": { "const": "answered" }, "answer": {},
+                "at": { "$ref": "#/$defs/timestamp" }, "channel": { "enum": ["cli", "sdk", "viewer"] }
+              },
+              "required": ["status", "answer", "at", "channel"], "additionalProperties": false
+            },
+            {
+              "type": "object", "properties": { "status": { "const": "expired" }, "at": { "$ref": "#/$defs/timestamp" } },
+              "required": ["status", "at"], "additionalProperties": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

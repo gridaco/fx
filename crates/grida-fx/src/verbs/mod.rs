@@ -27,6 +27,7 @@ pub mod schema;
 pub mod service;
 pub mod takes;
 pub mod view;
+pub mod waiting;
 
 use grida_fx_core::project::Planner;
 use grida_fx_core::registry::relative_inside;

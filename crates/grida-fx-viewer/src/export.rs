@@ -476,6 +476,7 @@ fn project_view(view: &Value, options: ExportOptions) -> Value {
                         "routes",
                         "routing",
                         "state",
+                        "review_outcome",
                         "reads",
                         "needs",
                         "judges",

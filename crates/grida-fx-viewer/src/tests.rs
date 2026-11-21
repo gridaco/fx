@@ -89,7 +89,175 @@ impl Fixture {
     }
 }
 
+#[tokio::test]
+async fn answers_are_exact_run_same_origin_and_share_the_runtime_winner() {
+    use grida_fx_runtime::waiting::{self, RequestSpec, ResponseChannel};
+
+    let fixture = Fixture::new("image/png");
+    let root = fixture.root();
+    let path = root.join("events.jsonl");
+    let history = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(path, history.replace("offline-fixture", "0123456789abcdef")).unwrap();
+    let opened = waiting::ensure_request(
+        &root,
+        RequestSpec {
+            step: "choose#1".into(),
+            message: None,
+            schema: json!({"type":"boolean"}),
+            show: Value::Null,
+            choices: None,
+            choice_field: None,
+            timeout_seconds: None,
+            on_timeout: Default::default(),
+        },
+    )
+    .unwrap();
+    let endpoint = format!("/api/requests/{}/respond", opened.id);
+    let app = fixture.app();
+    for (origin, marker, mime, expected) in [
+        (None, true, "application/json", StatusCode::FORBIDDEN),
+        (
+            Some("http://unrelated.invalid"),
+            true,
+            "application/json",
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some("http://127.0.0.1:43123"),
+            false,
+            "application/json",
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            Some("http://127.0.0.1:43123"),
+            true,
+            "text/plain",
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        ),
+    ] {
+        let mut req = Fixture::request(&endpoint)
+            .method(Method::POST)
+            .header(header::CONTENT_TYPE, mime);
+        if let Some(origin) = origin {
+            req = req.header(header::ORIGIN, origin);
+        }
+        if marker {
+            req = req.header("x-fx-action", "respond");
+        }
+        let response = app
+            .clone()
+            .oneshot(req.body(Body::from(r#"{"answer":true}"#)).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    let submit = |json: &'static str| {
+        Fixture::request(&endpoint)
+            .method(Method::POST)
+            .header(header::ORIGIN, "http://127.0.0.1:43123")
+            .header("sec-fetch-site", "same-origin")
+            .header("x-fx-action", "respond")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json))
+            .unwrap()
+    };
+    assert_eq!(
+        app.clone()
+            .oneshot(submit(r#"{"answer":9007199254740993}"#))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let response = app
+        .clone()
+        .oneshot(submit(r#"{"answer":"invalid"}"#))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let winner = waiting::respond(&root, &opened.id, json!(false), ResponseChannel::Cli).unwrap();
+    let response = app
+        .clone()
+        .oneshot(submit(r#"{"answer":true}"#))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 100_000).await.unwrap()).unwrap();
+    assert_eq!(body["request"], json!(winner));
+    let response = app.oneshot(submit(r#"{"answer":false}"#)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 100_000).await.unwrap()).unwrap();
+    assert_eq!(body, json!(winner));
+}
+
+#[test]
+fn an_open_request_can_preview_its_files_before_the_runner_logs_the_wait() {
+    use grida_fx_runtime::waiting::{self, RequestSpec};
+    use std::fs;
+
+    let fixture = Fixture::new("image/png");
+    let root = fixture.root();
+    fs::write(root.join("events.jsonl"), "").unwrap();
+    let mut log = FileForEvents::new(&root);
+    let invocation = "0123456789abcdef";
+    log.append(json!({"event":"run_started","invocation_id":invocation}));
+    let before_step = observation::snapshot(&root).unwrap();
+    log.append(json!({"event":"node_started","invocation_id":invocation,"id":"draw#1","path":"draw","uses":"fx/await@1"}));
+
+    let bytes = b"synthetic review image";
+    let digest = file_digest(bytes);
+    fs::create_dir(root.join("values")).unwrap();
+    fs::write(root.join("values").join(&digest), bytes).unwrap();
+    let image =
+        json!({"file":{"digest":digest,"kind":"image/png","name":"review.png","size":bytes.len()}});
+    waiting::ensure_request(
+        &root,
+        RequestSpec {
+            step: "draw#1".into(),
+            message: None,
+            schema: json!({"type":"string"}),
+            show: Value::Null,
+            choices: Some([("swatch".into(), image)].into()),
+            choice_field: None,
+            timeout_seconds: None,
+            on_timeout: Default::default(),
+        },
+    )
+    .unwrap();
+
+    let current = observation::snapshot(&root).unwrap();
+    assert!(
+        read::read_observed(&root, &current)
+            .unwrap()
+            .document
+            .artifacts
+            .iter()
+            .any(|a| a.digest == digest && a.available)
+    );
+    assert!(
+        read::read_inventory(&root)
+            .unwrap()
+            .open_artifact(&root, &digest)
+            .is_ok()
+    );
+    assert!(
+        read::read_observed(&root, &before_step)
+            .unwrap()
+            .open_artifact(&root, &digest)
+            .is_err()
+    );
+    assert!(
+        read::project_export_records(&root, &current)
+            .unwrap()
+            .open_artifact(&root, &digest)
+            .is_err()
+    );
+}
+
 struct FileForEvents(std::fs::File);
+
 impl FileForEvents {
     fn new(root: &Path) -> Self {
         Self(
@@ -124,6 +292,61 @@ fn imported_scope(nodes: &[&str]) -> Value {
         "ports":{"inputs":{"input":{"type":"file","kind":"image"}},"outputs":["preview"]},
         "input_bindings":[], "output_bindings":[], "nodes":nodes, "pending":[]
     })
+}
+
+#[test]
+fn review_outcome_uses_the_terminal_wait_fact_and_survives_export_without_answers() {
+    let fixture = Fixture::new("image/png");
+    let root = fixture.root();
+    let mut log = FileForEvents::new(&root);
+    let outcome = |id: &str| {
+        read::read_inventory(&root)
+            .unwrap()
+            .document
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .unwrap()
+            .review_outcome
+    };
+    log.append(json!({"event":"run_started"}));
+    log.append(json!({"event":"node_started","id":"draw#1","path":"draw","uses":"fx/await@01"}));
+    log.append(json!({"event":"waiting_request","id":"draw#1","request_status":"answered"}));
+    assert_eq!(outcome("draw#1"), None);
+    log.append(json!({"event":"node_finished","id":"draw#1","facts":{"outcome":"answered"},"outputs":{"answer":{"value":false}}}));
+    assert_eq!(outcome("draw#1"), Some("answered"));
+    log.append(json!({"event":"node_finished","id":"later#1","facts":{"outcome":"answered"}}));
+    assert_eq!(outcome("later#1"), None); // A different builtin or project node can publish an identically named fact.
+    log.append(json!({"event":"run_finished","ok":true,"outputs":{}}));
+    std::fs::File::create(root.join("run.lock")).unwrap();
+    let package = tempfile::tempdir().unwrap();
+    let target = package.path().join("export");
+    export::run_export(&root, &target, "export", export::ExportOptions::default()).unwrap();
+    let manifest: Value =
+        serde_json::from_slice(&std::fs::read(target.join("manifest.json")).unwrap()).unwrap();
+    let draw = manifest["view"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == "draw#1")
+        .unwrap();
+    assert_eq!(draw["review_outcome"], "answered");
+    assert_eq!(draw["outputs"]["answer"], json!({"withheld":true}));
+
+    log.append(json!({"event":"run_started"}));
+    assert_eq!(outcome("draw#1"), Some("answered")); // A resume can preserve a completed checkpoint.
+    log.append(json!({"event":"node_started","id":"draw#1","path":"draw","uses":"fx/await@1"}));
+    assert_eq!(outcome("draw#1"), None);
+    log.append(json!({"event":"node_finished","id":"draw#1","facts":{"outcome":"expired"}}));
+    assert_eq!(outcome("draw#1"), Some("expired"));
+    log.append(json!({"event":"node_retry","id":"draw#1"}));
+    assert_eq!(outcome("draw#1"), None);
+    log.append(
+        json!({"event":"node_failed","id":"draw#1","error":"the response deadline expired"}),
+    );
+    assert_eq!(outcome("draw#1"), None);
+    log.append(json!({"event":"node_failed","id":"draw#1","facts":{"outcome":"expired"}}));
+    assert_eq!(outcome("draw#1"), Some("expired"));
 }
 
 #[test]

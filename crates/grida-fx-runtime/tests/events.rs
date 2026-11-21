@@ -206,6 +206,7 @@ fn every_event() -> Vec<Event> {
             ok: false,
             incomplete: true,
             stopped: None,
+            awaiting: vec!["a".repeat(64)],
             charged_usd: Usd(40_000),
             failed: vec!["a#1".into()],
             outputs: IndexMap::from([
@@ -217,6 +218,7 @@ fn every_event() -> Vec<Event> {
             ok: false,
             incomplete: true,
             stopped: Some("phase 2 may cost up to $1.00".into()),
+            awaiting: vec![],
             charged_usd: Usd::ZERO,
             failed: vec![],
             outputs: IndexMap::new(),
@@ -257,6 +259,12 @@ fn every_event() -> Vec<Event> {
                 "path": "more", "step": "more", "max": 4, "phase": 2, "high_usd": 0.16,
                 "waiting_on": ["leaf#1"],
             }]),
+        },
+        Event::WaitingRequest {
+            id: "review#1".into(),
+            request_id: DIGEST.into(),
+            status: "pending",
+            deadline: Some("2026-01-01T00:00:10.000Z".into()),
         },
     ]
 }

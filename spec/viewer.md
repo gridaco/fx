@@ -4,6 +4,51 @@ Protocol v1 exposes inspection context and presentation in an existing viewer
 page. It does not execute workflows, mutate records or picks, launch processes,
 activate windows, or navigate to arbitrary sources.
 
+## Answering a waiting step in the local viewer
+
+For a run, `GET <api_base>/requests` returns `{"requests":[...]}` with the
+pending, answered and expired [waiting requests](waiting.md). The browser polls this
+resource independently of the invocation's event cursor. A second client can record
+an answer after an invocation exits. Each request binds the optional message, answer schema,
+reviewed inputs, any candidate keys and deadline to a concrete run and step.
+The selected run's artifact inventory supplies names, previews and verified byte URLs.
+The live canvas marks an awaiting step and opens its request from that card's
+**Review** action. One request occupies the panel at a time. Dismissal preserves
+the draft in the open page. A resolved request remains available from its card.
+For a promptless request, use the step title or identifier as the review heading.
+The viewer may render a scalar schema enum as a picker. It submits the literal
+JSON value, preserving its type. Only a workflow-authored candidate mapping
+binds a submitted key to an additional `selected` output.
+
+A completed `fx/await@1` instance can carry `review_outcome` alongside its
+execution state in live and exported run views. Its terminal node event supplies
+`facts.outcome`: `answered` for an answer, or `expired` for a deadline under
+either timeout policy. A pending request, a receipt written while the runner is
+stopped, or an older record without the terminal fact leaves this field absent.
+A new start or retry of that instance clears the previous outcome. Cards may
+describe a disclosed choice as selected or a disclosed boolean as yes or no.
+When an export withholds answers, cards retain only the recorded outcome.
+
+The local viewer sends `POST <api_base>/requests/<request_id>/respond` with
+`Content-Type: application/json`, `X-FX-Action: respond` and a JSON object whose
+only field is `answer`. JSON null and false are valid when the schema permits them.
+The run-scoped server passes the answer to the same runtime operation as the CLI
+and SDKs. HTTP 200 returns the durable request including its resolution. Invalid
+answers return 422. A conflicting or late submission returns 409 with `code`,
+`error` and the winning `request`. Retrying the same recorded answer returns 200.
+An answer can be recorded while execution is stopped. Work resumes according to
+the invocation lifecycle in [waiting.md](waiting.md).
+
+The server requires a loopback Host, the exact local Origin and the explicit
+action header for submission. Browser fetch metadata, when present, must identify
+a same-origin request. The server grants no cross-origin browser preflights.
+The viewer's page protocol, portable exports and plan pages have no response
+operation. Service and runner control tokens stay in private local coordination
+state. This local HTTP interface trusts native programs with access to the
+loopback listener. The browser protections guard against foreign web pages, and
+the submission channel identifies the interface used. See [the service
+boundary](service.md#5-http-boundary).
+
 ## Recognizing a viewer document
 
 The engine-shipped viewer includes this marker in the initial HTML head for its

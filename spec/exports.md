@@ -22,7 +22,7 @@ The observation reader captures the plan and complete event prefix. The latest
 invocation must start with `run_started` and end with `run_finished` or
 `run_cancelled`, and no unreadable or incomplete event tail may follow it. Refuse
 unfinished, crashed, malformed and actively resumed records. Failed terminal
-runs are valid inspection sources. A terminal recording never appears live.
+runs are valid inspection sources. A parked invocation ending in `run_finished.awaiting` can also be exported. Its recorded request state is frozen at that invocation, and opening the package cannot submit an answer. A terminal recording never appears live.
 
 `source.plan_sha256` hashes the exact saved UTF-8 `plan.json` bytes.
 `source.events_sha256` hashes the RFC 8785 canonical JSON encoding of the captured

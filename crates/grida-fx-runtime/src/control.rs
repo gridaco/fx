@@ -262,7 +262,12 @@ impl Record {
                     self.terminal = Some(event.clone());
                 }
                 Some("run_finished") => {
-                    self.state = if event.get("ok").and_then(Value::as_bool) == Some(true) {
+                    self.state = if event["awaiting"]
+                        .as_array()
+                        .is_some_and(|ids| !ids.is_empty())
+                    {
+                        "awaiting"
+                    } else if event.get("ok").and_then(Value::as_bool) == Some(true) {
                         "succeeded"
                     } else {
                         "failed"
@@ -1275,6 +1280,41 @@ mod tests {
             })
             .unwrap();
         control.terminal().unwrap()
+    }
+
+    #[test]
+    fn parked_terminal_evidence_remains_bound_to_its_invocation_on_resume() {
+        let folder = tempfile::tempdir().unwrap();
+        let plan = "0".repeat(64);
+        let invocation = "0123456789abcdef";
+        std::fs::write(
+            folder.path().join("plan.json"),
+            json!({"kind":"fx-graph-v1","plan":plan}).to_string(),
+        )
+        .unwrap();
+        let event = |id: &str, mut e: Value| {
+            e["kind"] = json!("fx-run-events-v1");
+            e["plan"] = json!(plan);
+            e["invocation_id"] = json!(id);
+            e["offset_ms"] = json!(0);
+            format!("{e}\n")
+        };
+        let mut events = event(invocation, json!({"event":"run_started"}));
+        events += &event(
+            invocation,
+            json!({"event":"run_finished","ok":false,"incomplete":true,"awaiting":["a".repeat(64)]}),
+        );
+        let path = folder.path().join("events.jsonl");
+        std::fs::write(&path, &events).unwrap();
+        let mut parked = Record::read(folder.path()).unwrap();
+        assert_eq!(parked.state, "awaiting");
+        let next = "fedcba9876543210";
+        events += &event(next, json!({"event":"run_started"}));
+        std::fs::write(&path, events).unwrap();
+        assert_eq!(Record::read(folder.path()).unwrap().state, "unfinished");
+        assert!(parked.refresh_bound());
+        assert_eq!(parked.state, "awaiting");
+        assert!(parked.terminal.is_some());
     }
 
     #[test]

@@ -1,0 +1,53 @@
+fx: workflow/v1
+id: review-variants
+title: Review three variants
+
+inputs:
+  seconds: { type: integer, minimum: 1, default: 300 }
+
+steps:
+  revision:
+    title: Build revision
+    uses: fx/await@1
+    with: { schema: { type: string } }
+  draw:
+    uses: ./nodes.py#draw
+  choose:
+    uses: fx/await@1
+    with:
+      message: Choose a variant
+      schema:
+        type: object
+        properties: { variant: { type: string } }
+        required: [variant]
+        additionalProperties: false
+      choices:
+        a: ${{ steps.draw.outputs.a }}
+        b: ${{ steps.draw.outputs.b }}
+        c: ${{ steps.draw.outputs.c }}
+      choice_field: variant
+      timeout_seconds: ${{ inputs.seconds }}
+      on_timeout: continue
+  judge:
+    if: ${{ steps.choose.facts.outcome == 'expired' }}
+    uses: ./nodes.py#judge
+    with:
+      a: ${{ steps.draw.outputs.a }}
+      b: ${{ steps.draw.outputs.b }}
+      c: ${{ steps.draw.outputs.c }}
+  deliver:
+    uses: fx/select@1
+    with:
+      first_of:
+        - ${{ steps.choose.outputs.selected ?? null }}
+        - ${{ steps.judge.outputs.image ?? null }}
+
+  manifest:
+    uses: ./nodes.py#manifest
+    with:
+      revision: ${{ steps.revision.outputs.answer }}
+      image: ${{ steps.deliver.outputs.value }}
+
+outputs:
+  manifest: ${{ steps.manifest.outputs.record }}
+  image: ${{ steps.deliver.outputs.value }}

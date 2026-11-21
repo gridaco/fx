@@ -74,6 +74,9 @@ use std::path::{Component, Path, PathBuf};
 
 /// Runs `grida-fx inspect`.
 pub fn run(args: &InspectArgs) -> Result<u8, Error> {
+    if args.requests {
+        return super::waiting::inspect(args);
+    }
     if args.control {
         return super::control::inspect(args);
     }
@@ -81,7 +84,32 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
     let (folder, label) = find_folder(&args.run, &cwd)?;
     let plan = read_plan(&folder, &label)?;
     let events = read_log(&folder, &label, false)?;
-    let view = RunView::new(&plan, &events);
+    let mut view = RunView::new(&plan, &events);
+    let requests = if args.verify || (args.json && !args.register) {
+        super::waiting::requests(&folder)?
+    } else {
+        Vec::new()
+    };
+    // The finish event uses plain JSON for object outputs. The frozen choice retains
+    // the file types needed to locate and verify any placements inside those objects.
+    let selected: BTreeMap<_, _> = requests
+        .iter()
+        .filter_map(|request| {
+            let grida_fx_runtime::waiting::RequestState::Answered { answer, .. } = &request.state
+            else {
+                return None;
+            };
+            Some((request.spec.step.as_str(), request.selected(answer)?))
+        })
+        .collect();
+    for step in &mut view.steps {
+        if step.state == "succeeded"
+            && let Some(value) = selected.get(step.id.as_str())
+        {
+            let folder = step_folder(&step.path, &takes_of_id(&step.id));
+            step.files = placed_port_files(&folder, "selected", value);
+        }
+    }
     let verification = args.verify.then(|| verify(&view, &folder));
     let receipt = args
         .register
@@ -97,7 +125,11 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             }
             receipt
         } else {
-            json_document(&view, &label, verification.as_ref())
+            let mut document = json_document(&view, &label, verification.as_ref());
+            if !requests.is_empty() {
+                document["run"]["requests"] = json!(requests);
+            }
+            document
         };
         print_json(&document);
     } else {
@@ -265,7 +297,16 @@ impl RunView {
                 }
                 Some("run_finished") => {
                     let ok = event.get("ok").and_then(Value::as_bool) == Some(true);
-                    state = if ok { "succeeded" } else { "failed" };
+                    state = if event["awaiting"]
+                        .as_array()
+                        .is_some_and(|ids| !ids.is_empty())
+                    {
+                        "awaiting"
+                    } else if ok {
+                        "succeeded"
+                    } else {
+                        "failed"
+                    };
                     charged = event.get("charged_usd").cloned();
                 }
                 Some("run_cancelled") => {
@@ -296,6 +337,11 @@ impl RunView {
                     // A new attempt leaves its step's waits behind.
                     if let Some(entry) = text(event, "id").and_then(|id| entries.get_mut(id)) {
                         entry.waits.clear();
+                    }
+                }
+                Some("waiting_request") => {
+                    if let Some(entry) = text(event, "id").and_then(|id| entries.get_mut(id)) {
+                        entry.last = Some(event.clone());
                     }
                 }
                 Some("call_attempt_failed") => call_attempt_failures.push(event.clone()),
@@ -383,7 +429,12 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
             view.state = "skipped";
             view.error = error_of(event);
         }
-        Some((Some("node_started"), _)) if ended => {
+        Some((Some("waiting_request"), event))
+            if !ended && text(event, "request_status") == Some("pending") =>
+        {
+            view.state = "awaiting";
+        }
+        Some((Some("node_started" | "waiting_request"), _)) if ended => {
             view.state = "failed";
             view.error = Some("the run ended before this step finished".into());
         }
@@ -433,6 +484,10 @@ fn encoded_files(value: &Value, item_key: Option<&str>, out: &mut Vec<EncodedFil
         for item in items {
             encoded_files(item, None, out);
         }
+    } else if let Some(members) = value.get("object").and_then(Value::as_object) {
+        for item in members.values() {
+            encoded_files(item, None, out);
+        }
     } else if let Some(items) = value.get("collection").and_then(Value::as_array) {
         for pair in items {
             if let Some([key, item]) = pair.as_array().map(Vec::as_slice) {
@@ -445,28 +500,31 @@ fn encoded_files(value: &Value, item_key: Option<&str>, out: &mut Vec<EncodedFil
 /// Where a succeeded step's files were placed (module doc): the instance id `id` names its takes.
 fn placed_files(id: &str, step_path: &str, outputs: &Map<String, Value>) -> Vec<Placed> {
     let step = step_folder(step_path, &takes_of_id(id));
-    let mut placed = Vec::new();
-    for (port, value) in outputs {
-        let mut files = Vec::new();
-        encoded_files(value, None, &mut files);
-        let one = files.len() == 1;
-        for (index, file) in files.into_iter().enumerate() {
-            let path = if one {
-                step_file_path(&step, port, None, &file.kind)
-            } else {
-                let label = file
-                    .key
-                    .map_or_else(|| index.to_string(), |key| keyed_path(&key));
-                step_file_path(&step, port, Some(&label), &file.kind)
-            };
-            placed.push(Placed {
-                path,
+    outputs
+        .iter()
+        .flat_map(|(port, value)| placed_port_files(&step, port, value))
+        .collect()
+}
+
+fn placed_port_files(step: &str, port: &str, value: &Value) -> Vec<Placed> {
+    let mut files = Vec::new();
+    encoded_files(value, None, &mut files);
+    let one = files.len() == 1;
+    files
+        .into_iter()
+        .enumerate()
+        .map(|(index, file)| {
+            let label = (!one).then(|| {
+                file.key
+                    .map_or_else(|| index.to_string(), |key| keyed_path(&key))
+            });
+            Placed {
+                path: step_file_path(step, port, label.as_deref(), &file.kind),
                 digest: file.digest,
                 size: file.size,
-            });
-        }
-    }
-    placed
+            }
+        })
+        .collect()
 }
 
 /// What `--verify` found.

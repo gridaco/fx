@@ -3,8 +3,8 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { call } from "../src/engine.js";
-import { cancel, FxError, inspectControl, RunControlError } from "../src/index.js";
-import type { CancelOptions, RunControlResult } from "../src/index.js";
+import { AnswerError, cancel, FxError, inspectControl, inspectRequests, listRequests, respond, RunControlError } from "../src/index.js";
+import type { CancelOptions, RunControlResult, WaitingRequest } from "../src/index.js";
 import { SLOW, temporaryFolder } from "./support.js";
 
 const NODE = spawnSync("node", ["--version"]).status === 0;
@@ -78,6 +78,42 @@ async function until(check: () => boolean): Promise<void> {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("exact-target run control", () => {
+  test("waiting clients verify listed requests, viewer handoffs and the exact submission receipt", async () => {
+    const engine = fake();
+    try {
+      const run = "test/one";
+      const id = "a".repeat(64);
+      const at = "2026-11-22T00:00:00Z";
+      const pending = { id, step: "review#1", schema: true, show: null, on_timeout: "fail", opened_at: at, state: { status: "pending" } } satisfies WaitingRequest;
+      const answer = ["proof"] as const;
+      const winner = { ...pending, state: { status: "answered", answer: [...answer], channel: "sdk", at } } satisfies WaitingRequest;
+      for (const stdout of ["broken", '{"requests":[null]}', '{"requests":[{"state":{"status":"pending"}}]}']) {
+        engine.reply({ stdout });
+        await expect(listRequests(run, engine.options)).rejects.toBeInstanceOf(FxError);
+      }
+      engine.reply({ stdout: JSON.stringify({ requests: [pending] }) });
+      expect(await listRequests(run, engine.options)).toEqual([pending]);
+      await expect(inspectRequests(run, engine.options)).rejects.toBeInstanceOf(FxError);
+      engine.reply({ stdout: JSON.stringify({ requests: [], viewer_url: false }) });
+      await expect(inspectRequests(run, engine.options)).rejects.toBeInstanceOf(FxError);
+      engine.reply({ stdout: JSON.stringify({ request: winner }) });
+      expect(await respond(run, id, answer, engine.options)).toEqual(winner);
+      for (const [status, body] of [
+        [0, { request: pending }],
+        [0, { request: { ...winner, id: "b".repeat(64) } }],
+        [1, { code: "answer_conflict", message: "Conflict", request: pending }],
+        [1, { code: "expired", message: "Expired" }],
+      ] as const) {
+        engine.reply({ status, stdout: JSON.stringify(body) });
+        const error = await respond(run, id, answer, engine.options).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(FxError);
+        expect(error).not.toBeInstanceOf(AnswerError);
+      }
+    } finally {
+      engine.cleanup();
+    }
+  });
+
   test("forwards options and preserves inspect, acceptance and terminal result", async () => {
     const engine = fake();
     try {
@@ -94,6 +130,9 @@ describe.skipIf(!NODE || process.platform === "win32")("exact-target run control
       const completed = await cancel("runs/one", { ...engine.options, wait: true, timeout: "2m" });
       expect(completed.recorded_state).toBe("failed");
       expect(completed.external_completion).toBe("not_verified");
+      engine.reply({ stdout: JSON.stringify(result("cancel", { outcome: "completed", recorded_state: "awaiting", cleanup: "complete" })) });
+      const parked = await cancel("runs/one", { ...engine.options, wait: true, timeout: "2m" });
+      expect(parked.recorded_state).toBe("awaiting");
       expect(engine.log().at(-1)?.args).toEqual(["cancel", "runs/one", "--source=sdk", "--wait", "--timeout=2m", "--json"]);
     } finally {
       engine.cleanup();

@@ -79,7 +79,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from grida.fx._builder import Workflow
 from grida.fx._protocol import (
@@ -794,7 +794,9 @@ async def _read_into(stream: asyncio.StreamReader | None, sink: bytearray) -> No
         sink.extend(chunk)
 
 
-async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = None) -> _Exit:
+async def _call(
+    args: Sequence[str], cwd: Path, stdin: socket.socket | BinaryIO | None = None
+) -> _Exit:
     """Runs the binary, retaining ownership of a cancelled run until its engine has exited.
     Repeated task cancellation is the same request, never emergency force authority. Non-run
     commands keep their process-owned interruption and force deadline."""
@@ -824,7 +826,7 @@ async def _call(args: Sequence[str], cwd: Path, stdin: socket.socket | None = No
 async def _call_owned(
     args: Sequence[str],
     cwd: Path,
-    stdin: socket.socket | None = None,
+    stdin: socket.socket | BinaryIO | None = None,
     stop_requested: asyncio.Event | None = None,
 ) -> _Exit:
     """Runs the binary with ``args`` in ``cwd``. Its output is what it
@@ -1237,6 +1239,7 @@ async def run_async(
     max_usd: float | None = None,
     require_estimates: bool = False,
     yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
     run_dir: str | Path | None = None,
     name: str | None = None,
     resume: str | None = None,
@@ -1285,6 +1288,10 @@ async def run_async(
         arguments=arguments,
     )
     options = ["--live"] if live else []
+    if not isinstance(wait_for_answers, bool):
+        raise TypeError("wait_for_answers is True or False")
+    if wait_for_answers:
+        options.append("--wait-for-answers")
     if yes_up_to is not None:
         options.append(f"--yes-up-to={_amount('yes_up_to', yes_up_to)}")
     if run_dir is not None:
@@ -1379,6 +1386,7 @@ def run(
     max_usd: float | None = None,
     require_estimates: bool = False,
     yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
     run_dir: str | Path | None = None,
     name: str | None = None,
     resume: str | None = None,
@@ -1399,6 +1407,7 @@ def run(
             max_usd=max_usd,
             require_estimates=require_estimates,
             yes_up_to=yes_up_to,
+            wait_for_answers=wait_for_answers,
             run_dir=run_dir,
             name=name,
             resume=resume,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { ArtifactController, artifactDownloadName, artifactFileTarget, canPreviewText, jsonShape, jsonSize, parseJson, plainJson, stateIcon, stateIconParts, type Artifact, type CanvasPreview, type ExternalFileController } from "@grida/fx-web";
 import { ModelPreview } from "./model-preview";
 import { VisualPreview } from "./visual-preview";
@@ -25,7 +25,7 @@ export function StateIcon({ state, size = 12 }: { state: string; size?: number }
 export function StateLabel({ state }: { state: string }) {
   return <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
     <StateIcon state={state} size={12} />
-    {state.replaceAll("_", " ")}
+    {stateLabel(state)}
   </span>;
 }
 
@@ -36,6 +36,7 @@ export function Status({ state }: { state: string }) {
     cancelling: "bg-amber-50 text-amber-800 ring-amber-200",
     cancelled: "bg-amber-50 text-amber-800 ring-amber-200",
     interrupted: "bg-amber-50 text-amber-800 ring-amber-200",
+    awaiting: "bg-amber-50 text-amber-800 ring-amber-200",
     planned: "bg-blue-50 text-blue-800 ring-blue-200",
     maybe: "bg-amber-50 text-amber-800 ring-amber-200",
     done: "bg-emerald-50 text-emerald-800 ring-emerald-200",
@@ -43,15 +44,21 @@ export function Status({ state }: { state: string }) {
   };
   return <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] leading-3 font-medium ring-1 ring-inset ${colors[state] ?? "bg-zinc-100 text-zinc-600 ring-zinc-200"}`}>
     <StateIcon state={state} size={10} />
-    {state.replaceAll("_", " ")}
+    {stateLabel(state)}
   </span>;
+}
+
+function stateLabel(state: string) {
+  return state === "awaiting" ? "Awaiting answer" : state.replaceAll("_", " ");
 }
 
 const imageKinds = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
 const jsonKinds = ["json", "application/json", "annotations"];
 
 /** Visual media uses VisualPreview; native players explicitly own their fullscreen control. */
-export function ArtifactPreview({ artifact, poster, externalFiles }: { artifact: Artifact; poster?: Artifact; externalFiles?: ExternalFileController }) {
+export function ArtifactPreview({ artifact, poster, externalFiles, renderJson }: {
+  artifact: Artifact; poster?: Artifact; externalFiles?: ExternalFileController; renderJson?: (value: unknown) => ReactNode;
+}) {
   const controller = useMemo(() => new ArtifactController(), []);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   useEffect(() => { void controller.load(artifact); return () => controller.dispose(); }, [controller, artifact]);
@@ -84,6 +91,7 @@ export function ArtifactPreview({ artifact, poster, externalFiles }: { artifact:
   if (canPreviewText(artifact)) {
     // A JSON file reads as its value does: rows, one line, or folded.
     const json = jsonKinds.includes(artifact.kind) && state.text !== null ? parseJson(state.text) : undefined;
+    if (renderJson && jsonKinds.includes(artifact.kind)) return json === undefined ? open : <>{renderJson(json)}</>;
     return json !== undefined ? <Json value={json} /> : <pre className="fx-value-text">{state.text ?? "…"}</pre>;
   }
   return open;
@@ -108,6 +116,8 @@ export function Value({ value, artifacts, videoPreview, externalFiles }: { value
     return artifact ? <ArtifactPreview artifact={artifact} poster={poster} externalFiles={externalFiles} /> : <p className="fx-value-note">File not in this run folder</p>;
   }
   if (typeof value.file === "string" && /^[a-f0-9]{64}$/.test(value.file)) return <p className="fx-value-note" title={value.file}>file {value.file.slice(0, 12)}</p>;
+  if (record(value.object) && Object.keys(value).length === 1)
+    return <Values values={value.object} artifacts={artifacts} externalFiles={externalFiles} />;
   const json = plainJson(value);
   if (json !== undefined) return <Json value={json} />;
   // Pictures read best as a grid; anything else, one under another.

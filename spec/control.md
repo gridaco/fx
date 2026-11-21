@@ -166,7 +166,7 @@ has begun; it does not report B's unfinished state as A's.
 | `already_requested` | This invocation already accepted cancellation. | 0 without `--wait` |
 | `already_terminal` | A terminal record already exists; no cancellation performed. | 0 without `--wait` |
 | `finishing` | The owner already committed to finishing; no cancellation performed. | 0 without `--wait` |
-| `completed` | Matching terminal result and local completion receipt verified. The result may be succeeded, failed or cancelled. | 0 with `--wait` |
+| `completed` | Matching terminal result and local completion receipt verified. The invocation may have succeeded, failed, been cancelled or parked awaiting a workflow answer. | 0 with `--wait` |
 | `error` | Refused, unsupported, unknown outcome, or unverified completion. | See codes below |
 
 Inspection exits 0 when it can report a valid observation, including known
@@ -234,8 +234,8 @@ targeting; it is not isolation from malicious code already running as this user.
 
 The project service may later adapt this interface for a viewer action with
 explicit browser mutation protections. Observation HTTP endpoints remain
-read-only; merely opening a run URL never authorizes cancellation. No browser
-write endpoint, remote worker transport, broker or cloud supervisor is in v1.
+read-only; merely opening a run URL never authorizes cancellation. Browser answering for a workflow-declared [waiting step](waiting.md) uses its run-scoped
+HTTP endpoint. Cancellation remains available through local process control.
 
 ## 6. External work, signals and SDKs
 

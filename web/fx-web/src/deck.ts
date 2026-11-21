@@ -31,16 +31,19 @@ export function deckBadge(members: DeckMember[]) {
   const failures = members.filter((member) => failed.has(member.state)).length;
   const skipped = members.filter((member) => member.state === "skipped").length;
   const waiting = members.filter((member) => member.state === "waiting").length;
+  const awaiting = members.filter((member) => member.state === "awaiting").length;
   return {
     text: parts.join(" · "),
     failed: failures,
-    detail: [...(failures ? [`${failures} failed`] : []), ...(waiting ? [`${waiting} waiting`] : []), ...(skipped ? [`${skipped} skipped`] : [])],
+    detail: [...(failures ? [`${failures} failed`] : []), ...(awaiting ? [`${awaiting} awaiting an answer`] : []),
+      ...(waiting ? [`${waiting} waiting`] : []), ...(skipped ? [`${skipped} skipped`] : [])],
   };
 }
 
 /**
  * The member that rests in front (§5.4): the selected one, else the last failed or blocked, else
- * the first running, else the first waiting for its route, else in a take deck the last take read
+ * the first running, else the first awaiting an answer, else the first waiting for its route.
+ * In a take deck the next choice is the last take read
  * from outside it, else the last succeeded, else one with execution evidence, else the first.
  * Explicit inspection may foreground any member; status alone does not establish consumption.
  */
@@ -59,6 +62,7 @@ export function restingRow(rows: DeckMember[][], selected: string | null): numbe
     () => first((member) => member.id === selected),
     () => last((member) => failed.has(member.state)),
     () => first((member) => member.state === "running"),
+    () => first((member) => member.state === "awaiting"),
     () => first((member) => member.state === "waiting"),
     () => rows[0]?.some((_, column) => isTakeDeck(rows.map((row) => row[column]))) ? last((member) => member.bound === true) : -1,
     () => last((member) => succeeded.has(member.state)),
@@ -96,7 +100,7 @@ export function deckTicks(members: DeckMember[]): DeckTick[] {
     const first = Math.floor(at * members.length / count), last = Math.floor((at + 1) * members.length / count) - 1;
     const states = members.slice(first, last + 1).map((member) => member.state);
     const tone = states.some((state) => failed.has(state)) ? "failed"
-      : states.some((state) => state === "running" || state === "waiting") ? "active"
+      : states.some((state) => ["running", "awaiting", "waiting"].includes(state)) ? "active"
         : states.some((state) => succeeded.has(state)) ? "done" : "idle";
     return { first, last, tone };
   });

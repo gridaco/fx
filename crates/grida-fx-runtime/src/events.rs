@@ -160,6 +160,14 @@ pub enum Event {
         steps: usize,
         high_usd: Usd,
     },
+    /// Observed state of a durable request. An out-of-process reply becomes an event only
+    /// when the scheduler observes it in an invocation.
+    WaitingRequest {
+        id: String,
+        request_id: String,
+        status: &'static str,
+        deadline: Option<String>,
+    },
     NodeStarted {
         id: String,
         path: String,
@@ -288,6 +296,7 @@ pub enum Event {
         ok: bool,
         incomplete: bool,
         stopped: Option<String>,
+        awaiting: Vec<String>,
         charged_usd: Usd,
         failed: Vec<String>,
         outputs: IndexMap<String, Value>,
@@ -333,6 +342,7 @@ impl Event {
             Event::ScopesUpdated { .. } => "scopes_updated",
             Event::RunStarted { .. } => "run_started",
             Event::PhasePlanned { .. } => "phase_planned",
+            Event::WaitingRequest { .. } => "waiting_request",
             Event::NodeStarted { .. } => "node_started",
             Event::NodeFinished { .. } => "node_finished",
             Event::NodeFailed { .. } => "node_failed",
@@ -436,6 +446,19 @@ impl Event {
                 fields.put("phase", Value::from(*phase));
                 fields.put("steps", Value::from(*steps as u64));
                 fields.money("high_usd", *high_usd);
+            }
+            Event::WaitingRequest {
+                id,
+                request_id,
+                status,
+                deadline,
+            } => {
+                fields.text("id", id);
+                fields.text("request_id", request_id);
+                fields.text("request_status", status);
+                if let Some(deadline) = deadline {
+                    fields.text("deadline", deadline);
+                }
             }
             Event::NodeStarted {
                 id,
@@ -695,6 +718,7 @@ impl Event {
                 ok,
                 incomplete,
                 stopped,
+                awaiting,
                 charged_usd,
                 failed,
                 outputs,
@@ -702,6 +726,9 @@ impl Event {
                 fields.put("ok", Value::Bool(*ok));
                 fields.put("incomplete", Value::Bool(*incomplete));
                 fields.text_or_null("stopped", stopped.as_deref());
+                if !awaiting.is_empty() {
+                    fields.put("awaiting", serde_json::json!(awaiting));
+                }
                 fields.money("charged_usd", *charged_usd);
                 fields.put(
                     "failed",

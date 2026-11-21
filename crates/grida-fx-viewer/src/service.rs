@@ -6,6 +6,7 @@ use axum::http::Uri;
 use axum::routing::post;
 use chrono::{DateTime, SecondsFormat, Utc};
 use grida_fx_core::value::digest;
+use grida_fx_runtime::waiting::{self as requests, RequestState};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::{self, File};
@@ -173,6 +174,25 @@ impl Catalog {
         self.register_matching_run(run, None)
     }
 
+    /// Return the scoped route only if this exact run already has a catalog entry.
+    pub fn registered_run_route(&self, run: &Path) -> io::Result<Option<String>> {
+        let root = run.canonicalize()?;
+        let identity = run_identity(&root)?;
+        let id = local_run_id(&root, &identity);
+        match self.record(&id) {
+            Ok(Record::Run {
+                root: recorded,
+                identity: original,
+                ..
+            }) if recorded == root && original == identity => {
+                Ok(Some(format!("/p/{}/runs/{id}/", self.project_id)))
+            }
+            Ok(_) => Err(invalid("The registered run no longer matches.")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     /// Registers a run only if it still matches the recorded evidence read by inspection.
     pub fn register_inspected_run(
         &self,
@@ -196,7 +216,7 @@ impl Catalog {
         if expected.is_some_and(|expected| expected != identity) {
             return Err(invalid("The inspected run folder has been replaced."));
         }
-        let id = digest(&json!(["fx-local-run-v1", root, identity]));
+        let id = local_run_id(&root, &identity);
         let record = Record::Run {
             id,
             root,
@@ -328,8 +348,8 @@ impl Catalog {
                 let state = details
                     .as_ref()
                     .ok_or_else(|| invalid("The registered run folder is unavailable."))
-                    .and_then(|_| read::read_inventory(root))
-                    .map(|snapshot| snapshot.document.state)
+                    .and_then(|_| read::read_recorded_inventory(root))
+                    .map(|snapshot| catalog_run_state(root, snapshot.document.state))
                     .unwrap_or_else(|_| "unavailable".into());
                 let metadata = metadata.clone().or_else(|| details.map(|run| run.metadata));
                 ("run", title.clone(), state, metadata)
@@ -433,6 +453,25 @@ impl Catalog {
             }
         }
     }
+}
+
+fn catalog_run_state(root: &Path, recorded: String) -> String {
+    if matches!(recorded.as_str(), "unfinished" | "awaiting")
+        && let Ok(requests) = requests::list(root)
+        && !requests.is_empty()
+    {
+        // A detached response or elapsed deadline can change what needs attention
+        // before a runner records the resolution in the event log.
+        return if requests
+            .iter()
+            .any(|request| matches!(request.state, RequestState::Pending))
+        {
+            "awaiting".into()
+        } else {
+            "unfinished".into()
+        };
+    }
+    recorded
 }
 
 /// A run the project's catalog registered, read without creating or changing local state.
@@ -568,7 +607,7 @@ fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
     let record: Record =
         serde_json::from_reader(file).map_err(|_| invalid("The catalog entry cannot be read."))?;
     let expected = match &record {
-        Record::Run { root, identity, .. } => digest(&json!(["fx-local-run-v1", root, identity])),
+        Record::Run { root, identity, .. } => local_run_id(root, identity),
         Record::Plan { graph, .. } => digest(&json!(["fx-local-plan-v1", graph])),
     };
     if record.id() != id || expected != id {
@@ -646,6 +685,10 @@ fn recorded_run_identity(graph: &Value, mut first: Value) -> String {
     }
     // Resumes retain the first invocation, including legacy events without invocation_id.
     digest(&json!([graph, first]))
+}
+
+fn local_run_id(root: &Path, identity: &str) -> String {
+    digest(&json!(["fx-local-run-v1", root, identity]))
 }
 
 fn checked_run(root: &Path, identity: &str) -> io::Result<()> {

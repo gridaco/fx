@@ -70,7 +70,7 @@ pub enum Shape {
 /// An input or output port (protocol.md §4 "Ports").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Port {
-    /// A family (`image`) or a media type in it (`image/png`).
+    /// A family (`image`), a media type (`image/png`), or an engine-native output (`value`).
     pub kind: String,
     pub shape: Shape,
     pub optional: bool,
@@ -139,7 +139,7 @@ pub enum BodyKind {
     Capability,
     /// A built-in whose body is in `grida.fx.std`, run by the Python host.
     Python,
-    /// `fx/select@1`: the engine itself.
+    /// Built-in selection and waiting steps, executed by the engine.
     Engine,
     /// A built-in that plans, identifies and prices but has no body.
     None,
@@ -170,6 +170,15 @@ pub struct NodeSpec {
 impl NodeSpec {
     /// Validates a wire spec (module doc). `capability` is set only for catalog types.
     pub fn from_type_spec(spec: &TypeSpec, capability: Option<String>) -> Result<NodeSpec, String> {
+        Self::read_type_spec(spec, capability, false)
+    }
+
+    /// The embedded catalog can describe native outputs whose concrete value is chosen at runtime.
+    pub(crate) fn read_type_spec(
+        spec: &TypeSpec,
+        capability: Option<String>,
+        native_outputs: bool,
+    ) -> Result<NodeSpec, String> {
         let name = &spec.name;
         if !TYPE_NAME.is_match(name) {
             return Err(format!(
@@ -177,12 +186,12 @@ impl NodeSpec {
                 py_repr_str(name)
             ));
         }
-        let inputs = ports(name, "input", &spec.inputs)?;
+        let inputs = ports(name, "input", &spec.inputs, false)?;
         for (param, schema) in &spec.params {
             check_name(name, "param", param)?;
             check_param(name, param, schema)?;
         }
-        let outputs = ports(name, "output", &spec.outputs)?;
+        let outputs = ports(name, "output", &spec.outputs, native_outputs)?;
         let overlap: BTreeSet<&str> = spec
             .inputs
             .keys()
@@ -367,11 +376,21 @@ fn ports(
     type_name: &str,
     what: &str,
     declared: &IndexMap<String, String>,
+    native_outputs: bool,
 ) -> Result<IndexMap<String, Port>, String> {
     let mut ports = IndexMap::new();
     for (name, notation) in declared {
         check_name(type_name, what, name)?;
-        ports.insert(name.clone(), Port::parse(notation)?);
+        let port = if native_outputs && matches!(notation.as_str(), "value" | "value?") {
+            Port {
+                kind: "value".into(),
+                shape: Shape::One,
+                optional: notation.ends_with('?'),
+            }
+        } else {
+            Port::parse(notation)?
+        };
+        ports.insert(name.clone(), port);
     }
     Ok(ports)
 }

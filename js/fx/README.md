@@ -596,3 +596,21 @@ and captures notes. See the [note contract](https://github.com/gridaco/fx/blob/m
 
 For note selection context, construct `ViewerClient` with `includeNotes: true`. The default
 preserves protocol-v1 selection shapes; see the [viewer API](https://github.com/gridaco/fx/blob/main/spec/viewer.md).
+
+## Answer a waiting step
+
+Use `run(target, { name: "review", waitForAnswers: true })` to keep a named run attached while another client supplies input. In the [waiting example](https://github.com/gridaco/fx/blob/main/fixtures/waiting/workflow.yaml), a build system supplies a revision without a prompt and a reviewer picks one of the saved images.
+
+```js
+import { listRequests, respond } from "@grida/fx";
+
+const run = "review-variants/review";
+const pending = (await listRequests(run)).filter(r => r.state.status === "pending");
+const revision = pending.find(r => r.step === "revision#1");
+if (revision) await respond(run, revision.id, "rev-42");
+
+const image = pending.find(r => r.step === "choose#1");
+if (image) await respond(run, image.id, { variant: "b" });
+```
+
+`listRequests(run)` reads the durable requests directly. For a viewer link, call `inspectRequests(run)`, or pass `{ register: true }` to register the run too. The result includes `viewer_url` when the local service can serve the run. The engine checks every response against the saved schema and any frozen candidate keys. A conflicting submission raises `AnswerError` with the recorded winner.

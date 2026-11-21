@@ -325,6 +325,49 @@ To use whichever result exists, pick explicitly, or use `??`:
 `select` skips results whose step was skipped or rejected. Its output keeps the candidates' name:
 `steps.chosen.outputs.image` above.
 
+## Wait for external input
+
+Use `fx/await@1` when a person or program supplies a value during a run. Declare
+the accepted value with `with.schema`. A build system can supply a revision
+without a prompt. A human review can add a question and show an artifact.
+
+```yaml
+steps:
+  revision:
+    uses: fx/await@1
+    with: { schema: { type: string } }
+  approve:
+    uses: fx/await@1
+    with:
+      message: "Approve this concept?"
+      schema: { type: boolean }
+      timeout_seconds: 300
+      on_timeout: continue
+  render:
+    if: ${{ steps.approve.outputs.answer ?? false }}
+    uses: ./nodes.py#render
+  fallback:
+    if: ${{ steps.approve.facts.outcome == 'expired' }}
+    uses: ./nodes.py#judge
+```
+
+Read the supplied revision from `steps.revision.outputs.answer`.
+A timely `false` on the approval skips both branches in this example. With `on_timeout: fail`
+(the default), expiry fails the step. Omit `timeout_seconds` for an open-ended wait.
+Use `show` to provide context, and `choices` to offer keyed values or files. A string
+answer names the chosen key directly. For a structured answer, set `choice_field`
+to the member holding that key. The step's `outputs.selected` carries the original
+candidate. Each expanded occurrence opens its own request. See the [three-variant
+workflow](../../fixtures/waiting/workflow.yaml) and [how to answer](05-running.md#answer-a-waiting-step).
+
+For fixed values such as a paper finish, use
+`schema: { type: string, enum: [matte, satin] }`. The viewer offers a picker,
+and `outputs.answer` contains the chosen string. When upstream work produces
+images, use `choices` to bind each key to the exact image the next step needs.
+The [review showcase](../../fixtures/waiting/showcase.yaml) demonstrates both.
+The [form examples](../../fixtures/waiting/README.md#answer-types-in-the-viewer)
+show how the viewer renders other JSON Schema types.
+
 ## Judges
 
 A judge is a step that looks at another step's result and reports a verdict, `accept` or `reject`.

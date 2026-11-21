@@ -1,4 +1,4 @@
-//! The built-in node types (`fx/<name>@<major>`), embedded as data: `catalog.json`, the 37
+//! The built-in node types (`fx/<name>@<major>`), embedded as data: `catalog.json`, the 38
 //! standard types.
 //!
 //! `catalog.json` is `{"kind": "fx-std-catalog-v1", "types": [...]}`; each type has `uses`,
@@ -6,11 +6,13 @@
 //! `capability`, `calls`, `resources`, `tools`, `retry`, and `body` (`capability`, `python`,
 //! `engine` or `none`), in declaration order. A built-in's identity is
 //! `fx/<name>@<major>.<version>` (identity.md §6). The engine owns the capability types and
-//! `fx/select@1` (protocol.md §4 "Engine types"); the Python host runs the `python` bodies.
+//! the native `select` and `await` types (protocol.md §4 "Engine types"); the Python host runs the `python` bodies.
 //!
 //! The catalog is read once, with FX's JSON reader (one number type), and every spec is
-//! validated through [`crate::spec::NodeSpec::from_type_spec`] with its capability. `nodes`
-//! kinds are 11 paid, 5 judge, 21 free.
+//! validated with its capability and its engine-native output notation when applicable. `nodes`
+//! kinds are 11 paid, 5 judge, 22 free.
+
+pub mod waiting;
 
 use crate::spec::{BodyKind, NodeSpec};
 use grida_fx_protocol::TypeSpec;
@@ -133,7 +135,7 @@ fn parse_catalog(text: &str) -> Result<Vec<BuiltinType>, String> {
             version: Some(entry.version),
             retry: entry.retry,
         };
-        let spec = NodeSpec::from_type_spec(&wire, entry.capability)
+        let spec = NodeSpec::read_type_spec(&wire, entry.capability, body == BodyKind::Engine)
             .map_err(|reason| format!("{uses}: {reason}"))?;
         types.push(BuiltinType {
             uses,
@@ -152,7 +154,16 @@ mod tests {
 
     #[test]
     fn the_catalog_parses() {
-        assert_eq!(builtins().len(), 37);
+        assert_eq!(builtins().len(), 38);
+        for builtin in builtins() {
+            let wire = builtin.spec.to_type_spec();
+            let restored = NodeSpec::read_type_spec(
+                &wire,
+                builtin.spec.capability.clone(),
+                builtin.body == BodyKind::Engine,
+            );
+            assert_eq!(restored.as_ref(), Ok(&builtin.spec), "{}", builtin.uses);
+        }
         let generate = builtin("image.generate", 1).unwrap();
         assert_eq!(generate.uses, "fx/image.generate@1");
         assert_eq!(generate.identity(), "fx/image.generate@1.1");
@@ -161,6 +172,15 @@ mod tests {
         assert!(builtin("image.generate", 2).is_none());
         assert!(builtin("nope", 1).is_none());
         assert_eq!(builtin("select", 1).unwrap().body, BodyKind::Engine);
+        let review = &builtin("await", 1).unwrap().spec;
+        assert_eq!(review.outputs["selected"].notation(), "value?");
+        assert_eq!(review.to_type_spec().outputs["selected"], "value?");
+        for notation in ["value", "value?"] {
+            let mut host_spec = review.to_type_spec();
+            host_spec.outputs.insert("selected".into(), notation.into());
+            let error = NodeSpec::from_type_spec(&host_spec, None).unwrap_err();
+            assert!(error.contains("port kind 'value'"), "{error}");
+        }
         assert_eq!(builtin("image.resize", 1).unwrap().body, BodyKind::Python);
         assert_eq!(builtin("image.key", 1).unwrap().body, BodyKind::None);
     }

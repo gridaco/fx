@@ -1,10 +1,11 @@
-import { StrictMode, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel } from "@grida/fx-web";
+import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, WaitingReviewController, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel, withReviewCards } from "@grida/fx-web";
 import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Value, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import { RunFavicon } from "./run-favicon";
+import { WaitingReviews } from "./waiting-reviews";
 import "./style.css";
 
 const entryController = new ViewerEntryController(window.location.pathname);
@@ -196,7 +197,7 @@ function RunDetails({ run, node, canvasNode, onInspectSource }: { run: ViewerRun
   const [inputs, settings] = split(node.with, canvasNode);
   const skipped = node.state === "skipped" ? skipExplanation(node.skip_reason, run.nodes) : null;
   return <>
-    <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
+    <Heading title={node.title || node.path} id={node.id} kind="step id" state={node.state} meta={[canvasNode?.review_label, node.cache === "hit" && "cached", node.state === "waiting" && node.waiting_for && `for ${node.waiting_for}`,
       node.duration_ms !== null && duration(node.duration_ms), !!node.waited_ms && `waited ${duration(node.waited_ms)} for a route`]} />
     <SourceFile instanceId={node.id} />
     {skipped ? <section className="fx-detail-skip" aria-label="Why skipped">
@@ -268,11 +269,30 @@ function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
   const inventory = useSyncExternalStore(fileInventory.subscribe, fileInventory.getSnapshot);
+  const reviews = useMemo(() => new WaitingReviewController(apiBase), []);
+  const pendingAnswers = useSyncExternalStore(reviews.subscribe, reviews.getPendingCount);
+  const reviewStep = useSyncExternalStore(reviews.subscribe, reviews.getOpenStep);
   useEffect(() => {
     const favicon = new RunFavicon(document.querySelector<HTMLLinkElement>('link[rel="icon"]')!);
-    const unsubscribe = controller.subscribe(() => favicon.setActive(controller.getSnapshot().runActive));
-    const hide = () => { controller.dispose(); favicon.setActive(false); };
-    const show = (event: PageTransitionEvent) => { if (event.persisted) void controller.refresh(); };
+    let pageActive = true;
+    const syncIcon = () => {
+      if (!pageActive) favicon.setState("idle");
+      else if (reviews.getPendingCount() > 0) favicon.setState("awaiting");
+      else favicon.setState(controller.getSnapshot().runActive ? "active" : "idle");
+    };
+    const unsubscribe = controller.subscribe(syncIcon);
+    const unsubscribeReviews = reviews.subscribe(syncIcon);
+    const hide = () => {
+      pageActive = false;
+      controller.dispose();
+      syncIcon();
+    };
+    const show = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      pageActive = true;
+      void controller.refresh();
+      syncIcon();
+    };
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", show);
     void controller.refresh();
@@ -280,22 +300,38 @@ function WorkflowView() {
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", show);
       unsubscribe();
+      unsubscribeReviews();
       controller.dispose();
       favicon.dispose();
     };
-  }, []);
+  }, [reviews]);
   const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
   const [about, setAbout] = useState(false);
-  useEffect(() => setAbout(false), [scope]);
-  const select = (id: string | null) => { setAbout(false); controller.select(id); };
+  useEffect(() => { setAbout(false); reviews.close(); }, [scope, reviews]);
+  const select = (id: string | null) => { reviews.close(); setAbout(false); controller.select(id); };
   const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1" ? view : null;
+  const hasReviews = run?.nodes.some(node => /^fx\/await@0*1$/.test(node.uses ?? "")) ?? false;
+  const reviewOpen = hasReviews && reviewStep !== null;
+  const reviewCards = useSyncExternalStore(reviews.subscribe, reviews.getCards);
+  const liveGraph = useMemo(() => hasReviews ? withReviewCards(graph, reviewCards) : graph, [graph, hasReviews, reviewCards]);
+  let runStatus = run?.state ?? "";
+  if (cancelling) runStatus = "cancelling";
+  else if (reviewCards.size > 0 && (runStatus === "unfinished" || runStatus === "awaiting")) {
+    runStatus = pendingAnswers > 0 ? "awaiting" : "unfinished";
+  }
+  useEffect(() => {
+    if (!hasReviews) return;
+    reviews.start();
+    return () => reviews.stop();
+  }, [hasReviews, reviews]);
   const workflowTitle = view?.workflow.title.trim() || view?.workflow.id;
   const description = view?.workflow.description?.trim()
     || (plan ? `Inspect the execution plan for ${workflowTitle}.`
       : run ? `Inspect run ${run.run_name} for ${workflowTitle}.` : undefined);
-  usePageMetadata([run ? "Run" : plan ? "Plan" : undefined, workflowTitle, run?.run_name], description);
+  const runTitle = pendingAnswers === 1 ? "Awaiting answer" : pendingAnswers > 1 ? `Awaiting ${pendingAnswers} answers` : "Run";
+  usePageMetadata([run ? runTitle : plan ? "Plan" : undefined, workflowTitle, run?.run_name], description);
   const selectedNote = graph.notes?.find((note) => note.id === selected);
   const selectedNode = graph.nodes.find((node) => node.id === selected);
   const stepNodes = graph.nodes.filter((node) => node.kind !== "value");
@@ -322,16 +358,32 @@ function WorkflowView() {
   // A step chosen from the list brings its card into the canvas the open panels leave free.
   const pane = useRef<HTMLElement>(null);
   const canvas = useRef<WorkflowCanvasHandle>(null);
+  const closeReview = useCallback(() => {
+    const step = reviews.getOpenStep();
+    reviews.close();
+    if (!step || !pane.current) return;
+    const card = pane.current.querySelector<SVGElement>(`[data-node-id="${CSS.escape(`instance:${step}`)}"]`);
+    const action = card?.querySelector<SVGElement>(".fx-canvas-review-action");
+    if (action?.getClientRects().length) action.focus({ preventScroll: true });
+    else pane.current.querySelector<HTMLElement>(".fx-canvas")?.focus({ preventScroll: true });
+  }, [reviews]);
   const canvasLoaded = view !== null;
   useEffect(() => {
     if (!canvasLoaded) return;
     return presentation.attachCanvas((next, focus) => {
       // Commit the controller's selection/scope and its details before measuring the free area.
-      flushSync(() => { setAbout(false); if (focus !== null) setSteps(false); });
+      flushSync(() => {
+        setAbout(false);
+        if (focus !== null) {
+          setSteps(false);
+          reviews.close();
+        }
+      });
       if (!canvas.current || !pane.current) throw new ViewerPresentationError("not_ready", "The workflow canvas is not mounted.");
-      canvas.current.present(next.graph, next.layout, next.selected, next.scope, focus, canvasInset(pane.current));
+      const graph = hasReviews ? withReviewCards(next.graph, reviews.getCards()) : next.graph;
+      canvas.current.present(graph, next.layout, next.selected, next.scope, focus, canvasInset(pane.current));
     });
-  }, [canvasLoaded]);
+  }, [canvasLoaded, hasReviews, reviews]);
   const [reveal, setReveal] = useState<{ id: string } | null>(null);
   const inspectSource = (id: string) => {
     if (!run?.nodes.some((node) => node.id === id)) return;
@@ -345,33 +397,36 @@ function WorkflowView() {
     if (!reveal || !pane.current) return;
     canvas.current?.reveal(reveal.id, canvasInset(pane.current));
   }, [reveal]);
-  // Esc closes the details, then the step list; an open deck takes it before them, and the canvas's own Esc after.
+  // Esc closes the right-hand panel before the step list. Interactive content can handle it first.
   useEffect(() => {
-    if (!open && !steps) return;
+    if (!reviewOpen && !open && !steps) return;
     const close = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented || ownsKeys(event.target)) return;
       event.preventDefault();
-      if (open) { setAbout(false); controller.select(null); } else setSteps(false);
+      if (reviewOpen) closeReview();
+      else if (open) { setAbout(false); controller.select(null); }
+      else setSteps(false);
     };
     document.addEventListener("keydown", close, { capture: true });
     return () => document.removeEventListener("keydown", close, { capture: true });
-  }, [open, steps]);
+  }, [reviewOpen, open, steps, closeReview]);
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
     {external.error && <p role="alert" className="fx-error">{external.error}{external.failedReference?.target.kind === "artifact" && external.failedReference.target.artifact.url && <>{" "}<a href={external.failedReference.target.artifact.url} target="_blank" rel="noopener noreferrer" className="underline">Open in browser</a></>}{" "}<button type="button" className="underline" onClick={externalFiles.clearError}>Dismiss</button></p>}
     {external.available && inventory.error && <p role="alert" className="fx-error">{inventory.error}{" "}<button type="button" className="underline" onClick={() => void fileInventory.refresh()}>Retry source files</button></p>}
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
       : <main ref={pane} aria-label="Workflow canvas" className="fx-canvas-pane">
-        <WorkflowCanvas ref={canvas} graph={graph} layout={layout} selected={selected} scope={scope} onSelect={select} onOpenScope={controller.openScope} onBack={controller.back} />
+        <WorkflowCanvas ref={canvas} graph={liveGraph} layout={layout} selected={selected} scope={scope} onSelect={select}
+          onOpenScope={controller.openScope} onBack={controller.back} onReview={hasReviews ? reviews.open : undefined} />
         <nav aria-label="Workflow location" className="fx-bar">
           {entryController.route?.project_id && <a href="/" className="fx-bar-project" title="Project" aria-label="Project"><ArrowLeft {...iconProps} /></a>}
           <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
             ? <button onClick={() => controller.goToScope(crumb.id)} title={crumb.id ?? crumb.title}>{crumb.title}</button>
-            : <button onClick={() => { controller.select(null); setAbout(!about); }} aria-current="page" aria-expanded={about}>{crumb.title}</button>}</li>)}</ol>
-          {run ? <><StateLabel state={cancelling ? "cancelling" : run.state} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost" title="Budget booked; includes reserved amounts when the provider reports no final charge">booked {money(run.charged_usd)}</span></>}</>
+            : <button onClick={() => { select(null); setAbout(reviewOpen || !about); }} aria-current="page" aria-expanded={!reviewOpen && about}>{crumb.title}</button>}</li>)}</ol>
+          {run ? <><StateLabel state={runStatus} /><RunTime run={run} />{run.charged_usd !== null && <><Dot /><span className="fx-bar-cost" title="Budget booked; includes reserved amounts when the provider reports no final charge">booked {money(run.charged_usd)}</span></>}</>
             : view.estimate && <span className="fx-bar-cost">{priceLabel(view.estimate, money, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
-          {notices.length > 0 && <button onClick={() => { controller.select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
+          {notices.length > 0 && <button onClick={() => { select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
         </nav>
         <button ref={toggle} onClick={() => setSteps(!steps)} className="fx-steps-toggle" aria-expanded={steps} aria-controls="fx-steps" aria-label="Steps" title="Steps"><List {...iconProps} size={16} /></button>
         {steps && <nav ref={popover} id="fx-steps" aria-label="Workflow steps" className="fx-steps">
@@ -380,7 +435,8 @@ function WorkflowView() {
             <span className="fx-step-label">{node.title}</span><StateIcon state={node.state} />
           </button>)}</div>
         </nav>}
-        {open && <aside aria-label="Details" className="fx-details">
+        {run && reviewOpen ? <WaitingReviews run={run} controller={reviews} onClose={closeReview} />
+        : open && <aside aria-label="Details" className="fx-details">
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
           {selectedNote ? <NoteDetails note={selectedNote} /> : selectedNode?.value ? <ValueDetails value={selectedNode.value} view={view} /> : selectedNode?.kind ? <ScopeDetails node={selectedNode} />
             : selectedNode ? plan ? <PlanDetails plan={plan} instance={instance} pending={pending} canvasNode={selectedNode} />

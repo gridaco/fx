@@ -15,12 +15,14 @@ export interface PortBinding {
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const name = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 const portName = (value: unknown): value is string => typeof value === "string" && /^[a-z][a-z0-9_]*$/.test(value);
-const notation = /^(?:image|audio|video|model|text|json|annotations|file)(?:\/[a-z0-9.+-]+)?(?:\[\]|\{\})?\??$/;
+const filePort = (type: unknown): type is string => typeof type === "string"
+  && /^(?:image|audio|video|model|text|json|annotations|file)(?:\/[a-z0-9.+-]+)?(?:\[\]|\{\})?\??$/.test(type);
 
 export function isNodePorts(value: unknown): value is NodePorts {
   return record(value) && Object.keys(value).length === 3
     && record(value.inputs) && record(value.outputs) && record(value.params)
-    && [value.inputs, value.outputs].every((ports) => Object.entries(ports).every(([key, type]) => portName(key) && typeof type === "string" && notation.test(type)))
+    && Object.entries(value.inputs).every(([key, type]) => portName(key) && filePort(type))
+    && Object.entries(value.outputs).every(([key, type]) => portName(key) && (filePort(type) || type === "value" || type === "value?"))
     && Object.entries(value.params).every(([key, schema]) => portName(key) && record(schema));
 }
 

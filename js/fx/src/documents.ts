@@ -200,6 +200,7 @@ export interface CallRecovery extends RunEvent {
 
 /** The `run_finished` event. */
 export interface RunFinished extends RunEvent {
+  awaiting?: string[];
   event: "run_finished";
   ok: boolean;
   incomplete: boolean;
@@ -212,7 +213,8 @@ export interface RunFinished extends RunEvent {
 /** One instance in {@link Projection}. */
 export interface ProjectedInstance {
   /** `waiting`: started, its paid call waiting for its route's slot (older records never have it). */
-  state: "running" | "waiting" | "succeeded" | "failed" | "skipped";
+  state: "running" | "waiting" | "awaiting" | "succeeded" | "failed" | "skipped";
+  request_id?: string;
   path: string;
   /** Waiting: the route it waits for. */
   waiting_for?: string | null;
@@ -240,7 +242,7 @@ export interface Projection {
 export interface InspectedStep {
   id: string;
   path: string;
-  state: "succeeded" | "failed" | "skipped" | "running" | "waiting" | "pending";
+  state: "succeeded" | "failed" | "skipped" | "running" | "waiting" | "awaiting" | "pending";
   error?: string;
   cache?: "hit" | "miss";
   /** Waiting: the route whose slot it waits for. */
@@ -253,10 +255,12 @@ export interface InspectedStep {
 /** `grida-fx inspect <run> --json`: a run's summary. */
 export interface Inspection {
   run: {
+    /** Recorded external requests when the workflow has opened any. */
+    requests?: import("./waiting.js").WaitingRequest[];
     workflow: string;
     /** The run folder, as it was named. */
     folder: string;
-    state: "planned" | "unfinished" | "succeeded" | "failed" | "cancelled";
+    state: "planned" | "unfinished" | "awaiting" | "succeeded" | "failed" | "cancelled";
     /** What the run was charged; null before it ended. */
     charged_usd: number | null;
     steps: InspectedStep[];
