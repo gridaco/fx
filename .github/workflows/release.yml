@@ -2,24 +2,20 @@ name: release
 
 # Builds the release's engine for its four targets, packs the grida wheels and the npm packages
 # around each one, holds every package to the conformance suite as installed, and then (for a
-# v* tag, once a reviewer approves the "release" environment) publishes them: npm under the
+# push of a protected v* tag) publishes them: npm under the
 # dist-tag latest for stable versions or next for pre-releases. PyPI uses the Python manifest
-# version. After both registries succeed, the workflow publishes the tagged changelog on GitHub.
+# version. After both registries succeed, the workflow publishes the tagged changelog and
+# checked standalone archives on GitHub.
 # RELEASING.md has the owner's steps.
 #
-# A workflow_dispatch run is a dry run unless dry_run is unchecked on a v* tag: it builds and
-# checks everything and publishes nothing. Windows is not in the preview: the engine's runner uses
+# Manual runs always build and check everything without publishing.
+# Windows is not in the preview: the engine's runner uses
 # Unix process groups and signals.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Build and check everything, publish nothing
-        type: boolean
-        default: true
 
 permissions: {}
 
@@ -248,7 +244,17 @@ jobs:
           mv "$DIST/npm/grida-fx-$VERSION.tgz" "$DIST/npm-sdk/"
           mv "$DIST"/npm/*.tgz "$DIST/npm-engine/"
           test "$(find "$DIST/npm-engine" -name '*.tgz' | wc -l)" -eq 1
+      - name: Package and verify the tested standalone executable
+        run: >-
+          uv run --locked --project python python tools/standalone_release.py
+          --engine "$DIST"/npm-engine/*.tgz --wheel "$DIST"/wheels/*.whl
+          --target "$TARGET" --version "$VERSION" --out "$DIST/standalone"
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: standalone-${{ matrix.target }}
+          path: ${{ runner.temp }}/dist/standalone/*.tar.gz
+          if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.target }}
@@ -266,13 +272,43 @@ jobs:
           path: ${{ runner.temp }}/dist/npm-sdk/*.tgz
           if-no-files-found: error
 
+  downloads:
+    name: Verify standalone release downloads
+    needs: [versions, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    env:
+      VERSION: ${{ needs.versions.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: standalone-*
+          path: downloads
+          merge-multiple: true
+      - name: Require all four platform archives and write their checksums
+        working-directory: downloads
+        env:
+          LC_ALL: C
+        run: |
+          set -euo pipefail
+          archives=(grida-fx-"$VERSION"-{aarch64-apple-darwin,aarch64-unknown-linux-gnu,x86_64-apple-darwin,x86_64-unknown-linux-gnu}.tar.gz)
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq "${#archives[@]}"
+          sha256sum "${archives[@]}" > SHA256SUMS
+          sha256sum --strict -c SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-downloads
+          path: downloads/
+          if-no-files-found: error
+
   publish:
     name: Publish (npm, PyPI)
-    needs: [versions, build]
-    if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+    needs: [versions, downloads]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Required reviewers are set on this environment by the owner. Both registries use OIDC;
+    # The release environment is tag-only. Both registries use OIDC;
     # new npm packages are bootstrapped manually before registering their trusted publishers.
     environment:
       name: release
@@ -356,29 +392,48 @@ jobs:
     name: Publish GitHub Release
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: release-notes
-      - name: Announce the published packages
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-downloads
+          path: downloads
+      - name: Upload and verify the draft before publishing
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          LC_ALL: C
         run: |
           set -euo pipefail
           draft=$(gh api graphql -F owner='{owner}' -F repo='{repo}' -f tag="$GITHUB_REF_NAME" \
             -f query='query($owner: String!, $repo: String!, $tag: String!) {
               repository(owner: $owner, name: $repo) { release(tagName: $tag) { isDraft } }
             }' --jq '.data.repository.release.isDraft | tostring')
+          tag="$GITHUB_REF_NAME"
+          flags=(--title "Grida FX ${tag#v}" --notes-file release-notes.md)
+          if [[ "$tag" == *-* ]]; then flags+=(--prerelease --latest=false); fi
           case "$draft" in
-            false) echo "$GITHUB_REF_NAME already has a published release"; exit 0 ;;
-            true) echo "::error::A draft release already exists for $GITHUB_REF_NAME"; exit 1 ;;
-            null) ;; # No release for this tag yet.
+            null) gh release create "$tag" --verify-tag --draft "${flags[@]}" ;;
+            true|false) ;;
             *) echo "::error::Unexpected release lookup result"; exit 1 ;;
           esac
-          flags=(--verify-tag --title "Grida FX ${GITHUB_REF_NAME#v}" --notes-file release-notes.md)
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease --latest=false); fi
-          gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+          if [[ "$draft" != false ]]; then
+            gh release upload "$tag" downloads/* --clobber
+          fi
+          gh release view "$tag" --json assets --jq '[.assets[].name] | sort[]' > remote-names
+          (cd downloads && printf '%s\n' *) > expected-names
+          diff -u expected-names remote-names
+          gh release download "$tag" --pattern '*' --dir uploaded
+          (
+            cd uploaded
+            sha256sum *.tar.gz | cmp SHA256SUMS -
+          )
+          if [[ "$draft" != false ]]; then
+            cmp downloads/SHA256SUMS uploaded/SHA256SUMS
+            gh release edit "$tag" "${flags[@]}" --draft=false
+          fi

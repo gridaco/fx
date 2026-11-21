@@ -79,6 +79,9 @@ Grida CLI. The same engine has three launchers ([spec/distribution.md](spec/dist
 | `grida-fx <verb>` | `npm install @grida/fx` (Node.js 18+; 24+ to host TypeScript nodes), or `npx @grida/fx` | The JavaScript SDK and the TypeScript node host, and FX on its own: a service you host, a CI image, an FX version pinned apart from `grida` |
 | `python -m grida.fx <verb>` | `pip install grida` (Python 3.11+) | The Python SDK, and machines without Node |
 
+For a native executable you can pin in a CI image, see
+[Standalone downloads](docs/guide/17-standalone-downloads.md).
+
 All three take the same verbs. Usage, errors and next-step hints name the command that was run;
 plans, records and exports are byte-identical under each (the invoker, `GRIDA_FX_INVOKER`).
 
