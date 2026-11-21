@@ -391,6 +391,13 @@ entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
 
+The bundled viewer uses an optional `X-FX-Run-Active: 1` response header for
+tab activity. An unfinished snapshot can carry it after a read-only owner
+handshake for the recorded invocation. An empty event batch can carry it when
+the caller supplies the observed `plan` digest and `invocation_id` and the same
+check succeeds. The signal is sampled independently of the event cursor and
+contains no private control data.
+
 `GET /api/viewer_config` under the selected entry returns the owning project's current
 resolved display settings ([viewer.md](viewer.md#project-display-settings)), with
 `Cache-Control: no-store`. It contains no paths, credentials or other project fields.

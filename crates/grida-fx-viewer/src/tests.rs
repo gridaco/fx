@@ -1361,6 +1361,66 @@ async fn observation_snapshot_and_batches_share_one_record_frontier() {
     assert_eq!(view.nodes[0].state, "running");
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn observation_reports_active_owner_and_clears_it_without_new_events() {
+    use grida_fx_runtime::{engine::Cancel, folder::RunFolder, run_control::RunControl};
+
+    let fixture = Fixture::new("image/png");
+    let root = fixture.root();
+    let plan = "a".repeat(64);
+    let invocation = "0123456789abcdef";
+    let get = |path: &str| {
+        fixture
+            .app()
+            .oneshot(Fixture::request(path).body(Body::empty()).unwrap())
+    };
+    let mut log = FileForEvents::new(&root);
+    let lock = RunFolder::lock_existing(&root, "test run").unwrap();
+    log.append(json!({"event":"run_started","invocation_id":invocation}));
+    assert!(
+        !get("/api/snapshot")
+            .await
+            .unwrap()
+            .headers()
+            .contains_key(RUN_ACTIVE_HEADER)
+    );
+
+    let owner = control::ControlServer::start(
+        &root,
+        &plan,
+        invocation,
+        RunControl::unrecorded(Cancel::new()),
+        &tokio::runtime::Handle::current(),
+    )
+    .unwrap();
+    let snapshot = get("/api/snapshot").await.unwrap();
+    assert_eq!(snapshot.headers()[RUN_ACTIVE_HEADER], "1");
+    let snapshot: Value =
+        serde_json::from_slice(&to_bytes(snapshot.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(snapshot["view"]["state"], "unfinished");
+    let after = snapshot["cursor"].as_str().unwrap();
+    let batch = format!("/api/events?after={after}&plan={plan}&invocation_id={invocation}");
+    assert_eq!(get(&batch).await.unwrap().headers()[RUN_ACTIVE_HEADER], "1");
+    let mismatched = batch.replace(invocation, "fedcba9876543210");
+    assert!(
+        !get(&mismatched)
+            .await
+            .unwrap()
+            .headers()
+            .contains_key(RUN_ACTIVE_HEADER)
+    );
+
+    drop(owner);
+    drop(lock);
+    let response = get(&batch).await.unwrap();
+    assert!(!response.headers().contains_key(RUN_ACTIVE_HEADER));
+    let response: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(response["events"], json!([]));
+    assert_eq!(response["cursor"], after);
+}
+
 #[tokio::test]
 async fn observation_errors_are_structured_and_do_not_leak_source_paths() {
     let fixture = Fixture::new("image/png");

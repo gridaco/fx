@@ -27,7 +27,7 @@ use axum::{Json, Router};
 use grida_fx_core::docs::project::{Project, ViewerConfig};
 use grida_fx_core::docs::{Schema, validate};
 use grida_fx_core::value::is_digest;
-use grida_fx_runtime::observation;
+use grida_fx_runtime::{control, observation};
 use rust_embed::RustEmbed;
 use serde::Deserialize;
 use serde_json::Value;
@@ -302,6 +302,8 @@ fn prefix_artifacts(document: &mut RunDocument, prefix: &str) {
     }
 }
 
+const RUN_ACTIVE_HEADER: &str = "x-fx-run-active";
+
 /// A display projection, its layout report and its cursor use the same captured event prefix.
 async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
     let Source::Run(root) = &state.source else {
@@ -312,18 +314,27 @@ async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
         let captured = observation::snapshot(&root)?;
         let projected = read::read_observed(&root, &captured).ok().map(|snapshot| {
             let report = layout::run_report(&captured.plan, &snapshot, captured.cursor.clone());
-            (snapshot.document, report)
+            let active = snapshot.document.state == "unfinished"
+                && captured
+                    .events
+                    .iter()
+                    .rfind(|event| event["event"] == "run_started")
+                    .and_then(|event| event["plan"].as_str().zip(event["invocation_id"].as_str()))
+                    .is_some_and(|(plan, invocation)| {
+                        control::is_executing(&root, plan, invocation)
+                    });
+            (snapshot.document, report, active)
         });
         Ok::<_, observation::ObservationError>((captured, projected))
     })
     .await
     {
-        Ok(Ok((captured, Some((mut view, report))))) => {
+        Ok(Ok((captured, Some((mut view, report, active))))) => {
             prefix_artifacts(&mut view, &state.artifact_prefix);
             let mut value = serde_json::to_value(captured).expect("serializable snapshot");
             value["view"] = serde_json::to_value(view).expect("serializable view");
             value["layout"] = serde_json::to_value(report).expect("serializable report");
-            observed_json(value)
+            observed_run(value, active)
         }
         Ok(Err(error)) => observed_error(error),
         _ => observation_failure("unavailable", "The selected run cannot be projected."),
@@ -362,6 +373,8 @@ async fn layout_report(State(state): State<Arc<AppState>>) -> Response {
 struct EventQuery {
     after: Option<String>,
     limit: Option<String>,
+    plan: Option<String>,
+    invocation_id: Option<String>,
 }
 
 async fn observation_events(
@@ -394,14 +407,35 @@ async fn observation_events(
     };
     let root = root.clone();
     match tokio::task::spawn_blocking(move || {
-        observation::batch(&root, query.after.as_deref(), limit)
+        let batch = observation::batch(&root, query.after.as_deref(), limit)?;
+        // A changed prefix gets its own snapshot. An empty batch can still signal owner loss.
+        let active = batch.events.is_empty()
+            && query
+                .plan
+                .as_deref()
+                .zip(query.invocation_id.as_deref())
+                .is_some_and(|(plan, invocation)| control::is_executing(&root, plan, invocation));
+        Ok::<_, observation::ObservationError>((batch, active))
     })
     .await
     {
-        Ok(Ok(batch)) => observed_json(serde_json::to_value(batch).expect("serializable batch")),
+        Ok(Ok((batch, active))) => observed_run(
+            serde_json::to_value(batch).expect("serializable batch"),
+            active,
+        ),
         Ok(Err(error)) => observed_error(error),
         _ => observation_failure("unavailable", "The selected run cannot be read."),
     }
+}
+
+fn observed_run(value: Value, active: bool) -> Response {
+    let mut response = observed_json(value);
+    if active {
+        response
+            .headers_mut()
+            .insert(RUN_ACTIVE_HEADER, HeaderValue::from_static("1"));
+    }
+    response
 }
 
 fn observed_json(value: Value) -> Response {

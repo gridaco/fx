@@ -327,6 +327,10 @@ constructing it from a folder name. `--open` requests one browser launch; omit i
 to visit the printed URL yourself. Planning-time code can execute before the URL
 exists. Browser or service failures do not change the workflow's result.
 
+The browser tab's `f(x)` icon pulses green while the viewer can verify the run is
+executing. With reduced motion enabled, the green icon stays steady. Plans, finished
+runs and unfinished records without a verified runner use the standard icon.
+
 `run` stays foreground and exits normally after execution. The separate FX service
 keeps its page available afterward, including for failed and cancelled runs.
 The URL still identifies that record after a service restart or same-plan resume.
