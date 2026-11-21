@@ -486,3 +486,20 @@ one of `text` or `file`, plus optional `format="markdown"` (default) or `format=
 The SDK preserves declarations; the engine reads local files and records snapshots.
 Notes never evaluate expressions or execute as steps. See the
 [note contract](https://github.com/gridaco/fx/blob/main/spec/notes.md).
+
+## Answer a waiting step
+
+Use `run_async(..., name="review", wait_for_answers=True)` to keep a named run attached while another client supplies input. In the [waiting example](https://github.com/gridaco/fx/blob/main/fixtures/waiting/workflow.yaml), a build system supplies a revision without a prompt and a reviewer picks one of the saved images.
+
+```python
+from grida import fx
+
+run = "review-variants/review"
+pending = {r["step"]: r for r in fx.list_requests(run) if r["state"]["status"] == "pending"}
+if revision := pending.get("revision#1"):
+    fx.respond(run, revision["id"], "rev-42")
+if image := pending.get("choose#1"):
+    fx.respond(run, image["id"], {"variant": "b"})
+```
+
+`list_requests(run)` reads the durable requests directly. For a viewer link, call `inspect_requests(run)`, or pass `register=True` to register the run too. The result includes `viewer_url` when the local service can serve the run. The request methods also have asynchronous forms. The engine checks every response against the saved schema and any frozen candidate keys. A conflicting submission raises `AnswerError` with the recorded winner.

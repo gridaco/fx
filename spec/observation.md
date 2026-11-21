@@ -87,6 +87,12 @@ Its additive `cancel_requested` event follows the unknown-event compatibility ru
 below. The bundled viewer derives cancellation intent from this event; its
 existing run-state enum remains unchanged.
 
+A workflow-authored [waiting step](waiting.md) records `waiting_request` for the
+instance and an invocation parked on external answers lists their IDs in
+`run_finished.awaiting`. The inspection state for that step or parked run is
+`awaiting`. A detached submission is visible in the request list immediately.
+The runner records its observation when attached or resumed.
+
 The additive `call_waiting` and `call_admitted` events ([store.md](store.md) §8,
 "Waiting for a route") follow the same rule. The `fx-viewer-run-v1` projection adds
 the instance state `waiting`: a started instance that has not ended and has an open

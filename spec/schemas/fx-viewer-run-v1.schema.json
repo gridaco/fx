@@ -51,6 +51,7 @@
       "enum": [
         "planned",
         "unfinished",
+        "awaiting",
         "succeeded",
         "failed",
         "cancelled"
@@ -203,11 +204,12 @@
             "pending",
             "running",
             "waiting",
+            "awaiting",
             "succeeded",
             "failed",
             "skipped"
           ],
-          "description": "`waiting` is a started instance that has not ended and has an open wait: a `call_waiting` not yet closed by the `call_admitted` of the same `call`, by the instance starting again or making a new attempt (`node_retry`), or by a new invocation (`run_started`) (store.md \u00a78). A body that makes several calls at once is `waiting` while any of them waits, though another may be drawing. `running` is any other started instance that has not ended."
+          "description": "`waiting` is a started instance that has not ended and has an open wait: a `call_waiting` not yet closed by the `call_admitted` of the same `call`, by the instance starting again or making a new attempt (`node_retry`), or by a new invocation (`run_started`) (store.md \u00a78). A body that makes several calls at once is `waiting` while any of them waits, though another may be drawing. `awaiting` is a waiting step whose latest recorded request status is pending. `running` is any other started instance that has not ended."
         },
         "reads": {
           "type": "array",
@@ -298,6 +300,10 @@
         "preview": {
           "$ref": "#/$defs/preview"
         },
+        "review_outcome": {
+          "description": "Terminal outcome recorded for this version-one waiting step. Answer contents depend on the view's disclosure of outputs.",
+          "enum": ["answered", "expired"]
+        },
         "skip_reason": {
           "$ref": "#/$defs/skip_reason"
         },
@@ -376,6 +382,17 @@
       },
       "allOf": [
         {
+          "if": { "required": ["review_outcome"] },
+          "then": {
+            "properties": {
+              "uses": { "type": "string", "pattern": "^fx/await@0*1$" },
+              "state": { "enum": ["succeeded", "failed"] }
+            },
+            "if": { "properties": { "state": { "const": "failed" } } },
+            "then": { "properties": { "review_outcome": { "const": "expired" } } }
+          }
+        },
+        {
           "if": {
             "required": [
               "skip_reason"
@@ -430,7 +447,7 @@
       }
     },
     "ports": {
-      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "description": "Declared file ports, engine-native value outputs and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -458,7 +475,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+            "pattern": "^(?:value|(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?)\\??$"
           }
         },
         "params": {

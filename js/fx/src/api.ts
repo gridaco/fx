@@ -419,6 +419,7 @@ export function decode(encoded: Encoded, placed: ReadonlyMap<string, string>): R
 const RUN_ONLY: readonly string[] = [
   "live",
   "yesUpTo",
+  "waitForAnswers",
   "runDir",
   "name",
   "resume",

@@ -33,7 +33,7 @@ pub fn parse_timeout(text: &str) -> Result<Duration, String> {
 
 /// Exact selectors reuse the recorded-source catalog, including its bounded traversal. A
 /// relative spelling that names both a folder and a distinct named run is refused.
-fn exact_folder(
+pub(super) fn exact_folder(
     given: &str,
     cwd: &Path,
     wait: Option<(Instant, Duration)>,
@@ -94,7 +94,7 @@ fn exact_folder(
         return Ok(found);
     }
     if matches!(parts.as_slice(), [Component::Normal(_)]) {
-        return Err(("invalid_target", "control requires an explicit run folder or exact WORKFLOW_ID/NAME; bare workflow IDs do not select a run".into()));
+        return Err(("invalid_target", "select an explicit run folder or exact WORKFLOW_ID/NAME; bare workflow IDs do not select a run".into()));
     }
     Ok(path)
 }

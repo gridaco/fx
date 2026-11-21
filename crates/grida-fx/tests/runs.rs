@@ -1052,6 +1052,40 @@ fn integrated_a_real_run_is_indexed_outside_the_tree_removed_and_never_resumed()
 }
 
 #[test]
+fn only_verified_waiting_request_files_are_removable() {
+    let project = Project::new();
+    let folder = "runs/review";
+    fs::write(
+        project.root.join("review.yaml"),
+        "fx: workflow/v1\nid: review\ntitle: Review\nsteps:\n  input:\n    uses: fx/await@1\n    with: {schema: {type: string}}\n",
+    )
+    .unwrap();
+    let parked = project.fx(&["run", "review.yaml", "--run", folder, "--no-view"]);
+    assert_eq!(status(&parked), 1, "{}", text(&parked.stderr));
+    let requests = json_of(&project.fx(&["inspect", folder, "--requests", "--json"]));
+    assert_eq!(requests["requests"].as_array().unwrap().len(), 1);
+
+    let foreign = project
+        .root
+        .join(folder)
+        .join("awaiting")
+        .join(format!("{}.json", "0".repeat(64)));
+    fs::write(&foreign, r#"{"title":"keep this file"}"#).unwrap();
+    for apply in [false, true] {
+        let mut args = vec!["runs", "remove", folder, "--json"];
+        if apply {
+            args.push("--yes");
+        }
+        let result = json_of(&project.fx(&args));
+        assert_eq!(result["runs"][0]["code"], "not_removable", "{result}");
+        assert!(foreign.is_file());
+    }
+    fs::rename(&foreign, project.root.join("preserved.json")).unwrap();
+    let result = json_of(&project.fx(&["runs", "remove", folder, "--yes", "--json"]));
+    assert_eq!(result["runs"][0]["outcome"], "removed", "{result}");
+}
+
+#[test]
 fn recorded_input_snapshots_are_owned_run_data_for_listing_and_removal() {
     let project = Project::new();
     let relative = "runs/case/2026-10-01-1";

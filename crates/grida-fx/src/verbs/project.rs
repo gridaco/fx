@@ -87,6 +87,17 @@ pub(crate) fn projection(events: &[Value]) -> Value {
                 }
                 instances.insert(id.to_string(), entry);
             }
+            (Some("waiting_request"), Some(id)) => {
+                if let Some(entry) = instances.get_mut(id) {
+                    if object.get("request_status").and_then(Value::as_str) == Some("pending") {
+                        entry["state"] = json!("awaiting");
+                        entry["request_id"] = object["request_id"].clone();
+                    } else {
+                        entry["state"] = json!("running");
+                        entry.as_object_mut().unwrap().remove("request_id");
+                    }
+                }
+            }
             (Some("node_retry"), Some(id)) => settle(&mut instances, id, None),
             (Some(call @ ("call_waiting" | "call_admitted")), Some(id)) => {
                 if !matches!(

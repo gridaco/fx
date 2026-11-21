@@ -366,6 +366,50 @@ fn admission_requires_existing_inactive_lock_and_terminal_latest_invocation() {
 }
 
 #[test]
+fn parked_invocation_exports_historical_waiting_evidence_without_a_response_surface() {
+    let fixture = source("image/png");
+    let parent = tempfile::tempdir().unwrap();
+    let request = grida_fx_core::value::file_digest(b"waiting request");
+    let events = [
+        json!({"event":"run_started","charged_usd":0}),
+        json!({"event":"node_started","id":"draw#1","path":"draw","uses":"fx/await@1","with":{},"reads":[]}),
+        json!({"event":"waiting_request","id":"draw#1","request_id":request,"request_status":"pending"}),
+        json!({"event":"run_finished","ok":false,"incomplete":true,"awaiting":[request],"charged_usd":0,"outputs":{}}),
+    ];
+    let mut log = OpenOptions::new()
+        .append(true)
+        .open(fixture.root().join("events.jsonl"))
+        .unwrap();
+    for (offset, mut event) in events.into_iter().enumerate() {
+        event["kind"] = json!("fx-run-events-v1");
+        event["plan"] = json!("a".repeat(64));
+        event["invocation_id"] = json!("second-invocation");
+        event["offset_ms"] = json!(offset);
+        writeln!(log, "{event}").unwrap();
+    }
+    drop(log);
+    export(&fixture, &parent, ExportOptions::default()).unwrap();
+    let data = manifest(&parent);
+    assert_eq!(data["view"]["state"], "awaiting");
+    assert!(
+        data["view"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["id"] == "draw#1" && n["state"] == "awaiting")
+    );
+    assert!(!serde_json::to_string(&data).unwrap().contains(&request));
+    let schema: Value = serde_json::from_str(include_str!(
+        "../../../../spec/schemas/fx-run-export-v1.schema.json"
+    ))
+    .unwrap();
+    jsonschema::validator_for(&schema)
+        .unwrap()
+        .validate(&data)
+        .unwrap();
+}
+
+#[test]
 fn failed_and_cancelled_latest_invocations_export_terminal_evidence() {
     let schema: Value = serde_json::from_str(include_str!(
         "../../../../spec/schemas/fx-run-export-v1.schema.json"

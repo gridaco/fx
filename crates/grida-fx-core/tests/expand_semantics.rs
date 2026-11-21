@@ -2253,3 +2253,125 @@ fn notes_have_recorded_owner_occurrences_without_execution_members() {
         "workflow"
     );
 }
+
+#[test]
+fn waiting_steps_refuse_planning_execution_and_invalid_review_contracts() {
+    let project = Project::new();
+    let expansion = project.expand(
+        r#"fx: workflow/v1
+id: case
+title: Review contracts
+steps:
+  early:
+    uses: fx/await@1
+    at: plan
+    with: { message: Wait, schema: true }
+  schema:
+    uses: fx/await@1
+    with: { message: Wait, schema: {type: invented} }
+  field:
+    uses: fx/await@1
+    with: { message: Wait, schema: true, choice_field: pick }
+  legacy:
+    uses: fx/await@1
+    with: { answer: {type: string} }
+  both:
+    uses: fx/await@1
+    with: { schema: {type: string}, answer: {type: string} }
+  contradiction:
+    uses: fx/await@1
+    with: { schema: {type: boolean}, choices: {a: first} }
+  disjoint:
+    uses: fx/await@1
+    with: { schema: {enum: [other]}, choices: {a: first} }
+  field_type:
+    uses: fx/await@1
+    with:
+      schema: {type: object, properties: {pick: {type: boolean}}}
+      choice_field: pick
+      choices: {a: first}
+  forbidden_field:
+    uses: fx/await@1
+    with:
+      schema: {type: object, additionalProperties: false}
+      choice_field: pick
+      choices: {a: first}
+  clock:
+    uses: fx/await@1
+    with: { message: Wait, schema: true, timeout_seconds: 0 }
+  remote:
+    uses: fx/await@1
+    with: { message: Wait, schema: { $ref: 'https://example.test/schema' } }
+"#,
+    );
+    let problems = problems(&expansion);
+    for (step, message) in [
+        ("early.at", "opens only during a run"),
+        ("schema.with", "valid draft 2020-12 JSON Schema"),
+        ("field.with", "choice_field requires choices"),
+        ("legacy.with.answer", "has no input or setting answer"),
+        ("legacy.with", "needs setting schema"),
+        ("both.with.answer", "has no input or setting answer"),
+        ("contradiction.with", "no choice key satisfies"),
+        ("disjoint.with", "no choice key satisfies"),
+        ("field_type.with", "no choice key can be supplied"),
+        ("forbidden_field.with", "no choice key can be supplied"),
+        ("clock.with", "positive integer"),
+        ("remote.with", "only internal references"),
+    ] {
+        assert!(
+            problems
+                .iter()
+                .any(|problem| problem.contains(step) && problem.contains(message)),
+            "{problems:?}"
+        );
+    }
+}
+
+#[test]
+fn waiting_steps_price_a_paid_fallback_conditionally_until_the_outcome_is_known() {
+    const WORKFLOW: &str = r#"fx: workflow/v1
+id: case
+title: Optional review
+steps:
+  review:
+    uses: fx/await@1
+    with: { message: Choose, schema: true, timeout_seconds: 30, on_timeout: continue }
+  fallback:
+    if: ${{ steps.review.facts.outcome == 'expired' }}
+    uses: fx/image.generate@1
+    route: img-a@acme
+    with: { prompt: Generate another option }
+"#;
+    let mut project = Project::new();
+    for (outcome, lower, upper) in [
+        (None, "0", "0.04"),
+        (Some("answered"), "0", "0"),
+        (Some("expired"), "0.01", "0.04"),
+    ] {
+        if let Some(outcome) = outcome {
+            project.results.insert(
+                "review#1".into(),
+                NodeResult {
+                    status: ResultStatus::Succeeded,
+                    outputs: IndexMap::new(),
+                    facts: IndexMap::from([("outcome".into(), json!(outcome))]),
+                    error: None,
+                },
+            );
+        }
+        let expansion = project.expand(WORKFLOW);
+        assert!(expansion.problems.is_empty(), "{:?}", expansion.problems);
+        let plan = grida_fx_core::plan::Plan {
+            expansion,
+            cached: BTreeSet::new(),
+            ceiling: None,
+            problems: Vec::new(),
+        };
+        let estimate = plan.estimate();
+        assert_eq!(
+            (estimate.low, estimate.high),
+            (Usd::parse(lower).unwrap(), Usd::parse(upper).unwrap())
+        );
+    }
+}

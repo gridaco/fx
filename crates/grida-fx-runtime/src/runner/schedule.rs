@@ -42,9 +42,25 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Groups {
     running: HashMap<String, u32>,
+    pub(super) open_requests: HashSet<String>,
 }
 
 impl Groups {
+    /// Reserve the places of already-open requests before admitting new repeat
+    /// instances on resume. A request can exist before its first waiting_request event.
+    pub(super) fn resume(events: &[serde_json::Value]) -> Self {
+        let mut groups = Self::default();
+        for event in events {
+            if let Some((step, published)) = crate::waiting::recorded_step(event) {
+                if !published || event["request_status"] == "pending" {
+                    groups.open_requests.insert(step.to_owned());
+                } else {
+                    groups.open_requests.remove(step);
+                }
+            }
+        }
+        groups
+    }
     /// One more member of `group` runs.
     pub fn start(&mut self, group: &str) {
         *self.running.entry(group.to_string()).or_insert(0) += 1;
@@ -129,7 +145,15 @@ pub fn ready(
     groups: &Groups,
 ) -> Vec<String> {
     // The instances chosen in this call take their places too.
-    let mut groups = groups.clone();
+    let mut occupied = groups.running.clone();
+    // Waiting uses no worker, but a repeat's authored concurrency still bounds
+    // how many of its requests can be open together. Existing requests can settle
+    // even when every slot is occupied.
+    for id in &groups.open_requests {
+        if let Some((group, _)) = expansion.instances.get(id).and_then(group_of) {
+            *occupied.entry(group.to_owned()).or_default() += 1;
+        }
+    }
     let identity_of = |id: &String| expansion.instances.get(id)?.identity.as_deref();
     let succeeded = succeeded_identities(expansion, results);
     let mut identities: HashSet<&str> = running.iter().filter_map(identity_of).collect();
@@ -160,15 +184,18 @@ pub fn ready(
         let identity = instance
             .identity
             .as_deref()
-            .filter(|identity| !succeeded.contains(identity));
+            .filter(|identity| !instance.ty.is_await() && !succeeded.contains(identity));
         if identity.is_some_and(|identity| identities.contains(identity)) {
             continue;
         }
-        if let Some((group, limit)) = group_of(instance) {
-            if groups.running(group) >= limit {
+        if !groups.open_requests.contains(&instance.id)
+            && let Some((group, limit)) = group_of(instance)
+        {
+            let count = occupied.entry(group.to_owned()).or_default();
+            if *count >= limit {
                 continue;
             }
-            groups.start(group);
+            *count += 1;
         }
         identities.extend(identity);
         ready.push(instance.id.clone());

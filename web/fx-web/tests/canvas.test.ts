@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, canvasNodeGeometry, canvasPreviewReserved, canvasNodeSize, canvasPortAnchor, deckBadge, layoutGraph, restingFront, type CanvasGraph, type CanvasStep, type LayoutReport } from "../src/index";
+import { BADGE_BAND, DECK_OFFSET, canvasEdgePath, canvasNodeGeometry, canvasPreviewReserved, canvasNodeSize, canvasPortAnchor, deckBadge, flatCanvasGraph, layoutGraph, parseViewerRun, restingFront, type CanvasGraph, type CanvasStep, type LayoutReport, type RunNode } from "../src/index";
 import { cardStatus, runningLabel } from "../src/card";
+import { reviewFooter } from "../src/layout";
 
 function node(id: string, preview = false, address = id): CanvasStep {
   return {
@@ -249,4 +250,45 @@ test("a running card counts up from its start, never below zero", () => {
   const start = Date.parse("2026-10-11T09:00:00.000Z");
   expect([0, 8_999, 64_000, 3_599_000, 7_500_000, -5_000].map((elapsed) => runningLabel(start, start + elapsed)))
     .toEqual(["0s", "8s", "1m 04s", "59m 59s", "2h 05m", "0s"]);
+});
+
+test("the request footer keeps the action, prompt and preview count separate", () => {
+  const passive = { ...node("choose#2"), state: "awaiting" };
+  const open: CanvasStep = { ...passive, review_action: "review", review_prompt: "Which frame?" };
+  const answered: CanvasStep = { ...open, state: "succeeded", review_action: "view_answer", review_label: "Selected" };
+  const expired: CanvasStep = { ...open, state: "failed", review_action: "view_outcome", review_label: "Expired" };
+  expect(cardStatus(passive).text).toBe("Awaiting answer");
+  expect(cardStatus({ ...passive, review_action: "view_answer" }).text).toBe("Answer recorded");
+  expect(cardStatus({ ...passive, review_action: "view_outcome" }).text).toBe("Expired");
+  expect(cardStatus(answered).text).toBe("succeeded · Selected");
+  expect(cardStatus(expired).text).toBe("failed · Expired");
+  expect(reviewFooter(open)?.pending).toBe(true);
+  expect(reviewFooter(answered)?.pending).toBe(false);
+  expect(reviewFooter(expired)?.pending).toBe(false);
+  expect(reviewFooter(node("draw"))).toBeUndefined();
+  // Loading the question leaves the ready-to-review card and its wires in place.
+  expect(canvasNodeSize(passive)).toEqual(canvasNodeSize(open));
+  for (const ports of [undefined, { inputs: [], outputs: [], settings: [] }]) {
+    const image = { ...answered, ports, preview: node("draw", true).preview };
+    const box = canvasNodeGeometry(image);
+    const footerY = box.height - reviewFooter(image)!.height;
+    expect(footerY - (box.preview_y + box.preview_height)).toBeGreaterThanOrEqual(20);
+  }
+});
+
+test("resolved review cards keep execution state and describe only the disclosed decision", () => {
+  const gate: RunNode = { id: "review#1", path: "review", title: "Review", uses: "fx/await@1",
+    state: "succeeded", reads: [], with: {}, outputs: {}, cache: null, error: null, duration_ms: 0 };
+  const run = { kind: "fx-viewer-run-v1", workflow: { id: "review", title: "Review" },
+    run_name: "test", state: "succeeded", stand_in: false, charged_usd: 0, estimate: null,
+    inputs: {}, outputs: {}, artifacts: [], warnings: [] };
+  const status = (node: RunNode) => cardStatus(flatCanvasGraph(parseViewerRun({ ...run, nodes: [node] })).nodes[0]).text;
+  const answered = { ...gate, review_outcome: "answered" } as const;
+  expect(status(gate)).toBe("succeeded");
+  expect(status({ ...answered, outputs: { answer: { value: "a" }, selected: { none: true } } })).toBe("succeeded · Selected");
+  expect(status({ ...answered, outputs: { answer: { value: true } } })).toBe("succeeded · Answered yes");
+  expect(status({ ...answered, outputs: { answer: { value: false } } })).toBe("succeeded · Answered no");
+  expect(status({ ...answered, outputs: { answer: { withheld: true }, selected: { none: true } } })).toBe("succeeded · Answered");
+  expect(status({ ...gate, state: "failed", review_outcome: "expired" })).toBe("failed · Expired");
+  expect(status({ ...gate, review_outcome: "expired" })).toBe("succeeded · Expired");
 });

@@ -1291,6 +1291,47 @@ fn request(fixture: &Fixture, target: &str) -> PlanRequest {
     }
 }
 
+#[test]
+fn compiled_waiting_plans_validate_the_native_selected_output_in_both_graph_versions() {
+    use grida_fx_core::docs::{Schema, validate};
+    use grida_fx_core::plan::output::graph_document;
+
+    let fixture = Fixture::new();
+    fixture.write("fx.yaml", "fx: project/v1\nroute_tables: [routes.yaml]\n");
+    fixture.write(
+        "workflows/case.yaml",
+        r#"fx: workflow/v1
+id: case
+title: Reviewed choice
+steps:
+  review:
+    uses: fx/await@1
+    with: { message: Pick, schema: {type: string}, choices: {first: {label: blue}} }
+  draw:
+    uses: fx/image.generate@1
+    route: img-a@acme
+    with: {prompt: Draw a leaf}
+"#,
+    );
+    for (price, kind, schema) in [
+        ("price: {usd: 0.02}", "fx-graph-v1", Schema::Graph),
+        ("price: null", "fx-graph-v2", Schema::GraphV2),
+    ] {
+        fixture.write("routes.yaml", &format!("fx: routes/v1\nroutes:\n  - {{capability: image.generate, route: img-a@acme, {price}}}\n"));
+        let mut host = FakeHost::new();
+        let mut planner = make_planner(&request(&fixture, "case"), &mut host).unwrap();
+        let plan = make_plan(&mut planner, &mut host, None, &NoCache).unwrap();
+        assert!(plan.ok(), "{:?}", plan.problems);
+        let graph = graph_document(&plan, &planner);
+        assert_eq!(graph["kind"], kind);
+        assert_eq!(
+            graph["types"]["fx/await@1"]["ports"]["outputs"]["selected"],
+            "value?"
+        );
+        validate(schema, &graph, "plan").unwrap();
+    }
+}
+
 fn video_preview_project(outputs: &[(&str, &str)], render: Value) -> (Fixture, FakeHost) {
     let fixture = Fixture::new();
     fixture.write("fx.yaml", "fx: project/v1\n");

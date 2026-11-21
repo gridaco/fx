@@ -41,7 +41,7 @@ use crate::print::{labelled, print_json, print_line, shown_path};
 use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::money::Usd;
-use grida_fx_core::value::sha256_hex;
+use grida_fx_core::value::{is_digest, sha256_hex};
 use grida_fx_runtime::folder::same_file;
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -648,12 +648,16 @@ fn preview_one(set: &RunSet, selected: Selected) -> Outcome {
 
 /// The first top-level entry of a run folder or claim that FX did not write: anything but its
 /// `plan.json`, `events.jsonl`, `run.lock`, `files/`, `outputs/`, `views/`, `values/`, temporary names,
-/// `.DS_Store` and folders holding no file. A tombstone's leftovers are all its own.
+/// the waiting request records and their lock, `.DS_Store` and folders holding no file.
+/// A tombstone's leftovers are all its own.
 fn foreign_entry(found: &Found) -> Option<String> {
     if matches!(found.holds, Holds::Tombstone | Holds::Missing) {
         return None;
     }
     let listing = fs::read_dir(&found.folder).ok()?;
+    let waiting_lock = found.folder.join(grida_fx_runtime::waiting::REQUEST_LOCK);
+    let recorded_requests = fs::symlink_metadata(&waiting_lock)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() == 0);
     for item in listing.flatten() {
         let name = item.file_name().to_string_lossy().into_owned();
         let ours = matches!(
@@ -666,7 +670,12 @@ fn foreign_entry(found: &Found) -> Option<String> {
                 | "views"
                 | "values"
                 | ".DS_Store"
-        ) || grida_fx_runtime::folder::is_temporary_name(&name);
+        ) || grida_fx_runtime::folder::is_temporary_name(&name)
+            || (recorded_requests && name == grida_fx_runtime::waiting::REQUEST_LOCK)
+            || (recorded_requests
+                && name == grida_fx_runtime::waiting::REQUEST_DIRECTORY
+                && item.file_type().is_ok_and(|kind| kind.is_dir())
+                && owns_request_directory(&found.folder, &item.path()));
         let empty_folder =
             item.file_type().is_ok_and(|kind| kind.is_dir()) && !holds_a_file(&item.path());
         if !ours && !empty_folder {
@@ -674,6 +683,22 @@ fn foreign_entry(found: &Found) -> Option<String> {
         }
     }
     None
+}
+
+fn owns_request_directory(run: &Path, directory: &Path) -> bool {
+    // The request reader verifies that every JSON record belongs to this run and step.
+    // It ignores other names, so separately check that only engine temporary files remain.
+    fs::read_dir(directory).is_ok_and(|mut entries| {
+        entries.all(|entry| {
+            entry.is_ok_and(|entry| {
+                entry.file_type().is_ok_and(|kind| kind.is_file())
+                    && entry.file_name().to_str().is_some_and(|name| {
+                        grida_fx_runtime::folder::is_temporary_name(name)
+                            || name.strip_suffix(".json").is_some_and(is_digest)
+                    })
+            })
+        })
+    }) && grida_fx_runtime::waiting::list(run).is_ok()
 }
 
 /// Whether a folder holds a file anywhere below it (a symbolic link counts).
@@ -753,6 +778,13 @@ fn remove_one(set: &RunSet, project: &Project, selected: Selected) -> Outcome {
             return outcome;
         }
     }
+    let _waiting_lock = match grida_fx_runtime::waiting::lock_for_removal(folder) {
+        Ok(lock) => lock,
+        Err(error) => {
+            refused(&mut outcome, "not_removable", error.to_string());
+            return outcome;
+        }
+    };
     // Under its lock, the folder must still hold what was selected, and only what FX wrote.
     if !same_file(&lock, &folder.join("run.lock")) || !still_selected(found) {
         refused(

@@ -75,13 +75,12 @@ export function hostVariables(): Record<string, string> {
   return variables;
 }
 
-/** Runs the engine with `args` and collects what it prints. `stdin`, a socket, becomes the
- * engine's standard input (a stand-in run's): it is closed here once the engine holds it, so the
- * engine alone keeps that end open. */
+/** Run the engine and collect its output. A string is written to its standard input.
+ * A stand-in socket is transferred to the engine and closed here once the child holds it. */
 export async function call(
   args: readonly string[],
   options: CallOptions = {},
-  stdin?: Socket,
+  stdin?: Socket | string,
 ): Promise<Exit> {
   const cwd = options.cwd ?? process.cwd();
   // An explicit `options.env` wins over the host variables.
@@ -98,13 +97,23 @@ export async function call(
     const child = spawn(engine, [...args], {
       cwd,
       env,
-      stdio: [stdin ?? "ignore", "pipe", "pipe"],
+      stdio: [typeof stdin === "string" ? "pipe" : stdin ?? "ignore", "pipe", "pipe"],
     });
-    stdin?.destroy();
+    if (typeof stdin === "string") {
+      // Early command refusal can close stdin before the answer is fully read.
+      child.stdin!.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code !== "EPIPE") reject(error);
+      });
+      child.stdin!.end(stdin);
+    } else {
+      stdin?.destroy();
+    }
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    const output = child.stdout!;
+    const errors = child.stderr!;
+    output.on("data", (chunk: Buffer) => stdout.push(chunk));
+    errors.on("data", (chunk: Buffer) => stderr.push(chunk));
     let killTimer: NodeJS.Timeout | undefined;
     let interrupted = false;
     const onAbort = () => {
@@ -142,8 +151,8 @@ export async function call(
       const closed = new Promise<void>((done) => child.once("close", () => done()));
       const drained = new Promise<void>((done) => setTimeout(done, DRAIN_MS).unref());
       void Promise.race([closed, drained]).then(() => {
-        child.stdout.destroy();
-        child.stderr.destroy();
+        output.destroy();
+        errors.destroy();
         if (options.signal?.aborted) {
           reject(options.signal.reason);
           return;

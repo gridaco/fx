@@ -188,6 +188,10 @@ Up to and including the 0.6.1 release, the contract was hashed as the entry decl
 
 ## 8. Step identity
 
+An [external waiting step](waiting.md) opens a request for each run and concrete
+occurrence. Its decision replays only for that occurrence on same-run resume.
+Downstream values continue to enter computation identities by content.
+
 Each expanded step instance has an identity, the key of the result cache:
 
 ```

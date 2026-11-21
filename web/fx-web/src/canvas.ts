@@ -10,10 +10,11 @@ import { element, nodeCard, runningLabel, short } from "./card";
 import { CardVideos } from "./video";
 import { CardModels } from "./card-models";
 import { PortPreview, type InspectedPort } from "./port-preview";
+import { countdownLabel } from "./waiting";
 
 const EXPANDED_GAP = 32;
 /** A card's labelled controls do what they say (§5.7): a press on one neither pans nor opens its deck. */
-const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-model-open, .fx-canvas-port";
+const CARD_CONTROLS = ".fx-canvas-open-workflow, .fx-canvas-play, .fx-canvas-model-open, .fx-canvas-port, .fx-canvas-review-action";
 
 /**
  * Whether a key event's target keeps its own keys: a text field, or a card's media player, whose
@@ -23,7 +24,7 @@ export function ownsKeys(target: EventTarget | null) {
   const element = target as Element | null;
   // Native fullscreen gets Escape before surrounding details, decks or scope navigation.
   return Boolean(element?.ownerDocument?.fullscreenElement?.contains(element)
-    || element?.closest?.("input, textarea, select, [contenteditable], .fx-canvas-player, .fx-canvas-model-player, .fx-port-preview"));
+    || element?.closest?.("input, textarea, select, [contenteditable], [data-fx-owns-keys], .fx-canvas-player, .fx-canvas-model-player, .fx-port-preview"));
 }
 /** §5.9: expanded decks fit the viewport down to card titles (13 px) about 11 px on screen. */
 const LEGIBLE_ZOOM = 11 / 13;
@@ -129,7 +130,8 @@ export class CanvasController {
   private readonly cameras = new Map<string | null, { viewport: ReturnType<CanvasViewport["getSnapshot"]>; didFit: boolean }>();
 
   constructor(private readonly container: HTMLElement, private readonly onSelect: (id: string | null) => void,
-    private readonly onOpenScope: (id: string) => void = () => {}, private readonly onBack: () => void = () => {}) {
+    private readonly onOpenScope: (id: string) => void = () => {}, private readonly onBack: () => void = () => {},
+    private readonly onReview?: (sourceId: string) => void) {
     container.classList.add("fx-canvas");
     container.tabIndex = -1;
     const defs = element("defs");
@@ -236,6 +238,8 @@ export class CanvasController {
     this.portPreview.dismiss();
     const navigating = scope !== this.scope;
     const restoringFocus = this.content.contains(document.activeElement);
+    const reviewFocus = restoringFocus && document.activeElement?.matches(".fx-canvas-review-action")
+      ? document.activeElement.closest<SVGGElement>("[data-node-id]")?.dataset.nodeId : undefined;
     const reopen = navigating || !this.open ? null : { id: this.open.deck.placed.id, camera: this.open.camera };
     this.cancelDrag();
     this.collapse(true, !navigating);
@@ -275,7 +279,10 @@ export class CanvasController {
       // A deck that vanished or dropped below two members stays closed and gives the camera back.
       else this.animateCamera(() => this.viewport.restore(reopen.camera));
     }
-    if (navigating || restoringFocus) this.container.focus({ preventScroll: true });
+    if (navigating || restoringFocus) {
+      const review = !navigating && reviewFocus ? this.nodes.get(reviewFocus)?.querySelector<SVGGElement>(".fx-canvas-review-action") : null;
+      (review && !this.covered(review) ? review : this.container).focus({ preventScroll: true });
+    }
     this.models.redrawn(this.nodes);
     this.redrawing = false;
     this.models.recheck();
@@ -335,7 +342,7 @@ export class CanvasController {
       }
     }
     for (const [index, node] of this.layout.nodes.entries()) {
-      const group = nodeCard(node, this.id, index, signal, (scope) => this.onOpenScope(scope));
+      const group = nodeCard(node, this.id, index, signal, this.onOpenScope, this.onReview);
       for (const socket of group.querySelectorAll<SVGGElement>(".fx-canvas-port")) {
         const direction = socket.dataset.portDirection === "input" ? "input" : "output";
         const ports = direction === "input" ? node.ports?.inputs : node.ports?.outputs;
@@ -394,12 +401,18 @@ export class CanvasController {
     this.decks = this.layout.decks.map((placed, index) => this.deck(placed, index, layer(placed.frame).cards, items));
     this.decks.forEach((_, index) => this.restDeck(index));
     this.content.replaceChildren(boundaries, rootEdges, rootCards);
-    // Running and waiting cards count up together, once a second, until the next redraw.
-    const clocks = [...this.content.querySelectorAll<SVGTextElement>("text[data-started]")];
+    // One timer updates elapsed times and review countdowns until the next redraw.
+    const clocks = [...this.content.querySelectorAll<SVGTextElement | SVGTSpanElement>("[data-started], [data-review-countdown]")];
     if (clocks.length) {
       const timer = window.setInterval(() => {
         const now = Date.now();
-        for (const clock of clocks) clock.textContent = (clock.dataset.prefix ?? "") + runningLabel(Number(clock.dataset.started), now);
+        for (const clock of clocks) {
+          const deadline = clock.dataset.reviewCountdown;
+          const label = deadline === undefined
+            ? (clock.dataset.prefix ?? "") + runningLabel(Number(clock.dataset.started), now)
+            : countdownLabel(Number(deadline), now);
+          if (clock.textContent !== label) clock.textContent = label;
+        }
       }, 1000);
       signal.addEventListener("abort", () => window.clearInterval(timer), { once: true });
     }
@@ -560,9 +573,9 @@ export class CanvasController {
     if (this.open && !this.open.deck.cards.some((card) => card.contains(element))) return true;
     return this.decks.some((deck) => deck !== this.open?.deck && deck.cards.some((card, at) => at !== deck.front && card.contains(element)));
   }
-  private syncPortFocus() {
-    for (const node of this.nodes.values()) for (const port of node.querySelectorAll<SVGGElement>(".fx-canvas-port")) {
-      port.setAttribute("tabindex", this.covered(port) ? "-1" : "0");
+  private syncControlFocus() {
+    for (const node of this.nodes.values()) for (const control of node.querySelectorAll<SVGGElement>(".fx-canvas-port, .fx-canvas-review-action")) {
+      control.setAttribute("tabindex", this.covered(control) ? "-1" : "0");
     }
   }
   /** The deck card that is or holds this node's card, or -1. */
@@ -592,7 +605,7 @@ export class CanvasController {
     this.markFront(deck, front);
     // One tab stop per closed deck: its front card.
     deck.cards.forEach((card, at) => { if (card.hasAttribute("tabindex")) card.setAttribute("tabindex", at === front ? "0" : "-1"); });
-    this.syncPortFocus();
+    this.syncControlFocus();
     return deck.cards[front];
   }
   /**
@@ -702,7 +715,7 @@ export class CanvasController {
     veil.style.transition = `opacity ${duration}ms ease`;
     veil.classList.add("is-shown");
     this.open = { deck, veil, camera, grid };
-    this.syncPortFocus();
+    this.syncControlFocus();
     this.videos.recheck();
     if (!this.redrawing) this.models.recheck();
     this.showScrubber(index);

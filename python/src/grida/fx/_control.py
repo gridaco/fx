@@ -140,7 +140,15 @@ def _result(document: Any, operation: str, wait: bool, status: int) -> RunContro
     enums = {
         "outcome": _OUTCOMES,
         "request_status": {"accepted", "not_accepted", "unknown"},
-        "recorded_state": {"planned", "unfinished", "succeeded", "failed", "cancelled", "unknown"},
+        "recorded_state": {
+            "planned",
+            "unfinished",
+            "awaiting",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "unknown",
+        },
         "cleanup": {"pending", "complete", "unknown"},
         "external_completion": {"not_verified"},
     }
@@ -162,7 +170,7 @@ def _result(document: Any, operation: str, wait: bool, status: int) -> RunContro
     if outcome == "completed" and (
         document["invocation_id"] is None
         or document["cleanup"] != "complete"
-        or document["recorded_state"] not in {"succeeded", "failed", "cancelled"}
+        or document["recorded_state"] not in {"awaiting", "succeeded", "failed", "cancelled"}
     ):
         raise ValueError("completion lacks invocation, cleanup or terminal evidence")
     if outcome == "error":

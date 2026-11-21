@@ -39,6 +39,8 @@ export interface RunOptions extends PlanOptions {
   readonly live?: boolean;
   /** Stop before a later phase that may take the run past this amount (`--yes-up-to`). */
   readonly yesUpTo?: number | string;
+  /** Keep this invocation attached while external requests are pending. */
+  readonly waitForAnswers?: boolean;
   /** The run folder, relative to `cwd` (`--run`); a folder holding a run of the same plan is
    * resumed. Default: a new folder under the project's runs folder. */
   readonly runDir?: string;
@@ -145,6 +147,10 @@ export function runArgs(options: RunOptions): string[] {
   if (options.live !== undefined && typeof options.live !== "boolean") {
     throw new TypeError(`live is true or false, not ${JSON.stringify(options.live)}`);
   }
+  if (options.waitForAnswers !== undefined && typeof options.waitForAnswers !== "boolean") {
+    throw new TypeError("waitForAnswers is true or false");
+  }
+  if (options.waitForAnswers) args.push("--wait-for-answers");
   if (options.recover !== undefined && typeof options.recover !== "boolean") {
     throw new TypeError("recover is true or false");
   }

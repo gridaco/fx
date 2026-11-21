@@ -1,5 +1,5 @@
-//! Read-only browser views for FX runs and materialized plans, hosted independently or by a
-//! project service with a private local catalog.
+//! Browser views for FX runs and materialized plans, hosted independently or by a project
+//! service with a private local catalog. Local run views can answer a workflow's open request.
 //!
 //! The caller owns argument parsing, browser opening and process interruption. This crate binds
 //! loopback only and starts no workflow, provider adapter or node host. Service discovery is
@@ -13,6 +13,7 @@ mod read;
 mod scopes;
 pub mod service;
 mod values;
+mod waiting;
 
 pub use read::{Artifact, Node, RunDocument};
 
@@ -22,7 +23,7 @@ use axum::extract::{Path as RoutePath, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use grida_fx_core::docs::project::{Project, ViewerConfig};
 use grida_fx_core::docs::{Schema, validate};
@@ -167,6 +168,8 @@ fn router(state: AppState) -> Router {
         .route("/api/snapshot", get(observation_snapshot))
         .route("/api/layout", get(layout_report))
         .route("/api/events", get(observation_events))
+        .route("/api/requests", get(waiting::list))
+        .route("/api/requests/{id}/respond", post(waiting::respond))
         .route("/api/files", get(file_inventory))
         .route("/api/artifacts/{digest}", get(artifact))
         .route("/api/{*path}", get(api_missing))

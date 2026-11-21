@@ -76,6 +76,9 @@ pub struct Node {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub routing: Option<Value>,
     pub state: String,
+    /// The terminal fact recorded by a version-one waiting step for this occurrence.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_outcome: Option<&'static str>,
     pub reads: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ports: Option<Value>,
@@ -462,6 +465,7 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         judges: value.get("judges").cloned(),
         parameters: object(value.get("with")),
         outputs: json!({}),
+        review_outcome: None,
         cache: None,
         error: text(value, "reason").map(str::to_string),
         diagnostic: None,
@@ -475,6 +479,23 @@ fn node(value: &Value, steps: &Map<String, Value>, types: &Map<String, Value>) -
         waited: Vec::new(),
         interrupted: false,
     })
+}
+
+fn is_waiting_step(uses: Option<&str>) -> bool {
+    // The registry accepts leading zeros in a built-in major version.
+    uses.and_then(|name| name.strip_prefix("fx/await@"))
+        .is_some_and(|major| major.trim_start_matches('0') == "1")
+}
+
+fn review_outcome(uses: Option<&str>, event_name: &str, event: &Value) -> Option<&'static str> {
+    if !is_waiting_step(uses) {
+        return None;
+    }
+    match (event_name, text(event.get("facts")?, "outcome")?) {
+        ("node_finished", "answered") => Some("answered"),
+        ("node_finished" | "node_failed", "expired") => Some("expired"),
+        _ => None,
+    }
 }
 
 impl Node {
@@ -565,7 +586,8 @@ pub(crate) fn read_observed(
     root: &Path,
     observed: &grida_fx_runtime::observation::RunSnapshot,
 ) -> io::Result<Snapshot> {
-    verify_inventory(root, project_records(root, observed)?)
+    let snapshot = project_records(root, observed)?;
+    verify_inventory(root, with_reviewed_artifacts(root, snapshot))
 }
 
 /// The projection of exactly the observation prefix, without opening artifact bytes. The layout
@@ -629,6 +651,14 @@ fn verify_inventory(root: &Path, mut snapshot: Snapshot) -> io::Result<Snapshot>
 /// Loads records and artifact references without opening artifact bytes. An artifact request
 /// uses this inventory, then validates only its selected digest through `open_artifact`.
 pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
+    Ok(with_reviewed_artifacts(
+        root,
+        read_recorded_inventory(root)?,
+    ))
+}
+
+/// Catalog state and layout use the recorded projection without reading review payloads.
+pub(crate) fn read_recorded_inventory(root: &Path) -> io::Result<Snapshot> {
     let path = confined_file(root, "plan.json")?;
     let plan = parse_json(&std::fs::read_to_string(path)?)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "plan.json is not valid JSON"))?;
@@ -666,6 +696,48 @@ pub(crate) fn read_inventory(root: &Path) -> io::Result<Snapshot> {
         Err(error) => return Err(error),
     };
     project_inventory(root, &plan, &events, warnings)
+}
+
+fn with_reviewed_artifacts(root: &Path, mut snapshot: Snapshot) -> Snapshot {
+    // The runner emits node_started before it publishes the durable request. An exit
+    // before its subsequent waiting_request event still leaves a reviewable request.
+    let review_steps = snapshot
+        .document
+        .nodes
+        .iter()
+        .filter(|node| {
+            is_waiting_step(node.uses.as_deref()) && snapshot.recorded.started.contains(&node.id)
+        })
+        .map(|node| node.id.as_str())
+        .collect::<BTreeSet<_>>();
+    if !review_steps.is_empty() {
+        match grida_fx_runtime::waiting::list(root) {
+            Ok(requests) => {
+                for request in requests {
+                    if !review_steps.contains(request.spec.step.as_str()) {
+                        continue;
+                    }
+                    collect_object(
+                        &json!({"show": request.spec.show}),
+                        Some(Placement::Value(root)),
+                        &mut snapshot.candidates,
+                    );
+                    if let Some(choices) = request.spec.choices {
+                        collect_object(
+                            &json!(choices),
+                            Some(Placement::Value(root)),
+                            &mut snapshot.candidates,
+                        );
+                    }
+                }
+            }
+            Err(_) => snapshot
+                .document
+                .warnings
+                .push("Reviewed values cannot be read from the run's waiting records.".into()),
+        }
+    }
+    snapshot
 }
 
 fn project_inventory(
@@ -804,7 +876,14 @@ fn project_inventory(
                 }
             }
             Some("run_finished") => {
-                state = if event.get("ok") == Some(&Value::Bool(true)) {
+                state = if event.get("incomplete") == Some(&Value::Bool(true))
+                    && event
+                        .get("awaiting")
+                        .and_then(Value::as_array)
+                        .is_some_and(|ids| !ids.is_empty())
+                {
+                    "awaiting"
+                } else if event.get("ok") == Some(&Value::Bool(true)) {
                     "succeeded"
                 } else {
                     "failed"
@@ -818,6 +897,20 @@ fn project_inventory(
                 state = "cancelled".into();
                 charged = event.get("charged_usd").and_then(Value::as_f64);
                 outputs = json!({});
+            }
+            Some("waiting_request") => {
+                let state = match text(event, "request_status") {
+                    Some("pending") => "awaiting",
+                    Some("answered" | "expired") => "running",
+                    _ => continue,
+                };
+                if let Some(current) = nodes
+                    .iter_mut()
+                    .find(|node| Some(node.id.as_str()) == text(event, "id"))
+                {
+                    current.review_outcome = None;
+                    current.state = state.into();
+                }
             }
             Some(name @ ("node_started" | "node_finished" | "node_failed" | "node_skipped")) => {
                 let Some(id) = text(event, "id") else {
@@ -849,6 +942,7 @@ fn project_inventory(
                 if let Some(uses) = text(event, "uses") {
                     current.uses = Some(uses.to_string());
                 }
+                current.review_outcome = review_outcome(current.uses.as_deref(), name, event);
                 if let Some(routes) = super::values::routes(event.get("routes")) {
                     current.routes = Some(routes);
                 }
@@ -941,6 +1035,7 @@ fn project_inventory(
                 if let Some(current) =
                     text(event, "id").and_then(|id| nodes.iter_mut().find(|entry| entry.id == id))
                 {
+                    current.review_outcome = None;
                     current.end_waits();
                 }
             }

@@ -9,4 +9,5 @@ test("every state takes one glyph in the shared circle slot", () => {
   // Waiting for a route's slot is still: a clock, never the spinning glyph.
   expect(stateIcon("waiting")).toBe("waiting");
   expect(stateIconParts("waiting").map((part) => part.attributes.class)).toEqual(["fx-state-ring", "fx-state-hands"]);
+  expect(stateIcon("awaiting")).toBe("pending");
 });

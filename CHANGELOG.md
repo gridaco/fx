@@ -12,10 +12,16 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+### Added
+
+- Workflows can request external input with `fx/await@1` and `with.schema`. An SDK can supply a promptless value, or a person can review a question and select an exact file. The viewer renders scalar enums as pickers, marks pending requests on the run and project home, and counts down to an optional deadline. The CLI and SDKs can list and answer requests without a viewer. [#62](https://github.com/gridaco/fx/issues/62)
+- Waiting steps stand out on the canvas and open their form from a **Review** button. Resolved steps show the outcome and open a receipt with the answer, submission time, and channel.
+
 ### Changed
 
 - Made `llms.txt` a shorter starting point for agents, with an introduction to FX, runnable recipes, and links organized by task.
 - The FX Viewer favicon pulses green during active execution and stays steady with reduced motion. [#158](https://github.com/gridaco/fx/issues/158)
+- A run awaiting answers shows a steady amber favicon and its pending review count in the tab title.
 
 ### Fixed
 

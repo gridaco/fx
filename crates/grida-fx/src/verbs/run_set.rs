@@ -32,6 +32,7 @@ use grida_fx_core::docs::project::Project;
 use grida_fx_core::docs::takes::read_takes;
 use grida_fx_core::value::{is_digest, sha256_hex};
 use grida_fx_runtime::events::{read_events_tolerant, run_metadata};
+pub(crate) use grida_fx_runtime::folder::is_tombstone_name;
 use grida_fx_runtime::folder::{holds_stand_in, safe_name};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -542,13 +543,6 @@ pub(crate) struct Picks {
     pub unreadable: BTreeMap<usize, String>,
 }
 
-/// `.removing-<16 lowercase hex>`.
-pub(crate) fn is_tombstone_name(name: &str) -> bool {
-    name.strip_prefix(".removing-").is_some_and(|hex| {
-        hex.len() == 16 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-    })
-}
-
 enum PlanFile {
     None,
     Graph,
@@ -635,6 +629,13 @@ fn read_recorded(folder: &Path) -> Result<Recorded, String> {
                 let incomplete = event.get("incomplete") == Some(&Value::Bool(true));
                 state = match (ok, incomplete) {
                     (true, _) => "succeeded",
+                    (false, true)
+                        if event["awaiting"]
+                            .as_array()
+                            .is_some_and(|ids| !ids.is_empty()) =>
+                    {
+                        "awaiting"
+                    }
                     (false, true) => "incomplete",
                     (false, false) => "failed",
                 };

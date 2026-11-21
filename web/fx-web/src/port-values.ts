@@ -28,7 +28,7 @@ function bounded(text: string): string {
 
 /** A saved plan can seed success without execution; keep the existing evidence rule. */
 export function recordedExecution(node: RunNode): boolean {
-  return node.state === "running" || node.state === "waiting" || node.interrupted === true
+  return node.state === "running" || node.state === "waiting" || node.state === "awaiting" || node.interrupted === true
     || node.started_at !== undefined || typeof node.duration_ms === "number" || typeof node.cache === "string"
     || Object.keys(node.outputs).length > 0;
 }
@@ -163,7 +163,7 @@ export function projectPortValues(view: GraphDocument | ViewerRun, graph: Canvas
         const output = run ? (raw as RunNode).outputs : undefined;
         inspection = output && own(output, port.name) ? inspect(output[port.name], true, artifacts, resolveArtifact)
           : unavailable(raw.state === "absent" || raw.state === "skipped" || run && executed && raw.state === "succeeded" ? "absent"
-            : !run || ["pending", "running", "waiting"].includes(raw.state) ? "pending" : "unavailable");
+            : !run || ["pending", "running", "waiting", "awaiting"].includes(raw.state) ? "pending" : "unavailable");
       } else if (own(raw.with, port.name)) {
         const value = raw.with[port.name];
         const waiting = run ? [...raw.reads, ...(raw.bindings?.map((binding) => binding.source) ?? [])] : (raw as GraphDocument["instances"][number]).waiting_on;

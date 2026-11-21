@@ -18,6 +18,24 @@
 .fx-canvas-open-workflow text { fill: #2563eb; font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .fx-canvas-open-workflow:hover rect, .fx-canvas-open-workflow:focus-visible rect { fill: #dbeafe; stroke: #2563eb; }
 .fx-canvas-node-box { fill: #fff; stroke: #d4d4d8; stroke-width: 1.2px; }
+.fx-canvas-review-pending .fx-canvas-node-box { stroke: #da9b36; stroke-width: 2px; }
+.fx-canvas-node.fx-canvas-review-pending:hover .fx-canvas-node-box { stroke: #ad6c17; }
+.fx-canvas-review-header { fill: #ffedca; pointer-events: none; }
+.fx-canvas-review-footer { fill: #fff5e1; pointer-events: none; }
+.fx-canvas-review-divider { stroke: #e4e4e7; pointer-events: none; }
+.fx-canvas-review-pending .fx-canvas-review-divider, .fx-canvas-review-pending .fx-canvas-node-divider { stroke: #e9c789; }
+.fx-canvas-review-pending .fx-canvas-node-state { fill: #794612; font-weight: 650; }
+.fx-canvas-review-countdown { font-variant-numeric: tabular-nums; }
+.fx-canvas-review-pending .fx-state-hands, .fx-canvas-review-pending .fx-state-ring { stroke: #985715; }
+.fx-canvas-review-prompt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #463722; font: 12px/20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.fx-canvas-review-action { cursor: pointer; outline: none; }
+.fx-canvas-review-action rect { fill: #fafafa; stroke: #d4d4d8; }
+.fx-canvas-review-action text { fill: #3f3f46; font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; pointer-events: none; }
+.fx-canvas-review-action:hover rect { fill: #f4f4f5; stroke: #71717a; }
+.fx-canvas-review-pending .fx-canvas-review-action rect { fill: #814710; stroke: #814710; }
+.fx-canvas-review-pending .fx-canvas-review-action text { fill: white; }
+.fx-canvas-review-pending .fx-canvas-review-action:hover rect { fill: #67380c; stroke: #67380c; }
+.fx-canvas-node .fx-canvas-review-action:focus-visible rect { stroke: #2563eb; stroke-width: 3px; }
 .fx-canvas-pending { stroke-dasharray: 6 4; fill: #fafafa; }
 .fx-canvas-node:hover .fx-canvas-node-box { stroke: #71717a; }
 .fx-canvas-node.is-selected .fx-canvas-node-box, .fx-canvas-node:focus-visible .fx-canvas-node-box { stroke: #2563eb; stroke-width: 2px; }

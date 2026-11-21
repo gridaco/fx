@@ -1279,6 +1279,9 @@ def test_control_wrappers_forward_exact_target_options_and_preserve_outcomes(
     result = fx.cancel("runs/one", cwd=project, wait=True, timeout="2m")
     assert result.outcome == "completed" and result.recorded_state == "failed"
     assert result.external_completion == "not_verified"
+    parked = _control_result(outcome="completed", recorded_state="awaiting", cleanup="complete")
+    fake.reply(cancel={"stdout": json.dumps(parked)})
+    assert fx.cancel("runs/one", cwd=project, wait=True, timeout="2m").recorded_state == "awaiting"
     assert fake.invocations[-1] == [
         "cancel",
         "runs/one",
@@ -1287,6 +1290,79 @@ def test_control_wrappers_forward_exact_target_options_and_preserve_outcomes(
         "--timeout=2m",
         "--json",
     ]
+
+
+def test_list_requests_only_discovers_a_viewer_for_explicit_inspection(
+    fake: Fake, project: Path
+) -> None:
+    target = "revisions/build"
+    request = {
+        "id": D1,
+        "step": "revision#1",
+        "schema": {"type": "string"},
+        "show": None,
+        "on_timeout": "fail",
+        "opened_at": "2026-11-22T00:00:00Z",
+        "state": {"status": "pending"},
+    }
+    fake.reply(inspect={"stdout": json.dumps({"requests": [request]})})
+    assert fx.list_requests(target, cwd=project) == [request]
+    assert fake.invocations[-1] == ["inspect", "--requests", "--json", "--", target]
+
+    access = {"requests": [request], "viewer_url": None}
+    fake.reply(inspect={"stdout": json.dumps(access)})
+    assert fx.inspect_requests(target, cwd=project) == access
+    assert fake.invocations[-1] == ["inspect", "--requests", "--json", "--viewer-url", "--", target]
+    assert fx.inspect_requests(target, cwd=project, register=True) == access
+    assert fake.invocations[-1] == ["inspect", "--requests", "--json", "--register", "--", target]
+
+
+def test_respond_preserves_json_object_keys(fake: Fake, project: Path) -> None:
+    with pytest.raises(ValueError, match="key 1 is not a string"):
+        fx.respond("review/one", "a" * 64, {"options": {1: True}}, cwd=project)
+    assert fake.invocations == []
+
+
+def test_waiting_rejects_malformed_engine_replies(fake: Fake, project: Path) -> None:
+    run = "review/one"
+    for stdout in [
+        "broken",
+        '{"requests":[null]}',
+        '{"requests":[{"state":{"status":"pending"}}]}',
+    ]:
+        fake.reply(inspect={"stdout": stdout})
+        with pytest.raises(fx.FxError):
+            fx.list_requests(run, cwd=project)
+    for result in [{"requests": []}, {"requests": [], "viewer_url": False}]:
+        fake.reply(inspect={"stdout": json.dumps(result)})
+        with pytest.raises(fx.FxError):
+            fx.inspect_requests(run, cwd=project)
+    at = "2026-11-22T00:00:00Z"
+    pending = {
+        "id": D1,
+        "step": "review#1",
+        "schema": True,
+        "show": None,
+        "on_timeout": "fail",
+        "opened_at": at,
+        "state": {"status": "pending"},
+    }
+    winner = {
+        **pending,
+        "state": {"status": "answered", "answer": None, "channel": "sdk", "at": at},
+    }
+    fake.reply(respond={"stdout": json.dumps({"request": winner})})
+    assert fx.respond(run, D1, None, cwd=project) == winner
+    for status, result in [
+        (0, {"request": pending}),
+        (0, {"request": {**winner, "id": D2}}),
+        (1, {"code": "answer_conflict", "message": "Conflict", "request": pending}),
+        (1, {"code": "expired", "message": "Expired"}),
+    ]:
+        fake.reply(respond={"status": status, "stdout": json.dumps(result)})
+        with pytest.raises(fx.FxError) as err:
+            fx.respond(run, D1, None, cwd=project)
+        assert not isinstance(err.value, fx.AnswerError)
 
 
 def test_async_control_and_structured_errors(fake: Fake, project: Path) -> None:

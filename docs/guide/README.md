@@ -12,7 +12,7 @@ awaiting implementation as **planned**. Stable FX releases start at `0.1.0`;
 [the overview](../wg/overview.md) records the decisions, what shipped and what comes later.
 
 The local FX service gives a project a stable address, a run/plan index, and a
-read-only node canvas. Start with `grida fx init` and `grida fx start --background`;
+node canvas with review actions for pending workflow inputs. Start with `grida fx init` and `grida fx start --background`;
 standalone workflows remain supported. These service commands describe current
 source behavior: check your installed version's help before using them.
 Custom step pages remain planned. Portable recorded-run exports are described in
@@ -27,7 +27,7 @@ custom node bodies and workflow builders: Python's on Python, TypeScript's on No
 The engine owns planning, scheduling, result identities, caching, spending limits, provider
 retries, and run records. SDKs and node bodies use that engine rather than implementing their own
 execution or billing layer. AI generation is one application; ordinary code can run as workflow
-steps too. The bundled viewer is a read-only canvas for plans and recorded runs.
+steps too. The bundled viewer displays plans and recorded runs.
 
 ## Chapters
 

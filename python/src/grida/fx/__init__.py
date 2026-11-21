@@ -102,6 +102,15 @@ from grida.fx._runs import (
 )
 from grida.fx._spec import NodeSpec, PortSpec, SpecError, node, param, spec_of
 from grida.fx._stand_in import DECLINE, Answer, StandInCall
+from grida.fx._waiting import (
+    AnswerError,
+    inspect_requests,
+    inspect_requests_async,
+    list_requests,
+    list_requests_async,
+    respond,
+    respond_async,
+)
 
 __all__ = [
     "DECLINE",
@@ -113,6 +122,7 @@ __all__ = [
     "AdapterRoute",
     "Agent",
     "Answer",
+    "AnswerError",
     "Answered",
     "CallFailed",
     "CallRefused",
@@ -166,6 +176,10 @@ __all__ = [
     "inspect_control",
     "inspect_control_async",
     "list_runs",
+    "inspect_requests",
+    "inspect_requests_async",
+    "list_requests",
+    "list_requests_async",
     "list_runs_async",
     "list_files",
     "list_files_async",
@@ -179,6 +193,8 @@ __all__ = [
     "remove_runs_async",
     "resolve_file",
     "resolve_file_async",
+    "respond",
+    "respond_async",
     "run",
     "run_async",
     "spec_of",

@@ -215,6 +215,7 @@ struct Invocation<'a> {
     inputs: &'a [&'a str],
     folder: &'a str,
     yes_up_to: Option<&'a str>,
+    wait_for_answers: bool,
     live: bool,
     require_estimates: bool,
     /// `--max-usd`.
@@ -232,6 +233,7 @@ impl Default for Invocation<'_> {
             inputs: &[],
             folder: "runs/one",
             yes_up_to: None,
+            wait_for_answers: false,
             live: false,
             require_estimates: false,
             max_usd: None,
@@ -380,6 +382,7 @@ fn run_in(
         label: invocation.folder.to_string(),
         name: None,
         yes_up_to: invocation.yes_up_to.map(|text| Usd::parse(text).unwrap()),
+        wait_for_answers: invocation.wait_for_answers,
         require_estimates: invocation.require_estimates,
         takes_file: format!("workflows/{}.takes.yaml", invocation.target),
         ..RunOptions::default()
@@ -2131,4 +2134,513 @@ def flip_image(ctx):
         !run.join("values").join(original_digest).exists(),
         "resume must not repair historical missing bytes from a current project source"
     );
+}
+
+#[test]
+fn waiting_steps_open_per_occurrence_and_replay_only_this_runs_decisions() {
+    use grida_fx_core::val::Val;
+    use grida_fx_runtime::waiting::{self, ResponseChannel};
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Choose twice
+steps:
+  first:
+    uses: fx/await@1
+    with:
+      message: Pick an item
+      schema: { type: object, required: [chosen], properties: { chosen: { type: string } } }
+      choice_field: chosen
+      choices: { a: one, b: two }
+  second:
+    uses: fx/await@1
+    with:
+      message: Pick an item
+      schema: { type: object, required: [chosen], properties: { chosen: { type: string } } }
+      choice_field: chosen
+      choices: { a: one, b: two }
+  independent:
+    uses: fx/select@1
+    with: { first_of: [ready] }
+outputs:
+  first: ${{ steps.first.outputs.selected }}
+  second: ${{ steps.second.outputs.selected }}
+"#,
+    )]);
+    let Some(result) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let parked = result.unwrap();
+    assert!(parked.incomplete && parked.failed.is_empty(), "{parked:?}");
+    let waiting = waiting::list(&parked.folder).unwrap();
+    assert_eq!(waiting.len(), 2);
+    assert_ne!(waiting[0].id, waiting[1].id);
+    let events = project.events("runs/one");
+    let parked_receipt = events.last().unwrap();
+    assert_eq!(parked_receipt["event"], "run_finished");
+    assert_eq!(parked_receipt["awaiting"].as_array().unwrap().len(), 2);
+    assert!(
+        named(&events, "node_finished")
+            .iter()
+            .any(|e| e["id"] == "independent#1")
+    );
+    for request in waiting {
+        let key = if request.spec.step == "first#1" {
+            "b"
+        } else {
+            "a"
+        };
+        let invalid = waiting::respond(
+            &parked.folder,
+            &request.id,
+            json!({"chosen":"absent"}),
+            ResponseChannel::Cli,
+        );
+        assert!(invalid.is_err());
+        waiting::respond(
+            &parked.folder,
+            &request.id,
+            json!({"chosen":key}),
+            ResponseChannel::Cli,
+        )
+        .unwrap();
+    }
+    let resumed = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert!(resumed.ok, "{resumed:?}");
+    assert_eq!(resumed.outputs["first"], Val::Str("two".into()));
+    assert_eq!(resumed.outputs["second"], Val::Str("one".into()));
+    let replayed = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(replayed.outputs, resumed.outputs);
+    let fresh = run_in(
+        &project,
+        Invocation {
+            folder: "runs/new",
+            ..Default::default()
+        },
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(fresh.incomplete && fresh.failed.is_empty());
+    assert!(
+        waiting::list(&fresh.folder)
+            .unwrap()
+            .iter()
+            .all(|r| matches!(r.state, waiting::RequestState::Pending))
+    );
+}
+
+#[test]
+fn waiting_repeat_limits_open_requests_across_detach_and_reattach() {
+    use grida_fx_runtime::waiting::{self, RequestState, ResponseChannel};
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Review in sequence
+steps:
+  review:
+    for_each: [a, b, c]
+    key: ${{ item }}
+    concurrency: 1
+    uses: fx/await@01
+    with: { schema: {type: string}, timeout_seconds: 15 }
+  release:
+    uses: fx/await@1
+    with: { schema: {type: boolean} }
+"#,
+    )]);
+    let Some(result) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let folder = result.unwrap().folder;
+    let initial = waiting::list(&folder).unwrap();
+    assert_eq!(
+        initial.len(),
+        2,
+        "the independent request and the first review can open together"
+    );
+    let release = initial.iter().find(|r| r.spec.step == "release#1").unwrap();
+    let first = initial
+        .iter()
+        .find(|r| r.spec.step == "review['a']#1")
+        .unwrap()
+        .id
+        .clone();
+    waiting::respond(&folder, &release.id, json!(true), ResponseChannel::Sdk).unwrap();
+    let answer = move || {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        for key in ["a", "b", "c"] {
+            loop {
+                let requests = waiting::list(&folder).unwrap();
+                let pending: Vec<_> = requests
+                    .iter()
+                    .filter(|r| matches!(r.state, RequestState::Pending))
+                    .collect();
+                assert!(pending.len() <= 1);
+                if let [request] = pending.as_slice() {
+                    assert_eq!(request.spec.step, format!("review['{key}']#1"));
+                    if key == "a" {
+                        assert_eq!(request.id, first);
+                    }
+                    waiting::respond(&folder, &request.id, json!(key), ResponseChannel::Cli)
+                        .unwrap();
+                    break;
+                }
+                assert!(Instant::now() < deadline, "next occurrence did not open");
+                std::thread::sleep(Duration::from_millis(15));
+            }
+        }
+    };
+    let completed = run_in(
+        &project,
+        Invocation {
+            wait_for_answers: true,
+            ..Invocation::default()
+        },
+        Some(Box::new(answer)),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(completed.ok, "{completed:?}");
+}
+
+#[test]
+fn waiting_steps_reject_disjoint_generated_choices_before_parking() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Generated keys
+steps:
+  candidates:
+    uses: fx/select@1
+    with: { first_of: [{draft: first, proof: second}] }
+  pick:
+    uses: fx/await@1
+    with:
+      schema: {enum: [final]}
+      choices: ${{ steps.candidates.outputs.value }}
+"#,
+    )]);
+    let Some(result) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let result = result.unwrap();
+    assert!(!result.ok, "{result:?}");
+    assert!(
+        result
+            .stopped
+            .as_deref()
+            .unwrap()
+            .contains("no choice key satisfies")
+    );
+    assert!(
+        grida_fx_runtime::waiting::list(&result.folder)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(named(&project.events("runs/one"), "waiting_request").is_empty());
+}
+
+#[test]
+fn waiting_steps_route_expiry_through_the_authored_fallback() {
+    use grida_fx_core::val::Val;
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Expiry
+steps:
+  choice:
+    uses: fx/await@1
+    with:
+      message: Pick a color
+      schema: { type: string }
+      choices: { a: red, b: blue }
+      timeout_seconds: 1
+      on_timeout: continue
+  fallback:
+    if: ${{ steps.choice.facts.outcome == 'expired' }}
+    uses: fx/select@1
+    with: { first_of: [red] }
+  finish:
+    uses: fx/select@1
+    with:
+      first_of: ["${{ steps.choice.outputs.selected }}", "${{ steps.fallback.outputs.value }}"]
+outputs:
+  color: ${{ steps.finish.outputs.value }}
+"#,
+    )]);
+    let Some(result) = run_in(
+        &project,
+        Invocation {
+            wait_for_answers: true,
+            ..Default::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let result = result.unwrap();
+    assert!(result.ok, "{result:?}");
+    assert_eq!(result.outputs["color"], Val::Str("red".into()));
+    let events = project.events("runs/one");
+    let finished = named(&events, "node_finished");
+    assert_eq!(
+        finished.iter().filter(|e| e["id"] == "fallback#1").count(),
+        1
+    );
+    assert!(
+        finished
+            .iter()
+            .any(|e| e["id"] == "choice#1" && e["facts"]["outcome"] == "expired")
+    );
+}
+
+#[test]
+fn waiting_steps_deliver_the_selected_artifact_in_an_attached_run() {
+    use grida_fx_core::val::Val;
+    use grida_fx_runtime::waiting::{self, ResponseChannel};
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Select generated material
+steps:
+  variants:
+    for_each: [green, violet]
+    key: ${{ item }}
+    uses: ./nodes/cases.py#shout
+    with: { text: "${{ item }}" }
+  pick:
+    uses: fx/await@1
+    with:
+      message: Which variant?
+      choices: ${{ steps.variants.*.outputs.text }}
+      schema: { type: string }
+      timeout_seconds: 12
+  downstream:
+    uses: ./nodes/cases.py#upper
+    with: { text: "${{ steps.pick.outputs.selected }}" }
+outputs:
+  text: ${{ steps.downstream.outputs.text }}
+"#,
+    )]);
+    let folder = project.root.join("runs/one");
+    let answer = move || {
+        let deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            if let Ok(requests) = waiting::list(&folder)
+                && let Some(request) = requests.first()
+            {
+                let choice = &request.spec.choices.as_ref().unwrap()["violet"];
+                assert_eq!(
+                    choice["file"]["digest"],
+                    grida_fx_core::value::file_digest(b"VIOLET")
+                );
+                waiting::respond(&folder, &request.id, json!("violet"), ResponseChannel::Cli)
+                    .unwrap();
+                break;
+            }
+            assert!(Instant::now() < deadline, "a waiting request never opened");
+            std::thread::sleep(Duration::from_millis(15));
+        }
+    };
+    let Some(result) = run_in(
+        &project,
+        Invocation {
+            wait_for_answers: true,
+            ..Default::default()
+        },
+        Some(Box::new(answer)),
+    ) else {
+        return;
+    };
+    let result = result.unwrap();
+    assert!(result.ok, "{result:?}");
+    let Val::File(file) = &result.outputs["text"] else {
+        panic!("selected artifact was not a file");
+    };
+    assert_eq!(file.digest, grida_fx_core::value::file_digest(b"VIOLET"));
+}
+
+#[test]
+fn waiting_steps_restore_nested_selected_files_and_literal_json_on_resume() {
+    use grida_fx_core::val::Val;
+    use grida_fx_runtime::waiting::{self, ResponseChannel};
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Nested review data
+steps:
+  variant:
+    uses: ./nodes/cases.py#shout
+    with: { text: chosen }
+  pick:
+    uses: fx/await@1
+    with:
+      message: Choose a candidate
+      schema: { type: string }
+      choices:
+        alpha:
+          artifact: ${{ steps.variant.outputs.text }}
+          caption: { object: { file: literal } }
+outputs:
+  result: ${{ steps.pick.outputs.selected }}
+"#,
+    )]);
+    let Some(result) = run_in(&project, Invocation::default(), None) else {
+        return;
+    };
+    let folder = result.unwrap().folder;
+    let requests = waiting::list(&folder).unwrap();
+    waiting::respond(
+        &folder,
+        &requests[0].id,
+        json!("alpha"),
+        ResponseChannel::Cli,
+    )
+    .unwrap();
+    for _ in 0..2 {
+        let result = run_in(&project, Invocation::default(), None)
+            .unwrap()
+            .unwrap();
+        assert!(result.ok, "{result:?}");
+        let Val::Object(members) = &result.outputs["result"] else {
+            panic!("expected a structured selection");
+        };
+        let Val::File(artifact) = &members["artifact"] else {
+            panic!("nested artifact lost its file type");
+        };
+        assert_eq!(
+            artifact.digest,
+            grida_fx_core::value::file_digest(b"CHOSEN")
+        );
+        assert_eq!(
+            members["caption"].plain(),
+            Some(json!({"object":{"file":"literal"}}))
+        );
+    }
+}
+
+#[test]
+fn waiting_steps_expire_without_scheduling_dependent_work_by_default() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Required approval
+steps:
+  review:
+    uses: fx/await@1
+    with: { message: Approve, schema: {type: boolean}, timeout_seconds: 1 }
+  publish:
+    if: ${{ steps.review.outputs.answer }}
+    uses: fx/select@1
+    with: { first_of: [published] }
+"#,
+    )]);
+    let Some(result) = run_in(
+        &project,
+        Invocation {
+            wait_for_answers: true,
+            ..Default::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let result = result.unwrap();
+    assert!(
+        !result.ok && result.failed.iter().any(|(id, _)| id == "review#1"),
+        "{result:?}"
+    );
+    let events = project.events("runs/one");
+    assert!(
+        named(&events, "node_started")
+            .iter()
+            .all(|e| e["id"] != "publish#1")
+    );
+    assert!(events.last().unwrap().get("awaiting").is_none());
+}
+
+#[test]
+fn waiting_steps_keep_the_open_request_and_deadline_after_cancellation() {
+    use grida_fx_runtime::waiting::{self, RequestState, ResponseChannel};
+
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Cancel an attached review
+steps:
+  review:
+    uses: fx/await@1
+    with: { message: Approve, schema: {type: boolean}, timeout_seconds: 30 }
+outputs:
+  approval: ${{ steps.review.outputs.answer }}
+"#,
+    )]);
+    let folder = project.root.join("runs/one");
+    let cancel_folder = folder.clone();
+    let cancel = move || {
+        let limit = Instant::now() + Duration::from_secs(10);
+        loop {
+            if waiting::list(&cancel_folder).is_ok_and(|requests| !requests.is_empty()) {
+                assert!(
+                    std::process::Command::new("kill")
+                        .args(["-INT", &std::process::id().to_string()])
+                        .status()
+                        .unwrap()
+                        .success()
+                );
+                return;
+            }
+            assert!(Instant::now() < limit, "the review never opened");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            wait_for_answers: true,
+            ..Default::default()
+        },
+        Some(Box::new(cancel)),
+    ) else {
+        return;
+    };
+    assert!(outcome.unwrap().cancelled);
+    let events = project.events("runs/one");
+    assert_eq!(events.last().unwrap()["event"], "run_cancelled");
+    let open = waiting::list(&folder).unwrap().pop().unwrap();
+    assert!(matches!(open.state, RequestState::Pending));
+    let answer = waiting::respond(&folder, &open.id, json!(true), ResponseChannel::Cli).unwrap();
+    assert_eq!(answer.deadline, open.deadline);
+    assert_eq!(project.events("runs/one"), events);
+    let resumed = run_in(&project, Invocation::default(), None)
+        .unwrap()
+        .unwrap();
+    assert!(resumed.ok);
+    assert_eq!(resumed.outputs["approval"].plain(), Some(json!(true)));
 }

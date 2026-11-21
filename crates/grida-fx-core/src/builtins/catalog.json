@@ -1071,6 +1071,63 @@
    "body": "none"
   },
   {
+   "uses": "fx/await@1",
+   "name": "await",
+   "major": 1,
+   "version": 1,
+   "description": "Request a schema-validated external input for this run and step.",
+   "inputs": {},
+   "params": {
+    "message": {
+     "type": "string",
+     "minLength": 1,
+     "x-fx-optional": true
+    },
+    "schema": {
+     "type": [
+      "object",
+      "boolean"
+     ]
+    },
+    "choices": {
+     "type": "object",
+     "x-fx-optional": true
+    },
+    "choice_field": {
+     "type": "string",
+     "minLength": 1,
+     "x-fx-optional": true
+    },
+    "show": {
+     "x-fx-optional": true
+    },
+    "timeout_seconds": {
+     "type": "integer",
+     "minimum": 1,
+     "x-fx-optional": true
+    },
+    "on_timeout": {
+     "type": "string",
+     "enum": [
+      "fail",
+      "continue"
+     ],
+     "default": "fail"
+    }
+   },
+   "outputs": {
+    "answer": "json?",
+    "selected": "value?"
+   },
+   "judge": false,
+   "capability": null,
+   "calls": {},
+   "resources": [],
+   "tools": [],
+   "retry": "service",
+   "body": "engine"
+  },
+  {
    "uses": "fx/select@1",
    "name": "select",
    "major": 1,

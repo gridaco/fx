@@ -6,6 +6,8 @@ import { validateViewerApiBase } from "./route";
 import { isSkipReason, type SkipReason } from "./skip";
 import { isPrice, type Price } from "./graph";
 export { VisualPreviewController } from "./visual-preview";
+export { WaitingReviewController, countdownLabel, parseDraft, withReviewCards, type WaitingRequest } from "./waiting";
+export { answerKinds, answerSchema, emptyAnswer, encodeAnswer, initialAnswer, scalarEnumOptions, type AnswerDraft, type AnswerKind, type AnswerSchema } from "./answer-draft";
 
 export interface Artifact {
   digest: string;
@@ -28,6 +30,8 @@ export interface RunNode {
   title: string;
   uses: string | null;
   state: string;
+  /** Recorded resolution of this waiting step, independent of its execution state. */
+  review_outcome?: "answered" | "expired";
   reads: string[];
   with: Record<string, unknown>;
   outputs: Record<string, unknown>;
@@ -138,6 +142,11 @@ function node(value: unknown): value is RunNode {
     && nullableString(value.error)
     && (value.diagnostic === undefined || diagnostic(value.diagnostic))
     && (value.skip_reason === undefined || value.state === "skipped" && isSkipReason(value.skip_reason))
+    && (value.review_outcome === undefined || (
+      typeof value.uses === "string" && /^fx\/await@0*1$/.test(value.uses)
+      && (value.state === "succeeded" && value.review_outcome === "answered"
+        || (value.state === "succeeded" || value.state === "failed") && value.review_outcome === "expired")
+    ))
     && nullableNumber(value.duration_ms)
     && (value.started_at === undefined || utcTimestamp(value.started_at))
     && (value.waiting_for === undefined || typeof value.waiting_for === "string")

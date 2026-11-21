@@ -54,6 +54,7 @@
       "enum": [
         "planned",
         "unfinished",
+        "awaiting",
         "succeeded",
         "failed",
         "cancelled",
@@ -152,6 +153,7 @@
           },
           "recorded_state": {
             "enum": [
+              "awaiting",
               "succeeded",
               "failed",
               "cancelled"

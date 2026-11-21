@@ -22,6 +22,7 @@
         "run_cancelled",
         "cancel_requested",
         "phase_planned",
+        "waiting_request",
         "node_started",
         "node_finished",
         "node_failed",
@@ -56,6 +57,27 @@
     "id": {
       "description": "The instance id.",
       "type": "string"
+    },
+    "request_id": {
+      "description": "The opaque waiting request ID, scoped to the run and step occurrence.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "request_status": {
+      "description": "The state of a waiting request as observed by this invocation.",
+      "enum": ["pending", "answered", "expired"]
+    },
+    "deadline": {
+      "description": "The request's original absolute deadline when set.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "awaiting": {
+      "description": "Requests blocking this invocation when it returned at a waiting boundary.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
     },
     "path": {
       "type": "string"
@@ -740,6 +762,22 @@
       "if": {
         "properties": {
           "event": {
+            "const": "waiting_request"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "id",
+          "request_id",
+          "request_status"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
             "const": "node_started"
           }
         }
@@ -1126,7 +1164,7 @@
       ]
     },
     "ports": {
-      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "description": "Declared file ports, engine-native value outputs and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1154,7 +1192,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+            "pattern": "^(?:value|(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?)\\??$"
           }
         },
         "params": {

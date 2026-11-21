@@ -1,7 +1,8 @@
 # Viewing workflows and runs
 
 The local FX service keeps a project's plans and recorded runs available at one
-loopback address. Its bundled viewer displays each workflow on a read-only canvas.
+loopback address. The canvas shows the graph defined in the workflow file.
+On a live run, **Review** opens a pending input for submission.
 The service needs FX 0.2 or later; `grida fx --version` names yours.
 
 ## Start the project service
@@ -45,6 +46,30 @@ grida fx stop
 workflow processes. Restarting it restores access to retained run URLs. Closing a
 browser tab has no effect on service or execution. Service commands accept
 `--project DIRECTORY` when you are outside the project.
+
+## Answer a waiting step
+
+An exact run page lets you **answer a waiting step**. An amber outline and tinted
+header mark the step awaiting an answer. Pending requests with a deadline show a
+countdown on the card and in the review panel. Open-ended requests show
+**Awaiting answer**. Click **Review** to see the optional question and artifacts in the
+right-hand panel. A promptless request uses the step title or ID. A scalar enum
+offers a picker, and an image candidate can include a preview. Fill in the answer, then click
+**Submit answer**.
+
+The run header and project home also show **Awaiting answer** while the
+unfinished run has a pending request. The home status updates automatically.
+
+If someone has already answered through the CLI, an SDK, or another tab, the
+panel shows the recorded selection or answer fields and the submission channel. Invalid input keeps the request
+open. A run started with `--wait-for-answers` can continue as soon as FX records
+the answer. If the invocation has exited, resume the same run to continue.
+After the runner resolves the step, the canvas card shows the review outcome
+alongside its execution status, such as **Selected** or **Expired**. Use
+**View answer** on an answered step to revisit its receipt.
+Portable exports are read-only. See the [waiting-step contract](../../spec/waiting.md).
+The [dogfood workflow](../../fixtures/waiting/README.md) shows concurrent reviews,
+repeated instances, follow-up questions and both timeout policies in one local run.
 
 ## Register a plan or saved run
 
@@ -327,9 +352,12 @@ constructing it from a folder name. `--open` requests one browser launch; omit i
 to visit the printed URL yourself. Planning-time code can execute before the URL
 exists. Browser or service failures do not change the workflow's result.
 
-The browser tab's `f(x)` icon pulses green while the viewer can verify the run is
-executing. With reduced motion enabled, the green icon stays steady. Plans, finished
-runs and unfinished records without a verified runner use the standard icon.
+The browser tab shows a steady amber `f(x)` icon and **Awaiting answer** while a
+review is open. If several reviews are open, the title gives their count. The
+amber icon follows the requests, including when the runner stops or another
+branch is still executing. Once all requests resolve, the icon pulses green
+while the viewer can verify an active runner and uses the standard icon
+otherwise. Reduced motion keeps the green icon steady.
 
 `run` stays foreground and exits normally after execution. The separate FX service
 keeps its page available afterward, including for failed and cancelled runs.
@@ -542,7 +570,7 @@ The bar shows `cancelling` after a recorded `cancel_requested` event and
 returns to the terminal state when that invocation ends. A resume resets the intent.
 This label does not prove the runner is still alive or that cleanup finished. Use
 [`inspect --control` or `cancel --wait`](08-run-control.md) for verified local control.
-The viewer has no cancellation button or write endpoint in this version.
+Request cancellation through the CLI or SDK.
 
 To connect a chat, editor, or browser automation to the current selection and
 presentation, see [Connect to the FX viewer](16-viewer-api.md).

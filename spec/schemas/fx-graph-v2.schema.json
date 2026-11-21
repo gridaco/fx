@@ -769,7 +769,7 @@
       }
     },
     "ports": {
-      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "description": "Declared file ports, engine-native value outputs and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -797,7 +797,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+            "pattern": "^(?:value|(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?)\\??$"
           }
         },
         "params": {

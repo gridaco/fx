@@ -86,6 +86,7 @@
 //! incomplete: true, stopped: <fault>}` where it still can, and is returned as
 //! [`RunError::Fatal`]. The host pool is shut down whatever happened.
 
+mod awaiting;
 pub mod dispatch;
 pub mod replay;
 pub mod schedule;
@@ -128,6 +129,8 @@ pub struct RunOptions {
     pub name: Option<String>,
     /// `--yes-up-to`.
     pub yes_up_to: Option<Usd>,
+    /// Keep the invoking runner attached while workflow steps wait for an external answer.
+    pub wait_for_answers: bool,
     /// Require applicable forecasts for uncached chargeable work, including new expansions.
     pub require_estimates: bool,
     /// Permit only call cache hits and collection of retained jobs.
@@ -549,9 +552,13 @@ fn invoke(
         }
     };
     let events_label = in_folder(&options.label, "events.jsonl");
-    planner
-        .results
-        .extend(replay::replay(&prior, &engine.store));
+    match replay::replay_run(&prior, &engine.store, &folder.path) {
+        Ok(results) => planner.results.extend(results),
+        Err(error) => {
+            watchers();
+            return Err(RunError::Fatal(error));
+        }
+    }
     let invocation_id = crate::events::new_invocation_id();
     let log = match EventLog::open(&folder.events_path(), &invocation_id, &digest) {
         Ok(log) => Arc::new(log),
@@ -604,8 +611,10 @@ fn invoke(
         sender,
         receiver,
         running: IndexMap::new(),
+        awaiting: IndexMap::new(),
+        parked: false,
         overturned: IndexMap::new(),
-        groups: schedule::Groups::default(),
+        groups: schedule::Groups::resume(&prior),
         gate: schedule::Gate::new(),
         failed: Vec::new(),
         tasks: Vec::new(),
@@ -869,6 +878,8 @@ enum Message {
     Interrupted,
     /// A stand-in run's answerer is gone ([`crate::stand_in::StandIn::lost`]).
     AnswererLost,
+    /// A workflow waiting step has accepted an answer or reached its deadline.
+    RequestResolved,
 }
 
 /// The loop's state (module doc).
@@ -892,6 +903,10 @@ struct Scheduler<'a> {
     workflow: String,
     sender: mpsc::UnboundedSender<Message>,
     receiver: mpsc::UnboundedReceiver<Message>,
+    /// Request IDs for the waiting step occurrences reached in this invocation.
+    awaiting: IndexMap<String, String>,
+    /// Reached quiescence and returned execution to the caller for these external requests.
+    parked: bool,
     /// Running instances by id.
     running: IndexMap<String, Running>,
     /// Running instances a run-time assertion failed and the run stopped: the assertion's
@@ -1202,27 +1217,40 @@ impl Scheduler<'_> {
             for planned in &check.planned {
                 self.emit(planned)?;
             }
-            let mut failed_at_once = false;
+            let mut result_ready = false;
             // Nothing new starts once a person stopped the run.
             if check.stop.is_none() && !self.interrupted() {
                 let ready =
                     schedule::ready(&expansion, &self.planner.results, &running, &self.groups);
                 for id in ready {
                     if let Some(instance) = expansion.instances.get(&id) {
-                        failed_at_once |= !self.start(instance)?;
+                        result_ready |= !self.start(instance)?;
                     }
                 }
+            }
+            if result_ready {
+                continue;
             }
             if self.running.is_empty() {
                 if check.stop.is_some() {
                     return Ok(check.stop);
                 }
-                if failed_at_once {
-                    continue;
+                if self.awaiting.is_empty() {
+                    return Ok(None);
                 }
-                return Ok(None);
+                if !self.options.wait_for_answers {
+                    self.parked = true;
+                    return Ok(Some(format!(
+                        "awaiting external answers for {}",
+                        self.awaiting
+                            .keys()
+                            .map(String::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
+                }
             }
-            let messages = self.wait();
+            let messages = self.wait_for_work()?;
             if messages.is_empty() {
                 // Every sender is gone, so nothing running can report any more.
                 return Err(Error::internal(
@@ -1239,7 +1267,7 @@ impl Scheduler<'_> {
                         }
                     }
                     Message::AnswererLost => lost = true,
-                    Message::Interrupted => {}
+                    Message::Interrupted | Message::RequestResolved => {}
                 }
             }
             // A call that met the loss first has already stopped the run with it.
@@ -1290,11 +1318,14 @@ impl Scheduler<'_> {
         self.engine.handle.block_on(self.services.calls_settled());
     }
 
-    /// Dispatches an instance; `false` when its job could not be made and it failed at once.
+    /// Dispatches a job or opens a waiting step. `false` means an immediate result needs expansion.
     fn start(&mut self, instance: &Instance) -> Result<bool, Error> {
         let Some(admission) = self.services.control.admit() else {
             return Ok(true);
         };
+        if instance.ty.is_await() {
+            return self.waiting_step(instance);
+        }
         let env = |name: &str| std::env::var(name).ok();
         let job = match InstanceJob::from_instance(instance, self.planner, &env) {
             Ok(job) => job,
@@ -1495,6 +1526,11 @@ impl Scheduler<'_> {
             ok,
             incomplete,
             stopped: stopped.clone(),
+            awaiting: if self.parked {
+                self.awaiting.values().cloned().collect()
+            } else {
+                Vec::new()
+            },
             charged_usd: charged,
             failed: self.failed.iter().map(|(id, _)| id.clone()).collect(),
             outputs: outputs
@@ -1536,6 +1572,7 @@ impl Scheduler<'_> {
             ok: false,
             incomplete: true,
             stopped: Some(fault.message.clone()),
+            awaiting: Vec::new(),
             charged_usd: self.ledger.charged(),
             failed: self.failed.iter().map(|(id, _)| id.clone()).collect(),
             outputs: IndexMap::new(),

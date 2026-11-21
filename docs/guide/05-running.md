@@ -39,6 +39,34 @@ The service uses loopback port 8787 by default and keeps run pages available aft
 `--open` requests browser launch. Commands never start a background service implicitly.
 Execution still works when the service is stopped.
 
+## Answer a waiting step
+
+A workflow can ask for a boolean, a candidate key or a JSON value matching its
+answer schema. A named run gives both a person and an agent the same review target.
+In the [three-variant fixture](../../fixtures/waiting/workflow.yaml), a build
+system supplies a promptless revision and a reviewer picks an image. To try
+both from the terminal, copy each step's request ID from the inspection.
+
+```sh
+grida fx run workflow.yaml --name review
+grida fx inspect review-variants/review --requests --json
+# Set REVISION_ID and CHOOSE_ID to the IDs for revision#1 and choose#1.
+grida fx respond review-variants/review "$REVISION_ID" --json '"rev-42"'
+grida fx respond review-variants/review "$CHOOSE_ID" --json '{"variant":"b"}'
+grida fx run workflow.yaml --resume review
+```
+
+By default the first invocation exits with status 1 and an incomplete result once
+only open requests block progress. Add `--wait-for-answers` to keep it running.
+A second terminal, an SDK or the local viewer can answer. The result pairs the
+revision and selected image digest in `outputs/manifest.json`. Use `--viewer-url`
+with request inspection to look up an existing viewer link, or `--register`
+to register the run for handoff.
+Use `--json=-` to read an answer from standard input. Invalid input leaves a
+request open. If another client has answered, a conflicting submission reports
+the winner. When a detached request expires, resume to run its configured fallback.
+Answering needs no sign-in or credential setup. [Workflow contract](../../spec/waiting.md)
+
 ## Generate one image
 
 `grida fx call` runs a single `image.generate` from a literal prompt. It uses the nearest

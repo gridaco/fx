@@ -15,6 +15,7 @@
 //! | [`agent`] | the agent loop (`agent.run`) |
 //! | [`executor`] | one attempt of one instance: result cache, select, paid built-ins, host runs, accepting results |
 //! | [`runner`] | one run invocation: refusals, resume, scheduling, dispatch, outputs |
+//! | [`waiting`] | durable waiting-step requests and answers |
 //! | [`plantime`] | `at: plan` steps while planning |
 //! | [`host`] | node host processes, their connections and pool; the planning host |
 //! | [`tools`] | external programs (`GRIDA_FX_TOOL_<NAME>`, then `PATH`) |
@@ -41,3 +42,4 @@ pub mod stand_in;
 pub mod stderr;
 pub mod store;
 pub mod tools;
+pub mod waiting;

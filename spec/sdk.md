@@ -66,6 +66,28 @@ The event's optional `original_charged_usd` is the amount FX booked for the orig
 Older records can lack the evidence needed to identify that amount, even when the run's
 accumulated spend is available. Recovery adds zero to that accumulated spend.
 
+## Answer external requests
+
+Use `list_requests` / `listRequests` with an exact run directory or `workflow/name`.
+Listing reads the run's request records without discovering a viewer. They include
+the frozen schema and any authored message, reviewed values, choices, original
+deadline and current state. Use `respond(run, request_id, answer)` for a durable
+receipt. An engine refusal raises `AnswerError` with a machine-readable `code`.
+Before submission, the SDK checks that it can encode the value. Python raises
+`ValueError` for invalid JSON values, including a mapping with non-string keys.
+JavaScript raises `TypeError` for values outside its SDK profile, including
+integral numbers with magnitude greater than 2⁵³.
+A conflict or expiry supplies the winning `request`. Python also supports the
+`_async` forms. See [waiting steps](waiting.md).
+
+Pass `wait_for_answers=True` / `waitForAnswers: true` and an explicit run directory
+or name before starting an asynchronous run. Once initialized, a second client can
+inspect and respond while the execution call is pending. `inspect_requests` /
+`inspectRequests` returns `{requests, viewer_url}`. Requesting registration
+(`register=True` / `{register: true}`) makes an SDK-started run available to an
+already running local project viewer. The URL is null when no verified viewer
+is available. Neither inspection nor registration starts a server.
+
 ## Provider-native calls and diagnostics
 
 A project node may declare and call a custom capability through `ctx.capability`;

@@ -236,6 +236,7 @@
           "enum": [
             "pending",
             "running",
+            "awaiting",
             "succeeded",
             "failed",
             "skipped"
@@ -315,6 +316,10 @@
         "preview": {
           "$ref": "#/$defs/preview"
         },
+        "review_outcome": {
+          "description": "Terminal outcome recorded for this version-one waiting step. Answer contents depend on the view's disclosure of outputs.",
+          "enum": ["answered", "expired"]
+        },
         "skip_reason": {
           "$ref": "#/$defs/skip_reason"
         },
@@ -393,6 +398,17 @@
       },
       "allOf": [
         {
+          "if": { "required": ["review_outcome"] },
+          "then": {
+            "properties": {
+              "uses": { "type": "string", "pattern": "^fx/await@0*1$" },
+              "state": { "enum": ["succeeded", "failed"] }
+            },
+            "if": { "properties": { "state": { "const": "failed" } } },
+            "then": { "properties": { "review_outcome": { "const": "expired" } } }
+          }
+        },
+        {
           "if": {
             "required": [
               "skip_reason"
@@ -443,7 +459,7 @@
       }
     },
     "ports": {
-      "description": "Declared input/output file ports and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
+      "description": "Declared file ports, engine-native value outputs and JSON parameter schemas for display. Absent in older documents. Does not participate in identity.",
       "type": "object",
       "additionalProperties": true,
       "required": [
@@ -471,7 +487,7 @@
           },
           "additionalProperties": {
             "type": "string",
-            "pattern": "^(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?\\??$"
+            "pattern": "^(?:value|(?:image|audio|video|model|text|json|annotations|file)(?:/[a-z0-9.+-]+)?(?:\\[\\]|\\{\\})?)\\??$"
           }
         },
         "params": {
@@ -786,6 +802,7 @@
           "enum": [
             "planned",
             "unfinished",
+            "awaiting",
             "succeeded",
             "failed",
             "cancelled"

@@ -384,6 +384,11 @@ plans in the same group. Older recorded running/unfinished runs remain visible
 without opening history; recorded state still does not prove process liveness.
 Resuming never promotes an old run as a new one.
 
+For unfinished runs, the catalog displays `awaiting` while a locally recorded
+workflow request is pending. Once all recorded requests are answered or expired,
+it displays `unfinished` until an invocation records a new outcome. This
+read-only projection uses the same deadlines as request inspection.
+
 Under a selected entry route, `/api/view`, `/api/snapshot`, `/api/events`, and
 `/api/artifacts/DIGEST` retain their existing contracts and validation. Plans have
 no run observation or artifact bytes. Artifact URLs are confined to the selected
@@ -391,12 +396,24 @@ entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
 
+For a live run, `GET /api/requests` lists external requests and their recorded state.
+The bundled viewer can submit a JSON answer to `POST /api/requests/ID/respond` under
+the same run. A write requires the exact loopback Host and matching browser Origin,
+a JSON content type and the explicit `X-FX-Action: respond` header. The engine verifies
+the exact run, request, schema and deadline. Private service-control credentials stay
+inside the service. The authority is local-machine access, with no reviewer sign-in.
+Project roots, plan pages and portable exports have no answer endpoint.
+See [waiting steps](waiting.md) for the resolution and resume contract.
+
 The bundled viewer uses an optional `X-FX-Run-Active: 1` response header for
 tab activity. An unfinished snapshot can carry it after a read-only owner
 handshake for the recorded invocation. An empty event batch can carry it when
 the caller supplies the observed `plan` digest and `invocation_id` and the same
 check succeeds. The signal is sampled independently of the event cursor and
 contains no private control data.
+For a live run page, open requests from `GET /api/requests` take precedence over
+this activity signal in the tab's icon and title. The request count reflects
+answers and elapsed deadlines even while a run is parked.
 
 `GET /api/viewer_config` under the selected entry returns the owning project's current
 resolved display settings ([viewer.md](viewer.md#project-display-settings)), with

@@ -69,7 +69,7 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) 
   if (pathname.endsWith("/api/layout")) return new Response("No fixture report", { status: 404 });
   if (pathname === "/viewer-client.js") return new Response(clientScript, { headers: { "Content-Type": "text/javascript" } });
   if (pathname === "/host") return hostHtml();
-  const asset = /\/(assets\/[^/]+|favicon(?:-active(?:-dim)?)?\.svg)$/.exec(pathname);
+  const asset = /\/(assets\/[^/]+|favicon(?:-active(?:-dim)?|-awaiting)?\.svg)$/.exec(pathname);
   return new Response(Bun.file(resolve(assets, asset?.[1] ?? "index.html")));
 } });
 const foreign = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: hostHtml });

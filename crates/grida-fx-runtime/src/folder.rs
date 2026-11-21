@@ -185,6 +185,20 @@ impl RunFolder {
         }
     }
 
+    /// Snapshot reviewed files that might have no output placement or visible input card.
+    /// An existing historical snapshot stays untouched.
+    pub fn capture_waiting_files<'a>(&self, files: impl IntoIterator<Item = &'a FileValue>) {
+        let directory = self.path.join("values");
+        for file in files {
+            if is_digest(&file.digest)
+                && std::fs::symlink_metadata(directory.join(&file.digest))
+                    .is_err_and(|error| error.kind() == ErrorKind::NotFound)
+            {
+                let _ = self.capture_value_file(file);
+            }
+        }
+    }
+
     #[cfg(unix)]
     fn capture_value_file(&self, value: &FileValue) -> std::io::Result<()> {
         use rustix::fs::{AtFlags, Mode, OFlags, open, openat, renameat, unlinkat};
@@ -264,8 +278,8 @@ impl RunFolder {
     }
 
     /// Removes what an earlier invocation left half placed: every file under the folder whose
-    /// name is a temporary one ([`is_temporary_name`]). Only the invocation holding the lock
-    /// places anything here, so none of them is being written. Best effort.
+    /// name is a temporary one ([`is_temporary_name`]). Waiting request files have their own
+    /// writer lock and are swept separately under it. Best effort.
     pub fn sweep(&self) {
         let mut folders = vec![self.path.clone()];
         while let Some(folder) = folders.pop() {
@@ -277,12 +291,16 @@ impl RunFolder {
                     continue;
                 };
                 if kind.is_dir() {
-                    folders.push(entry.path());
+                    if folder != self.path || entry.file_name() != crate::waiting::REQUEST_DIRECTORY
+                    {
+                        folders.push(entry.path());
+                    }
                 } else if is_temporary_name(&entry.file_name().to_string_lossy()) {
                     let _ = std::fs::remove_file(entry.path());
                 }
             }
         }
+        crate::waiting::sweep(&self.path);
     }
 
     /// `relative` as a path under the folder; refused when it is empty, absolute or could leave
@@ -326,6 +344,16 @@ pub fn same_file(file: &File, path: &Path) -> bool {
 
 /// The most bytes one name may hold on the file systems FX writes to (`NAME_MAX`).
 pub const NAME_BYTES: usize = 255;
+
+/// A reserved name for the remains of a run undergoing removal.
+pub fn is_tombstone_name(name: &str) -> bool {
+    name.strip_prefix(".removing-").is_some_and(|hex| {
+        hex.len() == 16
+            && hex
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
 
 /// A temporary name in the destination folder: `.<16 hex>.part`, hidden, never a digest, unique
 /// in the process so two tasks placing at once do not share one, and short (22 bytes), so it fits

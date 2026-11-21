@@ -110,6 +110,8 @@ pub enum Verb {
     Files(FilesArgs),
     /// a run's summary, from its own folder
     Inspect(InspectArgs),
+    /// answer one recorded waiting step in an exact run
+    Respond(RespondArgs),
     /// request cancellation of one exact run invocation, without starting a service
     Cancel(CancelArgs),
     /// list the project's runs, or remove runs it no longer needs
@@ -331,6 +333,9 @@ pub struct RunArgs {
     /// stop before a later phase that may take the run past this amount
     #[arg(long = "yes-up-to", value_name = "USD", allow_negative_numbers = true)]
     pub yes_up_to: Option<String>,
+    /// stay attached while a workflow waits for external answers or deadlines
+    #[arg(long)]
+    pub wait_for_answers: bool,
     /// copy an output after the run: OUTPUT=PATH, {key} for each element; repeatable; names are
     /// checked before the run
     #[arg(long = "deliver", value_name = "OUTPUT=PATH")]
@@ -478,9 +483,10 @@ pub struct RunsListArgs {
 }
 
 /// The states `runs remove --state` matches (spec/store.md §9).
-pub const RUN_STATES: [&str; 9] = [
+pub const RUN_STATES: [&str; 10] = [
     "planned",
     "unfinished",
+    "awaiting",
     "succeeded",
     "failed",
     "incomplete",
@@ -648,6 +654,12 @@ pub struct InspectArgs {
     /// observe verified local control for an exact run folder or WORKFLOW_ID/NAME
     #[arg(long, conflicts_with_all = ["open", "standalone", "verify"])]
     pub control: bool,
+    /// list external answer requests for an exact run folder or WORKFLOW_ID/NAME
+    #[arg(long, conflicts_with_all = ["control", "open", "standalone", "verify"])]
+    pub requests: bool,
+    /// include the viewer URL for an already registered run when the service is running
+    #[arg(long, requires = "requests", conflicts_with = "register")]
+    pub viewer_url: bool,
     /// register the recorded run in the project catalog and print its viewer route
     #[arg(long, conflicts_with_all = ["open", "standalone", "control"])]
     pub register: bool,
@@ -657,6 +669,20 @@ pub struct InspectArgs {
     /// serve this recorded run in a foreground viewer on an available port
     #[arg(long, conflicts_with = "json")]
     pub standalone: bool,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct RespondArgs {
+    /// exact run folder or WORKFLOW_ID/NAME
+    pub run: String,
+    /// the request ID reported by inspect --requests
+    pub request: String,
+    /// the answer as JSON, or - to read JSON from standard input
+    #[arg(long, value_name = "ANSWER", allow_hyphen_values = true)]
+    pub json: String,
+    /// Ingress channel for SDK command wrappers.
+    #[arg(long, hide = true, value_parser = ["cli", "sdk"], default_value = "cli")]
+    pub source: String,
 }
 
 #[derive(Debug, Args, Clone)]
@@ -854,6 +880,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Export(args) => verbs::export::run(&args),
         Verb::Files(args) => verbs::files::run(&args),
         Verb::Inspect(args) => verbs::inspect::run(&args),
+        Verb::Respond(args) => verbs::waiting::respond(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
         Verb::Runs(args) => verbs::runs::run(&args),
         Verb::Cache(args) => verbs::cache::run(&args),

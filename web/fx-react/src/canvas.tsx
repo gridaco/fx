@@ -10,7 +10,7 @@ export interface WorkflowCanvasHandle {
 }
 
 /** React only mounts the reusable DOM controller and forwards presentation props. */
-export function WorkflowCanvas({ graph, layout = null, selected, scope = null, onSelect, onOpenScope = () => {}, onBack = () => {}, ref }: {
+export function WorkflowCanvas({ graph, layout = null, selected, scope = null, onSelect, onOpenScope = () => {}, onBack = () => {}, onReview, ref }: {
   graph: CanvasGraph;
   layout?: LayoutReport | null;
   selected: string | null;
@@ -18,6 +18,7 @@ export function WorkflowCanvas({ graph, layout = null, selected, scope = null, o
   onSelect: (id: string | null) => void;
   onOpenScope?: (id: string) => void;
   onBack?: () => void;
+  onReview?: (id: string) => void;
   ref?: Ref<WorkflowCanvasHandle>;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -25,6 +26,7 @@ export function WorkflowCanvas({ graph, layout = null, selected, scope = null, o
   const select = useRef(onSelect);
   const openScope = useRef(onOpenScope);
   const back = useRef(onBack);
+  const review = useRef(onReview);
   useImperativeHandle(ref, () => ({
     reveal: (id, inset) => controller.current?.reveal(id, inset),
     present: (graph, layout, selected, scope, focus, inset) => {
@@ -35,10 +37,18 @@ export function WorkflowCanvas({ graph, layout = null, selected, scope = null, o
       else if (focus !== null) controller.current.reveal(focus, inset);
     },
   }), []);
-  useEffect(() => { select.current = onSelect; openScope.current = onOpenScope; back.current = onBack; }, [onSelect, onOpenScope, onBack]);
+  useEffect(() => {
+    select.current = onSelect;
+    openScope.current = onOpenScope;
+    back.current = onBack;
+    review.current = onReview;
+  }, [onSelect, onOpenScope, onBack, onReview]);
   useEffect(() => {
     if (!container.current) return;
-    controller.current = new CanvasController(container.current, (id) => select.current(id), (id) => openScope.current(id), () => back.current());
+    controller.current = new CanvasController(
+      container.current, (id) => select.current(id), (id) => openScope.current(id),
+      () => back.current(), (id) => review.current?.(id),
+    );
     return () => { controller.current?.dispose(); controller.current = null; };
   }, []);
   useEffect(() => { controller.current?.setGraph(graph, scope, layout); }, [graph, scope, layout]);

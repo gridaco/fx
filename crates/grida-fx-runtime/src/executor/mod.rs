@@ -203,7 +203,10 @@ impl InstanceJob {
                 },
                 None => return Err(format!("{} is a paid type with no capability", ty.uses)),
             },
-            (BodyKind::Engine, _) => JobBody::Select,
+            (BodyKind::Engine, _) if ty.is_select() => JobBody::Select,
+            (BodyKind::Engine, _) => {
+                return Err(format!("{} runs in the workflow scheduler", ty.uses));
+            }
             (BodyKind::None, _) => JobBody::None,
             (BodyKind::Project, TypeOrigin::Builtin { .. }) => {
                 return Err(format!("{} is a built-in, not a project type", ty.uses));

@@ -774,6 +774,17 @@ fn registered_url(catalog: &Catalog, path: &str) -> Option<String> {
     Some(format!("{}{}", base.trim_end_matches('/'), path))
 }
 
+/// An exact, already-registered run URL from the currently verified project service.
+pub(super) fn existing_run_url(folder: &Path) -> Option<String> {
+    let project = project(None).ok()?;
+    let catalog = Catalog::locate(&project.root).ok()?;
+    if !catalog.has_state().ok()? {
+        return None;
+    }
+    let route = catalog.registered_run_route(folder).ok()??;
+    registered_url(&catalog, &route)
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;

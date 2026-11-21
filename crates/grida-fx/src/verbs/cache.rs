@@ -14,9 +14,9 @@
 //!   naming the call (`legacy_interrupted_run`); and, with `--yes`, a store or run in use
 //!   (`cache_in_use`: its lock, a run's `run.lock` or a work claim is held) or a file system that
 //!   cannot lock (`lock_unsupported`).
-//! - **What stays**: every 64-hex token in every run's `plan.json` and `events.jsonl` names what
-//!   stays (file digests, step identities, call keys), and so do the tokens of every record that
-//!   stays, and of every job record; a store file linked from anywhere else (a run folder the
+//! - **What stays**: every 64-hex token in a run's `plan.json`, `events.jsonl` and frozen reviewed
+//!   values names what stays (file digests, step identities, call keys), and so do the tokens of
+//!   every record that stays, and of every job record; a store file linked from anywhere else (a run folder the
 //!   project does not know) stays with every record that names it. Everything else under
 //!   `results/`, `calls/` and `files/` goes, records first, with what killed invocations left
 //!   (`Store::sweep`).
@@ -378,17 +378,19 @@ fn held(path: &Path) -> bool {
 /// cannot be read refuses the prune.
 fn roots(set: &RunSet, stand_in: bool, cwd: &Path) -> Result<BTreeSet<String>, Refusal> {
     let mut roots = BTreeSet::new();
-    let mut read = |folder: &Path, name: &str| match fs::read(folder.join(name)) {
-        Ok(bytes) => {
-            roots.extend(tokens(&bytes));
-            Ok(())
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(refusal(
-            "unreadable_run",
-            format!("{}: {name}: {error}", shown_path(folder, cwd)),
-        )),
-    };
+    let read =
+        |roots: &mut BTreeSet<String>, folder: &Path, name: &str| match fs::read(folder.join(name))
+        {
+            Ok(bytes) => {
+                roots.extend(tokens(&bytes));
+                Ok(())
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(refusal(
+                "unreadable_run",
+                format!("{}: {name}: {error}", shown_path(folder, cwd)),
+            )),
+        };
     for found in &set.found {
         let Some(recorded) = found.recorded() else {
             continue;
@@ -396,12 +398,25 @@ fn roots(set: &RunSet, stand_in: bool, cwd: &Path) -> Result<BTreeSet<String>, R
         if recorded.stand_in != stand_in {
             continue;
         }
-        read(&found.folder, "plan.json")?;
-        read(&found.folder, "events.jsonl")?;
+        read(&mut roots, &found.folder, "plan.json")?;
+        read(&mut roots, &found.folder, "events.jsonl")?;
+        let unreadable = |error: &dyn std::fmt::Display| {
+            refusal(
+                "unreadable_run",
+                format!("{}: {error}", shown_path(&found.folder, cwd)),
+            )
+        };
+        let requests =
+            grida_fx_runtime::waiting::list(&found.folder).map_err(|error| unreadable(&error))?;
+        for request in requests {
+            let views = serde_json::json!([request.spec.show, request.spec.choices]);
+            let bytes = serde_json::to_vec(&views).map_err(|error| unreadable(&error))?;
+            roots.extend(tokens(&bytes));
+        }
     }
     for problem in &set.problems {
         if problem.kind == ProblemKind::NoPlan {
-            read(&problem.path, "events.jsonl")?;
+            read(&mut roots, &problem.path, "events.jsonl")?;
         }
     }
     Ok(roots)

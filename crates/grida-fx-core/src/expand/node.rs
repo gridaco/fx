@@ -684,6 +684,23 @@ impl Expander<'_> {
                 "an at: plan step makes no paid call",
             );
         }
+        if resolved.is_await() {
+            if declared.at_plan {
+                self.problem(
+                    &format!("{where_}.at"),
+                    "a waiting step opens only during a run",
+                );
+            }
+            if declared.timeout.is_some() {
+                self.problem(
+                    &format!("{where_}.timeout"),
+                    "set with.timeout_seconds for a waiting step's response deadline",
+                );
+            }
+            if let Err(message) = crate::builtins::waiting::validate(&with) {
+                self.problem(&format!("{where_}.with"), message);
+            }
+        }
         let identity =
             step_identity_with_fresh_id(&resolved.identity, &with, &routes, &takes, self.fresh_id);
         // The engine runs select itself: it calls nothing and costs nothing.

@@ -27,6 +27,7 @@ _PLACEMENTS = {"allocated", "named", "explicit", "external"}
 _STATES = {
     "planned",
     "unfinished",
+    "awaiting",
     "succeeded",
     "failed",
     "incomplete",

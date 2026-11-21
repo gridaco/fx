@@ -1,0 +1,165 @@
+fx: workflow/v1
+id: review-showcase
+title: Review a field guide palette
+description: Choose cover and thumbnail colors, set print and web options, and record the print proof.
+
+inputs:
+  continue_seconds:
+    type: integer
+    minimum: 1
+    default: 150
+    description: Seconds to pick a thumbnail color before the local judge chooses swatch C.
+  fail_seconds:
+    type: integer
+    minimum: 1
+    default: 300
+    description: Seconds to enter the print proof code before certification expires.
+
+steps:
+  draw:
+    title: Draw three swatches
+    uses: ./nodes.py#draw
+
+  choose:
+    title: Choose the cover
+    uses: fx/await@1
+    with:
+      message: Which swatch should go on the cover?
+      schema: { type: string }
+      choices:
+        a: ${{ steps.draw.outputs.a }}
+        b: ${{ steps.draw.outputs.b }}
+        c: ${{ steps.draw.outputs.c }}
+
+  feedback:
+    title: Annotate the cover
+    uses: fx/await@1
+    with:
+      message: What should the designer know about this cover color?
+      show: ${{ steps.choose.outputs.selected }}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [summary, actions, owner]
+        properties:
+          summary: { title: Review note, type: string, minLength: 1 }
+          actions:
+            title: Requested changes
+            description: Leave the list empty if the cover is ready.
+            type: array
+            items: { type: string, minLength: 1 }
+          owner:
+            title: Assigned designer
+            description: Choose null to leave this work unassigned.
+            type: [string, "null"]
+
+  approve:
+    title: Approve public use
+    uses: fx/await@1
+    with:
+      message: May the field guide appear in the public sample?
+      schema: { type: boolean }
+
+  publish:
+    title: Mark the sample public
+    if: ${{ steps.approve.outputs.answer }}
+    uses: fx/select@1
+    with: { first_of: [public] }
+
+  placement:
+    title: Set label length
+    for_each: [print, web]
+    key: ${{ item }}
+    uses: fx/await@1
+    with:
+      message: "Which label style should the ${{ item }} edition use?"
+      schema: { type: string, enum: [compact, full] }
+
+  print_settings:
+    title: Set the print settings
+    uses: fx/await@1
+    with:
+      message: How should the print edition be produced?
+      schema:
+        type: object
+        additionalProperties: false
+        required: [finish, copies, scale, margins]
+        properties:
+          finish: { title: Paper finish, type: string, enum: [matte, satin] }
+          copies: { title: Print copies, type: integer, minimum: 1 }
+          scale: { title: Scale factor, type: number, exclusiveMinimum: 0, maximum: 2 }
+          margins:
+            title: Margins
+            type: object
+            additionalProperties: false
+            required: [top_mm]
+            properties:
+              top_mm: { title: Top margin in mm, type: number, minimum: 0 }
+          profile_override:
+            title: Color profile override
+            description: Choose No value to explicitly use the standard profile, or leave this field unset.
+            type: "null"
+          labels:
+            title: Production labels
+            description: Add a text label such as batch for the print shop.
+            type: object
+            additionalProperties: { type: string }
+
+  backup:
+    title: Choose the thumbnail
+    uses: fx/await@1
+    with:
+      message: Pick a thumbnail swatch before the timer ends, or let the local judge choose C.
+      schema:
+        type: object
+        properties: { swatch: { type: string } }
+        required: [swatch]
+        additionalProperties: false
+      choices:
+        a: ${{ steps.draw.outputs.a }}
+        b: ${{ steps.draw.outputs.b }}
+        c: ${{ steps.draw.outputs.c }}
+      choice_field: swatch
+      timeout_seconds: ${{ inputs.continue_seconds }}
+      on_timeout: continue
+
+  judge:
+    title: Use the blue thumbnail
+    if: ${{ steps.backup.facts.outcome == 'expired' }}
+    uses: ./nodes.py#judge
+    with:
+      a: ${{ steps.draw.outputs.a }}
+      b: ${{ steps.draw.outputs.b }}
+      c: ${{ steps.draw.outputs.c }}
+
+  thumbnail:
+    title: Deliver the thumbnail
+    uses: fx/select@1
+    with:
+      first_of:
+        - ${{ steps.backup.outputs.selected ?? null }}
+        - ${{ steps.judge.outputs.image ?? null }}
+
+  signoff:
+    title: Verify the print proof
+    uses: fx/await@1
+    with:
+      message: Enter the print proof code before certification expires (for example, FX-042).
+      schema: { type: string, pattern: "^[A-Z]{2}-[0-9]{3}$" }
+      timeout_seconds: ${{ inputs.fail_seconds }}
+      on_timeout: fail
+
+  certify:
+    title: Record the proof code
+    uses: fx/select@1
+    with:
+      first_of: ["${{ steps.signoff.outputs.answer }}"]
+
+outputs:
+  cover: ${{ steps.choose.outputs.selected }}
+  feedback: ${{ steps.feedback.outputs.answer }}
+  public_sample: ${{ steps.approve.outputs.answer }}
+  labels: ${{ steps.placement.*.outputs.answer }}
+  print_settings: ${{ steps.print_settings.outputs.answer }}
+  thumbnail: ${{ steps.thumbnail.outputs.value }}
+  proof: ${{ steps.certify.outputs.value }}

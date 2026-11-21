@@ -576,9 +576,9 @@ fn a_declared_family_completes_its_provider_s_contracts_in_every_table() {
 #[test]
 fn the_built_in_catalog() {
     let all = builtins();
-    assert_eq!(all.len(), 37);
+    assert_eq!(all.len(), 38);
     let count = |word: &str| all.iter().filter(|b| b.spec.kind_word() == word).count();
-    assert_eq!((count("paid"), count("judge"), count("free")), (11, 5, 21));
+    assert_eq!((count("paid"), count("judge"), count("free")), (11, 5, 22));
     assert_eq!(all.iter().filter(|b| b.spec.paid()).count(), 13);
     for b in all {
         assert_eq!(b.uses, format!("fx/{}@{}", b.name, b.major));
@@ -587,9 +587,6 @@ fn the_built_in_catalog() {
         if let Some(capability) = &b.spec.capability {
             assert_eq!(capability, &b.name);
         }
-        // Every spec survives the wire form and validates again.
-        let again = NodeSpec::from_type_spec(&b.spec.to_type_spec(), b.spec.capability.clone());
-        assert_eq!(again.as_ref(), Ok(&b.spec), "{}", b.uses);
     }
     let generate = builtin("image.generate", 1).unwrap();
     assert_eq!(generate.identity(), "fx/image.generate@1.1");

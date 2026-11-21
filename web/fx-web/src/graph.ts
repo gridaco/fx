@@ -249,6 +249,12 @@ export interface CanvasModelPreview extends CanvasPreviewBase {
 export type CanvasPreview = CanvasImagePreview | CanvasVideoPreview | CanvasModelPreview;
 export interface CanvasStep {
   id: string; source_id: string; title: string; subtitle: string; state: string; pending: boolean;
+  /** The recorded review result shown alongside execution state. */
+  review_label?: string;
+  /** Live review affordances supplied by the local request controller. */
+  review_action?: "review" | "view_answer" | "view_outcome";
+  review_prompt?: string;
+  review_deadline?: string;
   /** Recorded evidence that the node executed; status alone does not prove this for skipped nodes. */
   executed?: true;
   /** When the step last started, UTC: a running card counts up from it, less `waited_ms`. */
@@ -364,6 +370,17 @@ function recordedPreview(node: ViewerRun["nodes"][number], artifacts: Map<string
   }, node.preview);
 }
 
+function reviewLabel(node: ViewerRun["nodes"][number]): string | undefined {
+  if (node.review_outcome === "expired") return "Expired";
+  if (node.review_outcome !== "answered") return undefined;
+  const { selected, answer } = node.outputs;
+  if (isRecord(answer) && Object.hasOwn(answer, "value")) {
+    if (isRecord(selected) && selected.withheld !== true) return "Selected";
+    if (typeof answer.value === "boolean") return answer.value ? "Answered yes" : "Answered no";
+  }
+  return "Answered";
+}
+
 /** Project declared wiring for display; no expressions or execution decisions are evaluated. */
 export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api"): CanvasGraph {
   validateViewerApiBase(apiBase);
@@ -373,6 +390,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
   const nodes: CanvasStep[] = source.map((item) => {
     const preview = plan ? undefined : recordedPreview(item as ViewerRun["nodes"][number], artifacts, apiBase);
     const run = plan ? undefined : item as ViewerRun["nodes"][number];
+    const review_label = run && reviewLabel(run);
     const started_at = run?.started_at;
     const declared = plan ? view.types?.[item.uses ?? ""]?.ports : (item as ViewerRun["nodes"][number]).ports;
     const boundParams = new Set([...(item.bindings ?? []), ...(item.interface_bindings ?? [])].map((binding) => binding.target_port));
@@ -390,6 +408,7 @@ export function flatCanvasGraph(view: GraphDocument | ViewerRun, apiBase = "/api
       ...(item.take ? { take: item.take } : {}), ...(item.key !== undefined ? { key: item.key } : {}),
       title: plan ? view.steps?.[(item as GraphInstance).step]?.title || item.path : (item as ViewerRun["nodes"][number]).title || item.path,
       subtitle: item.uses ?? "Type not recorded", state: item.state, pending: false,
+      ...(review_label ? { review_label } : {}),
       ...(run && recordedExecution(run) ? { executed: true as const } : {}),
       ...(run?.state === "skipped" ? { skip_explanation: skipExplanation(run.skip_reason, (view as ViewerRun).nodes) } : {}),
       ...(started_at ? { started_at } : {}),

@@ -23,6 +23,54 @@ pub fn replay(events: &[Value], store: &Store) -> IndexMap<String, NodeResult> {
     replay_with(events, &|value| crate::events::decode(value, store))
 }
 
+/// Restore a waiting step's original selected value. A choice can be a structured object
+/// containing typed files. Its request keeps the types that a plain JSON event output omits.
+pub(super) fn replay_run(
+    events: &[Value],
+    store: &Store,
+    folder: &std::path::Path,
+) -> Result<IndexMap<String, NodeResult>, grida_fx_core::Error> {
+    let mut results = replay(events, store);
+    let mut restored = std::collections::HashSet::new();
+    for event in events
+        .iter()
+        .rev()
+        .filter(|event| event["event"] == "waiting_request")
+    {
+        let (Some(step), Some(id)) = (event["id"].as_str(), event["request_id"].as_str()) else {
+            continue;
+        };
+        let Some(result) = results.get_mut(step) else {
+            continue;
+        };
+        if !restored.insert(step) || !result.outputs.contains_key("selected") {
+            continue;
+        }
+        let request = crate::waiting::lookup(folder, id)
+            .map_err(|error| grida_fx_core::Error::internal(error.to_string()))?;
+        let selected = match &request.state {
+            crate::waiting::RequestState::Answered { answer, .. } if request.spec.step == step => {
+                request.selected(answer)
+            }
+            _ => None,
+        }
+        .ok_or_else(|| {
+            grida_fx_core::Error::internal("the finished step's recorded choice is unavailable")
+        })?;
+        match crate::waiting::decode_reviewed(selected, store) {
+            Ok(value) => {
+                result.outputs.insert("selected".into(), value);
+            }
+            // Normal expansion can recover a missing file, then match the frozen review inputs
+            // before reusing the answer. A different input cannot silently satisfy that gate.
+            Err(_) => {
+                results.shift_remove(step);
+            }
+        }
+    }
+    Ok(results)
+}
+
 /// [`replay`] with the decoder given, so the walk can be tested on its own.
 fn replay_with(
     events: &[Value],

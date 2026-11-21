@@ -19,6 +19,7 @@ These documents define FX independently of any implementation. The Rust engine, 
 | [previews.md](previews.md) | Workflow-authored video selection and image posters, recorded per node instance without execution dependencies |
 | [model-previews.md](model-previews.md) | Read-only self-contained GLB inspection, camera and animation controls, local resources and format fallbacks |
 | [skip-reasons.md](skip-reasons.md) | Recorded engine causes for skipped nodes, related-instance references, lifecycle and portable presentation |
+| [waiting.md](waiting.md) | External answer contracts, frozen choices, durable decisions, deadlines and resuming |
 | [control.md](control.md) | Local run control: exact invocation targeting, cancellation acceptance, verified local completion and force boundaries |
 | [sdk.md](sdk.md) | SDK user jobs: prepared model snapshots, named execution/resume, pinned saved records, independent observation and in-process stand-ins |
 | [call.md](call.md) | One-shot CLI capability calls, project route defaults, fresh execution, records and output delivery |
