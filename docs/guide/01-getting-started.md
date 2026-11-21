@@ -31,6 +31,7 @@ the same FX, started another way, and take the same commands (`grida-fx plan` is
 They share project files, the cache and run records. `--version` prints the FX version under any
 of them, so you can tell two installations apart. Setting them up, and source development, are in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#ways-to-run-fx).
+For a pinned executable from GitHub Releases, see [Standalone downloads](17-standalone-downloads.md).
 
 **One key for everything: Grida Gateway.** Create a key at
 [console.grida.co](https://console.grida.co/_/ai-gateway) and set it as `GG_API_KEY`. It serves every route on

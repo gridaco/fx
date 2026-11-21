@@ -66,6 +66,8 @@ bodies and built-in local image, JSON and file processing. TypeScript bodies nee
 project dependency `npm install @grida/fx`. Use `GRIDA_FX_PYTHON` or `GRIDA_FX_NODE` to select a
 host interpreter.
 
+For a pinned native CLI in CI, see [Standalone downloads](https://github.com/gridaco/fx/blob/main/docs/guide/17-standalone-downloads.md).
+
 ## A project
 
 - `grida fx init my-assets` writes a starter workflow and project files in a new or empty directory.
