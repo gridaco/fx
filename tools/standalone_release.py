@@ -26,7 +26,7 @@ def package(engine: Path, wheel: Path, target: str, version: str, out: Path) -> 
     if destination.exists():
         raise FileExistsError(destination)
     with tempfile.TemporaryDirectory(prefix=".fx-standalone-", dir=out) as directory:
-        work = Path(directory)
+        work = Path(directory).resolve()
         binary = work / "grida-fx"
         license_file = work / "LICENSE"
         with tarfile.open(engine, "r:gz") as npm:

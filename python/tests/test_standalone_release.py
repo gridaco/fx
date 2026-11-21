@@ -63,5 +63,6 @@ def test_standalone_matches_tested_packages(
         license_file = archive.extractfile("LICENSE")
         assert binary is not None and binary.read() == executable
         assert license_file is not None and license_file.read() == b"license text\n"
-    again = package(engine, wheel, TARGET, VERSION, tmp_path / "again")
+    monkeypatch.chdir(tmp_path)
+    again = package(engine, wheel, TARGET, VERSION, Path("again"))
     assert again.read_bytes() == path.read_bytes()
