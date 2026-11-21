@@ -3,7 +3,7 @@
 > Grida FX is a workflow engine for generating and processing assets. It combines model calls
 > for images, video, audio, 3D and structured text with local code. The command is `grida fx`.
 
-Version: 0.11.0
+Version: 0.12.0
 
 An FX project keeps its settings in `fx.yaml`. A workflow wires inputs, steps and outputs in YAML
 or through a Python or TypeScript builder. Planning resolves the steps and model routes and
@@ -306,7 +306,7 @@ export.
 
 ```json
 // package.json
-{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.11.0" } }
+{ "type": "module", "private": true, "dependencies": { "@grida/fx": "0.12.0" } }
 ```
 
 ```ts
