@@ -89,8 +89,8 @@ and visibility before introducing persistence or exposure in exported records.
 
 ## Run control: next operations
 
-- Ratify contracts for explicit `terminate`, durable `pause`, and active parameter
-  revision, building on [run control](spec/control.md) and its
+- Ratify contracts for explicit `terminate` and active parameter revision,
+  building on [run control](spec/control.md) and its
   [user guide](docs/guide/08-run-control.md).
 - Design bounded pruning for private temporary control receipts without removing
   evidence from an active bound waiter. Receipts currently last until system
