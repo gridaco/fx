@@ -97,12 +97,24 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     execute(args, super::planning::working_directory()?, None)
 }
 
-/// Runs the original planning and execution path for a resolved resume record.
-pub(super) fn resume(args: &RunArgs, root: PathBuf, invocation: &str) -> Result<u8, Error> {
-    execute(args, root, Some(invocation))
+/// Execution context read from the selected run before planning.
+pub(super) struct ResumeContext<'a> {
+    pub root: &'a Path,
+    pub invocation: &'a str,
+    pub defaulted_inputs_digest: Option<&'a str>,
 }
 
-fn execute(args: &RunArgs, cwd: PathBuf, expected_invocation: Option<&str>) -> Result<u8, Error> {
+/// Runs the original planning and execution path for a resolved resume record.
+pub(super) fn resume(
+    args: &RunArgs,
+    cwd: PathBuf,
+    context: ResumeContext<'_>,
+) -> Result<u8, Error> {
+    execute(args, cwd, Some(context))
+}
+
+fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> Result<u8, Error> {
+    let expected_invocation = resume.as_ref().map(|context| context.invocation);
     if args.recover && args.run.is_none() && args.resume.is_none() {
         return Err(Error::usage(
             "--recover needs an existing --run or --resume",
@@ -158,10 +170,25 @@ fn execute(args: &RunArgs, cwd: PathBuf, expected_invocation: Option<&str>) -> R
     };
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
-    if expected_invocation.is_some() && planner.project.root != cwd {
-        return Err(Error::usage(
-            "the saved target now resolves to another project",
-        ));
+    if let Some(context) = resume {
+        if planner.project.root != context.root {
+            return Err(Error::usage(
+                "the saved target now resolves to another project",
+            ));
+        }
+        let bound = super::repeat::defaulted_file_inputs_digest(&planner);
+        if bound.as_deref() != context.defaulted_inputs_digest {
+            return Err(if context.defaulted_inputs_digest.is_none() {
+                Error::usage(format!(
+                    "the record cannot verify defaulted file inputs. Use the original working directory, inputs and options with {} run TARGET --run FOLDER",
+                    crate::invoker::command()
+                ))
+            } else {
+                Error::usage(
+                    "the defaulted inputs changed since the run was recorded. Restore the original inputs or start a new run",
+                )
+            });
+        }
     }
     let recorded_folder = if let Some(name) = &args.resume {
         Some(super::run_catalog::resume_named(

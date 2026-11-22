@@ -2850,6 +2850,106 @@ fn resume_reuses_saved_inputs_and_validates_the_exact_record() {
 }
 
 #[test]
+fn resume_verifies_default_files_from_the_original_working_directory() {
+    let project = empty_project();
+    let root = project.path();
+    let sub = root.join("sub");
+    std::fs::create_dir(&sub).unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        r#"fx: workflow/v1
+id: case
+title: Resume file defaults
+inputs:
+  brief: { type: file, kind: text/plain, default: brief.txt }
+steps:
+  gate:
+    uses: fx/await@1
+    with: { schema: { type: boolean } }
+outputs:
+  accepted: ${{ steps.gate.outputs.answer }}
+"#,
+    )
+    .unwrap();
+    std::fs::write(root.join("brief.txt"), "project root").unwrap();
+    std::fs::write(sub.join("brief.txt"), "original subdirectory").unwrap();
+    let run = grida_fx(
+        &sub,
+        &["run", "../case.yaml", "--run", "../runs/saved", "--no-view"],
+    );
+    assert_eq!(status(&run), 1, "{}{}", stdout(&run), stderr(&run));
+    let folder = root.join("runs/saved");
+    let original = events(&folder);
+    assert_eq!(original[0]["repeat"]["cwd"], "sub");
+    assert!(original[0]["repeat"]["defaulted_inputs_digest"].is_string());
+
+    let log = folder.join("events.jsonl");
+    let saved_log = std::fs::read(&log).unwrap();
+    let mut legacy = original.clone();
+    let repeat = legacy[0]["repeat"].as_object_mut().unwrap();
+    repeat.remove("cwd");
+    repeat.remove("defaulted_inputs_digest");
+    let legacy_log: String = legacy.iter().map(|event| format!("{event}\n")).collect();
+    std::fs::write(&log, legacy_log).unwrap();
+    let refused = grida_fx(root, &["resume", "runs/saved", "--no-view"]);
+    assert_eq!(
+        status(&refused),
+        2,
+        "{}{}",
+        stdout(&refused),
+        stderr(&refused)
+    );
+    assert!(stderr(&refused).contains("cannot verify defaulted file inputs"));
+    assert_eq!(events(&folder), legacy);
+    std::fs::write(&log, saved_log).unwrap();
+
+    std::fs::write(sub.join("brief.txt"), "changed subdirectory").unwrap();
+    let refused = grida_fx(root, &["resume", "runs/saved", "--no-view"]);
+    assert_eq!(
+        status(&refused),
+        2,
+        "{}{}",
+        stdout(&refused),
+        stderr(&refused)
+    );
+    assert!(stderr(&refused).contains("defaulted inputs changed"));
+    assert_eq!(events(&folder), original);
+    std::fs::write(sub.join("brief.txt"), "original subdirectory").unwrap();
+
+    let listed: Value = serde_json::from_slice(
+        &grida_fx(root, &["inspect", "runs/saved", "--requests", "--json"]).stdout,
+    )
+    .unwrap();
+    let request = listed["requests"][0]["id"].as_str().unwrap();
+    assert_eq!(
+        status(&grida_fx(
+            root,
+            &["respond", "runs/saved", request, "--json", "true"]
+        )),
+        0
+    );
+    let resumed = grida_fx(root, &["resume", "runs/saved", "--no-view"]);
+    assert_eq!(
+        status(&resumed),
+        0,
+        "{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+    let resumed = events(&folder);
+    let started = resumed
+        .iter()
+        .rfind(|event| event["event"] == "run_started")
+        .unwrap();
+    assert_ne!(started["invocation_id"], original[0]["invocation_id"]);
+    assert_eq!(started["repeat"], original[0]["repeat"]);
+    assert_eq!(
+        resumed.last().unwrap()["outputs"]["accepted"]["value"],
+        true
+    );
+}
+
+#[test]
 fn resume_refuses_missing_records_and_explains_missing_context() {
     let project = empty_project();
     let root = project.path();

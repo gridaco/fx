@@ -3,12 +3,14 @@
 //!
 //! Written by `run` ([`recorded`]): `workflow` (a workflow id as given) or `file` (a workflow
 //! file, or a builder's module with `function`), `inputs` and `routes` (left out when empty),
-//! `max_usd` (when given) and `live`; every path POSIX and relative to the planning project's
-//! root, each part exactly as the file system names it once symbolic links are resolved. None
+//! `max_usd` (when given), `live`, `cwd` (when below the project root) and
+//! `defaulted_inputs_digest` (when input defaults bind files). All paths are POSIX and relative
+//! to the planning project's root, with symbolic links resolved. None
 //! when the record could not repeat the invocation: workflow input flags, `--arg`,
 //! `--stand-in`, `--recover`, a target, inputs file or route table outside the planning project
-//! or whose path is not UTF-8, a builder run from anywhere but the planning project's root (a builder is
-//! called with the working directory), or an SDK invocation with temporary inputs
+//! or whose path is not UTF-8, a working directory outside the planning project, a builder run
+//! away from the planning project's root (a builder is called with the working directory),
+//! or an SDK invocation with temporary inputs
 //! (spec/sdk.md).
 //!
 //! Read by `reroll` and `pick` from the latest `run_started` ([`next_line`]), against the
@@ -20,8 +22,8 @@
 //! `repeat`, one that does not read as the schema says, no planning project the index names, a
 //! workflow id or a workflow file other than YAML read from a working directory in another
 //! project (planning would find the workflow there), a builder read from anywhere but that
-//! project's root, or a path that is not UTF-8: `run <workflow id> again with the same inputs
-//! and options`.
+//! project's root, a differing saved `cwd`, or a path that is not UTF-8:
+//! `run <workflow id> again with the same inputs and options`.
 
 use crate::cli::RunArgs;
 use crate::print::{labelled, shown_path};
@@ -59,10 +61,20 @@ pub(crate) fn recorded(
     let root = planner.project.root.canonicalize().ok()?;
     let inside = |typed: &str| exactly_inside(&root, &cwd.join(typed));
     let mut repeat = Map::new();
+    let working_dir = cwd.canonicalize().ok()?;
+    if working_dir != root {
+        repeat.insert(
+            "cwd".into(),
+            Value::from(exactly_inside(&root, &working_dir)?),
+        );
+    }
+    if let Some(digest) = defaulted_file_inputs_digest(planner) {
+        repeat.insert("defaulted_inputs_digest".into(), Value::from(digest));
+    }
     match Target::parse(&args.target) {
         Target::Builder { file, function } => {
             // A builder is called with the working directory: only its root repeats it.
-            if cwd.canonicalize().ok()? != root {
+            if working_dir != root {
                 return None;
             }
             repeat.insert("file".into(), Value::from(inside(&file)?));
@@ -92,6 +104,36 @@ pub(crate) fn recorded(
     }
     repeat.insert("live".into(), Value::Bool(args.live));
     Some(Value::Object(repeat))
+}
+
+/// The plan digest covers given inputs. Defaults that introduce files need a
+/// separate content check before automatic reconstruction.
+pub(super) fn defaulted_file_inputs_digest(planner: &Planner) -> Option<String> {
+    use grida_fx_runtime::store::files_in;
+    planner
+        .inputs
+        .values
+        .iter()
+        .any(|(name, value)| {
+            let given = planner
+                .inputs
+                .given
+                .get(name)
+                .map(files_in)
+                .unwrap_or_default();
+            files_in(value) != given
+        })
+        .then(|| {
+            let values = Value::Object(
+                planner
+                    .inputs
+                    .values
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.shown()))
+                    .collect(),
+            );
+            grida_fx_core::value::digest(&values)
+        })
 }
 
 /// `path` relative to `root` (canonical) as POSIX, once symbolic links are resolved: `None` when
@@ -136,6 +178,11 @@ fn command(repeat: &Value, root: &Path, cwd: &Path) -> Option<Vec<String>> {
     root.to_str()?;
     cwd.to_str()?;
     let repeat = Repeat::parse(repeat)?;
+    if let Some(saved_cwd) = &repeat.cwd
+        && cwd.canonicalize().ok()? != under(root, saved_cwd)
+    {
+        return None;
+    }
     let shown = |relative: &str| path_word(&shown_path(&under(root, relative), cwd));
     let mut words = vec!["run".to_string()];
     // A workflow id, a workflow file other than YAML, and a builder plan in the project found
@@ -175,6 +222,8 @@ fn command(repeat: &Value, root: &Path, cwd: &Path) -> Option<Vec<String>> {
 
 /// Validated local context in a `run_started.repeat` member.
 pub(super) struct Repeat {
+    pub cwd: Option<String>,
+    pub defaulted_inputs_digest: Option<String>,
     pub target: Target,
     pub inputs: Vec<String>,
     pub routes: Vec<String>,
@@ -185,7 +234,15 @@ pub(super) struct Repeat {
 impl Repeat {
     pub(super) fn parse(repeat: &Value) -> Option<Self> {
         let known = [
-            "workflow", "file", "function", "inputs", "routes", "max_usd", "live",
+            "workflow",
+            "file",
+            "function",
+            "inputs",
+            "routes",
+            "max_usd",
+            "live",
+            "cwd",
+            "defaulted_inputs_digest",
         ];
         if repeat.as_object()?.iter().any(|(name, value)| {
             !known.contains(&name.as_str())
@@ -231,6 +288,19 @@ impl Repeat {
             .transpose()
             .ok()?;
         Some(Self {
+            cwd: match repeat.get("cwd") {
+                Some(value) => Some(value.as_str().filter(|cwd| is_inside(cwd))?.to_owned()),
+                None => None,
+            },
+            defaulted_inputs_digest: match repeat.get("defaulted_inputs_digest") {
+                Some(value) => Some(
+                    value
+                        .as_str()
+                        .filter(|digest| grida_fx_core::value::is_digest(digest))?
+                        .to_owned(),
+                ),
+                None => None,
+            },
             target,
             inputs: paths("inputs")?,
             routes: paths("routes")?,

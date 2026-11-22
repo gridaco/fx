@@ -269,8 +269,9 @@ recorded resumable jobs retain their job-reconciliation protection.
 selected invocation to finish its active steps and record `paused`. Without
 `--wait`, acceptance means step admission has closed and active steps may
 still run under existing spending authorization. Resume with `resume RUN`
-when saved context can reproduce the plan, or supply the original options via
-`run`. Python and JavaScript expose the same operations. The provider-free
+when saved context can reproduce the plan and verify any files bound by defaults.
+Supply the original options and working directory via `run` when saved context
+is incomplete. Python and JavaScript expose the same operations. The provider-free
 [run-control harness](tools/check_control.py) verifies reuse after process exit,
 interruption during drain, and request targeting.
 
@@ -430,7 +431,7 @@ promise through documentation alone.
 | AR-03 | "Run it locally without AI." | Current: ordinary Python or TypeScript nodes, and offline stand-ins from a `.py` or `.ts` file or in-process from either SDK. | A normal code-only workflow completes and its artifacts verify at $0; stand-in data stays separate from paid data. |
 | AR-04 | "Show me while it runs." | Current in source: project service, early run URL, polling viewer and shared observation reader; standalone mode also remains. The viewer tab signals verified execution. SDK runs return after completion. | Agent reports a verified URL; human and independent observer see the same record; project inspection survives run completion, while standalone lifetime stays explicit. The [browser check](tools/check_viewer_browser.mjs) covers the activity icon and reduced motion. |
 | AR-05 | "Stop this run now." | Implemented in source: exact-target CLI/Python/JavaScript cancellation, invocation guard, optional verified wait and shared signal semantics. | Target and wait stay bound across resume; acceptance and finalization serialize; duplicate/lost requests are safe; waiter timeouts never force; verified local cleanup and unknown external outcomes remain separate. |
-| AR-06 | "Continue that exact run." | Current in source: exact `resume RUN` using verifiable saved context and the explicit same-plan `run` resume forms. | Finished valid work is reused; plan/mode mismatch and an existing writer are refused; history distinguishes invocations. |
+| AR-06 | "Continue that exact run." | Current in source: exact `resume RUN` using verifiable saved context and the explicit same-plan `run` resume forms. | Finished valid work is reused and history distinguishes invocations. [CLI tests](crates/grida-fx/tests/cli.rs) cover changed inputs, including files bound by defaults from the original working directory. A plan or mode mismatch or an existing writer prevents resume. |
 | AR-07 | "Pause and wait for me." | Current in source under [#166](https://github.com/gridaco/fx/issues/166). Pause drains admitted steps and retains the same attempt across runner exit. | Explicit request/acknowledgment/boundary semantics; active work and reservations accounted for; resume survives the documented lifetime. |
 | AR-08 | "Change what has not started yet." | Partial: revise/replan/new run with cache reuse. Active mutation proposed. | Unchanged work is retained where identities match; an edit racing dispatch cannot silently change already accepted work; history and cost remain attributable. |
 | AR-09 | "Keep this result; try another there." | Current takes, reroll and pick; their `next` line repeats the run from its record (conformance `run-repeat`). | Selected recorded instance is addressed exactly; no command implies immediate execution; next-plan impact and possible cost are visible. |

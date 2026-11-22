@@ -476,6 +476,15 @@
         }
       ],
       "properties": {
+        "cwd": {
+          "description": "Original working directory relative to the planning project, omitted for its root.",
+          "$ref": "#/$defs/relative_path"
+        },
+        "defaulted_inputs_digest": {
+          "description": "SHA-256 of canonical effective root inputs when defaults introduce files.",
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "workflow": {
           "description": "The workflow id the run was given.",
           "type": "string",

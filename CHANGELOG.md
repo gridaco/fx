@@ -14,7 +14,7 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ### Added
 
-- Pause an active workflow with `grida fx pause RUN`, which lets running steps finish before saving a durable boundary. Continue the same attempt with `grida fx resume RUN`. The CLI, SDKs, and viewer expose when the run is pausing or paused. [#166](https://github.com/gridaco/fx/issues/166)
+- Pause an active workflow with `grida fx pause RUN`, which lets running steps finish before saving a durable boundary. Continue the same attempt with `grida fx resume RUN` using the recorded working directory. The CLI, SDKs, and viewer expose when the run is pausing or paused. Run removal filters accept both states. [#166](https://github.com/gridaco/fx/issues/166)
 
 ### Fixed
 

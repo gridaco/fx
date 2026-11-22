@@ -201,14 +201,17 @@ print their `next` command. It holds the target, as `workflow` (a workflow id, a
 `--routes` files in the order given (`inputs`, `routes`, left out when none), `max_usd` (the
 `--max-usd` amount, when given) and `live` (whether the invocation admitted paid calls). Every
 path is POSIX and relative to the planning project's root, each part exactly as the file system
-names it once symbolic links are resolved. It holds nothing else: `--run`,
+names it once symbolic links are resolved. `cwd` records a working directory below the planning
+root when present. Records with defaulted file inputs also carry `defaulted_inputs_digest`, the
+SHA-256 of the canonical plain projection of effective root inputs. `--run`,
 `--name` and `--resume` choose the folder, and a run of another take is another plan, so it
 needs a new one; `--yes-up-to`, `--deliver` and the viewer options belong to the invocation.
 A `run_started` records no `repeat` when its record could not repeat the invocation: workflow
-input flags, `--arg` or `--recover` were given, a stand-in answered its paid calls, the target,
-an inputs file or a route table lies outside the planning project or has a path that is not UTF-8, the
-target is a builder and the working directory is not the planning project's root (a builder is
-called with the working directory), or the SDK's invocation uses a temporary input mapping.
+input flags, `--arg` or `--recover` were given, a stand-in answered its paid calls, the working
+directory, target, inputs file or route table lies outside the planning project or has a path that
+is not UTF-8, the target is a builder and the working directory is not the planning project's
+root (a builder is called with the working directory), or the SDK's invocation uses a temporary
+input mapping.
 An older SDK without input lifetime metadata is treated as supplying temporary inputs.
 See [SDK run access](sdk.md).
 
@@ -227,16 +230,20 @@ inputs and options` instead, never a command that would run something else, when
 `repeat` or one they cannot read, when no planning project is known, when the target is a
 workflow id, a workflow file other than YAML or a builder and the working directory is in
 another project (planning would find the target there), when the target is a builder and the
-working directory is not the planning project's root, or when a path is not UTF-8. Like the presentation metadata, `repeat` is not
+working directory is not the planning project's root, when a saved `cwd` differs from the working
+directory, or when a path is not UTF-8. Like the presentation metadata, `repeat` is not
 part of `plan.json`, the plan digest, step or call identities, prices or cache keys.
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
 `resume RUN` selects an exact existing run folder or `WORKFLOW_ID/NAME` using the
 [run-control selectors](control.md). It uses the latest `run_started.repeat` to
-recover the target and project-relative input and route files. It plans from the
-project whose run index records the folder. The normal plan and execution-mode
-checks still apply. Before writing a new start event, the runner takes
+recover the target, original working directory and project-relative input and
+route files. It uses the project whose run index records the folder. When defaults
+bind files, FX checks the saved digest of the effective input values. A legacy
+record without that digest requires explicit reconstruction for defaulted file
+inputs. The normal plan and execution-mode checks still apply. Before writing
+a new start event, the runner takes
 `run.lock` on the existing folder and verifies the latest invocation ID against
 the one selected before planning. Missing context, unavailable recorded files,
 and stand-in runs require the caller to supply the original execution options

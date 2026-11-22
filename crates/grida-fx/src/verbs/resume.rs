@@ -26,7 +26,7 @@ pub fn run(args: &ResumeArgs) -> Result<u8, Error> {
     let missing = |why: &str| {
         let target = source.map_or("TARGET".into(), super::repeat::path_word);
         Error::usage(format!(
-            "{label}: {why}. Supply the original target, inputs and options with {} run \
+            "{label}: {why}. Supply the original target, inputs and options from the original working directory with {} run \
              {target} --run {}",
             crate::invoker::command(),
             super::repeat::path_word(&crate::print::shown_path(&folder, &cwd))
@@ -59,47 +59,56 @@ pub fn run(args: &ResumeArgs) -> Result<u8, Error> {
     let here = Project::find(&cwd).ok().map(|project| project.root);
     let root = recording_project(&folder, here.as_deref().unwrap_or(&folder))
         .ok_or_else(|| missing("the original planning project could not be identified"))?;
-    let check_files = |paths: &[String], description: &str| -> Result<(), Error> {
-        for path in paths {
-            if !project_file(&root, path) {
-                return Err(missing(&format!(
-                    "the recorded {description} {path} is missing or outside the planning project"
-                )));
-            }
+    let working_dir = saved
+        .cwd
+        .as_ref()
+        .map_or_else(|| root.clone(), |cwd| root.join(cwd));
+    if !working_dir.is_dir() || working_dir.canonicalize().ok().as_ref() != Some(&working_dir) {
+        return Err(missing(
+            "the recorded working directory is missing or has moved",
+        ));
+    }
+    let path = |relative: &str| -> Result<String, Error> {
+        if !project_file(&root, relative) {
+            return Err(missing(&format!(
+                "the recorded file {relative} is missing or outside the planning project"
+            )));
         }
-        Ok(())
+        root.join(relative)
+            .into_os_string()
+            .into_string()
+            .map_err(|_| missing("the recorded path cannot be represented as UTF-8"))
     };
     let target = match saved.target {
-        Target::Workflow(file) if is_workflow_file(&file) => {
-            check_files(std::slice::from_ref(&file), "workflow file")?;
-            file
-        }
+        Target::Workflow(file) if is_workflow_file(&file) => path(&file)?,
         Target::Workflow(id) => id,
-        Target::Builder { file, function } => {
-            check_files(std::slice::from_ref(&file), "builder file")?;
-            format!("{file}:{function}")
-        }
+        Target::Builder { file, function } => format!("{}:{function}", path(&file)?),
     };
-    check_files(&saved.inputs, "input file")?;
-    check_files(&saved.routes, "route table")?;
     let folder = folder
-        .into_os_string()
-        .into_string()
-        .map_err(|_| Error::usage("the run folder cannot be represented as UTF-8"))?;
+        .to_str()
+        .ok_or_else(|| Error::usage("the run folder cannot be represented as UTF-8"))?;
     super::run::resume(
         &RunArgs {
             require_estimates: args.require_estimates,
             resolved_models: None,
             target,
-            inputs: saved.inputs,
-            routes: saved.routes,
+            inputs: saved
+                .inputs
+                .iter()
+                .map(|file| path(file))
+                .collect::<Result<_, _>>()?,
+            routes: saved
+                .routes
+                .iter()
+                .map(|file| path(file))
+                .collect::<Result<_, _>>()?,
             arg: Vec::new(),
             max_usd: args.max_usd.clone(),
             live: args.live,
             yes_up_to: args.yes_up_to.clone(),
             wait_for_answers: args.wait_for_answers,
             deliver: Vec::new(),
-            run: Some(folder),
+            run: Some(folder.to_owned()),
             name: None,
             resume: None,
             recover: false,
@@ -109,8 +118,12 @@ pub fn run(args: &ResumeArgs) -> Result<u8, Error> {
             open: args.open,
             rest: Vec::new(),
         },
-        root,
-        invocation,
+        working_dir,
+        super::run::ResumeContext {
+            root: &root,
+            invocation,
+            defaulted_inputs_digest: saved.defaulted_inputs_digest.as_deref(),
+        },
     )
 }
 

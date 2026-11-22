@@ -53,7 +53,8 @@ next      add --yes to remove them
 ```
 
 - **Filters** (`--workflow ID`, `--state STATE`, repeatable, and `--before YYYY-MM-DD`, a local
-  date) select the dated runs FX made for you, `runs/<id>/<date>-<n>`. A named run, a run you
+  date) select the dated runs FX made for you, `runs/<id>/<date>-<n>`. State filters accept
+  `paused` and `pausing`. An active invocation still prevents removal. A named run, a run you
   placed with `--run`, and a run outside the `runs` folder are only ever removed when you name
   them, so a production run called `character_1_rig_ready` survives any filter.
 - **A run you name** is a run folder, or `WORKFLOW_ID/NAME`. Anything else, such as the project

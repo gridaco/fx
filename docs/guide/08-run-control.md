@@ -19,8 +19,9 @@ boundary and released the run. `cancel` can interrupt the drain if active work
 is taking too long. Any pending workflow request retains its deadline and can
 accept a reply while the runner is away.
 
-Resume starts a new invocation of the same run attempt. FX uses the recorded
-execution context where it can verify the same plan and mode. For a live run,
+Resume starts a new invocation of the same run attempt. FX plans from the
+recorded working directory and verifies the same plan, mode and any files
+bound by input defaults. For a live run,
 pass `--live` with the applicable spending approval as on `run`. Include
 `--require-estimates` to require forecast coverage for the resumed work. If the record
 lacks execution context, repeat the original options with `run TARGET --resume

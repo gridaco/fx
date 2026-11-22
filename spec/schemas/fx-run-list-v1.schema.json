@@ -106,7 +106,7 @@
             "number",
             "null"
           ],
-          "description": "The last terminal invocation's recorded charge in USD; null before an outcome is recorded."
+          "description": "The latest invocation's terminal charge in USD. Null until that invocation records an outcome."
         },
         "stand_in": {
           "type": "boolean"

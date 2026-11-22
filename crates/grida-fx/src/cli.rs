@@ -519,9 +519,11 @@ pub struct RunsListArgs {
 }
 
 /// The states `runs remove --state` matches (spec/store.md §9).
-pub const RUN_STATES: [&str; 10] = [
+pub const RUN_STATES: [&str; 12] = [
     "planned",
     "unfinished",
+    "pausing",
+    "paused",
     "awaiting",
     "succeeded",
     "failed",
