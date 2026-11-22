@@ -336,6 +336,7 @@ changes its local identity; this is not a portable project identity scheme.
 A run entry binds a canonical run folder and its initial recorded identity, so
 resuming the same record preserves its URL while replacing it is not mistaken for
 the earlier run. An invocation ID alone or plan digest alone is not a run ID.
+This URL addresses one exact [run attempt](store.md#run-references-attempts-and-invocations).
 The same plan may have several runs. Saved plans are immutable materializations;
 the service never imports workflow code to refresh them.
 

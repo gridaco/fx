@@ -403,6 +403,61 @@ These names are for reading, and they are not identities. Two step paths or keys
 - **The takes file is not touched.** `reroll` and `pick` refuse a stand-in run: `<folder> holds a stand-in run, and stand-in runs never change the workflow's takes file`. A stand-in run, and every command that reads one, writes nothing outside its run folder and the stand-in store, apart from what `--deliver` copies out, the run's entry in the project's run index (§9) and the record that its project used the store (§6).
 - **Read like any run.** `inspect` and `project` read a stand-in run's folder as any other's, and say that it is one. An SDK that reads a run's files by digest reads a stand-in run's from the stand-in store.
 
+### Run references, attempts and invocations
+
+A **run attempt** is the recorded execution in one run folder. Its plan, step
+occurrences, requests, receipts, outputs and event history belong to that record.
+An **invocation** is one execution of the runner against that attempt, identified
+by its `invocation_id`. A resume starts a new invocation of the same attempt.
+Compute identities and cache keys follow [identity.md](identity.md). Independent
+attempts of the same plan can reuse eligible cached work.
+
+The following operations are implemented:
+
+| Operation | Execution target |
+|---|---|
+| `inspect RUN` | One saved attempt. The bare workflow ID shorthand is a read selector for the newest-created matching record, under the ambiguity rules above. |
+| `run TARGET --resume NAME` or `--run FOLDER` on an existing record | The same attempt, with current plan and mode verified before dispatch. A previously unused `--run FOLDER` can create a run. |
+| `inspect RUN --requests` and `respond RUN REQUEST` | An exact attempt selected by folder or workflow/name. A response also selects a request within that attempt. |
+| `inspect RUN --control` and `cancel RUN` | An exact attempt selected by folder or workflow/name. FX resolves the current invocation once. For cancellation, `--invocation` can require a specific current invocation. A live request also binds to the verified owner. |
+| Existing local viewer run URL | The exact attempt bound by catalog registration. Browser responses target that record and request. |
+
+CLI and SDK operations use these same boundaries. See [SDK run access](sdk.md),
+[waiting steps](waiting.md), [run control](control.md), and
+[local catalog and URLs](service.md#4-local-catalog-and-urls).
+
+**Contract for full rerun (implementation pending).** A **run reference** identifies
+the history of one run within its project. A newly created independent run starts
+its own history at attempt 1. Existing records, including 0.12.0 run folders,
+can serve as attempt 1 in place. History membership comes from an explicit rerun
+relationship. Matching workflow, name, inputs, plan digest or cached outputs
+do not establish that relationship.
+
+Full rerun takes an explicitly selected source attempt and creates a fresh
+attempt in the same history. A new attempt has its own run folder and opens its
+own requests when it reaches waiting steps. The original plan, events, outputs,
+requests and receipts stay addressable through the retained source attempt.
+Inspecting a history can list its attempts. Resume, response and cancellation
+use the exact targets above. Once FX resolves a mutation's target, it stays
+bound to that target even if a new attempt or invocation starts.
+
+Register the history at a separate stable local viewer URL. An existing attempt
+URL stays bound to the original record and can become unavailable if the record
+is removed or replaced. A folder selector addresses the record at that path.
+An existing `WORKFLOW_ID/NAME` selector still resolves its named attempt under the
+rules above. Later attempts have their own selectors so they cannot make that
+name ambiguous. The history reference is separate from plan, step and call
+digests and grants no authority to modify a record.
+
+Full rerun requires enough evidence to reconstruct the source attempt's execution
+definition, effective inputs, bound routes, takes and execution mode. Verify the
+reconstruction against the source attempt's recorded plan and mode. If evidence
+is missing or verification fails, refuse with the specific reason before
+dispatching work. Plan equality checks FX's recorded identities, including
+declared versions for versioned code. New paid work requires the usual spending
+authorization. The rerun contract will define the available source evidence,
+published selectors, history storage and eligible source states.
+
 ## 9. Listing and removing runs, and pruning the store
 
 `grida-fx runs list` lists a planning project's runs and `grida-fx runs remove` removes the ones it no longer needs ([guide](../docs/guide/10-cleanup.md)). Both read the project without writing to it until a removal is confirmed.

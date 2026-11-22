@@ -30,11 +30,20 @@ An answered step exposes `outputs.answer`, and `outputs.selected` when a choice 
 A repeated waiting step honors its declared `concurrency`. At most that many
 of its requests can be open at once. Other ready steps continue to run.
 
+The request's execution scope is its exact
+[run attempt](store.md#run-references-attempts-and-invocations) and expanded step
+instance. The same scope applies whether the runner is attached, has parked, or
+has resumed under a new invocation.
+
 Persist the schema, optional message and reviewed values before making a request available. Opening is idempotent across invocations of the same run. Distinct occurrences and fresh runs open independent requests, even for identical settings. The supplied value is run-local. Downstream computation uses its normal content-based identity. Resume verifies the existing plan and execution mode. Planning never opens a request. A branch conditional on the outcome uses the existing conditional cost range. Before the answer, the lower bound can omit the branch and the upper bound includes what it could spend. After resolution the engine prices the eligible work.
 
 When only outstanding requests block progress, the default invocation exits 1 (incomplete). Inspection reports `awaiting` and preserves completed work. With `run --wait-for-answers` the runner stays attached, dispatches eligible work on an answer or deadline, and remains cancellable. A foreground invocation owns its timer. After exit, the original deadline still governs new answers and the run continues on explicit resume. Reading the run or submitting a decision cannot start an invocation or change its spending authority.
 
 One durable resolution wins per request. Validate against both schema and frozen choices before committing. A rejected input leaves the request open. Retry of the same accepted JSON is idempotent, including after the deadline. A conflicting answer or late first answer reports the winning state. Time and channel describe the submission, without asserting the identity of a named reviewer.
+
+For the [planned passive-wait race](https://github.com/gridaco/fx/issues/161),
+each race occurrence is scoped to one exact run attempt. Its participating waits
+and recorded winner stay within that occurrence across invocations.
 
 ## Local interfaces
 
