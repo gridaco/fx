@@ -92,7 +92,7 @@ def check_cli(command: Path, project: Path, baseline: Path) -> None:
     assert invocation_id() == invocation
     route = registered_route(SELECTOR, binary=baseline)
     assert requests(str(folder)) == opened
-    call("run", "workflow.yaml", "--resume", "review", "--no-view", status=1)
+    call("resume", SELECTOR, "--no-view", status=1)
     resumed = invocation_id()
     assert resumed and resumed != invocation
     assert requests(SELECTOR) == opened
@@ -204,6 +204,44 @@ steps:
     assert verified == {"verified": False, "problems": [f"choose#1: {placed['path']} is missing"]}
 
 
+def check_pause_with_requests(command: Path, project: Path) -> None:
+    folder = project / "paused-review"
+    runner = subprocess.Popen(
+        [command, "run", "workflow.yaml", "--run", str(folder), "--wait-for-answers", "--no-view"],
+        cwd=project,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 15
+        while True:
+            if (folder / "awaiting").is_dir():
+                opened = by_step(fx.list_requests(folder, cwd=project))
+                if len(opened) == 2:
+                    break
+            assert runner.poll() is None and time.monotonic() < deadline, "reviews failed to open"
+            time.sleep(0.03)
+        paused = fx.pause(folder, wait=True, cwd=project)
+        assert paused.recorded_state == "paused" and paused.cleanup == "complete"
+        assert runner.wait(timeout=10) == 1
+        assert by_step(fx.list_requests(folder, cwd=project)) == opened
+        fx.respond(folder, opened["revision#1"]["id"], "rev-paused", cwd=project)
+        chosen = opened["choose#1"]
+        fx.respond(folder, chosen["id"], {"variant": "a"}, cwd=project)
+        assert not (folder / "outputs/manifest.json").exists()
+        result = fx.resume(folder, cwd=project)
+        assert result.ok
+        check_delivery(folder, "rev-paused", chosen["choices"]["a"]["file"]["digest"])
+    finally:
+        if runner.poll() is None:
+            runner.terminate()
+            try:
+                runner.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                runner.kill()
+                runner.wait(timeout=5)
+
+
 async def check_sdk(project: Path) -> None:
     folder = project / "sdk-run"
     async with asyncio.timeout(30):
@@ -252,6 +290,7 @@ def main() -> None:
         project = Path(tmp) / "project"
         shutil.copytree(ROOT / "fixtures/waiting", project)
         check_cli(command, project, baseline)
+        check_pause_with_requests(command, project)
         asyncio.run(check_sdk(project))
     print("Passed CLI and Python SDK waiting-step journeys.")
 

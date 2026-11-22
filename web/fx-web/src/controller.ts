@@ -144,7 +144,7 @@ export class ViewerController {
     const snapshot = await this.observation!.snapshot(request.signal);
     if (request.signal.aborted) return;
     this.cursor = snapshot.cursor;
-    this.invocation = snapshot.view.state === "unfinished"
+    this.invocation = ["unfinished", "pausing"].includes(snapshot.view.state)
       ? snapshot.events.reduce<ObservedInvocation | undefined>((latest, event) => event.event === "run_started" ? event : latest, undefined)
       : undefined;
     this.apply(snapshot.view, snapshot.layout ?? this.state.layout, cancellationRequested(snapshot.events),

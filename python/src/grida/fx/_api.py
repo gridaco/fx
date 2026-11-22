@@ -310,10 +310,12 @@ class RunResult:
         return None
 
     def _ending(self) -> Mapping[str, Any] | None:
-        """The last ``run_finished`` or ``run_cancelled``, whichever came last."""
+        """The most recent recorded invocation outcome."""
         for event in reversed(self.events):
-            if event.get("event") in ("run_finished", "run_cancelled"):
+            if event.get("event") in ("run_finished", "run_cancelled", "run_paused"):
                 return event
+            if event.get("event") == "run_started":
+                break
         return None
 
     def _finished(self) -> Mapping[str, Any] | None:
@@ -333,10 +335,19 @@ class RunResult:
         return True if finished is None else bool(finished.get("incomplete"))
 
     @property
+    def paused(self) -> bool:
+        """Whether the last invocation finished draining and recorded a durable pause."""
+        ending = self._ending()
+        return ending is not None and ending.get("event") == "run_paused"
+
+    @property
     def cost(self) -> float:
         """Budget booked in USD; unreported charges consume their reservations."""
-        ending = self._ending()
-        return float(ending.get("charged_usd") or 0) if ending is not None else 0.0
+        for event in reversed(self.events):
+            if event.get("event") in ("run_started", "run_finished", "run_cancelled", "run_paused"):
+                if (charged := event.get("charged_usd")) is not None:
+                    return float(charged)
+        return 0.0
 
     @property
     def call_recoveries(self) -> list[Mapping[str, Any]]:
@@ -396,12 +407,12 @@ class RunResult:
     def outputs(self) -> dict[str, Any]:
         """Each declared output: a :class:`RunFile`, ``{key: value}`` for a keyed collection, a
         list, a plain value, or ``None``."""
-        finished = self._finished()
-        if finished is None:
+        ending = self._ending()
+        if ending is None or ending.get("event") not in ("run_finished", "run_paused"):
             return {}
         store = self._store_root()
         return {
-            name: _decode(value, store) for name, value in (finished.get("outputs") or {}).items()
+            name: _decode(value, store) for name, value in (ending.get("outputs") or {}).items()
         }
 
     @property
@@ -658,6 +669,15 @@ def _target_text(target: Any) -> str:
     )
 
 
+def _run_target(run: str | Path) -> str:
+    if not isinstance(run, str | os.PathLike):
+        raise TypeError("run is an explicit run folder or exact WORKFLOW_ID/NAME")
+    text = os.fspath(run)
+    if not isinstance(text, str) or not text or text.startswith("-") or "\0" in text:
+        raise ValueError("run is a nonempty target that cannot start with '-' or contain NUL")
+    return text
+
+
 def _request(
     target: Any,
     *,
@@ -795,15 +815,21 @@ async def _read_into(stream: asyncio.StreamReader | None, sink: bytearray) -> No
 
 
 async def _call(
-    args: Sequence[str], cwd: Path, stdin: socket.socket | BinaryIO | None = None
+    args: Sequence[str],
+    cwd: Path,
+    stdin: socket.socket | BinaryIO | None = None,
+    *,
+    temporary_inputs: bool | None = None,
 ) -> _Exit:
     """Runs the binary, retaining ownership of a cancelled run until its engine has exited.
     Repeated task cancellation is the same request, never emergency force authority. Non-run
     commands keep their process-owned interruption and force deadline."""
-    if not args or args[0] != "run":
+    if not args or args[0] not in {"run", "resume"}:
         return await _call_owned(args, cwd, stdin)
     stop_requested = asyncio.Event()
-    owner = asyncio.ensure_future(_call_owned(args, cwd, stdin, stop_requested))
+    owner = asyncio.ensure_future(
+        _call_owned(args, cwd, stdin, stop_requested, temporary_inputs=temporary_inputs)
+    )
     try:
         return await asyncio.shield(owner)
     except BaseException:
@@ -828,6 +854,8 @@ async def _call_owned(
     cwd: Path,
     stdin: socket.socket | BinaryIO | None = None,
     stop_requested: asyncio.Event | None = None,
+    *,
+    temporary_inputs: bool | None = None,
 ) -> _Exit:
     """Runs the binary with ``args`` in ``cwd``. Its output is what it
     wrote until it exited: the call ends with the binary, not with the last holder of its pipes.
@@ -839,9 +867,11 @@ async def _call_owned(
         options["start_new_session"] = True
     loop = asyncio.get_running_loop()
     environment = engine_environment()
-    if args and args[0] == "run":
-        # Also tells the engine the inputs file is temporary: the run records no `repeat`.
+    if args and args[0] in {"run", "resume"}:
         environment["GRIDA_FX_CANCEL_SOURCE"] = "sdk"
+    if temporary_inputs is not None:
+        # The engine can retain explicit input file arguments in the run record.
+        environment["GRIDA_FX_SDK_TEMP_INPUTS"] = "1" if temporary_inputs else "0"
     try:
         transport, protocol = await loop.subprocess_exec(
             lambda: _Protocol(loop),
@@ -1326,28 +1356,22 @@ async def run_async(
         if models_file is not None:
             args.append(f"--resolved-models={models_file}")
         if answerer is None:
-            done = await _call(args, request.cwd)
+            done = await _call(args, request.cwd, temporary_inputs=inputs_file is not None)
         else:
             done = await _call_answered(args, request.cwd, answerer)
-    named = [
-        line[len(_RUN_LINE) :] for line in done.stdout.splitlines() if line.startswith(_RUN_LINE)
-    ]
+    run_line = _summary_line(done, _RUN_LINE)
+    folder_label = run_line.removeprefix(_RUN_LINE) if run_line is not None else None
     if answerer is not None and answerer.fault is not None:
         fault = answerer.fault
-        if run_dir is not None or named:
-            folder = request.cwd / (os.fspath(run_dir) if run_dir is not None else named[-1])
+        fault_folder = os.fspath(run_dir) if run_dir is not None else folder_label
+        if fault_folder is not None:
+            folder = request.cwd / fault_folder
             fault.add_note(f"the stand-in run stopped in {folder}")
         else:
             fault.add_note(f"the stand-in run stopped: grida-fx exited with status {done.status}")
         raise fault
-    if done.status == _CANCELLED:
-        raise FxError("the run was cancelled", done.status)
-    if done.status not in (0, 1):
-        raise _failure("run", done)
-    if not named:
-        refused = [line for line in done.stdout.splitlines() if line.startswith(_REFUSED)]
-        if refused:
-            raise FxError(refused[-1], done.status)
+    _check_execution("run", done, folder_label)
+    if folder_label is None:
         if resuming:
             # A diagnostic replan would repeat discovery without the recorded run's facts.
             raise _failure("run", done)
@@ -1355,10 +1379,110 @@ async def run_async(
         if not replanned.ok:
             raise PlanRefused(replanned)
         raise _failure("run", done)
-    folder = request.cwd / (os.fspath(run_dir) if run_dir is not None else named[-1])
+    folder = request.cwd / (os.fspath(run_dir) if run_dir is not None else folder_label)
     result = RunResult(folder, _read_events(folder))
     result._store = _project_store(_planning_start(request))
     return result
+
+
+def _summary_line(done: _Exit, prefix: str) -> str | None:
+    for line in reversed(done.stdout.split("\n")):
+        if line.startswith(prefix):
+            return line
+    return None
+
+
+def _check_execution(verb: str, done: _Exit, folder_label: str | None) -> None:
+    if done.status == _CANCELLED:
+        raise FxError("the run was cancelled", done.status)
+    if done.status not in (0, 1):
+        raise _failure(verb, done)
+    if folder_label is None and (refused := _summary_line(done, _REFUSED)) is not None:
+        raise FxError(refused, done.status)
+
+
+async def resume_async(
+    run: str | Path,
+    *,
+    live: bool = False,
+    max_usd: float | None = None,
+    yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
+    require_estimates: bool = False,
+    cwd: str | Path | None = None,
+) -> RunResult:
+    """Continue an exact saved attempt using the engine's recorded execution context.
+
+    For records that require explicit context, call :func:`run` with the original target,
+    inputs, and ``resume`` or ``run_dir``. Set ``live=True`` to authorize paid calls and
+    ``require_estimates=True`` to require forecasts for uncached paid work.
+    """
+    if type(live) is not bool or type(wait_for_answers) is not bool:
+        raise TypeError("live and wait_for_answers are True or False")
+    if type(require_estimates) is not bool:
+        raise TypeError("require_estimates is True or False")
+    args = ["resume", _run_target(run), "--no-view"]
+    if live:
+        args.append("--live")
+    if max_usd is not None:
+        args.append(f"--max-usd={_amount('max_usd', max_usd)}")
+    if yes_up_to is not None:
+        args.append(f"--yes-up-to={_amount('yes_up_to', yes_up_to)}")
+    if wait_for_answers:
+        args.append("--wait-for-answers")
+    if require_estimates:
+        args.append("--require-estimates")
+    done = await _call(args, Path.cwd() if cwd is None else Path(cwd).absolute())
+    prefix = "resume_project\t"
+    project_lines = []
+    stderr = []
+    for line in done.stderr.split("\n"):
+        if line.startswith(prefix):
+            project_lines.append(line[len(prefix) :])
+        else:
+            stderr.append(line)
+    done = replace(done, stderr="\n".join(stderr))
+    run_line = _summary_line(done, _RUN_LINE)
+    _check_execution("resume", done, run_line)
+    if run_line is None:
+        raise _failure("resume", done)
+    try:
+        root = Path(json.loads(project_lines[0])) if len(project_lines) == 1 else None
+    except (TypeError, ValueError):
+        root = None
+    if root is None or "\0" in os.fspath(root) or not root.is_absolute():
+        raise FxError("grida-fx resume did not report the absolute project folder", done.status)
+    folder = Path(run_line.removeprefix(_RUN_LINE))
+    if not folder.is_absolute():
+        raise FxError("grida-fx resume did not report the absolute run folder", done.status)
+    result = RunResult(folder, _read_events(folder))
+    result._store = _project_store(root)
+    return result
+
+
+def resume(
+    run: str | Path,
+    *,
+    live: bool = False,
+    max_usd: float | None = None,
+    yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
+    require_estimates: bool = False,
+    cwd: str | Path | None = None,
+) -> RunResult:
+    """:func:`resume_async`, for code outside an event loop."""
+    _no_running_loop("resume")
+    return asyncio.run(
+        resume_async(
+            run,
+            live=live,
+            max_usd=max_usd,
+            yes_up_to=yes_up_to,
+            wait_for_answers=wait_for_answers,
+            require_estimates=require_estimates,
+            cwd=cwd,
+        )
+    )
 
 
 def _answerer(stand_in: StandIn, *, live: bool, yes_up_to: float | None) -> Answerer:

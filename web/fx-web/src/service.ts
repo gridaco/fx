@@ -110,7 +110,7 @@ export class ServiceIndexProjection {
         key, title: primary.title, workflow: primary.workflow, primary,
         latest_known: (runs.length ? runs : plans).every((entry) => entry.created_at !== undefined),
         show_source: false, runs, plans,
-        unfinished_runs: runs.filter((entry) => entry !== primary && ["running", "unfinished", "awaiting"].includes(entry.state)),
+        unfinished_runs: runs.filter((entry) => entry !== primary && ["running", "unfinished", "awaiting", "pausing", "paused"].includes(entry.state)),
       };
     });
     const titles = new Map<string, number>(), workflowIds = new Map<string, number>();

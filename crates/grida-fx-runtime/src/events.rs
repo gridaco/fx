@@ -122,6 +122,9 @@ pub enum Event {
     CancelRequested {
         source: crate::run_control::CancelSource,
     },
+    PauseRequested {
+        source: crate::run_control::CancelSource,
+    },
     /// The display snapshot of the current expansion (spec/store.md §8): its scopes, each
     /// instance's interface bindings, its instances other than absent ones (`{id, step, take,
     /// key}`, in expansion order) and its pending repeats.
@@ -305,6 +308,10 @@ pub enum Event {
         reason: String,
         charged_usd: Usd,
     },
+    RunPaused {
+        charged_usd: Usd,
+        outputs: IndexMap<String, Value>,
+    },
 }
 
 impl Event {
@@ -339,6 +346,7 @@ impl Event {
     pub fn name(&self) -> &'static str {
         match self {
             Event::CancelRequested { .. } => "cancel_requested",
+            Event::PauseRequested { .. } => "pause_requested",
             Event::ScopesUpdated { .. } => "scopes_updated",
             Event::RunStarted { .. } => "run_started",
             Event::PhasePlanned { .. } => "phase_planned",
@@ -359,6 +367,7 @@ impl Event {
             Event::Problem { .. } => "problem",
             Event::RunFinished { .. } => "run_finished",
             Event::RunCancelled { .. } => "run_cancelled",
+            Event::RunPaused { .. } => "run_paused",
         }
     }
 
@@ -366,7 +375,7 @@ impl Event {
     pub fn to_fields(&self) -> Map<String, Value> {
         let mut fields = Fields::default();
         match self {
-            Event::CancelRequested { source } => {
+            Event::CancelRequested { source } | Event::PauseRequested { source } => {
                 fields.text("source", source.as_str());
             }
             Event::ScopesUpdated {
@@ -742,6 +751,13 @@ impl Event {
             } => {
                 fields.text("reason", reason);
                 fields.money("charged_usd", *charged_usd);
+            }
+            Event::RunPaused {
+                charged_usd,
+                outputs,
+            } => {
+                fields.money("charged_usd", *charged_usd);
+                fields.put("outputs", object_of(outputs));
             }
         }
         fields.0

@@ -90,6 +90,8 @@ pub enum Verb {
     Lock(LockArgs),
     /// run a workflow; --live admits paid calls, within a ceiling
     Run(RunArgs),
+    /// continue an exact recorded run using its saved execution context
+    Resume(ResumeArgs),
     /// invoke one managed capability without authoring a workflow
     Call(CallArgs),
     /// draw the next take of one step of a run
@@ -114,6 +116,8 @@ pub enum Verb {
     Respond(RespondArgs),
     /// request cancellation of one exact run invocation, without starting a service
     Cancel(CancelArgs),
+    /// let active steps finish and durably pause one exact run invocation
+    Pause(CancelArgs),
     /// list the project's runs, or remove runs it no longer needs
     Runs(RunsArgs),
     /// prune the project's cache of what no run still needs
@@ -371,6 +375,38 @@ pub struct RunArgs {
     pub rest: Vec<String>,
 }
 
+/// Continue the same attempt in a new runner invocation.
+#[derive(Debug, Args)]
+pub struct ResumeArgs {
+    /// an exact run folder or WORKFLOW_ID/NAME
+    #[arg(value_name = "RUN")]
+    pub run: String,
+    /// require an applicable cost forecast for uncached paid work
+    #[arg(long)]
+    pub require_estimates: bool,
+    /// admit paid calls again using the current spending authorization
+    #[arg(long)]
+    pub live: bool,
+    /// the ceiling in US dollars for paid work
+    #[arg(long, value_name = "USD", allow_negative_numbers = true)]
+    pub max_usd: Option<String>,
+    /// stop before a later phase that may take the run past this amount
+    #[arg(long, value_name = "USD", allow_negative_numbers = true)]
+    pub yes_up_to: Option<String>,
+    /// stay attached while a workflow waits for external answers or deadlines
+    #[arg(long)]
+    pub wait_for_answers: bool,
+    /// suppress viewer registration and hosting for this invocation
+    #[arg(long)]
+    pub no_view: bool,
+    /// use an invocation-owned viewer on an available port
+    #[arg(long, conflicts_with = "no_view")]
+    pub standalone: bool,
+    /// open the run's viewer in the default browser after initialization
+    #[arg(long, conflicts_with = "no_view")]
+    pub open: bool,
+}
+
 /// Invoke one managed capability using the working directory's project configuration.
 #[derive(Debug, Args)]
 pub struct CallArgs {
@@ -483,9 +519,11 @@ pub struct RunsListArgs {
 }
 
 /// The states `runs remove --state` matches (spec/store.md §9).
-pub const RUN_STATES: [&str; 10] = [
+pub const RUN_STATES: [&str; 12] = [
     "planned",
     "unfinished",
+    "pausing",
+    "paused",
     "awaiting",
     "succeeded",
     "failed",
@@ -770,7 +808,7 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
     crate::interrupt::install();
     if matches!(
         cli.verb,
-        Verb::Run(_) | Verb::Call(CallArgs { dry_run: false, .. })
+        Verb::Run(_) | Verb::Resume(_) | Verb::Call(CallArgs { dry_run: false, .. })
     ) {
         crate::interrupt::expect_runner();
     }
@@ -870,6 +908,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
             args.rest = rest;
             verbs::run::run(&args)
         }
+        Verb::Resume(args) => verbs::resume::run(&args),
         Verb::Call(args) => verbs::call::run(&args),
         Verb::Reroll(args) => verbs::takes::reroll(&args),
         Verb::Pick(args) => verbs::takes::pick(&args),
@@ -882,6 +921,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         Verb::Inspect(args) => verbs::inspect::run(&args),
         Verb::Respond(args) => verbs::waiting::respond(&args),
         Verb::Cancel(args) => verbs::control::cancel(&args),
+        Verb::Pause(args) => verbs::control::pause(&args),
         Verb::Runs(args) => verbs::runs::run(&args),
         Verb::Cache(args) => verbs::cache::run(&args),
         Verb::View(mut args) => {

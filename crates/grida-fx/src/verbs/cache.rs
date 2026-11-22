@@ -317,7 +317,7 @@ fn unnamed_reservation(events: &[Value]) -> bool {
                 open = false;
                 unnamed = false;
             }
-            Some("run_cancelled") => {
+            Some("run_cancelled" | "run_paused") => {
                 open = false;
                 unnamed = false;
             }

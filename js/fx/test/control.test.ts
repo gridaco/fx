@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { call } from "../src/engine.js";
-import { AnswerError, cancel, FxError, inspectControl, inspectRequests, listRequests, respond, RunControlError } from "../src/index.js";
+import { AnswerError, cancel, FxError, inspectControl, inspectRequests, listRequests, pause as pauseRun, respond, resume, RunControlError } from "../src/index.js";
 import type { CancelOptions, RunControlResult, WaitingRequest } from "../src/index.js";
 import { SLOW, temporaryFolder } from "./support.js";
 
@@ -11,7 +11,8 @@ const NODE = spawnSync("node", ["--version"]).status === 0;
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 const SCRIPT = `#!/usr/bin/env node
 const fs = require("node:fs");
-const config = JSON.parse(fs.readFileSync(process.env.FAKE_CONTROL_CONFIG, "utf8"));
+const settings = JSON.parse(fs.readFileSync(process.env.FAKE_CONTROL_CONFIG, "utf8"));
+const config = settings.verbs?.[process.argv[2]] ?? settings;
 const log = (value) => fs.appendFileSync(process.env.FAKE_CONTROL_LOG, JSON.stringify(value) + "\\n");
 log({args:process.argv.slice(2),source:process.env.GRIDA_FX_CANCEL_SOURCE ?? null});
 if (config.sleep) {
@@ -54,7 +55,7 @@ function fake() {
   };
 }
 
-function result(operation: "inspect" | "cancel" = "cancel", fields: Record<string, unknown> = {}): RunControlResult {
+function result(operation: RunControlResult["operation"] = "cancel", fields: Record<string, unknown> = {}): RunControlResult {
   return {
     kind: "fx-run-control-v1",
     operation,
@@ -78,6 +79,65 @@ async function until(check: () => boolean): Promise<void> {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("exact-target run control", () => {
+  test("pause verifies the durable outcome and resume executes the exact saved attempt", async () => {
+    const engine = fake();
+    const selector = "gallery/one";
+    const folder = join(engine.path, "runs/one");
+    try {
+      engine.reply({ verbs: {
+        pause: { stdout: JSON.stringify(result("pause", {
+          outcome: "completed", recorded_state: "paused", cleanup: "complete",
+        })) },
+        resume: { stdout: `run       ${folder}\n`, status: 1 },
+        project: { stdout: JSON.stringify({ instances: {}, run: {
+          run_started: { invocation_id: "inv-2" },
+          run_finished: { invocation_id: "inv-1", ok: true, incomplete: false },
+          run_paused: { invocation_id: "inv-2", charged_usd: 0, outputs: { checkpoint: { value: 42 } } },
+        } }) },
+        // A successor was started after the projection was captured.
+        inspect: { stdout: JSON.stringify({ run: { state: "unfinished", charged_usd: 0 } }) },
+      } });
+      const paused = await pauseRun(selector, { ...engine.options, invocation: "inv-1", wait: true, timeout: "2m" });
+      expect(paused.operation).toBe("pause");
+      expect(paused.recorded_state).toBe("paused");
+      const resumed = await resume(selector, { ...engine.options, live: true, maxUsd: 2, yesUpTo: 1, requireEstimates: true });
+      expect(resumed.runDir).toBe(folder);
+      expect(resumed.invocationId).toBe("inv-2");
+      expect(resumed.paused && resumed.incomplete && !resumed.ok).toBe(true);
+      expect(resumed.outputs).toEqual({ checkpoint: 42 });
+      expect(engine.log().slice(0, 2)).toEqual([
+        { args: ["pause", selector, "--source=sdk", "--invocation=inv-1", "--wait", "--timeout=2m", "--json"], source: null },
+        { args: ["resume", selector, "--live", "--yes-up-to=1", "--no-view", "--max-usd=2", "--require-estimates"], source: "sdk" },
+      ]);
+    } finally {
+      engine.cleanup();
+    }
+  });
+
+  test("a newer invocation ignores an older pause and an older finish", async () => {
+    const engine = fake();
+    const folder = join(engine.path, "runs/one");
+    try {
+      engine.reply({ verbs: {
+        resume: { stdout: `run       ${folder}\n`, status: 1 },
+        project: { stdout: JSON.stringify({ instances: {}, run: {
+          run_started: { invocation_id: "inv-3" },
+          run_finished: { invocation_id: "inv-1", ok: true, outputs: { old: { value: 1 } } },
+          run_paused: { invocation_id: "inv-2", charged_usd: 0, outputs: { old: { value: 2 } } },
+        } }) },
+        inspect: { stdout: JSON.stringify({ run: { state: "paused" } }) },
+      } });
+      const latest = await resume(folder, engine.options);
+      expect(latest.invocationId).toBe("inv-3");
+      expect(latest.paused).toBe(false);
+      expect(latest.ok).toBe(false);
+      expect(latest.incomplete).toBe(true);
+      expect(latest.outputs).toEqual({});
+    } finally {
+      engine.cleanup();
+    }
+  });
+
   test("waiting clients verify listed requests, viewer handoffs and the exact submission receipt", async () => {
     const engine = fake();
     try {

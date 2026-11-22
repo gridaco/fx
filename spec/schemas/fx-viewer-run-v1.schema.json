@@ -52,6 +52,8 @@
         "planned",
         "unfinished",
         "awaiting",
+        "pausing",
+        "paused",
         "succeeded",
         "failed",
         "cancelled"

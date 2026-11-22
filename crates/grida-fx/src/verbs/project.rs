@@ -14,7 +14,8 @@
 //!   path, waiting_for}` (the `route` of its earliest open wait, else `null`), and a `waiting`
 //!   entry whose last wait closes is `{state: "running", path}`. Other events (`call`,
 //!   `budget_*`, `phase_planned`, `problem`) are left out;
-//! - `run`: the last `run_started`, `run_finished` and `run_cancelled` event, each whole but for
+//! - `run`: the last `run_started`, `pause_requested`, `run_paused`, `run_finished` and
+//!   `run_cancelled` event, each whole but for
 //!   its `kind`.
 //!
 //! Printed with `print_json` (keys sorted canonically), exit 0.
@@ -122,7 +123,13 @@ pub(crate) fn projection(events: &[Value]) -> Value {
                 }
                 settle(&mut instances, id, open.values().next());
             }
-            (Some(summary @ ("run_started" | "run_finished" | "run_cancelled")), _) => {
+            (
+                Some(
+                    summary @ ("run_started" | "pause_requested" | "run_paused" | "run_finished"
+                    | "run_cancelled"),
+                ),
+                _,
+            ) => {
                 if summary == "run_started" {
                     // A new invocation leaves every earlier wait behind.
                     for id in std::mem::take(&mut waits).into_keys() {

@@ -780,6 +780,38 @@ def test_run_reads_the_folder_from_the_summary(fake: Fake, project: Path) -> Non
     assert len(result.events) == len(EVENTS)
 
 
+def test_resume_uses_the_exact_attempt_and_recorded_project(fake: Fake, project: Path) -> None:
+    folder = project / "external"
+    folder.mkdir()
+    (folder / "events.jsonl").write_text(
+        "".join(json.dumps(event) + "\n" for event in EVENTS), encoding="utf-8"
+    )
+    fake.reply(
+        resume={
+            "stdout": f"run       {folder}\n",
+            "stderr": f"resume_project\t{json.dumps(str(project.resolve()))}\n",
+            "status": 1,
+        }
+    )
+    result = fx.resume(
+        folder, cwd=project.parent, live=True, max_usd=2, yes_up_to=1, require_estimates=True
+    )
+    assert fake.invocations == [
+        [
+            "resume",
+            str(folder),
+            "--no-view",
+            "--live",
+            "--max-usd=2",
+            "--yes-up-to=1",
+            "--require-estimates",
+        ]
+    ]
+    assert result.run_dir == folder
+    store = project.resolve() / "store" / "cache"
+    assert result.outputs["plate"].path == store / "files" / "11" / D1
+
+
 def test_a_run_result_reads_the_record(fake: Fake, project: Path) -> None:
     fake.runs()
     result = fx.run("gallery", cwd=project, run_dir="runs/mine")
@@ -833,6 +865,37 @@ def test_a_run_that_ended_well(tmp_path: Path) -> None:
     assert (result.ok, result.incomplete, result.cost, result.failed) == (True, False, 0.0, [])
     assert result.outputs == {}
     assert result.steps == {}
+
+
+def test_a_paused_run_preserves_its_booked_cost_and_resumable_state(tmp_path: Path) -> None:
+    result = RunResult(
+        tmp_path,
+        [
+            *EVENTS,
+            _envelope("run_started"),
+            _envelope("run_paused", charged_usd=0.35, outputs={"checkpoint": {"value": 42}}),
+        ],
+    )
+    assert result.paused
+    assert result.incomplete
+    assert not result.ok
+    assert result.cost == 0.35
+    assert result.outputs == {"checkpoint": 42}
+
+
+def test_a_successor_start_preserves_cumulative_booked_cost(tmp_path: Path) -> None:
+    result = RunResult(
+        tmp_path,
+        [
+            _envelope("run_started", invocation_id="previous", charged_usd=0),
+            _envelope("run_paused", invocation_id="previous", charged_usd=1.25),
+            _envelope("run_started", invocation_id="current", charged_usd=1.25),
+        ],
+    )
+    assert result.invocation_id == "current"
+    assert result.cost == 1.25
+    assert not result.paused
+    assert result.incomplete
 
 
 def test_a_run_that_did_not_finish(tmp_path: Path) -> None:
@@ -1180,7 +1243,12 @@ def test_run_cancellation_while_process_creation_is_pending_keeps_an_owner(
         observed: list[bool] = []
 
         async def owned(
-            args: object, cwd: object, stdin: object, stop: asyncio.Event
+            args: object,
+            cwd: object,
+            stdin: object,
+            stop: asyncio.Event,
+            *,
+            temporary_inputs: bool | None = None,
         ) -> _api._Exit:
             creation.set()
             await released.wait()
@@ -1245,8 +1313,8 @@ def _control_result(operation: str = "cancel", **fields: Any) -> dict[str, Any]:
         "kind": "fx-run-control-v1",
         "operation": operation,
         "invocation_id": "inv-1",
-        "outcome": "accepted" if operation == "cancel" else "inspected",
-        "request_status": "accepted" if operation == "cancel" else "not_accepted",
+        "outcome": "inspected" if operation == "inspect" else "accepted",
+        "request_status": "not_accepted" if operation == "inspect" else "accepted",
         "recorded_state": "unfinished",
         "cleanup": "pending",
         "external_completion": "not_verified",
@@ -1286,6 +1354,31 @@ def test_control_wrappers_forward_exact_target_options_and_preserve_outcomes(
         "cancel",
         "runs/one",
         "--source=sdk",
+        "--wait",
+        "--timeout=2m",
+        "--json",
+    ]
+
+
+def test_pause_wait_preserves_the_durable_outcome(fake: Fake, project: Path) -> None:
+    sampled = _control_result("inspect", recorded_state="pausing", can_pause=False)
+    fake.reply(inspect={"stdout": json.dumps(sampled)})
+    assert fx.inspect_control("runs/one", cwd=project).can_pause is False
+    completed = _control_result(
+        "pause", outcome="completed", recorded_state="paused", cleanup="complete"
+    )
+    fake.reply(pause={"stdout": json.dumps(completed)})
+    result = fx.pause("runs/one", cwd=project, invocation="inv-1", wait=True, timeout="2m")
+    assert (result.operation, result.recorded_state, result.cleanup) == (
+        "pause",
+        "paused",
+        "complete",
+    )
+    assert fake.invocations[-1] == [
+        "pause",
+        "runs/one",
+        "--source=sdk",
+        "--invocation=inv-1",
         "--wait",
         "--timeout=2m",
         "--json",

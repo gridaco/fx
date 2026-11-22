@@ -85,7 +85,14 @@ fn control_events(folder: &Path, plan: &str) -> Result<Vec<Value>, EvidenceError
         }
         if matches!(
             event.get("event").and_then(Value::as_str),
-            Some("run_started" | "cancel_requested" | "run_finished" | "run_cancelled")
+            Some(
+                "run_started"
+                    | "cancel_requested"
+                    | "pause_requested"
+                    | "run_finished"
+                    | "run_cancelled"
+                    | "run_paused"
+            )
         ) {
             if events.len() == MAX_CONTROL_EVENTS {
                 return Err((
@@ -119,6 +126,8 @@ pub struct ControlResult {
     pub availability: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub can_cancel: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub can_pause: Option<bool>,
 }
 
 impl ControlResult {
@@ -142,6 +151,7 @@ impl ControlResult {
             message: None,
             availability: (operation == "inspect").then(|| "unknown".into()),
             can_cancel: (operation == "inspect").then_some(false),
+            can_pause: (operation == "inspect").then_some(false),
         }
     }
 
@@ -158,7 +168,7 @@ impl ControlResult {
                     (self.operation.as_str(), self.outcome.as_str()),
                     ("inspect", "inspected")
                         | (
-                            "cancel",
+                            "cancel" | "pause",
                             "accepted"
                                 | "already_requested"
                                 | "already_terminal"
@@ -192,6 +202,7 @@ struct Record {
     invocation: Option<String>,
     state: String,
     accepted: bool,
+    pause_accepted: bool,
     terminal: Option<Value>,
 }
 
@@ -244,6 +255,7 @@ impl Record {
             }
             .into(),
             accepted: false,
+            pause_accepted: false,
             terminal: None,
         };
         record.apply_events(&events);
@@ -257,8 +269,13 @@ impl Record {
             }
             match event.get("event").and_then(Value::as_str) {
                 Some("cancel_requested") => self.accepted = true,
+                Some("pause_requested") => self.pause_accepted = true,
                 Some("run_cancelled") => {
                     self.state = "cancelled".into();
+                    self.terminal = Some(event.clone());
+                }
+                Some("run_paused") => {
+                    self.state = "paused".into();
                     self.terminal = Some(event.clone());
                 }
                 Some("run_finished") => {
@@ -294,10 +311,26 @@ impl Record {
         let mut result = ControlResult::new(operation);
         result.invocation_id.clone_from(&self.invocation);
         result.recorded_state.clone_from(&self.state);
-        if self.accepted {
+        if self.accepted(operation) {
             result.request_status = "accepted".into();
         }
         result
+    }
+
+    fn accepted(&self, operation: &str) -> bool {
+        if operation == "pause" {
+            self.pause_accepted
+        } else {
+            self.accepted
+        }
+    }
+
+    fn observed_state(&self, phase: &str) -> String {
+        if self.terminal.is_none() && matches!(phase, "pause_requested" | "pause_finishing") {
+            "pausing".into()
+        } else {
+            self.state.clone()
+        }
     }
 }
 
@@ -634,7 +667,7 @@ impl ControlServer {
                 || terminal.get("plan").and_then(Value::as_str) != Some(&self.owner.plan)
                 || !matches!(
                     terminal.get("event").and_then(Value::as_str),
-                    Some("run_finished" | "run_cancelled")
+                    Some("run_finished" | "run_cancelled" | "run_paused")
                 )
             {
                 return Err("record_error".into());
@@ -737,18 +770,25 @@ fn serve(mut stream: std::os::unix::net::UnixStream, owner: &Owner, control: &Ru
         reply.code = Some("unauthorized".into());
     } else if request.invocation_id != owner.invocation_id {
         reply.code = Some("invocation_mismatch".into());
-    } else if !matches!(request.operation.as_str(), "inspect" | "cancel")
-        || !matches!(request.source.as_str(), "cli" | "sdk")
+    } else if !matches!(
+        request.operation.as_str(),
+        "inspect" | "inspect_pause" | "cancel" | "pause"
+    ) || !matches!(request.source.as_str(), "cli" | "sdk")
     {
         reply.code = Some("unsupported_version".into());
     } else {
-        if request.operation == "cancel" {
+        if matches!(request.operation.as_str(), "cancel" | "pause") {
             let source = if request.source == "sdk" {
                 CancelSource::Sdk
             } else {
                 CancelSource::Cli
             };
-            reply.outcome = match control.request_cancel(source) {
+            let outcome = if request.operation == "pause" {
+                control.request_pause(source)
+            } else {
+                control.request_cancel(source)
+            };
+            reply.outcome = match outcome {
                 CancelAcceptance::Accepted => "accepted",
                 CancelAcceptance::AlreadyRequested => "already_requested",
                 CancelAcceptance::Finishing => "finishing",
@@ -762,13 +802,20 @@ fn serve(mut stream: std::os::unix::net::UnixStream, owner: &Owner, control: &Ru
         }
         reply.phase = match control.phase() {
             ControlPhase::Running => "running",
+            ControlPhase::PauseRequested => "pause_requested",
             ControlPhase::CancelRequested => "cancel_requested",
             ControlPhase::RecordError => "record_error",
+            ControlPhase::Finishing if control.pause_requested() => "pause_finishing",
             ControlPhase::Finishing => "finishing",
             ControlPhase::Terminal => "terminal",
         }
         .into();
-        if control.cancellation_requested() {
+        let accepted = if request.operation == "pause" {
+            control.pause_requested()
+        } else {
+            control.cancellation_requested()
+        };
+        if accepted {
             reply.request_status = "accepted".into();
         }
         if reply.phase == "record_error" {
@@ -893,7 +940,9 @@ fn exchange(
         Ok(result) => result.map_err(fault)?,
         Err(_) => {
             return Err(fault(
-                if sent.load(std::sync::atomic::Ordering::Acquire) && operation == "cancel" {
+                if sent.load(std::sync::atomic::Ordering::Acquire)
+                    && matches!(operation, "cancel" | "pause")
+                {
                     "acknowledgment_unknown"
                 } else {
                     "unavailable"
@@ -917,7 +966,13 @@ fn exchange(
         "accepted" | "not_accepted" | "unknown"
     ) || !matches!(
         reply.phase.as_str(),
-        "running" | "cancel_requested" | "record_error" | "finishing" | "terminal"
+        "running"
+            | "pause_requested"
+            | "pause_finishing"
+            | "cancel_requested"
+            | "record_error"
+            | "finishing"
+            | "terminal"
     ) || reply.code.as_deref().is_some_and(|code| {
         !matches!(
             code,
@@ -927,8 +982,9 @@ fn exchange(
         return Err(fault("unsupported_version"));
     }
     if (reply.outcome == "error") != reply.code.is_some()
-        || (operation == "inspect" && !matches!(reply.outcome.as_str(), "inspected" | "error"))
-        || (operation == "cancel" && reply.outcome == "inspected")
+        || (matches!(operation, "inspect" | "inspect_pause")
+            && !matches!(reply.outcome.as_str(), "inspected" | "error"))
+        || (matches!(operation, "cancel" | "pause") && reply.outcome == "inspected")
         || (matches!(reply.outcome.as_str(), "accepted" | "already_requested")
             && reply.request_status != "accepted")
     {
@@ -963,12 +1019,10 @@ fn explanation(code: &str) -> &'static str {
         "unauthorized" => {
             "private local control ownership, permissions or identity could not be verified"
         }
-        "record_error" => "cancellation could not be durably recorded; cleanup remains unverified",
-        "wait_timeout" => "the wait deadline expired; any accepted cancellation remains in effect",
+        "record_error" => "the request could not be durably recorded; cleanup remains unverified",
+        "wait_timeout" => "the wait deadline expired; any accepted request remains in effect",
         "owner_lost" => "the selected owner was lost before local completion could be verified",
-        "acknowledgment_unknown" => {
-            "the cancellation acknowledgment was lost; acceptance is unknown"
-        }
+        "acknowledgment_unknown" => "the control acknowledgment was lost; acceptance is unknown",
         "completion_unverified" => "the terminal result has no compatible local cleanup receipt",
         _ => "the selected invocation has no verified available control owner",
     }
@@ -1001,7 +1055,11 @@ pub fn is_executing(folder: &Path, plan: &str, invocation: &str) -> bool {
             return false;
         };
         exchange(&root, &owner, "inspect", "cli", TRANSPORT_TIMEOUT).is_ok_and(|reply| {
-            reply.code.is_none() && matches!(reply.phase.as_str(), "running" | "cancel_requested")
+            reply.code.is_none()
+                && matches!(
+                    reply.phase.as_str(),
+                    "running" | "pause_requested" | "pause_finishing" | "cancel_requested"
+                )
         })
     }
     #[cfg(not(unix))]
@@ -1021,6 +1079,18 @@ pub fn cancel(
     started: Instant,
 ) -> ControlResult {
     operate(folder, invocation, wait, timeout, source, "cancel", started)
+}
+
+/// Pauses one sampled invocation at a step boundary.
+pub fn pause(
+    folder: &Path,
+    invocation: Option<&str>,
+    wait: bool,
+    timeout: Duration,
+    source: &str,
+    started: Instant,
+) -> ControlResult {
+    operate(folder, invocation, wait, timeout, source, "pause", started)
 }
 
 fn operate(
@@ -1094,7 +1164,7 @@ fn operate(
         if receipt_verified {
             result.cleanup = "complete".into();
         }
-        if record.terminal.is_some() && operation == "cancel" {
+        if record.terminal.is_some() && operation != "inspect" {
             result.outcome = "already_terminal".into();
             if !wait {
                 return result;
@@ -1104,13 +1174,27 @@ fn operate(
                 return result;
             }
         }
-        let reply = exchange(
+        let deadline = if wait { remaining() } else { TRANSPORT_TIMEOUT };
+        let mut pause_supported = operation == "inspect";
+        let mut reply = exchange(
             &root,
             &owner,
-            operation,
+            if pause_supported {
+                "inspect_pause"
+            } else {
+                operation
+            },
             source,
-            if wait { remaining() } else { TRANSPORT_TIMEOUT },
+            deadline,
         );
+        if pause_supported
+            && reply
+                .as_ref()
+                .is_ok_and(|reply| reply.code.as_deref() == Some("unsupported_version"))
+        {
+            pause_supported = false;
+            reply = exchange(&root, &owner, "inspect", source, deadline);
+        }
         let mut last_handshake = None;
         match reply {
             Ok(reply) => {
@@ -1122,7 +1206,7 @@ fn operate(
                     return result;
                 }
                 if record.refresh_bound() {
-                    result.recorded_state = record.state.clone();
+                    result.recorded_state = record.observed_state(&reply.phase);
                 }
                 if completed(&root, &owner, &record) {
                     result.cleanup = "complete".into();
@@ -1131,8 +1215,12 @@ fn operate(
                     result.availability = Some("available".into());
                     result.can_cancel = Some(matches!(
                         reply.phase.as_str(),
-                        "running" | "cancel_requested"
+                        "running" | "pause_requested" | "cancel_requested"
                     ));
+                    result.can_pause = Some(
+                        pause_supported
+                            && matches!(reply.phase.as_str(), "running" | "pause_requested"),
+                    );
                     return result;
                 }
                 result.outcome = reply.outcome;
@@ -1150,7 +1238,7 @@ fn operate(
                 record.refresh_bound();
                 result.recorded_state = record.state.clone();
                 result.cleanup = "unknown".into();
-                if record.accepted {
+                if record.accepted(operation) {
                     result.request_status = "accepted".into();
                 } else if error.may_have_sent {
                     result.request_status = "unknown".into();
@@ -1162,7 +1250,10 @@ fn operate(
                         return result;
                     }
                 }
-                if !wait || (!error.may_have_sent && !record.accepted && record.terminal.is_none())
+                if !wait
+                    || (!error.may_have_sent
+                        && !record.accepted(operation)
+                        && record.terminal.is_none())
                 {
                     result.fail(code, explanation(code));
                     return result;
@@ -1174,8 +1265,10 @@ fn operate(
         }
         loop {
             record.refresh_bound();
-            result.recorded_state = record.state.clone();
-            if record.accepted {
+            if record.terminal.is_some() {
+                result.recorded_state = record.state.clone();
+            }
+            if record.accepted(operation) {
                 result.request_status = "accepted".into();
             }
             if completed(&root, &owner, &record) {
@@ -1193,7 +1286,8 @@ fn operate(
                 match exchange(&root, &owner, "inspect", "cli", remaining()) {
                     Ok(reply) if reply.code.is_none() => {
                         result.cleanup = "pending".into();
-                        if reply.request_status == "accepted" {
+                        result.recorded_state = record.observed_state(&reply.phase);
+                        if operation == "cancel" && reply.request_status == "accepted" {
                             result.request_status = "accepted".into();
                         }
                     }
@@ -1203,7 +1297,7 @@ fn operate(
                         if error.definite_owner_loss {
                             record.refresh_bound();
                             result.recorded_state = record.state.clone();
-                            if record.accepted {
+                            if record.accepted(operation) {
                                 result.request_status = "accepted".into();
                             }
                             if completed(&root, &owner, &record) {
@@ -1360,6 +1454,31 @@ mod tests {
         );
         assert!(control.admit().is_none());
         let _ = std::fs::remove_file(pointer_path(&server.root, &server.owner.folder_digest));
+    }
+
+    #[test]
+    fn pause_stays_observable_until_its_terminal_event() {
+        let folder = tempfile::tempdir().unwrap();
+        let (control, server) = start(folder.path(), "0123456789abcdef");
+        assert_eq!(
+            control.request_pause(CancelSource::Cli),
+            CancelAcceptance::Accepted
+        );
+        assert!(control.begin_finalization().unwrap());
+        let finishing = inspect(folder.path());
+        assert_eq!(finishing.recorded_state, "pausing");
+        assert_eq!(finishing.can_cancel, Some(false));
+        assert_eq!(finishing.can_pause, Some(false));
+        control
+            .emit_terminal(&Event::RunPaused {
+                charged_usd: Usd::ZERO,
+                outputs: Default::default(),
+            })
+            .unwrap();
+        server.complete(&control.terminal().unwrap()).unwrap();
+        let paused = inspect(folder.path());
+        assert_eq!(paused.recorded_state, "paused");
+        assert_eq!(paused.cleanup, "complete");
     }
 
     #[test]

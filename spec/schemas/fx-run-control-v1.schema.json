@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:grida-fx:schema:fx-run-control-v1",
   "title": "FX local run control (fx-run-control-v1)",
-  "description": "A bounded observation or cancellation result for one selected invocation. Local completion does not verify remote work.",
+  "description": "A bounded observation, cancellation or pause result for one selected invocation. Local completion does not verify remote work.",
   "type": "object",
   "required": [
     "kind",
@@ -21,7 +21,8 @@
     "operation": {
       "enum": [
         "inspect",
-        "cancel"
+        "cancel",
+        "pause"
       ]
     },
     "invocation_id": {
@@ -54,6 +55,8 @@
       "enum": [
         "planned",
         "unfinished",
+        "pausing",
+        "paused",
         "awaiting",
         "succeeded",
         "failed",
@@ -100,6 +103,9 @@
       ]
     },
     "can_cancel": {
+      "type": "boolean"
+    },
+    "can_pause": {
       "type": "boolean"
     }
   },
@@ -154,6 +160,7 @@
           "recorded_state": {
             "enum": [
               "awaiting",
+              "paused",
               "succeeded",
               "failed",
               "cancelled"

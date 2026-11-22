@@ -82,6 +82,8 @@
             "planned",
             "unfinished",
             "awaiting",
+            "pausing",
+            "paused",
             "succeeded",
             "failed",
             "incomplete",
@@ -104,7 +106,7 @@
             "number",
             "null"
           ],
-          "description": "The charge in USD the last run_finished or run_cancelled records; null before the run ended."
+          "description": "The latest invocation's terminal charge in USD. Null until that invocation records an outcome."
         },
         "stand_in": {
           "type": "boolean"

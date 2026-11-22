@@ -166,6 +166,8 @@ pub struct RunOutcome {
     pub outputs: IndexMap<String, Val>,
     /// Ctrl-C stopped it.
     pub cancelled: bool,
+    /// The operator paused this invocation at a step boundary.
+    pub paused: bool,
 }
 
 /// Why a run did not start, or broke.
@@ -222,9 +224,28 @@ pub fn run_with_control_ready(
     options: RunOptions,
     ready: impl FnOnce(&ReadyRun),
 ) -> Result<RunOutcome, RunError> {
-    let outcome = invoke(&engine, planner, host, plan, &options, |run, _control| {
-        ready(run)
-    });
+    run_with_expected_invocation(engine, planner, host, plan, options, None, ready)
+}
+
+/// Run with an optional guard on the last recorded invocation, checked under the run lock.
+pub fn run_with_expected_invocation(
+    engine: Arc<Engine>,
+    planner: &mut Planner,
+    host: &mut dyn NodeHost,
+    plan: Plan,
+    options: RunOptions,
+    expected_invocation: Option<&str>,
+    ready: impl FnOnce(&ReadyRun),
+) -> Result<RunOutcome, RunError> {
+    let outcome = invoke(
+        &engine,
+        planner,
+        host,
+        plan,
+        &options,
+        expected_invocation,
+        |run, _control| ready(run),
+    );
     engine.handle.block_on(engine.hosts.shutdown());
     outcome
 }
@@ -465,6 +486,7 @@ fn invoke(
     host: &mut dyn NodeHost,
     mut plan: Plan,
     options: &RunOptions,
+    expected_invocation: Option<&str>,
     ready: impl FnOnce(&ReadyRun, &Arc<RunControl>),
 ) -> Result<RunOutcome, RunError> {
     if options.recover
@@ -543,7 +565,14 @@ fn invoke(
             answerer.abort();
         }
     };
-    let started = prepare(engine, planner, &plan, options, &digest);
+    let started = prepare(
+        engine,
+        planner,
+        &plan,
+        options,
+        &digest,
+        expected_invocation,
+    );
     let (folder, prior) = match started {
         Ok(started) => started,
         Err(error) => {
@@ -729,6 +758,7 @@ fn prepare(
     plan: &Plan,
     options: &RunOptions,
     digest: &str,
+    expected_invocation: Option<&str>,
 ) -> Result<(RunFolder, Vec<serde_json::Value>), RunError> {
     // The run holds the store's lock from here on (spec/store.md §6): a prune that holds it past
     // the wait refuses the run before anything of it is written.
@@ -737,13 +767,13 @@ fn prepare(
             "the cache is being pruned (grida-fx cache prune); run again when it ends".into(),
         )
     })?;
-    let folder = if options.existing {
+    let folder = if options.existing || expected_invocation.is_some() {
         RunFolder::lock_existing(&options.folder, &options.label)
     } else {
         RunFolder::lock(&options.folder, &options.label)
     }
     .map_err(|refused| RunError::Refused(refused.0))?;
-    if options.existing && !folder.plan_path().is_file() {
+    if (options.existing || expected_invocation.is_some()) && !folder.plan_path().is_file() {
         return Err(RunError::Refused(format!(
             "{} no longer holds a run",
             options.label
@@ -753,14 +783,6 @@ fn prepare(
         .map_err(|refused| RunError::Refused(refused.0))?;
     crate::folder::check_mode(&options.folder, &options.label, engine.stand_in_run())
         .map_err(|refused| RunError::Refused(refused.0))?;
-    if let Some(index) = &options.index {
-        index.record(&options.folder).map_err(|error| {
-            RunError::Refused(format!(
-                "cannot record {} in the project's run index: {error}",
-                options.label
-            ))
-        })?;
-    }
     let events_label = in_folder(&options.label, "events.jsonl");
     // The reader's sentences name `events.jsonl`; the folder says which one.
     let (prior, torn) =
@@ -770,6 +792,21 @@ fn prepare(
                 format!("{}: {message}", options.label),
             ))
         })?;
+    if let Some(expected) = expected_invocation {
+        let invocation = prior
+            .iter()
+            .rfind(|event| {
+                event.get("event").and_then(serde_json::Value::as_str) == Some("run_started")
+            })
+            .and_then(|event| event.get("invocation_id"))
+            .and_then(serde_json::Value::as_str);
+        if invocation != Some(expected) {
+            return Err(RunError::Refused(format!(
+                "{} changed invocations while preparing to resume; inspect the record and try again",
+                options.label
+            )));
+        }
+    }
     if torn {
         crate::stderr::line(format_args!(
             "note: {events_label} ended in a line an earlier invocation did not finish writing; \
@@ -784,6 +821,14 @@ fn prepare(
             "{} holds a run of another workflow or other inputs; choose a new folder",
             options.label
         )));
+    }
+    if let Some(index) = &options.index {
+        index.record(&options.folder).map_err(|error| {
+            RunError::Refused(format!(
+                "cannot record {} in the project's run index: {error}",
+                options.label
+            ))
+        })?;
     }
     folder.sweep();
     engine.store.sweep();
@@ -876,6 +921,7 @@ struct Running {
 enum Message {
     Done(Box<Done>),
     Interrupted,
+    PauseRequested,
     /// A stand-in run's answerer is gone ([`crate::stand_in::StandIn::lost`]).
     AnswererLost,
     /// A workflow waiting step has accepted an answer or reached its deadline.
@@ -1087,7 +1133,9 @@ impl Scheduler<'_> {
             Ok(stopped) => stopped,
             Err(fault) => return Err(self.fault(fault)),
         };
-        if stopped.is_some() || self.interrupted() {
+        let ordinary_stop =
+            stopped.is_some() && (!self.parked || self.services.control.begin_parking());
+        if self.interrupted() || ordinary_stop {
             self.drain();
         }
         // Finalization cannot race still-running calls or tasks, including calls left by a
@@ -1132,6 +1180,7 @@ impl Scheduler<'_> {
                 failed: self.failed.clone(),
                 outputs: IndexMap::new(),
                 cancelled: true,
+                paused: false,
             });
         }
         let expansion = final_expansion
@@ -1145,6 +1194,7 @@ impl Scheduler<'_> {
     fn drive(&mut self, first: Expansion) -> Result<Option<String>, Error> {
         let mut next = Some(first);
         loop {
+            self.check_log()?;
             if self.interrupted() {
                 return Ok(None);
             }
@@ -1155,6 +1205,7 @@ impl Scheduler<'_> {
             if self.options.require_estimates
                 && !self.engine.stand_in_run()
                 && !self.options.recover
+                && !self.services.control.pause_requested()
             {
                 let strict = Plan {
                     expansion: expansion.clone(),
@@ -1208,46 +1259,55 @@ impl Scheduler<'_> {
                 // What reads them settles once they are known.
                 continue;
             }
-            let check = self.gate.check_with_ledger(
-                &expansion,
-                &self.planner.results,
-                &self.ledger,
-                self.options.yes_up_to.filter(|_| !self.options.recover),
-            );
-            for planned in &check.planned {
-                self.emit(planned)?;
-            }
-            let mut result_ready = false;
-            // Nothing new starts once a person stopped the run.
-            if check.stop.is_none() && !self.interrupted() {
-                let ready =
-                    schedule::ready(&expansion, &self.planner.results, &running, &self.groups);
-                for id in ready {
-                    if let Some(instance) = expansion.instances.get(&id) {
-                        result_ready |= !self.start(instance)?;
-                    }
-                }
-            }
-            if result_ready {
-                continue;
-            }
-            if self.running.is_empty() {
-                if check.stop.is_some() {
-                    return Ok(check.stop);
-                }
-                if self.awaiting.is_empty() {
+            if self.services.control.pause_requested() {
+                if self.running.is_empty() {
                     return Ok(None);
                 }
-                if !self.options.wait_for_answers {
-                    self.parked = true;
-                    return Ok(Some(format!(
-                        "awaiting external answers for {}",
-                        self.awaiting
-                            .keys()
-                            .map(String::as_str)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )));
+            } else {
+                let check = self.gate.check_with_ledger(
+                    &expansion,
+                    &self.planner.results,
+                    &self.ledger,
+                    self.options.yes_up_to.filter(|_| !self.options.recover),
+                );
+                for planned in &check.planned {
+                    self.emit(planned)?;
+                }
+                let mut result_ready = false;
+                // Nothing new starts once a person stopped the run.
+                if check.stop.is_none() && !self.interrupted() {
+                    let ready =
+                        schedule::ready(&expansion, &self.planner.results, &running, &self.groups);
+                    for id in ready {
+                        if let Some(instance) = expansion.instances.get(&id) {
+                            result_ready |= !self.start(instance)?;
+                        }
+                    }
+                }
+                if result_ready {
+                    continue;
+                }
+                if self.running.is_empty() {
+                    if self.services.control.pause_requested() {
+                        continue;
+                    }
+                    if check.stop.is_some() {
+                        return Ok(check.stop);
+                    }
+                    if self.awaiting.is_empty() {
+                        return Ok(None);
+                    }
+                    if !self.options.wait_for_answers {
+                        self.parked = true;
+                        return Ok(Some(format!(
+                            "awaiting external answers for {}",
+                            self.awaiting
+                                .keys()
+                                .map(String::as_str)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )));
+                    }
                 }
             }
             let messages = self.wait_for_work()?;
@@ -1267,7 +1327,7 @@ impl Scheduler<'_> {
                         }
                     }
                     Message::AnswererLost => lost = true,
-                    Message::Interrupted | Message::RequestResolved => {}
+                    Message::Interrupted | Message::PauseRequested | Message::RequestResolved => {}
                 }
             }
             // A call that met the loss first has already stopped the run with it.
@@ -1320,7 +1380,7 @@ impl Scheduler<'_> {
 
     /// Dispatches a job or opens a waiting step. `false` means an immediate result needs expansion.
     fn start(&mut self, instance: &Instance) -> Result<bool, Error> {
-        let Some(admission) = self.services.control.admit() else {
+        let Some(admission) = self.services.control.admit_step() else {
             return Ok(true);
         };
         if instance.ty.is_await() {
@@ -1402,13 +1462,21 @@ impl Scheduler<'_> {
     /// Waits for at least one message, then takes every one already there.
     fn wait(&mut self) -> Vec<Message> {
         let mut messages = Vec::new();
-        if let Some(message) = self.receiver.blocking_recv() {
+        let handle = self.engine.handle.clone();
+        if let Some(message) = handle.block_on(self.recv()) {
             messages.push(message);
         }
         while let Ok(message) = self.receiver.try_recv() {
             messages.push(message);
         }
         messages
+    }
+
+    async fn recv(&mut self) -> Option<Message> {
+        tokio::select! {
+            message = self.receiver.recv() => message,
+            () = self.services.control.pause_changed() => Some(Message::PauseRequested),
+        }
     }
 
     /// Takes a completion in: its group place back, its result kept, its failure counted. Its
@@ -1489,10 +1557,18 @@ impl Scheduler<'_> {
         self.emit_scopes(&expansion)?;
         in_listing_order(&mut self.failed, &expansion);
         let mut stopped = stopped;
-        let mut incomplete =
-            stopped.is_some() || expansion.outputs.values().any(Val::contains_pending);
-        if stopped.is_none() {
-            for (id, waits) in schedule::stuck(&expansion, &self.planner.results) {
+        let remaining = schedule::stuck(&expansion, &self.planner.results);
+        let outputs_pending = expansion.outputs.values().any(Val::contains_pending);
+        let pause_pending = self.services.control.pause_requested()
+            && self.failed.is_empty()
+            && (stopped.is_none() || self.parked)
+            && (!remaining.is_empty() || !expansion.pending.is_empty() || outputs_pending);
+        if pause_pending && self.parked {
+            stopped = None;
+        }
+        let mut incomplete = pause_pending || stopped.is_some() || outputs_pending;
+        if stopped.is_none() && !pause_pending {
+            for (id, waits) in remaining {
                 let path = expansion
                     .instances
                     .get(&id)
@@ -1522,22 +1598,32 @@ impl Scheduler<'_> {
         let outputs = existing_outputs(&expansion.outputs);
         self.check_log()?;
         let charged = self.ledger.charged();
-        self.emit_terminal(&Event::RunFinished {
-            ok,
-            incomplete,
-            stopped: stopped.clone(),
-            awaiting: if self.parked {
-                self.awaiting.values().cloned().collect()
-            } else {
-                Vec::new()
-            },
-            charged_usd: charged,
-            failed: self.failed.iter().map(|(id, _)| id.clone()).collect(),
-            outputs: outputs
-                .iter()
-                .map(|(name, value)| (name.clone(), crate::events::encode(value)))
-                .collect(),
-        })?;
+        let paused = pause_pending && stopped.is_none();
+        let recorded_outputs = outputs
+            .iter()
+            .map(|(name, value)| (name.clone(), crate::events::encode(value)))
+            .collect();
+        let terminal = if paused {
+            Event::RunPaused {
+                charged_usd: charged,
+                outputs: recorded_outputs,
+            }
+        } else {
+            Event::RunFinished {
+                ok,
+                incomplete,
+                stopped: stopped.clone(),
+                awaiting: if self.parked {
+                    self.awaiting.values().cloned().collect()
+                } else {
+                    Vec::new()
+                },
+                charged_usd: charged,
+                failed: self.failed.iter().map(|(id, _)| id.clone()).collect(),
+                outputs: recorded_outputs,
+            }
+        };
+        self.emit_terminal(&terminal)?;
         Ok(RunOutcome {
             folder: self.options.folder.clone(),
             ok,
@@ -1547,6 +1633,7 @@ impl Scheduler<'_> {
             failed: self.failed.clone(),
             outputs,
             cancelled: false,
+            paused,
         })
     }
 
@@ -1877,6 +1964,7 @@ while (message := read()) is not None:
                     takes_file: String::new(),
                     ..RunOptions::default()
                 },
+                None,
                 |_ready, control| {
                     if cancelled {
                         let control = Arc::clone(control);

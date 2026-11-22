@@ -69,7 +69,7 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Recover a result | Collect the original provider task through a live resume, without a new generation charge. `--recover` permits checking settled tasks whose generation success is unconfirmed and blocks new managed provider calls. |
 | Cancel | Ask the active invocation to stop. Completed work remains; local accounting can conservatively charge a full reservation without knowing the provider's final outcome. Exact-target CLI/Python/JavaScript control is implemented in source under spec/control.md. |
 | Terminate | Proposed explicit force operation with weaker cleanup guarantees; stopping local execution cannot prove remote termination. |
-| Pause | A future, explicitly defined suspension boundary from which work can continue. There is no pause operation today; cancellation is not a pause acknowledgment. |
+| Pause | Close admission to new steps, let active steps finish, and record a durable boundary. Resume starts a new invocation of the same attempt. |
 | Revise | Change authored inputs or workflow choices and plan again. Today this generally needs a new run folder; valid unchanged work can still be reused from the same cache. |
 | Take / reroll / pick | A take identifies an alternative. Reroll selects a later take for the next execution; pick selects a take. Neither command executes it immediately. |
 | Waiting step | A workflow requests a schema-defined answer for one concrete occurrence. An exact run and request ID select it from any supported review surface. |
@@ -265,11 +265,15 @@ final invoice. A later resume can repeat an uncertain plain synchronous call;
 recorded resumable jobs retain their job-reconciliation protection.
 `--yes-up-to` gates later phases only; it does not pause on demand.
 
-**Deferred pause:** the agreed intent is to stop new steps, let active steps
-finish, then persist a resumable boundary. Active steps may still spend while
-draining. Define acknowledgment versus reaching that boundary and recovery after
-process exit before implementation. OS process suspension is not durable pause.
-Explicit force termination is a separate operation, also not implemented.
+**Durable pause:** `pause RUN --invocation ID --wait --json` waits for the
+selected invocation to finish its active steps and record `paused`. Without
+`--wait`, acceptance means step admission has closed and active steps may
+still run under existing spending authorization. Resume with `resume RUN`
+when saved context can reproduce the plan and verify any files bound by defaults.
+Supply the original options and working directory via `run` when saved context
+is incomplete. Python and JavaScript expose the same operations. The provider-free
+[run-control harness](tools/check_control.py) verifies reuse after process exit,
+interruption during drain, and request targeting.
 
 ### "Change what has not started yet"
 
@@ -427,8 +431,8 @@ promise through documentation alone.
 | AR-03 | "Run it locally without AI." | Current: ordinary Python or TypeScript nodes, and offline stand-ins from a `.py` or `.ts` file or in-process from either SDK. | A normal code-only workflow completes and its artifacts verify at $0; stand-in data stays separate from paid data. |
 | AR-04 | "Show me while it runs." | Current in source: project service, early run URL, polling viewer and shared observation reader; standalone mode also remains. The viewer tab signals verified execution. SDK runs return after completion. | Agent reports a verified URL; human and independent observer see the same record; project inspection survives run completion, while standalone lifetime stays explicit. The [browser check](tools/check_viewer_browser.mjs) covers the activity icon and reduced motion. |
 | AR-05 | "Stop this run now." | Implemented in source: exact-target CLI/Python/JavaScript cancellation, invocation guard, optional verified wait and shared signal semantics. | Target and wait stay bound across resume; acceptance and finalization serialize; duplicate/lost requests are safe; waiter timeouts never force; verified local cleanup and unknown external outcomes remain separate. |
-| AR-06 | "Continue that exact run." | Current in source: require-existing named resume and explicit-folder same-plan resume. | Finished valid work is reused; plan/mode mismatch and an existing writer are refused; history distinguishes invocations. |
-| AR-07 | "Pause and wait for me." | Proposed; cancellation and later-phase thresholds only cover narrower intents. | Explicit request/acknowledgment/boundary semantics; active work and reservations accounted for; resume survives the documented lifetime. |
+| AR-06 | "Continue that exact run." | Current in source: exact `resume RUN` using verifiable saved context and the explicit same-plan `run` resume forms. | Finished valid work is reused and history distinguishes invocations. [CLI tests](crates/grida-fx/tests/cli.rs) cover changed inputs, including files bound by defaults from the original working directory. A plan or mode mismatch or an existing writer prevents resume. |
+| AR-07 | "Pause and wait for me." | Current in source under [#166](https://github.com/gridaco/fx/issues/166). Pause drains admitted steps and retains the same attempt across runner exit. | Explicit request/acknowledgment/boundary semantics; active work and reservations accounted for; resume survives the documented lifetime. |
 | AR-08 | "Change what has not started yet." | Partial: revise/replan/new run with cache reuse. Active mutation proposed. | Unchanged work is retained where identities match; an edit racing dispatch cannot silently change already accepted work; history and cost remain attributable. |
 | AR-09 | "Keep this result; try another there." | Current takes, reroll and pick; their `next` line repeats the run from its record (conformance `run-repeat`). | Selected recorded instance is addressed exactly; no command implies immediate execution; next-plan impact and possible cost are visible. |
 | AR-10 | "Ask before the next expensive part." | Current later-phase `--yes-up-to`, within a separate ceiling. | Incomplete run can continue with an approved threshold; workflow-authored human decisions are covered separately in AR-31. |
@@ -766,7 +770,7 @@ cover resolution from exact recorded evidence while the service is stopped.
   completion, result and recoverable failure conditions.
 - **Observation versus control:** public observation is implemented; local
   cancellation is implemented in source under [its contract](spec/control.md).
-  Termination, pause, active revision and remote execution control remain later
+  Termination, active revision and remote execution control remain later
   contracts. Keep their ownership distinct even if one client presents them.
 - **Long-lived interaction:** project run URLs now survive execution and service
   restart while records are retained. Agents still need to distinguish server

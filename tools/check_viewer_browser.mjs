@@ -237,7 +237,30 @@ try {
   await waitForIcon(activePage, "favicon-active.svg");
   await activePage.emulateMedia({ reducedMotion: "no-preference" });
   await waitForIcon(activePage, "favicon-active-dim.svg");
-  activity = { active: false, state: "succeeded", events: [...activity.events, { ...start, event: "run_finished", ok: true }] };
+  activity = { active: true, state: "pausing", events: [...activity.events, { ...start, event: "pause_requested", source: "cli" }] };
+  const runBar = activePage.getByRole("navigation", { name: "Workflow location" });
+  await runBar.getByText("pausing", { exact: true }).waitFor();
+  await activePage.waitForFunction(() => document.title.startsWith("Pausing ·"));
+  if (process.env.FX_VIEWER_PAUSING_SCREENSHOT)
+    await activePage.screenshot({ path: process.env.FX_VIEWER_PAUSING_SCREENSHOT });
+  activity.active = false;
+  await runBar.getByText("unfinished", { exact: true }).waitFor();
+  assert.equal(await runBar.getByText("paused", { exact: true }).count(), 0);
+  activity = { active: true, state: "unfinished", events: [...activity.events, { ...start, invocation_id: "recovered" }] };
+  await waitForIcon(activePage, "favicon-active-dim.svg");
+  const recovered = { ...start, invocation_id: "recovered" };
+  activity = { active: false, state: "paused", events: [...activity.events,
+    { ...recovered, event: "pause_requested", source: "cli" }, { ...recovered, event: "run_paused", charged_usd: 0, outputs: {} }] };
+  await runBar.getByText("paused", { exact: true }).waitFor();
+  await activePage.waitForFunction(() => document.title.startsWith("Paused ·"));
+  await waitForIcon(activePage, "favicon.svg");
+  if (process.env.FX_VIEWER_PAUSED_SCREENSHOT)
+    await activePage.screenshot({ path: process.env.FX_VIEWER_PAUSED_SCREENSHOT });
+  const continued = { ...start, invocation_id: "continued" };
+  activity = { active: true, state: "unfinished", events: [...activity.events, continued] };
+  await waitForIcon(activePage, "favicon-active-dim.svg");
+  await runBar.getByText("unfinished", { exact: true }).waitFor();
+  activity = { active: false, state: "succeeded", events: [...activity.events, { ...continued, event: "run_finished", ok: true }] };
   await waitForIcon(activePage, "favicon.svg");
   activity = { active: true, state: "unfinished", events: [...activity.events, { ...start, invocation_id: "resumed" }] };
   await waitForIcon(activePage, "favicon-active-dim.svg");
@@ -251,7 +274,7 @@ try {
   await waitForIcon(activePage, "favicon.svg");
   assert.equal(await activePage.evaluate(() => sessionStorage.getItem("icon_on_exit")), origin + activePath + "favicon.svg");
   await activePage.close();
-  console.log("ok   active tab pulses beside a completed run and plan; reduced motion, owner loss, completion, resume and navigation");
+  console.log("ok   active tab pulses beside a completed run and plan; reduced motion, owner loss, pause, completion, resume and navigation");
 
   const authored = 'Prepare the "before" & "after" frames.';
   await page.route("**/plans/*/api/view", (route) => route.fulfill({ json: {

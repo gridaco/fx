@@ -178,7 +178,7 @@ export function parseRunExport(value: unknown): RunExport {
     || !Array.isArray(value.artifacts)) refuse("required export metadata is missing.");
   const view = parseViewerRun(inspectionShape(value.view));
   if (view.artifacts.some((item) => item.url !== null)) refuse("local or remote artifact URLs are forbidden in the inspection record.");
-  if (!["succeeded", "failed", "cancelled"].includes(view.state)) refuse("the recording is not terminal.");
+  if (!["succeeded", "failed", "cancelled", "awaiting", "paused"].includes(view.state)) refuse("the recording is not terminal.");
   if (view.charged_usd !== null && view.charged_usd < 0) refuse("the recorded charge is invalid.");
   if (view.estimate !== null && !isPrice(view.estimate)) refuse("the recorded estimate is invalid.");
   for (const note of view.notes ?? []) {
@@ -189,7 +189,7 @@ export function parseRunExport(value: unknown): RunExport {
   }
   if ((view.scopes ?? []).some((scope) => scope.source !== null)) refuse("workflow source locations are forbidden in the inspection record.");
   for (const node of view.nodes) {
-    if (!["pending", "succeeded", "failed", "skipped"].includes(node.state)
+    if (!["pending", "awaiting", "succeeded", "failed", "skipped"].includes(node.state)
       || (node.take !== undefined && (!Array.isArray(node.take) || !node.take.length || !node.take.every((part) => Number.isSafeInteger(part) && part >= 1)))
       || (node.key !== undefined && node.key !== null && typeof node.key !== "string")
       || (node.duration_ms !== null && !count(node.duration_ms)) || !["hit", "miss", null].includes(node.cache)) refuse("a recorded node is malformed or still running.");

@@ -227,9 +227,10 @@ FX 0.2 and later support `run TARGET --name NAME` (create-only) and
 older installations. Without a name or folder every command creates a fresh run record,
 even when cached. Names are scoped to recorded workflow ID/source within a project;
 do not overwrite or infer a new run from the last resumed time.
-Resume with the same target, inputs, routes, takes and execution mode, using
-`--resume NAME` or the same `--run` folder; a changed plan is refused. Prior arguments
-are not restored automatically. Put overlapping workflow inputs after `--`, for
+Use `grida fx resume RUN` if the installed version supports it and the record has
+enough execution context. For explicit reconstruction, supply the original target,
+inputs, routes and mode with `--resume NAME` or the same `--run` folder. FX checks the
+saved plan. Put overlapping workflow inputs after `--`, for
 example `run greeting --name baseline -- --name Ada`, or use an inputs file.
 Inspect `WORKFLOW_ID/NAME` for a precise named run, or an actual folder; a workflow
 ID selects newest-created evidence and refuses ambiguous recorded sources.
@@ -360,6 +361,13 @@ not prove process liveness, and a stopped viewer does not prove a stopped workfl
 
 ## Stop execution and verify cleanup
 
+Use `grida fx pause RUN --invocation INVOCATION_ID --wait --json` to let
+active steps finish and verify a durable pause. `pausing` means admission has
+closed and active steps may continue spending under existing approval. `paused`
+with `cleanup: complete` means the runner finished draining and released the run.
+Use `grida fx resume RUN` to continue the same attempt. For live runs, supply
+`--live` and the applicable spending approval. Check installed help for support.
+
 Check installed help before using `inspect --control` and `cancel`; older releases
 may lack these commands. Select an explicit run folder or exact `WORKFLOW_ID/NAME`.
 Never cancel a bare workflow ID or assume its newest run is the intended target.
@@ -392,8 +400,7 @@ control wait ends that wait. Choose a run folder to supervise a pending SDK run.
 Continue by repeating the original target/inputs/options with `--resume NAME` or
 the same `--run FOLDER`. Existing plan/mode checks and recorded spend remain.
 An explicit resume can repeat an uncertain plain synchronous paid call; resumable
-jobs retain their separate reconciliation protection. Cancellation is not pause;
-`pause` and `terminate` remain deferred.
+jobs retain their separate reconciliation protection.
 
 ## Read workflow values
 

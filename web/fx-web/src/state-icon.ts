@@ -5,7 +5,7 @@ export function stateIcon(state: string): StateIcon {
   if (["succeeded", "cached", "done"].includes(state)) return "succeeded";
   if (["failed", "blocked"].includes(state)) return "failed";
   if (state === "running") return "running";
-  if (state === "waiting") return "waiting";
+  if (state === "waiting" || state === "pausing") return "waiting";
   if (["cancelling", "cancelled", "interrupted"].includes(state)) return "cancelled";
   if (["skipped", "absent"].includes(state)) return "skipped";
   if (["maybe", "unexpanded"].includes(state)) return "maybe";

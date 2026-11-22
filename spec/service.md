@@ -385,6 +385,11 @@ plans in the same group. Older recorded running/unfinished runs remain visible
 without opening history; recorded state still does not prove process liveness.
 Resuming never promotes an old run as a new one.
 
+A verified draining owner after `pause_requested` displays as `pausing`. A
+recorded `run_paused` displays as `paused`, even with open external requests.
+Both stay visible outside collapsed history. The run's review controls continue
+to show pending requests and their original deadlines.
+
 For unfinished runs, the catalog displays `awaiting` while a locally recorded
 workflow request is pending. Once all recorded requests are answered or expired,
 it displays `unfinished` until an invocation records a new outcome. This

@@ -7,7 +7,7 @@ import { FxError } from "./errors.js";
 /** The engine's fx-run-control-v1 response. Wire fields retain lower_snake_case names. */
 export interface RunControlResult {
   readonly kind: "fx-run-control-v1";
-  readonly operation: "inspect" | "cancel";
+  readonly operation: "inspect" | "cancel" | "pause";
   readonly invocation_id: string | null;
   readonly outcome:
     | "inspected"
@@ -18,13 +18,14 @@ export interface RunControlResult {
     | "completed"
     | "error";
   readonly request_status: "accepted" | "not_accepted" | "unknown";
-  readonly recorded_state: "planned" | "unfinished" | "awaiting" | "succeeded" | "failed" | "cancelled" | "unknown";
+  readonly recorded_state: "planned" | "unfinished" | "awaiting" | "pausing" | "paused" | "succeeded" | "failed" | "cancelled" | "unknown";
   readonly cleanup: "pending" | "complete" | "unknown";
   readonly external_completion: "not_verified";
   readonly code?: string;
   readonly message?: string;
   readonly availability?: "available" | "unavailable" | "unsupported" | "unknown";
   readonly can_cancel?: boolean;
+  readonly can_pause?: boolean;
 }
 
 /** A structured control failure, retaining its stable code and complete result.
@@ -47,23 +48,25 @@ export class RunControlError extends FxError {
   }
 }
 
-/** Options of cancel. Relative targets start at cwd, as on the command line. */
+/** Options shared by pause and cancel. Relative targets start at cwd, as on the command line. */
 export interface CancelOptions extends CallOptions {
   /** Expected-current invocation guard. A successor is refused, never automatically selected. */
   readonly invocation?: string;
   /** Verify local completion, with a default timeout of thirty seconds. */
   readonly wait?: boolean;
   /** Positive integer followed by s, m or h (e.g. "5s"); requires wait: true. This bounds
-   * waiting only and never terminates the run or retracts an accepted cancellation. */
+   * waiting only. An accepted request remains in effect. */
   readonly timeout?: string;
 }
+
+export type PauseOptions = CancelOptions;
 
 const MAX_RESULT_BYTES = 16 * 1024;
 const REQUIRED = [
   "kind", "operation", "invocation_id", "outcome", "request_status", "recorded_state",
   "cleanup", "external_completion",
 ] as const;
-const OPTIONAL = ["code", "message", "availability", "can_cancel"];
+const OPTIONAL = ["code", "message", "availability", "can_cancel", "can_pause"];
 const ERROR_STATUS: Readonly<Record<string, number>> = {
   unavailable: 1,
   wait_timeout: 1,
@@ -80,19 +83,19 @@ const ERROR_STATUS: Readonly<Record<string, number>> = {
 const ENUMS: Readonly<Record<string, readonly string[]>> = {
   outcome: ["inspected", "accepted", "already_requested", "already_terminal", "finishing", "completed", "error"],
   request_status: ["accepted", "not_accepted", "unknown"],
-  recorded_state: ["planned", "unfinished", "awaiting", "succeeded", "failed", "cancelled", "unknown"],
+  recorded_state: ["planned", "unfinished", "awaiting", "pausing", "paused", "succeeded", "failed", "cancelled", "unknown"],
   cleanup: ["pending", "complete", "unknown"],
   external_completion: ["not_verified"],
 };
 
-function target(run: string): string {
+export function exactRunTarget(run: string): string {
   if (typeof run !== "string" || run === "" || run.startsWith("-") || run.includes("\0")) {
     throw new TypeError("run is a nonempty explicit run folder or exact WORKFLOW_ID/NAME, without a leading '-' or NUL");
   }
   return run;
 }
 
-function cancelOptions(options: CancelOptions): string[] {
+function controlOptions(options: CancelOptions): string[] {
   if (options.wait !== undefined && typeof options.wait !== "boolean") {
     throw new TypeError("wait is true or false");
   }
@@ -118,7 +121,7 @@ function cancelOptions(options: CancelOptions): string[] {
   return args;
 }
 
-function parseResult(done: Exit, operation: "inspect" | "cancel", wait: boolean): RunControlResult {
+function parseResult(done: Exit, operation: RunControlResult["operation"], wait: boolean): RunControlResult {
   if (Buffer.byteLength(done.stdout, "utf8") > MAX_RESULT_BYTES) {
     throw new Error("oversized result");
   }
@@ -132,8 +135,8 @@ function parseResult(done: Exit, operation: "inspect" | "cancel", wait: boolean)
   }
   for (const [name, field] of Object.entries(data)) {
     if (![...REQUIRED, ...OPTIONAL].includes(name)) continue;
-    if (name === "can_cancel") {
-      if (typeof field !== "boolean") throw new Error("can_cancel is not boolean");
+    if (name === "can_cancel" || name === "can_pause") {
+      if (typeof field !== "boolean") throw new Error(`${name} is not boolean`);
     } else if (name !== "invocation_id" || field !== null) {
       if (typeof field !== "string" || field === "" || field.length > (name === "invocation_id" ? 256 : 4096)) {
         throw new Error(`invalid ${name}`);
@@ -147,15 +150,15 @@ function parseResult(done: Exit, operation: "inspect" | "cancel", wait: boolean)
     throw new Error("unknown result enum");
   }
   if (data.outcome === "completed" && (data.invocation_id === null || data.cleanup !== "complete"
-    || !["awaiting", "succeeded", "failed", "cancelled"].includes(data.recorded_state as string))) {
+    || !["awaiting", "paused", "succeeded", "failed", "cancelled"].includes(data.recorded_state as string))) {
     throw new Error("completion lacks invocation, cleanup or terminal evidence");
   }
   if (operation === "inspect") {
     if (!["available", "unavailable", "unsupported", "unknown"].includes(data.availability as string) || typeof data.can_cancel !== "boolean") {
       throw new Error("missing or unknown inspection fields");
     }
-  } else if ("availability" in data || "can_cancel" in data) {
-    throw new Error("inspection fields on cancellation");
+  } else if ("availability" in data || "can_cancel" in data || "can_pause" in data) {
+    throw new Error("inspection fields on a control request");
   }
   if (data.outcome === "error") {
     if (ERROR_STATUS[data.code as string] !== done.status || !("message" in data)) {
@@ -171,15 +174,14 @@ function parseResult(done: Exit, operation: "inspect" | "cancel", wait: boolean)
 }
 
 async function control(
-  operation: "inspect" | "cancel", run: string, options: CallOptions, args: readonly string[], wait = false,
+  operation: RunControlResult["operation"], run: string, options: CallOptions, args: readonly string[], wait = false,
 ): Promise<RunControlResult> {
-  const verb = operation === "inspect" ? "inspect" : "cancel";
-  const done = await call([verb, target(run), ...args, "--json"], options);
+  const done = await call([operation, exactRunTarget(run), ...args, "--json"], options);
   let result: RunControlResult;
   try {
     result = parseResult(done, operation, wait);
   } catch {
-    throw failure(verb, done);
+    throw failure(operation, done);
   }
   if (result.outcome === "error") {
     throw new RunControlError(result, done);
@@ -196,5 +198,11 @@ export async function inspectControl(run: string, options: CallOptions = {}): Pr
 /** Request cancellation of one invocation. Aborting this control client only ends its wait;
  * an accepted cancellation remains effective in the separately owned runner. */
 export async function cancel(run: string, options: CancelOptions = {}): Promise<RunControlResult> {
-  return control("cancel", run, options, cancelOptions(options), options.wait === true);
+  return control("cancel", run, options, controlOptions(options), options.wait === true);
+}
+
+/** Stop admission of new steps and drain active work for one exact run.
+ * With `wait: true`, verify local completion and report the recorded outcome. */
+export async function pause(run: string, options: PauseOptions = {}): Promise<RunControlResult> {
+  return control("pause", run, options, controlOptions(options), options.wait === true);
 }

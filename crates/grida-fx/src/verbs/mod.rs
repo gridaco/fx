@@ -19,6 +19,7 @@ pub mod observe;
 pub mod planning;
 pub mod project;
 mod repeat;
+pub mod resume;
 pub mod run;
 mod run_catalog;
 mod run_set;

@@ -81,11 +81,10 @@ requires neither a running service nor a project: `observe RUN` reads a selected
 record directly. SDK `RunRecord` methods use that same direct reader, under
 [SDK run access](sdk.md).
 
-The separate [run-control contract](control.md) defines cancellation
-requests and completion verification. Observation endpoints remain read-only.
-Its additive `cancel_requested` event follows the unknown-event compatibility rule
-below. The bundled viewer derives cancellation intent from this event; its
-existing run-state enum remains unchanged.
+The separate [run-control contract](control.md) defines cancellation, pause and
+completion verification. Observation endpoints remain read-only. The bundled
+viewer derives cancellation intent from `cancel_requested`. The control events
+follow the unknown-event compatibility rule below.
 
 A workflow-authored [waiting step](waiting.md) records `waiting_request` for the
 instance and an invocation parked on external answers lists their IDs in
@@ -196,9 +195,12 @@ envelope; ignore an unfinished final line. An
 unreadable or blank complete line returns `invalid_record`; the observation interface never
 acknowledges corruption. Legacy summary readers may still show a readable prefix.
 Readers never repair the log.
-`run_finished` and `run_cancelled` terminate an invocation, not observation of the
-folder. There is no stream-closed or process-alive promise. Consumers decide when
-to stop, or remain attached to observe a later resume.
+`run_finished`, `run_cancelled` and `run_paused` terminate an invocation. Consumers
+can stay attached to observe a later resume. A `pause_requested` records accepted
+intent. The ordinary inspection and loopback viewer projections report `pausing`
+when they also verify that invocation's current owner. A durable `run_paused`
+reports `paused`, retains pending and awaiting steps for resume, and publishes
+the workflow outputs already available at that boundary.
 
 ### Compatibility and errors
 

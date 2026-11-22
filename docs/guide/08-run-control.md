@@ -4,6 +4,30 @@
 of the project service, including SDK launches, `--no-view` and projectless runs.
 `stop` shuts down the inspection service; it does not stop workflow execution.
 
+## Pause and resume at a step boundary
+
+```sh
+grida fx pause gallery/baseline --wait --json
+grida fx resume gallery/baseline
+```
+
+Pause closes admission to new steps. Steps already underway can finish,
+including calls covered by their existing spending authorization. A reply
+with `pausing` means FX has accepted the request. A reply with `paused` and
+`cleanup: complete` verifies that the invocation reached the durable pause
+boundary and released the run. `cancel` can interrupt the drain if active work
+is taking too long. Any pending workflow request retains its deadline and can
+accept a reply while the runner is away.
+
+Resume starts a new invocation of the same run attempt. FX plans from the
+recorded working directory and verifies the same plan, mode and any files
+bound by input defaults. For a live run,
+pass `--live` with the applicable spending approval as on `run`. Include
+`--require-estimates` to require forecast coverage for the resumed work. If the record
+lacks execution context, repeat the original options with `run TARGET --resume
+NAME` or `run TARGET --run FOLDER`. Python and JavaScript expose `pause` and
+`resume` for the same jobs. Python also has `pause_async` and `resume_async`.
+
 ## Select, request, verify
 
 ```sh
@@ -17,7 +41,7 @@ The target is an explicit run folder, such as `runs/example`, or an exact
 Use an absolute folder path if a relative path could also identify a named run.
 
 `inspect --control` reports the current invocation, recorded state, verified local
-control availability and `can_cancel`. It never runs author code or calls providers.
+control availability, `can_cancel` and `can_pause`. It never runs author code or calls providers.
 It is separate from ordinary `inspect --json` and cannot serve or open a browser.
 
 For agents, retain the inspected invocation and guard the request:
@@ -114,7 +138,6 @@ operation separately. There is no live SDK viewer handle.
 Repeat the original target, inputs and options with `--resume NAME` or the same
 `--run FOLDER`. FX requires the same plan and execution mode, preserves recorded
 spend and reuses valid saved work. It restores no old source or input options.
-Cancellation is not durable pause. `pause` and `terminate` remain deferred.
 
 The [provider-free harness](../../fixtures/control/) demonstrates timeout and resume.
 The [normative contract](../../spec/control.md) defines outcomes, error codes,

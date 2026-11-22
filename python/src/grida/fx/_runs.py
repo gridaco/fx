@@ -28,6 +28,8 @@ _STATES = {
     "planned",
     "unfinished",
     "awaiting",
+    "pausing",
+    "paused",
     "succeeded",
     "failed",
     "incomplete",

@@ -23,6 +23,8 @@ test("the SDK's surface", () => {
     "inspectControl",
     "loadRun",
     "cancel",
+    "pause",
+    "resume",
     "listRuns",
     "removeRuns",
     "engineVersion",

@@ -554,6 +554,38 @@ fn filters_take_dated_runs_only_and_say_what_they_passed_over() {
 }
 
 #[test]
+fn removal_accepts_pause_states_and_previews_a_paused_run() {
+    let project = Project::new();
+    let relative = "runs/case/2026-10-01-1";
+    let folder = project.run_at(relative, "case", &made("2026-10-01T00:00:00.000Z", None));
+    let log = folder.join("events.jsonl");
+    let started = fs::read_to_string(&log).unwrap();
+    let paused = format!(
+        "{started}{}\n",
+        json!({"event": "run_paused", "charged_usd": 0.25, "outputs": {}})
+    );
+    fs::write(&log, &paused).unwrap();
+
+    let output = project.fx(&[
+        "runs", "remove", "--state", "pausing", "--state", "paused", "--json",
+    ]);
+    assert_eq!(status(&output), 0, "{}", text(&output.stderr));
+    let preview = json_of(&output);
+    conforms(&preview, "fx-run-removal-v1");
+    let rows = preview["runs"].as_array().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["folder"], relative);
+    assert_eq!(rows[0]["state"], "paused");
+    assert_eq!(rows[0]["charged_usd"], 0.25);
+    assert_eq!(rows[0]["outcome"], "would_remove");
+
+    fs::write(log, format!("{paused}{started}")).unwrap();
+    let row = project.row(relative);
+    assert_eq!(row["state"], "unfinished");
+    assert!(row["charged_usd"].is_null());
+}
+
+#[test]
 fn an_empty_named_claim_is_found_by_its_name() {
     let project = Project::new();
     let claim = project.root.join(project.named("case", "draft"));

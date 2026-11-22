@@ -116,10 +116,10 @@ function Heading({ title, state, meta, id, kind = "id" }: { title: string; state
 
 function Dot() { return <span className="fx-bar-dot" aria-hidden="true">·</span>; }
 
-/** How long the run took, after a dot; an unfinished one counts up from its last record. */
+/** How long the run took, after a dot; an unfinished invocation counts up from its last record. */
 function RunTime({ run }: { run: ViewerRun }) {
   const recorded = run.recorded_at ? Date.parse(run.recorded_at) : NaN;
-  const live = run.state === "unfinished" && !Number.isNaN(recorded);
+  const live = ["unfinished", "pausing"].includes(run.state) && !Number.isNaN(recorded);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!live) return;
@@ -305,13 +305,15 @@ function WorkflowView() {
       favicon.dispose();
     };
   }, [reviews]);
-  const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling } = state;
+  const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling, runActive } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
   const [about, setAbout] = useState(false);
   useEffect(() => { setAbout(false); reviews.close(); }, [scope, reviews]);
   const select = (id: string | null) => { reviews.close(); setAbout(false); controller.select(id); };
   const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
-  const run = view?.kind === "fx-viewer-run-v1" ? view : null;
+  const run = view?.kind === "fx-viewer-run-v1"
+    ? view.state === "pausing" && !runActive ? { ...view, state: "unfinished" } : view
+    : null;
   const hasReviews = run?.nodes.some(node => /^fx\/await@0*1$/.test(node.uses ?? "")) ?? false;
   const reviewOpen = hasReviews && reviewStep !== null;
   const reviewCards = useSyncExternalStore(reviews.subscribe, reviews.getCards);
@@ -330,7 +332,8 @@ function WorkflowView() {
   const description = view?.workflow.description?.trim()
     || (plan ? `Inspect the execution plan for ${workflowTitle}.`
       : run ? `Inspect run ${run.run_name} for ${workflowTitle}.` : undefined);
-  const runTitle = pendingAnswers === 1 ? "Awaiting answer" : pendingAnswers > 1 ? `Awaiting ${pendingAnswers} answers` : "Run";
+  const runTitle = pendingAnswers === 1 ? "Awaiting answer" : pendingAnswers > 1 ? `Awaiting ${pendingAnswers} answers`
+    : runStatus === "paused" ? "Paused" : runStatus === "pausing" ? "Pausing" : "Run";
   usePageMetadata([run ? runTitle : plan ? "Plan" : undefined, workflowTitle, run?.run_name], description);
   const selectedNote = graph.notes?.find((note) => note.id === selected);
   const selectedNode = graph.nodes.find((node) => node.id === selected);

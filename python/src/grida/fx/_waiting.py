@@ -9,8 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from grida.fx._api import FxError, _call, _Exit, _failure, _no_running_loop
-from grida.fx._control import _target
+from grida.fx._api import FxError, _call, _Exit, _failure, _no_running_loop, _run_target
 from grida.fx._protocol import encode_message
 
 
@@ -71,7 +70,7 @@ def _is_request(value: Any) -> bool:
 async def _request_inspection(
     run: str | Path, cwd: str | Path | None, *options: str
 ) -> dict[str, Any]:
-    args = ["inspect", "--requests", "--json", *options, "--", _target(run)]
+    args = ["inspect", "--requests", "--json", *options, "--", _run_target(run)]
     done = await _call(args, Path(cwd or ".").absolute())
     if done.status != 0:
         raise _failure("inspect", done)
@@ -117,7 +116,7 @@ async def respond_async(
     run: str | Path, request_id: str, answer: Any, *, cwd: str | Path | None = None
 ) -> dict[str, Any]:
     """Submit a JSON value and return the durably answered request."""
-    args = ["respond", "--source=sdk", "--json=-", "--", _target(run), request_id]
+    args = ["respond", "--source=sdk", "--json=-", "--", _run_target(run), request_id]
     with tempfile.TemporaryFile() as stream:
         stream.write(encode_message(answer))
         stream.seek(0)

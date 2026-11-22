@@ -1617,11 +1617,12 @@ async fn observation_reports_active_owner_and_clears_it_without_new_events() {
         &tokio::runtime::Handle::current(),
     )
     .unwrap();
+    log.append(json!({"event":"pause_requested","source":"cli","invocation_id":invocation}));
     let snapshot = get("/api/snapshot").await.unwrap();
     assert_eq!(snapshot.headers()[RUN_ACTIVE_HEADER], "1");
     let snapshot: Value =
         serde_json::from_slice(&to_bytes(snapshot.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(snapshot["view"]["state"], "unfinished");
+    assert_eq!(snapshot["view"]["state"], "pausing");
     let after = snapshot["cursor"].as_str().unwrap();
     let batch = format!("/api/events?after={after}&plan={plan}&invocation_id={invocation}");
     assert_eq!(get(&batch).await.unwrap().headers()[RUN_ACTIVE_HEADER], "1");
@@ -1642,6 +1643,11 @@ async fn observation_reports_active_owner_and_clears_it_without_new_events() {
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(response["events"], json!([]));
     assert_eq!(response["cursor"], after);
+    let snapshot = get("/api/snapshot").await.unwrap();
+    assert!(!snapshot.headers().contains_key(RUN_ACTIVE_HEADER));
+    let snapshot: Value =
+        serde_json::from_slice(&to_bytes(snapshot.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(snapshot["view"]["state"], "unfinished");
 }
 
 #[tokio::test]
@@ -1718,6 +1724,30 @@ fn running_cost_follows_settlements_and_resume_baseline() {
             .charged_usd,
         None
     );
+}
+
+#[test]
+fn pause_retains_known_outputs_and_waiting_requests_for_resume() {
+    let fixture = Fixture::new("image/png");
+    let mut log = FileForEvents::new(&fixture.root());
+    log.append(json!({"event":"run_started", "invocation_id":"pause-owner"}));
+    log.append(
+        json!({"event":"node_started", "id":"draw#1", "path":"draw", "with":{}, "reads":[]}),
+    );
+    log.append(json!({"event":"waiting_request", "id":"draw#1", "request_id":"a".repeat(64), "request_status":"pending"}));
+    log.append(json!({
+        "event": "run_paused", "invocation_id": "pause-owner", "charged_usd": 0.6,
+        "outputs": {"early": {"value": "ready"}},
+    }));
+    let view = read::read_run(&fixture.root()).unwrap().document;
+    assert_eq!(view.state, "paused");
+    assert_eq!(view.charged_usd, Some(0.6));
+    assert_eq!(view.outputs["early"], json!({"value": "ready"}));
+    assert_eq!(view.nodes[0].state, "awaiting");
+    log.append(json!({"event":"run_started", "invocation_id":"resumed"}));
+    let view = read::read_run(&fixture.root()).unwrap().document;
+    assert_eq!(view.state, "unfinished");
+    assert_eq!(view.nodes[0].state, "awaiting");
 }
 
 #[test]

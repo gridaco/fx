@@ -177,6 +177,17 @@ describe("portable inspection boundary", () => {
     const live = fixture(); live.view.nodes[0].state = "running";
     expect(() => parseRunExport(live)).toThrow("still running");
   });
+  test("accepts paused and parked recordings with a historical waiting step", () => {
+    for (const state of ["paused", "awaiting"]) {
+      const value = fixture();
+      value.view.state = state;
+      value.view.nodes[0].state = "awaiting";
+      expect(parseRunExport(value).view.state).toBe(state);
+    }
+    const draining = fixture();
+    draining.view.state = "pausing";
+    expect(() => parseRunExport(draining)).toThrow("not terminal");
+  });
 });
 
 describe("static recording controller", () => {

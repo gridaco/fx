@@ -21,7 +21,7 @@
 //!   files cannot be read, an index or catalog entry that cannot be read, an external folder that
 //!   cannot be reached. `runs list` reports them as skipped; `cache prune` refuses on any.
 //!
-//! State (`fx-run-list-v1`): `planned`, `unfinished`, `succeeded`, `cancelled` as `inspect`
+//! State (`fx-run-list-v1`): `planned`, `unfinished`, `pausing`, `paused`, `succeeded`, `cancelled` as `inspect`
 //! reads them; inspect's `failed` split into `incomplete` (`ok: false, incomplete: true`, which a
 //! later invocation may finish) and `failed`; `empty` and `removing` for the leftovers; `missing`
 //! for an external folder that is gone.
@@ -642,13 +642,20 @@ fn read_recorded(folder: &Path) -> Result<Recorded, String> {
                 stopped = text(event, "stopped").map(str::to_string);
                 charged = event.get("charged_usd").filter(|c| c.is_number()).cloned();
             }
-            Some("run_cancelled") => {
-                state = "cancelled";
+            Some(event_name @ ("run_cancelled" | "run_paused")) => {
+                state = if event_name == "run_paused" {
+                    "paused"
+                } else {
+                    "cancelled"
+                };
                 stopped = None;
                 charged = event.get("charged_usd").filter(|c| c.is_number()).cloned();
             }
             _ => {}
         }
+    }
+    if state == "unfinished" && grida_fx_runtime::observation::is_pausing(folder, &events) {
+        state = "pausing";
     }
     let takes_file = plan
         .get("takes_file")

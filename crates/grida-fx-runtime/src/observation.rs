@@ -26,6 +26,37 @@ pub const BATCH_KIND: &str = "fx-run-event-batch-v1";
 const CURSOR_VERSION: &str = "fx1";
 const MAX_CURSOR_BYTES: usize = 2048;
 
+/// The plan and invocation with a recorded pause request and no terminal result.
+/// A live owner must be verified separately before reporting that it is draining.
+pub fn pending_pause(events: &[Value]) -> Option<(&str, &str)> {
+    let started = events
+        .iter()
+        .rposition(|event| event["event"] == "run_started")?;
+    let plan = events[started]["plan"].as_str()?;
+    let invocation = events[started]["invocation_id"].as_str()?;
+    let latest = events[started + 1..].iter().rfind(|event| {
+        event["plan"] == plan
+            && event["invocation_id"] == invocation
+            && matches!(
+                event["event"].as_str(),
+                Some(
+                    "pause_requested"
+                        | "cancel_requested"
+                        | "run_paused"
+                        | "run_cancelled"
+                        | "run_finished"
+                )
+            )
+    })?;
+    (latest["event"] == "pause_requested").then_some((plan, invocation))
+}
+
+/// Whether a run with a recorded pause request still has its draining invocation.
+pub fn is_pausing(folder: &Path, events: &[Value]) -> bool {
+    pending_pause(events)
+        .is_some_and(|(plan, invocation)| crate::control::is_executing(folder, plan, invocation))
+}
+
 /// A graph/run plan and exactly the events acknowledged by `cursor`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RunSnapshot {
@@ -453,6 +484,31 @@ mod tests {
 
     fn event(name: &str, invocation: &str) -> Value {
         json!({"kind": EVENTS_KIND, "event": name, "invocation_id": invocation, "plan": "a".repeat(64), "offset_ms": 0})
+    }
+
+    #[test]
+    fn pending_pause_is_bound_to_the_latest_unfinished_invocation() {
+        let start = event("run_started", "one");
+        let pause = event("pause_requested", "one");
+        assert_eq!(
+            pending_pause(&[start.clone(), pause.clone()]),
+            Some((start["plan"].as_str().unwrap(), "one"))
+        );
+        for outcome in [
+            "cancel_requested",
+            "run_paused",
+            "run_finished",
+            "run_cancelled",
+        ] {
+            assert_eq!(
+                pending_pause(&[start.clone(), pause.clone(), event(outcome, "one")]),
+                None
+            );
+        }
+        assert_eq!(
+            pending_pause(&[start, event("run_started", "two"), pause]),
+            None
+        );
     }
 
     fn append(root: &Path, event: &Value) {

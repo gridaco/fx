@@ -64,14 +64,15 @@ impl Scheduler<'_> {
     /// Wait for either an ordinary worker/control message or an independently written answer.
     /// Use the same receiver while waiting so a cancellation does not have to wait for a deadline.
     pub(super) fn wait_for_work(&mut self) -> Result<Vec<Message>, Error> {
-        if self.awaiting.is_empty() {
+        if self.awaiting.is_empty() || self.services.control.pause_requested() {
             return Ok(self.wait());
         }
         loop {
             // Charging and dispatch use this runner. A write to the run folder can arrive from
             // a different process with no service or connection to the attached runner.
-            let message = self.engine.handle.block_on(async {
-                tokio::time::timeout(Duration::from_millis(200), self.receiver.recv()).await
+            let handle = self.engine.handle.clone();
+            let message = handle.block_on(async {
+                tokio::time::timeout(Duration::from_millis(200), self.recv()).await
             });
             match message {
                 Ok(Some(message)) => {
