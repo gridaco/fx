@@ -12,8 +12,11 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-22
+
 ### Added
 
+- Download a standalone `grida-fx` executable for macOS or Linux from GitHub Releases, with a checksum for each supported target. [#156](https://github.com/gridaco/fx/issues/156)
 - Workflows can request external input with `fx/await@1` and `with.schema`. An SDK can supply a promptless value, or a person can review a question and select an exact file. The viewer renders scalar enums as pickers, marks pending requests on the run and project home, and counts down to an optional deadline. The CLI and SDKs can list and answer requests without a viewer. [#62](https://github.com/gridaco/fx/issues/62)
 - Waiting steps stand out on the canvas and open their form from a **Review** button. Resolved steps show the outcome and open a receipt with the answer, submission time, and channel.
 
@@ -136,7 +139,8 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 - Preview tag for the first stable release.
 
-[Unreleased]: https://github.com/gridaco/fx/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/gridaco/fx/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/gridaco/fx/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/gridaco/fx/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/gridaco/fx/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/gridaco/fx/compare/v0.8.1...v0.9.0

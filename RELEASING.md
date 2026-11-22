@@ -3,8 +3,9 @@
 Stable releases start at `0.1.0`: Python users install with `pip install grida`, and npm uses
 `latest` for stable versions and `next` for pre-releases.
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds, checks and publishes
-both package formats from the same version. The owner pushes the tag
-and approves the publish. CI uses OIDC for both registries and holds no publishing token.
+both package formats and standalone downloads from the same version. An authorized
+release maintainer approves publishing by pushing the protected release tag.
+CI uses OIDC for both registries and holds no publishing token.
 Local uploads have no CI build provenance.
 
 The one-time setup below is done: all five npm packages and the PyPI project publish through
@@ -30,6 +31,9 @@ build to open it. Python users still need no Node at all.
 - **PyPI:** the distribution `grida`, one wheel per target, each carrying the engine at
   `grida/fx/_bin/grida-fx`. There is no sdist, since it could not run, and no console command:
   Python users run `python -m grida.fx <verb>`.
+- **GitHub Releases:** four versioned `grida-fx-<version>-<target>.tar.gz` archives, each
+  holding the tested executable and license, plus `SHA256SUMS`.
+  See [Standalone downloads](docs/guide/17-standalone-downloads.md).
 - **Windows is not supported yet.** The engine's runner uses Unix process groups and signals.
   Windows users can run the Linux packages under WSL 2. Linux with musl (Alpine) isn't supported
   either.
@@ -63,11 +67,15 @@ pre-releases (`-alpha.N`, `-beta.N` or `-rc.N`).
 ## One-time setup
 
 1. **Push `main`** and wait for CI to pass.
-2. **Create the GitHub environment `release`** (Settings → Environments → New environment):
-   - **Required reviewers:** yourself, plus anyone else who may approve a publish. If you are
-     the only reviewer, leave "Prevent self-review" off, or you can never approve your own tag.
+2. **Protect release tags and configure the GitHub environment `release`** (Settings → Environments):
+   - Use the separate [creation ruleset](https://github.com/gridaco/fx/rules/27809036) that restricts
+     creation of `refs/tags/v*`. Its bypass list contains the release maintainers.
+     The separate [immutability ruleset](https://github.com/gridaco/fx/rules/24890738)
+     blocks tag updates and deletion for everyone.
    - **Deployment branches and tags:** choose "Selected branches and tags" and add a tag rule
      `v*`, so only a release tag can reach the publish job.
+   - Remove required reviewers from the environment after verifying the creation
+     ruleset is active and restricts creation to the intended maintainers.
 3. **npm:**
    - Make sure the npm organization `grida` exists and your account can publish under `@grida`
      (as an owner, or as a member of a team with write access to the scope).
@@ -110,11 +118,11 @@ and [PyPI existing-project setup](https://docs.pypi.org/trusted-publishers/addin
 
 ## A dry run
 
-Go to Actions → release → Run workflow. Pick `main` (or the tag), and leave **dry_run** checked.
+Go to Actions → release → Run workflow and select the branch or tag to check.
 The run builds and checks all four targets and skips both package publication and the GitHub
 Release. Its artifacts (`wheel-<target>`, `npm-<target>` and `npm-sdk`) are the exact files a
-release would publish, so you can download and inspect them. Do this before the first tag.
-A run started on a `v*` tag with **dry_run** unchecked publishes, just as pushing the tag does.
+release would publish, so you can download and inspect them. The `release-downloads`
+artifact contains the standalone archives and checksums. Do this before the first tag.
 
 A new engine package needs a manual first upload, since npm configures a trusted publisher only
 on a package that exists. Take its tarball from a **successful** dry run of the same source and
@@ -210,6 +218,10 @@ comparison with the previous tag. Keep `Unreleased` at the top and update its
 comparison to start from the new tag. Include the changelog update in the release
 commit.
 
+For each major or minor release, review the README's opening and first examples.
+Make room for the most useful new capability by shortening or replacing older
+material. Keep the install section and link to the detailed guide.
+
 Then tag that version; never reuse an already published version or tag.
 
 ```sh
@@ -251,19 +263,23 @@ Pushing the tag starts the jobs in `release.yml`.
      stand-in for the npm `grida` command, they must pass the launcher checks, the whole suite
      (`--invoker grida`) and the viewer check through `grida fx`
      ([spec/distribution.md](spec/distribution.md));
-   - uploads the wheel and the engine package it just tested. Every job packs `@grida/fx` the
+   - makes a standalone archive from the npm engine and compares the executable with its
+     wheel counterpart. It unpacks and runs that archive's executable on the native runner;
+   - uploads the wheel, the engine package, and the standalone archive. Every job packs `@grida/fx` the
      same way, and the `x86_64-unknown-linux-gnu` job uploads it.
-4. **publish** waits for a reviewer to approve the `release` environment. It runs only for a
-   `v*` tag, and never for a dry run. It publishes the four engine packages and then
+4. **downloads** requires all four standalone archives and prepares `SHA256SUMS`.
+5. **publish** runs in the tag-only `release` environment after the checks pass. A protected
+   `v*` tag push authorizes this job. It publishes the four engine packages and then
    `@grida/fx` to npm, under `latest` for stable versions or `next` for pre-releases, with `--access public --provenance`, and then the four wheels
    to PyPI. It checks out no code. A package version that is already published is skipped,
    so you can re-run a publish that failed partway.
-5. **github_release** publishes a [GitHub Release](https://github.com/gridaco/fx/releases)
+6. **github_release** publishes a [GitHub Release](https://github.com/gridaco/fx/releases)
    for the same tag after `publish` succeeds. Starting with `v0.11.0`, its notes come from
    the matching version section of the tagged `CHANGELOG.md`, with links to that version of
    `@grida/fx` on npm and `grida` on PyPI. The job marks alpha, beta and rc tags as pre-releases.
-   The job uses the built-in `GITHUB_TOKEN` with `contents: write`. If the announcement fails,
-   rerun the failed job. An already published release for the same tag counts as success.
+   The job uses the built-in `GITHUB_TOKEN` with `contents: write`. It uploads the standalone
+   archives and checksum file to a draft for the existing tag, verifies the complete set,
+   then publishes the draft. Rerun a failed job to resume the draft upload.
 
 The tag also serves indexed examples for `init --template` and `add`. An engine of this version
 downloads its templates from the tag's source archive on GitHub. CI's `tools/check_examples.py`

@@ -14,8 +14,8 @@ A build system for generated assets.
   against its ceiling before making it.
 - **Never pays twice.** Results and paid calls are cached by content, and an interrupted run picks
   up where it stopped.
-- **Judged, not just generated.** Steps can judge each other's output, draw again when rejected,
-  and let you pick the take you want.
+- **Review before continuing.** Choose an image in the viewer or supply a typed value from a
+  script. The workflow remembers the decision and can resume after the runner exits.
 - **Any model, or your own subscription.** Switch providers per step, or draw on your Codex or
   Grok plan.
 - **One native engine.** No Docker, no server: YAML in git, from your laptop to CI.
@@ -28,7 +28,8 @@ pip install grida        # the Python SDK, for nodes in Python
 npm install @grida/fx    # the TypeScript SDK, for nodes in TypeScript
 ```
 
-To run FX without the Grida CLI, see [ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
+For a pinned executable in CI, see [Standalone downloads](docs/guide/17-standalone-downloads.md).
+For other installation options, see [Ways to run FX](CONTRIBUTING.md#ways-to-run-fx).
 
 ## AI providers
 
