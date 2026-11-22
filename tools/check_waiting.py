@@ -31,24 +31,32 @@ def check_delivery(folder: Path, revision: str, image_digest: str) -> None:
     }
 
 
-def check_cli(command: Path, project: Path) -> None:
-    def call(*args: str, status: int = 0) -> str:
+def check_cli(command: Path, project: Path, baseline: Path) -> None:
+    def call(*args: str, status: int = 0, binary: Path = command) -> str:
         proc = subprocess.run(
-            [command, *args], cwd=project, capture_output=True, text=True, timeout=20, check=False
+            [binary, *args], cwd=project, capture_output=True, text=True, timeout=20, check=False
         )
         assert proc.returncode == status, (args, proc.stdout, proc.stderr)
         return proc.stdout
 
-    def requests() -> dict[str, dict]:
-        result = json.loads(call("inspect", SELECTOR, "--requests", "--json"))
+    def requests(selector: str = SELECTOR, *, binary: Path = command) -> dict[str, dict]:
+        result = json.loads(call("inspect", selector, "--requests", "--json", binary=binary))
         assert result.keys() == {"requests"}
         return by_step(result["requests"])
 
-    def submit(request: dict, key: str, status: int = 0) -> dict:
+    def registered_route(selector: str, *, binary: Path = command) -> str:
+        receipt = json.loads(call("inspect", selector, "--register", "--json", binary=binary))
+        return receipt["route"]
+
+    def invocation_id(*, binary: Path = command) -> str:
+        receipt = json.loads(call("inspect", SELECTOR, "--control", "--json", binary=binary))
+        return receipt["invocation_id"]
+
+    def submit(request: dict, key: str, status: int = 0, *, selector: str = SELECTOR) -> dict:
         return json.loads(
             call(
                 "respond",
-                SELECTOR,
+                selector,
                 request["id"],
                 "--json",
                 json.dumps({"variant": key}),
@@ -58,8 +66,13 @@ def check_cli(command: Path, project: Path) -> None:
 
     call("plan", "showcase.yaml", "--check", "--max-usd", "0")
     (project / "short.yaml").write_text("seconds: 1\n")
-    call("run", "workflow.yaml", "--name", "review", "--no-view", status=1)
+    call("run", "workflow.yaml", "--name", "review", "--no-view", status=1, binary=baseline)
+    original_requests = requests(binary=baseline)
     opened = requests()
+    assert opened.keys() == original_requests.keys()
+    for step, request in original_requests.items():
+        # The candidate may return additive request metadata.
+        assert {key: opened[step][key] for key in request} == request
     pending = opened["choose#1"]
     revision = opened["revision#1"]
     assert "message" not in revision and revision["schema"] == {"type": "string"}
@@ -72,13 +85,44 @@ def check_cli(command: Path, project: Path) -> None:
     for request in opened.values():
         stored = folder / "awaiting" / (request["id"] + ".json")
         validator("fx-await-request-v1").validate(json.loads(stored.read_text()))
+
+    # Resume changes the runner invocation while preserving the requests of the saved run.
+    invocation = invocation_id(binary=baseline)
+    assert invocation and pending["deadline"]
+    assert invocation_id() == invocation
+    route = registered_route(SELECTOR, binary=baseline)
+    assert requests(str(folder)) == opened
+    call("run", "workflow.yaml", "--resume", "review", "--no-view", status=1)
+    resumed = invocation_id()
+    assert resumed and resumed != invocation
+    assert requests(SELECTOR) == opened
+    assert registered_route(str(folder)) == route
+    stale = json.loads(call("cancel", SELECTOR, "--invocation", invocation, "--json", status=2))
+    assert stale["code"] == "invocation_mismatch"
+
+    # A second run of the identical plan has its own requests, even when it can reuse results.
+    other = "review-variants/independent"
+    call("run", "workflow.yaml", "--name", "independent", "--no-view", status=1)
+    other_run = json.loads(call("inspect", other, "--json"))["run"]
+    other_graph = json.loads((project / other_run["folder"] / "plan.json").read_text())
+    assert other_graph["plan"] == graph["plan"]
+    assert registered_route(other) != route
+    independent = requests(other)
+    assert independent.keys() == opened.keys()
+    for step, request in independent.items():
+        assert request["id"] != opened[step]["id"]
+        assert request["state"]["status"] == "pending"
+    assert submit(pending, "b", 1, selector=other)["code"] == "not_found"
+    assert requests(other) == independent
+    assert requests() == opened
+
     assert submit(pending, "missing", 1)["code"] == "invalid_answer"
     assert requests() == opened
     revision_winner = fx.respond(SELECTOR, revision["id"], "rev-42", cwd=project)
     assert revision_winner["state"]["channel"] == "sdk"
     # Lose the first client's acknowledgment. A fresh client can recover exactly what won.
     subprocess.run(
-        [command, "respond", SELECTOR, pending["id"], "--json", '{"variant":"b"}'],
+        [command, "respond", str(folder), pending["id"], "--json", '{"variant":"b"}'],
         cwd=project,
         stdout=subprocess.DEVNULL,
         check=True,
@@ -88,6 +132,7 @@ def check_cli(command: Path, project: Path) -> None:
     assert winner["state"]["channel"] == "cli"
     assert submit(pending, "b")["request"] == winner
     assert submit(pending, "a", 1)["request"] == winner
+    assert requests(other) == independent
     call("run", "workflow.yaml", "--resume", "review", "--no-view")
     check_delivery(folder, "rev-42", pending["choices"]["b"]["file"]["digest"])
     assert requests() == {"choose#1": winner, "revision#1": revision_winner}
@@ -192,14 +237,21 @@ async def check_sdk(project: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--command", type=Path, required=True)
-    command = parser.parse_args().command.resolve(strict=True)
+    parser.add_argument(
+        "--baseline-command",
+        type=Path,
+        help="Use a released engine to create the original run before testing resume",
+    )
+    args = parser.parse_args()
+    command = args.command.resolve(strict=True)
+    baseline = (args.baseline_command or command).resolve(strict=True)
     env = environment()
     os.environ.clear()
     os.environ.update(env, GRIDA_FX_BIN=str(command))
     with tempfile.TemporaryDirectory(prefix="fx-waiting-") as tmp:
         project = Path(tmp) / "project"
         shutil.copytree(ROOT / "fixtures/waiting", project)
-        check_cli(command, project)
+        check_cli(command, project, baseline)
         asyncio.run(check_sdk(project))
     print("Passed CLI and Python SDK waiting-step journeys.")
 

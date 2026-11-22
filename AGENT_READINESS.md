@@ -48,9 +48,10 @@ Existing tests are starting points for evidence, not proof of every scenario her
 | Agent / caller | The external assistant or application operating FX. This is separate from an `agent.turn` node inside a workflow. |
 | Workflow definition | Authored steps, inputs, dependencies and output declarations, supplied as YAML or through supported SDK authoring. |
 | Plan | FX's resolved view of that definition and its inputs: known instances, dependencies, problems, prices and unresolved work. Planning is not execution approval. |
-| Run | The recorded execution history in a selected run folder, bound to a plan. A fresh run is created by default; cached work can still be reused. An optional name labels this record. |
+| Run attempt | The recorded execution history in one run folder, bound to a plan. The current CLI and viewer call this record a run. Starting an independent run creates a new record and can reuse cached computation. |
+| Run reference | The stable identity of one run's attempt history in the [full-rerun contract](spec/store.md#run-references-attempts-and-invocations). History lookup and rerun are pending implementation. |
 | Run name | A case-sensitive create-only label within one project and recorded workflow ID/source. It is presentation metadata, not a cache key or workflow version. |
-| Invocation | One execution attempt of that run. Resuming appends a new invocation to the same history. |
+| Invocation | One execution of the runner against a run attempt. Resume appends a new invocation to that attempt's history. |
 | Step / instance | A step is authored; an instance is a concrete occurrence after repeats, takes and nesting. Use recorded identifiers instead of reconstructing them from UI labels. |
 | Artifact | A recorded output with a content identity. A path alone is not proof of success or valid content. |
 | Run export | An immutable, portable inspection package made from a terminal, inactive record. It contains selected evidence and media, with deliberate disclosure; it is separate from a resumable run folder and from publication. |
@@ -452,11 +453,16 @@ promise through documentation alone.
 | AR-29 | "Generate one image on this route and give me the PNG." | [One-shot call](spec/call.md) for [#149](https://github.com/gridaco/fx/issues/149) exposes image generation directly in the CLI. Python and JavaScript callers can build a one-step workflow, run it, and resolve or deliver its output. Native one-shot SDK entry points and a `--fresh` equivalent on that API are deferred. | Exercise project discovery from a child directory, explicit override, empty override refusal and projectless selection. Dry-run never generates. Prove request, output and cache behavior with a stand-in, including fresh execution and ordinary replay. Verify budget and live admission, reject output names that cannot be reported as UTF-8, and preserve the saved image on delivery failure or interruption. An opt-in signed-in Codex invocation is the live smoke test. |
 | AR-30 | "Retrieve the result I already paid for." | Implemented in source for [#116](https://github.com/gridaco/fx/issues/116). A live resume collects a known completed task. CLI, Python and JavaScript expose recovery-only resume and recorded recovery events. | A charged success followed by download or answer validation failure retains the task. A repeat collects and publishes the original result with one generation and one charge. Concurrent invocations sharing a long-job call key serialize submission and collection. A settled handle from an older engine or an ambiguous project adapter outcome requires explicit recovery. Original bookings require task-specific evidence. Terminal generation failure and unavailable retention produce distinct next steps. Pruning preserves recovery candidates. |
 | AR-31 | "Let my build supply its revision and let me choose a generated image." | [Durable workflow requests](spec/waiting.md) in CLI, Python, JavaScript and the live local viewer. | An SDK lists and answers a promptless revision. A reviewer chooses a frozen image through the viewer or CLI in the same run. Verify both values downstream, the winner on conflict and the exact selected file on resume. Timeout fallback follows normal spending rules. |
+| AR-32 | "Start this recorded run again and keep the earlier review." | Attempt identity and targeting are specified in the [run store contract](spec/store.md#run-references-attempts-and-invocations). Full rerun and access to attempt history are pending in [#162](https://github.com/gridaco/fx/issues/162). | Start a new attempt from a verified source. The old link still opens the original record and the history link lists both attempts. A new review has its own request and deadline. Late submissions stay scoped to the original attempt. CLI, Python, JavaScript and the viewer share the engine operation. |
 
 The [waiting fixture](fixtures/waiting/workflow.yaml) synthesizes three PNGs,
 provides a deterministic fallback and writes the revision and delivered image
 digest into a build manifest. The [public-interface check](tools/check_waiting.py)
 checks those outputs, attached and detached execution, validation, retries and expiry.
+It also checks that resume preserves the original request and deadline across
+invocations, and that independent runs of an identical plan each have their own
+requests and viewer routes. The optional `--baseline-command` seeds the original
+record with a released engine before the checkout engine resumes it.
 The [browser test](tools/check_waiting_browser.mjs) submits through both review surfaces
 in both winning orders, reloads the viewer, and resumes a review with the agent disconnected.
 

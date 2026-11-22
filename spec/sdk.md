@@ -33,6 +33,8 @@ SDK preplanning can execute local code before the engine's remaining run checks.
 
 Omitting all three selectors creates a fresh record. `name` is create-only; `resume` requires an
 existing named run. An explicit folder retains its existing create/resume behavior.
+Each resume starts a new invocation of the same
+[run attempt](store.md#run-references-attempts-and-invocations).
 Resuming repeats current target/input/route/builder options; old options are not
 restored. A name does not force generation or alter any cache identity.
 
