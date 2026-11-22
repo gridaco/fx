@@ -12,6 +12,14 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 
 ## [Unreleased]
 
+### Added
+
+- Pause an active workflow with `grida fx pause RUN`, which lets running steps finish before saving a durable boundary. Continue the same attempt with `grida fx resume RUN`. The CLI, SDKs, and viewer expose when the run is pausing or paused. [#166](https://github.com/gridaco/fx/issues/166)
+
+### Fixed
+
+- Restore keyboard focus after adding or removing a row in a workflow review form.
+
 ## [0.12.0] - 2026-11-22
 
 ### Added

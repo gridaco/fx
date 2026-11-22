@@ -134,6 +134,9 @@ fn report(result: &ControlResult, json: bool) -> u8 {
                 "control {availability}; can_cancel {}",
                 result.can_cancel.unwrap_or(false)
             ));
+            if let Some(can_pause) = result.can_pause {
+                print_line(&format!("can_pause {can_pause}"));
+            }
         }
     }
     result.exit_status()
@@ -148,10 +151,26 @@ pub fn inspect(args: &InspectArgs) -> Result<u8, Error> {
 }
 
 pub fn cancel(args: &CancelArgs) -> Result<u8, Error> {
+    request(args, "cancel", control::cancel)
+}
+
+pub fn pause(args: &CancelArgs) -> Result<u8, Error> {
+    request(args, "pause", control::pause)
+}
+
+fn request(
+    args: &CancelArgs,
+    operation: &str,
+    send: fn(&Path, Option<&str>, bool, Duration, &str, Instant) -> ControlResult,
+) -> Result<u8, Error> {
     let started = Instant::now();
     let timeout = args.timeout.unwrap_or(Duration::from_secs(30));
-    let result = match selected(&args.run, "cancel", args.wait.then_some((started, timeout))) {
-        Ok(folder) => control::cancel(
+    let result = match selected(
+        &args.run,
+        operation,
+        args.wait.then_some((started, timeout)),
+    ) {
+        Ok(folder) => send(
             &folder,
             args.invocation.as_deref(),
             args.wait,

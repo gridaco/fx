@@ -87,8 +87,9 @@ export async function call(
   const env = mergeEnvironment({ ...hostVariables(), ...options.env });
   // A value inherited from a launcher (a node body run under `grida fx`) would change the prefix.
   env.GRIDA_FX_INVOKER = "grida-fx";
-  if (args[0] === "run") {
-    // Also tells the engine the inputs file is temporary: the run records no `repeat`.
+  const ownsRun = args[0] === "run" || args[0] === "resume";
+  if (ownsRun) {
+    // Marks signals from SDK-owned execution.
     env.GRIDA_FX_CANCEL_SOURCE = "sdk";
   }
   const engine = findEngine(machineLookup(env, cwd));
@@ -119,8 +120,8 @@ export async function call(
     const onAbort = () => {
       if (!interrupted && child.exitCode === null && child.signalCode === null) {
         interrupted = true;
-        child.kill(args[0] === "run" ? "SIGTERM" : "SIGINT");
-        if (args[0] !== "run") {
+        child.kill(ownsRun ? "SIGTERM" : "SIGINT");
+        if (!ownsRun) {
           killTimer = setTimeout(() => child.kill("SIGKILL"), STOP_GRACE_MS);
         }
       }

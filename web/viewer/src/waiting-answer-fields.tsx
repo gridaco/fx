@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef } from "react";
 import {
   answerKinds,
   answerSchema,
@@ -28,13 +28,18 @@ function focusAnswerControl(container: Element | null) {
   container?.querySelector<HTMLElement>("input, select, button")?.focus();
 }
 
-function focusAnswerRow(button: HTMLButtonElement, index: number) {
-  const list = button.closest(".fx-answer-fields");
-  requestAnimationFrame(() => {
-    const row = list?.querySelectorAll(":scope > .fx-answer-row")[index];
+function useAnswerRowFocus(rowCount: number | undefined) {
+  const list = useRef<HTMLDivElement>(null);
+  const pendingIndex = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const index = pendingIndex.current;
+    if (index === null || !list.current) return;
+    pendingIndex.current = null;
+    const row = list.current.querySelectorAll(":scope > .fx-answer-row")[index];
     if (row) focusAnswerControl(row);
-    else list?.querySelector<HTMLElement>(":scope > .fx-answer-add")?.focus();
-  });
+    else list.current.querySelector<HTMLElement>(":scope > .fx-answer-add")?.focus();
+  }, [rowCount]);
+  return { list, focusAfterChange: (index: number) => { pendingIndex.current = index; } };
 }
 
 function RequiredLabel({ title, required }: { title: string; required: boolean }) {
@@ -65,7 +70,8 @@ function ObjectFields({ schema, draft, onChange }: Omit<EditorProps, "label"> & 
   const remove = (index: number) =>
     onChange({ ...draft, fields: draft.fields.filter((_, at) => at !== index) });
   const customFields = draft.fields.flatMap((field, index) => field.editableName ? [{ field, index }] : []);
-  return <div className="fx-answer-fields">
+  const { list, focusAfterChange } = useAnswerRowFocus(customFields.length);
+  return <div className="fx-answer-fields" ref={list}>
     {known.map(name => {
       const index = draft.fields.findIndex(field => !field.editableName && field.name === name);
       return <div key={name}>
@@ -93,14 +99,14 @@ function ObjectFields({ schema, draft, onChange }: Omit<EditorProps, "label"> & 
         <label>Field name<input value={field.name} onChange={event => replace(index, { ...field, name: event.currentTarget.value })} /></label>
         <WaitingAnswerFields label="Value" schema={customSchema}
           draft={field.value} required onChange={value => replace(index, { ...field, value })} />
-        <button type="button" className="fx-answer-helper" onClick={event => {
-          focusAnswerRow(event.currentTarget, row);
+        <button type="button" className="fx-answer-helper" onClick={() => {
+          focusAfterChange(row);
           remove(index);
         }}>Remove field <span className="sr-only">{row + 1}</span></button>
       </div>;
     })}
-    {allowCustom && <button type="button" className="fx-answer-helper fx-answer-add" onClick={event => {
-      focusAnswerRow(event.currentTarget, customFields.length);
+    {allowCustom && <button type="button" className="fx-answer-helper fx-answer-add" onClick={() => {
+      focusAfterChange(customFields.length);
       onChange({ ...draft, fields: [...draft.fields, { name: "", editableName: true, value: initialAnswer(customSchema) }] });
     }}>Add field</button>}
   </div>;
@@ -108,6 +114,7 @@ function ObjectFields({ schema, draft, onChange }: Omit<EditorProps, "label"> & 
 
 export function WaitingAnswerFields({ label, schema, draft, required = false, onChange }: EditorProps) {
   const id = useId();
+  const { list, focusAfterChange } = useAnswerRowFocus(draft?.kind === "array" ? draft.items.length : undefined);
   if (schema === false) return <p>This field does not accept a value.</p>;
   const rule = schema === true ? {} : schema;
   const options = answerKinds(rule);
@@ -164,7 +171,7 @@ export function WaitingAnswerFields({ label, schema, draft, required = false, on
   } else if (current?.kind === "object") {
     control = <fieldset aria-describedby={describedBy}><legend>{fieldLabel}</legend><ObjectFields schema={rule} draft={current} onChange={onChange} /></fieldset>;
   } else if (current?.kind === "array") {
-    control = <fieldset aria-describedby={describedBy}><legend>{fieldLabel}</legend><div className="fx-answer-fields">
+    control = <fieldset aria-describedby={describedBy}><legend>{fieldLabel}</legend><div className="fx-answer-fields" ref={list}>
       {current.items.map((item, index) => {
         const itemSchema = answerSchema(Array.isArray(rule.prefixItems) && index < rule.prefixItems.length
           ? rule.prefixItems[index] : rule.items);
@@ -172,17 +179,17 @@ export function WaitingAnswerFields({ label, schema, draft, required = false, on
           <WaitingAnswerFields label={`Item ${index + 1}`} schema={itemSchema} draft={item} required
             onChange={value => onChange({ ...current, items: current.items.map((previous, at) => at === index ? value : previous) })} />
           <button type="button" className="fx-answer-helper"
-            onClick={event => {
-              focusAnswerRow(event.currentTarget, index);
+            onClick={() => {
+              focusAfterChange(index);
               onChange({ ...current, items: current.items.filter((_, at) => at !== index) });
             }}>Remove item {index + 1}</button>
         </div>;
       })}
       {(rule.items !== false || (Array.isArray(rule.prefixItems) && current.items.length < rule.prefixItems.length))
-        && <button type="button" className="fx-answer-helper fx-answer-add" onClick={event => {
+        && <button type="button" className="fx-answer-helper fx-answer-add" onClick={() => {
           const schema = answerSchema(Array.isArray(rule.prefixItems) && current.items.length < rule.prefixItems.length
             ? rule.prefixItems[current.items.length] : rule.items);
-          focusAnswerRow(event.currentTarget, current.items.length);
+          focusAfterChange(current.items.length);
           onChange({ ...current, items: [...current.items, initialAnswer(schema)] });
         }}>Add item</button>}
     </div></fieldset>;

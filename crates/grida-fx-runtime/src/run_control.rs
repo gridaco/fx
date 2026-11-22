@@ -1,4 +1,4 @@
-//! One invocation's serialized cancellation, execution admission and terminal commitment.
+//! One invocation's serialized control, execution admission and terminal commitment.
 
 use crate::engine::Cancel;
 use crate::events::{Event, EventLog};
@@ -26,6 +26,7 @@ impl CancelSource {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlPhase {
     Running,
+    PauseRequested,
     CancelRequested,
     RecordError,
     Finishing,
@@ -33,7 +34,7 @@ pub enum ControlPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CancelAcceptance {
+pub enum Acceptance {
     Accepted,
     AlreadyRequested,
     Finishing,
@@ -41,11 +42,14 @@ pub enum CancelAcceptance {
     RecordError,
 }
 
+pub type CancelAcceptance = Acceptance;
+
 struct State {
     phase: ControlPhase,
     admission_open: bool,
     active: usize,
     accepted: bool,
+    pause_accepted: bool,
     terminal: Option<Value>,
 }
 
@@ -53,6 +57,7 @@ struct State {
 pub struct RunControl {
     state: Mutex<State>,
     admission_changed: tokio::sync::Notify,
+    pause_changed: tokio::sync::Notify,
     events: Option<Arc<EventLog>>,
     cancel: Cancel,
 }
@@ -75,11 +80,13 @@ impl RunControl {
                 admission_open: true,
                 active: 0,
                 accepted: false,
+                pause_accepted: false,
                 terminal: None,
             }),
             events,
             cancel,
             admission_changed: tokio::sync::Notify::new(),
+            pause_changed: tokio::sync::Notify::new(),
         })
     }
 
@@ -92,7 +99,7 @@ impl RunControl {
             ControlPhase::Finishing => return CancelAcceptance::Finishing,
             ControlPhase::CancelRequested => return CancelAcceptance::AlreadyRequested,
             ControlPhase::RecordError => return CancelAcceptance::RecordError,
-            ControlPhase::Running => {}
+            ControlPhase::Running | ControlPhase::PauseRequested => {}
         }
         state.admission_open = false;
         let persisted = self
@@ -113,12 +120,63 @@ impl RunControl {
         }
     }
 
-    /// Reserve one dispatch, authored attempt or provider operation before it starts.
-    /// Work holding a permit may proceed after acceptance; later work cannot obtain one.
+    /// Close step dispatch while keeping nested work of admitted steps eligible.
+    pub fn request_pause(&self, source: CancelSource) -> Acceptance {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.pause_accepted {
+            return Acceptance::AlreadyRequested;
+        }
+        match state.phase {
+            ControlPhase::Terminal => return Acceptance::AlreadyTerminal,
+            ControlPhase::Finishing | ControlPhase::CancelRequested => {
+                return Acceptance::Finishing;
+            }
+            ControlPhase::RecordError => return Acceptance::RecordError,
+            ControlPhase::PauseRequested => return Acceptance::AlreadyRequested,
+            ControlPhase::Running => {}
+        }
+        if !state.admission_open {
+            return Acceptance::Finishing;
+        }
+        let persisted = self
+            .events
+            .as_ref()
+            .is_some_and(|events| events.emit(&Event::PauseRequested { source }).is_ok());
+        state.pause_accepted = persisted;
+        state.phase = if persisted {
+            ControlPhase::PauseRequested
+        } else {
+            state.admission_open = false;
+            self.cancel.cancel();
+            ControlPhase::RecordError
+        };
+        self.pause_changed.notify_one();
+        if persisted {
+            Acceptance::Accepted
+        } else {
+            Acceptance::RecordError
+        }
+    }
+
+    pub async fn pause_changed(&self) {
+        self.pause_changed.notified().await;
+    }
+
+    /// Reserve nested work of an already-dispatched step.
     pub fn admit(self: &Arc<Self>) -> Option<Admission> {
+        self.admit_work(false)
+    }
+
+    /// Reserve a new step under the same lock that accepts operator requests.
+    pub fn admit_step(self: &Arc<Self>) -> Option<Admission> {
+        self.admit_work(true)
+    }
+
+    fn admit_work(self: &Arc<Self>, step: bool) -> Option<Admission> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if !state.admission_open
-            || state.phase != ControlPhase::Running
+            || !(state.phase == ControlPhase::Running
+                || (!step && state.phase == ControlPhase::PauseRequested))
             || self.cancel.is_cancelled()
         {
             return None;
@@ -135,6 +193,16 @@ impl RunControl {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .admission_open = false;
+    }
+
+    /// Reserve ordinary parking before cleanup, unless an operator pause already won.
+    pub(crate) fn begin_parking(&self) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.pause_accepted {
+            return false;
+        }
+        state.admission_open = false;
+        true
     }
 
     /// Close admission, then wait for every admitted local operation, including incoming
@@ -161,7 +229,7 @@ impl RunControl {
             return Err("the run cannot finish while admitted work is active");
         }
         match state.phase {
-            ControlPhase::Running => {
+            ControlPhase::Running | ControlPhase::PauseRequested => {
                 state.phase = ControlPhase::Finishing;
                 Ok(true)
             }
@@ -186,7 +254,7 @@ impl RunControl {
         }
         if !matches!(
             event,
-            Event::RunFinished { .. } | Event::RunCancelled { .. }
+            Event::RunFinished { .. } | Event::RunCancelled { .. } | Event::RunPaused { .. }
         ) {
             return Err(std::io::Error::other(
                 "a terminal record must end the invocation",
@@ -212,6 +280,13 @@ impl RunControl {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .accepted
+    }
+
+    pub fn pause_requested(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pause_accepted
     }
 
     pub fn terminal(&self) -> Option<Value> {
@@ -240,6 +315,51 @@ impl Drop for Admission {
 mod tests {
     use super::*;
     use crate::events::read_events;
+
+    #[test]
+    fn pause_closes_step_admission_and_keeps_nested_work_until_cancel() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        let control = control(&path);
+        let step = control.admit_step().unwrap();
+        assert_eq!(
+            control.request_pause(CancelSource::Cli),
+            Acceptance::Accepted
+        );
+        assert_eq!(
+            control.request_pause(CancelSource::Sdk),
+            Acceptance::AlreadyRequested
+        );
+        assert!(!control.begin_parking());
+        assert!(control.admit_step().is_none());
+        let nested = control.admit().unwrap();
+        assert_eq!(
+            control.request_cancel(CancelSource::Cli),
+            Acceptance::Accepted
+        );
+        assert!(control.admit().is_none());
+        drop((step, nested));
+        assert!(!control.begin_finalization().unwrap());
+        let events = read_events(&path).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["event"], "pause_requested");
+        assert_eq!(events[1]["event"], "cancel_requested");
+    }
+
+    #[test]
+    fn ordinary_parking_closes_admission_before_pause_can_be_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("events.jsonl");
+        let control = control(&path);
+        assert!(control.begin_parking());
+        assert_eq!(
+            control.request_pause(CancelSource::Cli),
+            Acceptance::Finishing
+        );
+        assert!(control.admit().is_none());
+        assert!(control.admit_step().is_none());
+        assert!(read_events(&path).unwrap().is_empty());
+    }
 
     fn control(path: &std::path::Path) -> Arc<RunControl> {
         RunControl::new(

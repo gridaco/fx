@@ -83,6 +83,35 @@ describe("observation read boundary", () => {
 });
 
 describe("serial live viewer observation", () => {
+  test("continues checking the draining invocation until pause or owner loss", async () => {
+    const requested = { ...event, event: "pause_requested", source: "cli" };
+    const paused = { ...event, event: "run_paused" };
+    const clock = new Clock();
+    let current = { ...snapshot("draining", "pausing"), events: [event, requested], run_active: true };
+    let next: RunEvent[] = [];
+    const guards: (string | undefined)[] = [];
+    const observation: RunObservationReader = {
+      async snapshot() { return current; },
+      async events(_after, _signal, invocation) {
+        guards.push(invocation?.invocation_id);
+        return { ...batch(current.cursor, next), run_active: false };
+      },
+    };
+    const controller = new ViewerController(async () => run(), { observation, scheduler: clock });
+    await controller.refresh();
+    expect(controller.getSnapshot()).toMatchObject({ runActive: true, view: { state: "pausing" } });
+    await clock.tick();
+    expect(controller.getSnapshot().runActive).toBeFalse();
+    current = { ...snapshot("paused", "paused"), events: [event, requested, paused], run_active: false };
+    next = [paused];
+    await clock.tick();
+    expect(controller.getSnapshot()).toMatchObject({ runActive: false, view: { state: "paused" } });
+    next = [];
+    await clock.tick();
+    expect(guards).toEqual([event.invocation_id, event.invocation_id, undefined]);
+    controller.dispose();
+  });
+
   test("recorded cancellation intent clears on terminal or resume without changing run state", async () => {
     const requested = { ...event, event: "cancel_requested", source: "cli" };
     const terminal = { ...event, event: "run_cancelled" };

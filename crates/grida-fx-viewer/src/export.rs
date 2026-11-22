@@ -148,7 +148,7 @@ pub fn run_export_with_viewer(
     let terminal = captured.events.last().filter(|event| {
         matches!(
             event["event"].as_str(),
-            Some("run_finished" | "run_cancelled")
+            Some("run_finished" | "run_cancelled" | "run_paused")
         )
     });
     if latest.is_none()

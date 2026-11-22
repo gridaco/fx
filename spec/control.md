@@ -2,9 +2,8 @@
 
 **Status: cancellation v1 implemented, 2026-10-08; released in 0.2.0.**
 The commands, events and result shapes below describe this checkout. Check an
-installed version's help before assuming support. This document owns cancellation v1.
-Termination and pause have agreed vocabulary only; their full contracts and
-implementation remain separate work.
+installed version's help before assuming support. This document also specifies
+operator pause and resume for #166. Force termination remains deferred.
 
 ## 1. Intent and ownership
 
@@ -20,8 +19,8 @@ code, loads provider credentials, replans, resumes, or submits provider work.
 | Stop this run. | `cancel RUN` | Request cancellation of one invocation. Ratified here. |
 | Stop it, and tell me when it has ended. | `cancel RUN --wait` | Also verify local completion. Ratified here. |
 | Force the stuck execution to end. | `terminate RUN` | Separate, explicit force operation; deferred. |
-| Finish active steps, then wait for me. | `pause RUN` | Stop new steps, drain active steps, persist a suspension boundary; deferred. |
-| Continue the recorded run. | `run TARGET --resume NAME` or `--run FOLDER` | Existing same-plan/mode behavior; repeat the original options. |
+| Finish active steps, then wait for me. | `pause RUN` | Close step admission, drain active steps and record a resumable boundary. |
+| Continue the recorded run. | `resume RUN` | Verify recorded execution context and resume the same attempt. The `run` resume forms accept explicit execution options. |
 | Shut down the project service. | `stop` | Existing service operation; does not cancel runs. |
 
 `grida-fx` is the installed executable; `python -m grida.fx` reaches the same
@@ -34,6 +33,8 @@ parameter mutation, provider-side job cancellation, or pause emulation.
 ```sh
 grida-fx inspect RUN --control [--json]
 grida-fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]
+grida-fx pause RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]
+grida-fx resume RUN [--require-estimates]
 ```
 
 `RUN` is an explicit run folder or an exact `WORKFLOW_ID/NAME`. Named lookup
@@ -54,8 +55,8 @@ guard also refuses when that newer invocation has already ended.
 
 `inspect --control` uses this same exact target grammar. It reads saved
 evidence and performs a bounded local owner handshake, returning the invocation,
-recorded state, verified control availability and whether `cancel` is currently
-supported. It does not change the ordinary portable `inspect --json` document.
+recorded state, verified control availability and whether `cancel` and `pause`
+are currently available. Ordinary `inspect --json` shows the recorded state.
 It conflicts with browser/standalone-serving flags. It exposes no token, socket
 path, PID, private absolute path or unverified claim of liveness. Agents retain
 the target they supplied; initial `run` output must expose the selected folder
@@ -140,20 +141,20 @@ must not assume every invocation of an unsupported binary returns JSON.
 
 Results use `kind: "fx-run-control-v1"` and lower_snake_case fields:
 
-- `operation`: `inspect` or `cancel`.
+- `operation`: `inspect`, `cancel` or `pause`.
 - `invocation_id`: the selected invocation, or null before successful resolution.
 - `outcome`: one of the values below.
 - `request_status`: `accepted`, `not_accepted`, or `unknown`; includes prior
   acceptance only for this invocation, never a predecessor.
-- `recorded_state`: existing coarse recorded state, or `unknown`; it is separate
-  from live owner/control state.
+- `recorded_state`: recorded state or `unknown`. `pausing` requires a verified
+  owner draining an accepted pause. `paused` comes from the terminal record.
 - `cleanup`: `pending`, `complete`, or `unknown`.
 - `external_completion`: `not_verified`. This version makes no general promise
   about provider completion or arbitrary node side effects.
 - `code`: a stable error code on failures; `message`: concise human explanation.
 - Inspection additionally reports `availability` (`available`, `unavailable`,
-  `unsupported`, `unknown`) and `can_cancel` (boolean, conditional on the sampled
-  owner; not a promise that a later request will succeed).
+  `unsupported`, `unknown`) and sampled `can_cancel` and `can_pause` booleans.
+  Older engines can omit `can_pause`.
 
 All execution fields describe `invocation_id`, never the newest state of the
 folder at response time. A waiter for A returns A's terminal result even if B
@@ -326,13 +327,8 @@ discovery and during waiting; node-host cleanup; plain calls with unknown billin
 and retained long-job handles; CLI/SDK cancellation parity; old events and strict
 viewer schema compatibility. No provider calls are needed for these gates.
 
-Pause needs a separate scheduler/state contract: active steps can still perform
-work/spend while draining, so `pausing` and `paused` must differ. Persisted pause
-must survive the documented process lifetime and define resume options. A new
-`resume RUN` cannot silently reconstruct missing historical inputs or run changed
-source. Terminate needs reliable process ownership/cleanup evidence and an honest
-forced/unknown outcome; a hung runner cannot certify its own cleanup. Neither
-operation is authorized for implementation merely by reserving its vocabulary.
+Terminate needs reliable process ownership and cleanup evidence, including an
+honest forced or unknown outcome.
 
 ## 9. Implementation and verification
 
@@ -372,3 +368,35 @@ Reviewed 2026-10-08; these inform intent, not additional FX promises:
   prevents scheduling new steps until resume.
 - [GitHub Actions cancellation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)
   addresses a workflow run while its runners own process signaling and escalation.
+
+## 11. Durable pause and resume
+
+Pause and cancellation use the exact selectors, invocation guard and local
+control transport in §2. The runner serializes pause acceptance with step
+dispatch, cancellation and finalization. Acceptance flushes `pause_requested`
+with its `cli` or `sdk` source and closes step admission. Admitted steps finish
+under their existing authorization, including their nested calls and retries.
+Repeated pause requests return the recorded acceptance for that invocation.
+
+The runner settles admitted steps and local call bookkeeping, then cleans up
+its hosts. If work remains and the run is healthy, it commits `run_paused` with
+the cumulative booked amount and available workflow outputs, then releases
+the writer. Natural success, failure and cancellation retain their ordinary
+terminal outcomes. Cancellation can
+interrupt a drain up to finalization. A pending external request occupies no
+worker and keeps its deadline. The request accepts external responses while
+paused, and a new invocation dispatches eligible work after explicit resume.
+
+An accepted pause is observable as `pausing` while a verified runner drains.
+A crash can leave only the acceptance event. That evidence identifies an
+interrupted invocation and its intended pause. A completed pause requires a
+`run_paused` event. `pause --wait` uses the existing private completion receipt
+to confirm cleanup and writer release for the selected invocation. `completed`
+reports the recorded outcome, including a competing outcome. An invocation
+that pauses returns exit 1 as incomplete.
+
+`resume RUN` selects the exact saved attempt and launches a new invocation
+through the existing plan and execution mode checks. FX uses verifiable saved
+context where available and requires the normal authorization for paid work.
+An unavailable context or changed plan is an explicit refusal. The caller
+can supply original options through the existing `run` resume forms.

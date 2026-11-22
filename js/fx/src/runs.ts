@@ -18,6 +18,8 @@ export type RunState =
   | "planned"
   | "unfinished"
   | "awaiting"
+  | "pausing"
+  | "paused"
   | "succeeded"
   | "failed"
   | "incomplete"
@@ -130,7 +132,7 @@ const LIST_KIND = "fx-run-list-v1";
 const REMOVAL_KIND = "fx-run-removal-v1";
 const PLACEMENTS: readonly string[] = ["allocated", "named", "explicit", "external"];
 const STATES: readonly string[] = [
-  "planned", "unfinished", "awaiting", "succeeded", "failed", "incomplete", "cancelled", "empty", "removing", "missing",
+  "planned", "unfinished", "awaiting", "pausing", "paused", "succeeded", "failed", "incomplete", "cancelled", "empty", "removing", "missing",
 ];
 const PREVIEW_OUTCOMES: readonly string[] = ["would_remove", "would_forget", "refused"];
 const APPLIED_OUTCOMES: readonly string[] = ["removed", "forgotten", "refused", "partial"];

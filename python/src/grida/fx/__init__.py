@@ -53,6 +53,8 @@ from grida.fx._api import (
     RunResult,
     plan,
     plan_async,
+    resume,
+    resume_async,
     run,
     run_async,
 )
@@ -64,6 +66,8 @@ from grida.fx._control import (
     cancel_async,
     inspect_control,
     inspect_control_async,
+    pause,
+    pause_async,
 )
 from grida.fx._ctx import CallResult, Ctx, InputFile, Output
 from grida.fx._errors import (
@@ -187,6 +191,8 @@ __all__ = [
     "load_run_async",
     "node",
     "param",
+    "pause",
+    "pause_async",
     "plan",
     "plan_async",
     "remove_runs",
@@ -195,6 +201,8 @@ __all__ = [
     "resolve_file_async",
     "respond",
     "respond_async",
+    "resume",
+    "resume_async",
     "run",
     "run_async",
     "spec_of",

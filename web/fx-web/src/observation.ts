@@ -28,7 +28,7 @@ export function cancellationRequested(events: readonly RunEvent[]): boolean {
     if (event.event === "run_started") { invocation = event.invocation_id; requested = false; }
     if (event.invocation_id !== invocation) continue;
     if (event.event === "cancel_requested") requested = true;
-    if (event.event === "run_finished" || event.event === "run_cancelled") requested = false;
+    if (["run_finished", "run_cancelled", "run_paused"].includes(event.event)) requested = false;
   }
   return requested;
 }

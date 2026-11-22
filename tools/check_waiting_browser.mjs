@@ -380,7 +380,10 @@ steps:
   await eventually(() => item2.evaluate(input => input === document.activeElement), "focus on the new second item");
   await item2.fill("7");
   await addItem.press("Enter");
+  const item3 = panel.getByRole("textbox", { name: "Item 3", exact: true });
+  await eventually(() => item3.evaluate(input => input === document.activeElement), "focus on the new last item");
   await panel.getByRole("button", { name: "Remove item 3" }).press("Enter");
+  await item3.waitFor({ state: "detached" });
   await eventually(() => addItem.evaluate(button => button === document.activeElement), "focus after removing the last item");
   assert.equal(await panel.locator("pre,code,textarea").count(), 0);
   await page.keyboard.press("Escape");

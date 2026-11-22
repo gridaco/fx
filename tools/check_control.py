@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify local cancellation through public CLI commands, without providers or a service."""
+"""Verify local run control through public commands, without providers or a service."""
 
 from __future__ import annotations
 
@@ -276,10 +276,142 @@ def signals(command: Path, output: Path) -> dict[str, Any]:
     return {"repeated_sigterm_is_idempotent": True, "sigint_uses_same_acceptance": True}
 
 
-async def python_sdk(command: Path, output: Path) -> dict[str, Any]:
-    from grida.fx import FxError, cancel_async, inspect_control_async, run_async
+def pause_journey(command: Path, output: Path) -> None:
+    harness = Harness(command, output, "pause")
+    try:
+        workflow = harness.home / "workflow.yaml"
+        workflow.write_text(
+            workflow.read_text() + "  early: ${{ steps.checkpoint.outputs.text }}\n"
+        )
+        harness.start()
+        harness.entered()
+        target = str(harness.run)
+        inspected = harness.call("inspect", target, "--control", "--json")
+        assert inspected["can_pause"]
+        invocation = inspected["invocation_id"]
+        accepted = harness.call("pause", target, "--invocation", invocation, "--json")
+        assert accepted["outcome"] == "accepted" and accepted["recorded_state"] == "pausing"
+        timeout = harness.call("pause", target, "--wait", "--timeout", "1s", "--json", status=1)
+        assert timeout["code"] == "wait_timeout" and timeout["request_status"] == "accepted"
+        (harness.home / ".control-release").touch()
+        paused = harness.call("pause", target, "--wait", "--json")
+        assert paused["outcome"] == "completed" and paused["recorded_state"] == "paused"
+        assert paused["cleanup"] == "complete" and paused["invocation_id"] == invocation
+        harness.finish(1)
+        events = harness.events()
+        assert sum(event["event"] == "pause_requested" for event in events) == 1
+        assert events[-1]["event"] == "run_paused"
+        assert set(events[-1]["outputs"]) == {"early"}
+        early = next(
+            event
+            for event in events
+            if event.get("id") == "checkpoint#1" and event["event"] == "node_finished"
+        )
+        assert events[-1]["outputs"]["early"] == early["outputs"]["text"]
+        assert (harness.run / "outputs/early.txt").is_file()
+        assert any(
+            event["event"] == "node_finished" and event.get("path") == "hold" for event in events
+        )
+        assert not any(
+            event["event"] == "node_started" and event.get("path") == "after" for event in events
+        )
 
-    harness = Harness(command, output, "python-sdk")
+        resumed = subprocess.run(
+            [command, "resume", target, "--no-view"],
+            cwd=harness.home,
+            env=environment(),
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        expect(resumed.returncode == 0, resumed.stdout + resumed.stderr)
+        newest = harness.call("inspect", target, "--control", "--json")
+        assert newest["recorded_state"] == "succeeded" and newest["invocation_id"] != invocation
+        assert [
+            event["path"]
+            for event in harness.events()
+            if event["event"] == "node_started"
+            and event["invocation_id"] == newest["invocation_id"]
+        ] == ["after"]
+        stale = harness.call("pause", target, "--invocation", invocation, "--json", status=2)
+        assert stale["code"] == "invocation_mismatch"
+    finally:
+        harness.close()
+
+
+def pause_interrupted(command: Path, output: Path) -> None:
+    for crash in (False, True):
+        harness = Harness(command, output, "pause-crash" if crash else "pause-cancel")
+        try:
+            harness.start()
+            harness.entered()
+            target = str(harness.run)
+            harness.call("pause", target, "--json")
+            if crash:
+                assert harness.child is not None
+                harness.child.kill()
+                harness.finish(-signal.SIGKILL)
+                inspected = harness.call("inspect", target, "--control", "--json")
+                assert inspected["recorded_state"] == "unfinished"
+            else:
+                result = harness.call("cancel", target, "--wait", "--json")
+                assert result["recorded_state"] == "cancelled"
+                harness.finish(130)
+                observed = harness.call("pause", target, "--wait", "--json")
+                assert (
+                    observed["recorded_state"] == "cancelled"
+                    and observed["request_status"] == "accepted"
+                )
+            events = harness.events()
+            assert any(event["event"] == "pause_requested" for event in events)
+            assert not any(event["event"] == "run_paused" for event in events)
+        finally:
+            harness.close()
+
+
+def pause_terminal_outcomes(command: Path, output: Path) -> None:
+    for outcome in ("succeeded", "failed"):
+        harness = Harness(command, output, f"pause-{outcome}")
+        try:
+            workflow = harness.home / "workflow.yaml"
+            workflow.write_text(
+                workflow.read_text().split("  after:", 1)[0]
+                + "outputs:\n  text: ${{ steps.hold.outputs.text }}\n"
+            )
+            if outcome == "failed":
+                nodes = harness.home / "nodes.py"
+                nodes.write_text(
+                    nodes.read_text().replace(
+                        'return {"text": ctx.inputs["text"]}',
+                        'raise ctx.fail("The released gate failed")',
+                        1,
+                    )
+                )
+            harness.start()
+            harness.entered()
+            target = str(harness.run)
+            harness.call("pause", target, "--json")
+            (harness.home / ".control-release").touch()
+            result = harness.call("pause", target, "--wait", "--json")
+            assert result["outcome"] == "completed" and result["recorded_state"] == outcome
+            harness.finish(0 if outcome == "succeeded" else 1)
+            assert harness.events()[-1]["event"] == "run_finished"
+        finally:
+            harness.close()
+
+
+async def python_sdk(command: Path, output: Path, *, pausing: bool = False) -> dict[str, Any]:
+    from grida.fx import (
+        FxError,
+        cancel_async,
+        inspect_control_async,
+        pause_async,
+        resume_async,
+        run_async,
+    )
+
+    harness = Harness(command, output, "python-sdk-pause" if pausing else "python-sdk")
     task = asyncio.create_task(
         run_async("workflow.yaml", run_dir=harness.run, cwd=harness.home, max_usd=0)
     )
@@ -290,6 +422,28 @@ async def python_sdk(command: Path, output: Path) -> dict[str, Any]:
             await asyncio.sleep(0.025)
         current = await inspect_control_async(harness.run, cwd=harness.home)
         expect(current.availability == "available", "Python SDK run has no control endpoint")
+        if pausing:
+            assert current.can_pause
+            accepted = await pause_async(harness.run, cwd=harness.home)
+            assert accepted.outcome == "accepted" and accepted.recorded_state == "pausing"
+            (harness.home / ".control-release").touch()
+            result = await pause_async(
+                harness.run, invocation=current.invocation_id, wait=True, cwd=harness.home
+            )
+            assert result.cleanup == "complete" and result.recorded_state == "paused"
+            assert any(
+                event["event"] == "pause_requested" and event["source"] == "sdk"
+                for event in harness.events()
+            )
+            paused = await task
+            assert paused.paused and paused.incomplete and not paused.ok
+            assert "hold" in paused.steps and "after" not in paused.steps
+            resumed = await resume_async(harness.run, cwd=harness.home)
+            assert resumed.ok and not resumed.paused
+            assert resumed.run_dir.resolve() == paused.run_dir.resolve()
+            assert resumed.invocation_id != paused.invocation_id
+            assert resumed.outputs["text"].path.read_text() == "saved checkpoint"
+            return {"cleanup_verified": True, "resumed_same_attempt": True, "source": "sdk"}
         result = await cancel_async(
             harness.run, invocation=current.invocation_id, wait=True, cwd=harness.home
         )
@@ -318,32 +472,54 @@ async def python_sdk(command: Path, output: Path) -> dict[str, Any]:
                 pass
 
 
-def javascript_sdk(command: Path, output: Path) -> dict[str, Any]:
-    harness = Harness(command, output, "javascript-sdk")
+def javascript_sdk(command: Path, output: Path, *, pausing: bool = False) -> dict[str, Any]:
+    harness = Harness(command, output, "javascript-sdk-pause" if pausing else "javascript-sdk")
     script = harness.home / "check-sdk.ts"
     script.write_text(
-        "import {run, inspectControl, cancel} from "
+        "import {run, inspectControl, cancel, pause, resume} from "
         + json.dumps(str(ROOT / "js/fx/src/index.ts"))
         + ";\n"
-        + "import {existsSync} from 'node:fs';\n"
+        + "import {existsSync, realpathSync, writeFileSync} from 'node:fs';\n"
         + "const home = "
         + json.dumps(str(harness.home))
         + ";\n"
         + "const folder = "
         + json.dumps(str(harness.run))
         + ";\n"
+        + "const pausing = "
+        + json.dumps(pausing)
+        + ";\n"
         + "const execution = run('workflow.yaml', {cwd:home, runDir:folder, maxUsd:0})"
-        + ".then(() => {throw new Error('cancelled run succeeded')}, error => {"
-        + "if(error.exitCode !== 130) throw error;});\n"
+        + ".catch(error => {if(pausing || error.exitCode !== 130) throw error; return null;});\n"
         + "const deadline = Date.now()+15000;\n"
         + "while(!existsSync(home+'/.control-entered')) {"
         + "if(Date.now()>deadline) throw new Error('gate never entered'); await Bun.sleep(25);}\n"
         + "const current = await inspectControl(folder, {cwd:home});\n"
         + "if(current.availability !== 'available') throw new Error('control unavailable');\n"
-        + "const result = await cancel(folder, "
+        + "if(pausing) {\n"
+        + "  if(!current.can_pause) throw new Error('pause unavailable');\n"
+        + "  const accepted = await pause(folder, {cwd:home});\n"
+        + "  if(accepted.recorded_state !== 'pausing') throw new Error('pause not accepted');\n"
+        + "  writeFileSync(home+'/.control-release', '');\n"
+        + "}\n"
+        + "const result = await (pausing ? pause : cancel)(folder, "
         + "{cwd:home, invocation:current.invocation_id, wait:true});\n"
         + "if(result.cleanup !== 'complete') throw new Error('cleanup unverified');\n"
-        + "await execution; console.log(JSON.stringify(result));\n"
+        + "const outcome = await execution;\n"
+        + "if(pausing) {\n"
+        + "  if(result.recorded_state !== 'paused' || !outcome?.paused || !outcome.incomplete)"
+        + " throw new Error('run did not pause');\n"
+        + "  if(outcome.steps['hold#1']?.state !== 'succeeded' || outcome.steps['after#1'])"
+        + " throw new Error('unexpected pause boundary');\n"
+        + "  const resumed = await resume(folder, {cwd:home});\n"
+        + "  if(!resumed.ok || resumed.paused"
+        + " || realpathSync(resumed.runDir) !== realpathSync(outcome.runDir)"
+        + " || resumed.invocationId === outcome.invocationId)"
+        + " throw new Error('resume did not continue the same attempt');\n"
+        + "  if((await resumed.outputs.text.read()).toString() !== 'saved checkpoint')"
+        + " throw new Error('resume lost the checkpoint');\n"
+        + "} else if(outcome !== null) throw new Error('cancelled run succeeded');\n"
+        + "console.log(JSON.stringify(result));\n"
     )
     result = subprocess.run(
         ["bun", "--no-env-file", str(script)],
@@ -356,11 +532,17 @@ def javascript_sdk(command: Path, output: Path) -> dict[str, Any]:
     expect(result.returncode == 0, f"JavaScript SDK integration failed: {result.stderr}")
     CONTROL.validate(json.loads(result.stdout))
     events = harness.events()
+    request = "pause_requested" if pausing else "cancel_requested"
     expect(
-        any(event["event"] == "cancel_requested" and event["source"] == "sdk" for event in events),
+        any(event["event"] == request and event["source"] == "sdk" for event in events),
         "JavaScript control wrapper did not record SDK source",
     )
-    return {"control_available": True, "cleanup_verified": True, "source": "sdk"}
+    return {
+        "control_available": True,
+        "cleanup_verified": True,
+        "source": "sdk",
+        **({"resumed_same_attempt": True} if pausing else {}),
+    }
 
 
 def main() -> int:
@@ -378,11 +560,21 @@ def main() -> int:
             for key in KEYS:
                 os.environ.pop(key, None)
             os.environ.update(environment(), GRIDA_FX_BIN=str(command))
+            pause_journey(command, output)
+            pause_interrupted(command, output)
+            pause_terminal_outcomes(command, output)
             report = {
+                "pause": {
+                    "resume_reused_step": True,
+                    "cancel_and_crash": True,
+                    "terminal_outcomes": True,
+                },
                 "journey": journey(command, output),
                 "signals": signals(command, output),
                 "python_sdk": asyncio.run(python_sdk(command, output)),
                 "javascript_sdk": javascript_sdk(command, output),
+                "python_sdk_pause": asyncio.run(python_sdk(command, output, pausing=True)),
+                "javascript_sdk_pause": javascript_sdk(command, output, pausing=True),
             }
             (output / "report.json").write_text(json.dumps(report, indent=2) + "\n")
             print(json.dumps(report, sort_keys=True))

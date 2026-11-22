@@ -69,7 +69,7 @@ describe("workflow index projection", () => {
     expect(value.entries).toEqual(before);
   });
 
-  test("keeps older recorded running or unfinished runs visible outside collapsed history", () => {
+  test("keeps older active and resumable runs visible outside collapsed history", () => {
     const running = entry(1, { state: "running", name: "long_run" }), unfinished = entry(2, { state: "unfinished" });
     const latest = entry(3, { state: "failed" });
     const group = new ServiceIndexProjection(catalog([running, latest, unfinished])).groups[0];
@@ -77,6 +77,8 @@ describe("workflow index projection", () => {
     expect(group.unfinished_runs).toEqual([unfinished, running]);
     const newerRunning = { ...latest, state: "running" };
     expect(new ServiceIndexProjection(catalog([running, newerRunning])).groups[0].unfinished_runs).toEqual([running]);
+    const paused = entry(1, { state: "paused" }), pausing = entry(2, { state: "pausing" });
+    expect(new ServiceIndexProjection(catalog([paused, latest, pausing])).groups[0].unfinished_runs).toEqual([pausing, paused]);
   });
 
   test("recorded ID and exact source group definition and input changes, never titles or hashes", () => {

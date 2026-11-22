@@ -35,8 +35,8 @@ Omitting all three selectors creates a fresh record. `name` is create-only; `res
 existing named run. An explicit folder retains its existing create/resume behavior.
 Each resume starts a new invocation of the same
 [run attempt](store.md#run-references-attempts-and-invocations).
-Resuming repeats current target/input/route/builder options; old options are not
-restored. A name does not force generation or alter any cache identity.
+Resuming through `run` uses the target, inputs, routes and builder options supplied
+by the client. The name labels the run record independently of cache identity.
 
 For a named resume or an existing explicit run folder, SDKs invoke the engine without
 preplanning or injecting a `Plan`'s preparation snapshot. The engine loads the run's recorded
@@ -52,21 +52,43 @@ It can replay cached answers, run local steps and contact the original provider
 to collect. It preserves the prior recorded ceiling and sends no new managed work.
 Ordinary live execution also retries collection for jobs already known to have finished.
 
-SDKs start `run` with `GRIDA_FX_CANCEL_SOURCE=sdk` in the engine's environment. Besides naming
-the source of a signal's cancellation, it tells the engine that the invocation's inputs file is
-temporary: its `run_started` records no `repeat` ([store.md](store.md) §8, "Repeating a run"),
-so `reroll` and `pick` on its folder advise running it again rather than print a command. An
-SDK caller repeats a run by calling `run` again with the same request.
+Python `resume(run)` / `resume_async(run)` and JavaScript `resume(run, options)`
+continue an exact saved attempt identified by a run folder or `WORKFLOW_ID/NAME`.
+They return the same `RunResult` as `run` and use the engine's recorded-context
+resume path. They accept the normal live authorization, ceiling, estimate and
+later-phase approval options, and can wait for external answers. The engine reports
+missing context, a plan mismatch or an authorization refusal as `FxError`.
+Supply the original execution options to `run` when the saved record needs
+explicit reconstruction.
 
-Run calls retain execution ownership until completion, including cancellation
-cleanup under [control.md](control.md). They return execution results. They do not
-start a viewer, return an early URL, or offer a readiness handle.
+SDKs mark signals from owned `run` and `resume` processes with
+`GRIDA_FX_CANCEL_SOURCE=sdk`. When opening a run, they report whether they wrote
+temporary inputs with `GRIDA_FX_SDK_TEMP_INPUTS` (value `1` for temporary inputs
+or `0` for persistent inputs). `run_started.repeat` can record eligible persistent
+input paths. A temporary inputs file or the absence of this marker on an older SDK's
+`run` leaves `repeat` absent. See [repeating a run](store.md#8-run-folders).
+
+Run and resume calls retain execution ownership until completion, including
+cleanup under [control.md](control.md). A terminal pause returns a `RunResult`
+with `paused` and `incomplete` set to true and the available workflow outputs.
+These calls do not start a viewer, return an early URL, or offer a readiness handle.
 Existing result construction reads the folder after the child exits; it is not
 an atomic invocation capture when another process immediately resumes that folder.
 `RunResult.call_recoveries` / `RunResult.callRecoveries` contains the recorded recovery events.
 The event's optional `original_charged_usd` is the amount FX booked for the original task.
 Older records can lack the evidence needed to identify that amount, even when the run's
 accumulated spend is available. Recovery adds zero to that accumulated spend.
+
+## Pause a run
+
+Python `pause` / `pause_async` and JavaScript `pause` request that one exact
+invocation stop admitting new steps and drain admitted work. Callers can supply
+an expected invocation ID and wait for verified local completion with the same
+`wait` and `timeout` options as cancellation. The result reports acceptance
+separately from the recorded outcome. A stopped client wait leaves an accepted
+request in effect. Structured refusals raise `RunControlError` with the engine's
+code and result. `inspect_control` / `inspectControl` report `can_pause` when
+available and distinguish `pausing` and `paused`. See [run control](control.md).
 
 ## Answer external requests
 
@@ -282,7 +304,7 @@ Project initialization and template installation (`init` and `add`), service
 management/browser opening, diagnostics, node locks,
 take maintenance and job forgetting stay CLI operations. Add native
 SDK support when a concrete embedding job justifies its lifetime and errors.
-Pause, active revision and cloud control remain separate contracts.
+Active revision and cloud control remain separate contracts.
 
 ## Optional cost forecasts
 

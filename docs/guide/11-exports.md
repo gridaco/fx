@@ -9,8 +9,8 @@ source; check `grida fx export --help` before using an older installed release.
 grida fx export ./runs/example --out ./review --json
 ```
 
-The source must be inactive with a terminal invocation. Failed and cancelled
-terminal runs are valid. The destination must be new. Export reads saved evidence
+The source must be inactive with a terminal invocation. Failed, cancelled and
+paused invocations can be exported. The destination must be new. Export reads saved evidence
 without importing workflow code or using the cache, service or providers.
 
 The result gives the manifest's SHA-256, output folder, copied artifact counts and

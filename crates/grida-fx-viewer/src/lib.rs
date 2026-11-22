@@ -315,19 +315,26 @@ async fn observation_snapshot(State(state): State<Arc<AppState>>) -> Response {
     let root = root.clone();
     match tokio::task::spawn_blocking(move || {
         let captured = observation::snapshot(&root)?;
-        let projected = read::read_observed(&root, &captured).ok().map(|snapshot| {
-            let report = layout::run_report(&captured.plan, &snapshot, captured.cursor.clone());
-            let active = snapshot.document.state == "unfinished"
-                && captured
-                    .events
-                    .iter()
-                    .rfind(|event| event["event"] == "run_started")
-                    .and_then(|event| event["plan"].as_str().zip(event["invocation_id"].as_str()))
-                    .is_some_and(|(plan, invocation)| {
-                        control::is_executing(&root, plan, invocation)
-                    });
-            (snapshot.document, report, active)
-        });
+        let projected = read::read_observed(&root, &captured)
+            .ok()
+            .map(|mut snapshot| {
+                let report = layout::run_report(&captured.plan, &snapshot, captured.cursor.clone());
+                let active = snapshot.document.state == "unfinished"
+                    && captured
+                        .events
+                        .iter()
+                        .rfind(|event| event["event"] == "run_started")
+                        .and_then(|event| {
+                            event["plan"].as_str().zip(event["invocation_id"].as_str())
+                        })
+                        .is_some_and(|(plan, invocation)| {
+                            control::is_executing(&root, plan, invocation)
+                        });
+                if active && observation::pending_pause(&captured.events).is_some() {
+                    snapshot.document.state = "pausing".into();
+                }
+                (snapshot.document, report, active)
+            });
         Ok::<_, observation::ObservationError>((captured, projected))
     })
     .await

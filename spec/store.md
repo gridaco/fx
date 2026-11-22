@@ -193,7 +193,8 @@ the plan digest, step or call identities, prices, or cache keys. A changed defin
 or input creates a different plan within the same logical workflow (recorded ID
 and source); FX introduces no workflow revision or version registry.
 
-**Repeating a run.** A `run_started` that `grida-fx run` writes may record `repeat`: the
+**Repeating a run.** A `run_started` that `grida-fx run` or `grida-fx resume` writes may record
+`repeat`: the
 arguments that run the same workflow again with the same inputs, from which `reroll` and `pick`
 print their `next` command. It holds the target, as `workflow` (a workflow id, as given) or
 `file` (the workflow file, or a builder's module with its `function`), the `--inputs` and
@@ -207,8 +208,9 @@ A `run_started` records no `repeat` when its record could not repeat the invocat
 input flags, `--arg` or `--recover` were given, a stand-in answered its paid calls, the target,
 an inputs file or a route table lies outside the planning project or has a path that is not UTF-8, the
 target is a builder and the working directory is not the planning project's root (a builder is
-called with the working directory), or an SDK started it (its inputs file is temporary;
-[sdk.md](sdk.md)).
+called with the working directory), or the SDK's invocation uses a temporary input mapping.
+An older SDK without input lifetime metadata is treated as supplying temporary inputs.
+See [SDK run access](sdk.md).
 
 `reroll` and `pick` resolve the recorded paths, `repeat`'s and `plan.json`'s `takes_file`,
 against the planning project, the project whose run index (§9) records the run folder: the
@@ -229,6 +231,24 @@ working directory is not the planning project's root, or when a path is not UTF-
 part of `plan.json`, the plan digest, step or call identities, prices or cache keys.
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
+
+`resume RUN` selects an exact existing run folder or `WORKFLOW_ID/NAME` using the
+[run-control selectors](control.md). It uses the latest `run_started.repeat` to
+recover the target and project-relative input and route files. It plans from the
+project whose run index records the folder. The normal plan and execution-mode
+checks still apply. Before writing a new start event, the runner takes
+`run.lock` on the existing folder and verifies the latest invocation ID against
+the one selected before planning. Missing context, unavailable recorded files,
+and stand-in runs require the caller to supply the original execution options
+with `run TARGET --resume NAME` or `run TARGET --run FOLDER`. A successful
+`resume RUN` writes reusable repeat metadata for its new invocation.
+
+A recorded live execution requires a fresh `--live` for `resume RUN`. Use a
+current `--max-usd` or the normal configured ceiling when one is required.
+Use `--require-estimates` on resume to require forecast coverage for uncached
+paid work, including later expansion. Any later-phase `--yes-up-to` comes from the current command. The resume verb
+uses the saved target and files for reconstruction and checks spend through the
+same path as `run`.
 
 **Recovery only.** `run TARGET --live --recover` requires `--resume NAME` or `--run FOLDER` for an existing run, with the usual plan and mode checks. It reuses cached work, can execute local steps, and may read existing provider jobs. It cannot send a new managed provider call or submit a new provider job. It keeps the prior invocation's recorded ceiling and needs no new dollar ceiling or forecast. Later phases do not require a budget approval threshold. An uncached call with no job to collect fails. Its invocation has no automatic repeat command.
 
@@ -281,7 +301,7 @@ them with their call keys, even when a step succeeded on retry.
 - **Waiting for a route.** A paid call takes its route's slot before each send: the route's `concurrency` and `requests_per_minute` ([providers.md](providers.md) §3). A call that cannot take one at once writes `call_waiting` (`id`, `capability`, `route`, and `call`, its key) before it waits, and `call_admitted` with the same members once it has the slot; a call admitted at once writes neither, so a run on unpaced routes records nothing more. A wait that the run's cancellation ends writes no `call_admitted`. A wait is open from its `call_waiting` until the `call_admitted` of the same call, or until the step starts again, makes a new attempt (`node_retry`) or its run a new invocation (`run_started`): a wait those leave behind is no longer the step's. Readers show a started step that has not ended and has an open wait as `waiting` rather than `running` (`inspect`, `project`, the viewer), and time the work a step did from its start less the time it waited. A step whose body makes several calls at once is shown `waiting` while any of them waits, though another may be drawing: the record names only calls that waited.
 - **`run.lock`** holds an exclusive operating-system file lock (`flock` on POSIX), taken without waiting, for as long as an invocation runs the folder. A second invocation that cannot take the lock is refused at once ("another invocation is running <folder>"). The lock ends with the process, so a crashed run leaves no stale lock. The file's content means nothing. It stays in place while the folder holds a run; a removal (§9) unlinks it last. An invocation that took the lock then checks that the file it locked is still the folder's `run.lock` (the same device and inode), and is refused otherwise ("<folder> was removed while this invocation started"), since that lock was taken on a folder that is gone.
 - **`files/`** gets an instance's output files when it succeeds, whether it ran or came from the cache, before its `node_finished` event is written. Each take of a step has a folder of its own (`<step>` below), so `files/` holds every take's files and `inspect --verify` checks each against its record.
-- **`outputs/`** gets the workflow's declared outputs at the end of each invocation, before `run_finished`. An incomplete run places the outputs that exist. An output that holds no file, such as a plain value, has no entry here; its value is in the `run_finished` event.
+- **`outputs/`** gets the workflow's declared outputs before `run_finished` or `run_paused`. The runner places every output available at that boundary. The terminal event records the output values, including plain values with no corresponding file.
 - `views/` is reserved for views, which are planned and not part of this version.
 
 **Display scopes and workflow interfaces.** New expanded graphs optionally record
@@ -475,7 +495,7 @@ Besides runs, the project can hold two leftovers. An **empty claim** is a folder
 
 A `plan.json` of another kind, a folder at a run's place that holds files but no `plan.json` (`no_plan`: it is searched for runs and never removed), a folder of the tree that cannot be read, a symbolic link or special file among the tree's folders, and a run index or catalog entry that cannot be read are reported as skipped, with the reason.
 
-**States.** The list ([schemas/fx-run-list-v1.schema.json](schemas/fx-run-list-v1.schema.json)) gives each run its creation time (the first `run_started`'s, else, for a record older than that field or a run that never started, `plan.json`'s modification time; none for a leftover) and the state `inspect` reads from its log (`planned`, `unfinished`, `succeeded`, `cancelled`), with unsuccessful finishes distinguished as `awaiting` for a `run_finished` with blocking `awaiting` request IDs, `incomplete` for other finishes with `ok: false` and `incomplete: true`, and `failed` for other failures. A detached response does not change the recorded finish. The leftovers are `empty`, `removing` and `missing`. A recorded `unfinished` says nothing about whether a process is running; only `run.lock` does.
+**States.** The list ([schemas/fx-run-list-v1.schema.json](schemas/fx-run-list-v1.schema.json)) gives each run its creation time (the first `run_started`'s, else, for a record older than that field or a run that never started, `plan.json`'s modification time; none for a leftover) and the state `inspect` reads from its log (`planned`, `unfinished`, `paused`, `succeeded`, `cancelled`), with unsuccessful finishes distinguished as `awaiting` for a `run_finished` with blocking `awaiting` request IDs, `incomplete` for other finishes with `ok: false` and `incomplete: true`, and `failed` for other failures. `pausing` requires a recorded `pause_requested` and a verified current invocation owner. Detached responses leave the recorded invocation outcome intact. The leftovers are `empty`, `removing` and `missing`. Check `run.lock` or verify the owner to learn whether a process is running.
 
 **Selecting runs to remove.** `runs remove` takes runs or filters, never both.
 - A run is a run folder, an empty claim or a tombstone that the list shows; `WORKFLOW_ID/NAME` of a named run, found by its place, so that an empty named claim is found too (a name of several sources is ambiguous); or a missing folder that the run index or the catalog still names, which is then only forgotten. Every run named is checked before anything is removed. One that is not a run, a folder that is or holds the project root, its `runs` folder, its store or `.fx`, and a folder that holds other runs fail the command, and nothing is removed.
@@ -505,7 +525,7 @@ It is refused, before anything is removed and in the preview too, when:
 - `job_outstanding`: a job record is `submitting` or `submitted` (§5): collect it by running the workflow again, or forget it once the provider is checked;
 - `unreadable_store`: a folder or record of the store, or a job record, cannot be read: what it names would be taken to name nothing;
 - the project's runs cannot all be read: a folder of the runs tree that cannot be read, or a symbolic link or special file among its folders (`incomplete_walk`), a `plan.json` of another kind (`foreign_run`), a run's `plan.json`, `events.jsonl` or waiting request records (`unreadable_run`), a run index or catalog entry (`unreadable_entry`), an external run folder that cannot be reached (`unreachable_run`) or that is gone (`missing_run`; `runs remove <folder>` forgets it);
-- `legacy_interrupted_run`: an invocation of a run that is not a stand-in run ended with no `run_finished` or `run_cancelled` after a `budget_reserved` without `call`, so a paid answer it received may be named by no event, and no later invocation of the run succeeded; run it again to finish it, or remove it;
+- `legacy_interrupted_run`: an invocation of a run that is not a stand-in run ended with no `run_finished`, `run_cancelled` or `run_paused` after a `budget_reserved` without `call`, so a paid answer it received may be named by no event, and no later invocation of the run succeeded; run it again to finish it, or remove it;
 - with `--yes`: `cache_in_use`, when the lock of either store, the `run.lock` of a run folder the project holds, or a work claim is held, and `lock_unsupported`, when the file system cannot lock.
 
 A folder at a run's place that holds files but no `plan.json` refuses nothing: what its `events.jsonl` names stays, in both stores. The `legacy` user also stands for this project's run folders outside its runs folder from before the run index, which pruning cannot see. A confirmed prune holds `.fx/runs/lock` while it reads the runs, so no removal runs meanwhile, and records its project among the store's users.

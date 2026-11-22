@@ -23,8 +23,8 @@
 //! ended (with the plan's reason), else `pending`. A failed or skipped step's error is the
 //! event's `error`, else its `reason`. The run's state: `planned`, `unfinished` after
 //! `run_started`, `succeeded`/`failed` after `run_finished` (by its `ok`), `cancelled` after
-//! `run_cancelled`, the last one winning; it has ended once succeeded, failed or cancelled.
-//! `spent` is the `charged_usd` of the last `run_finished` or `run_cancelled`.
+//! `run_cancelled`, or `paused` after `run_paused`. A verified draining owner after
+//! `pause_requested` is `pausing`. `spent` records the last terminal invocation's `charged_usd`.
 //! Failed managed attempts are read in event order, including failures from earlier invocations
 //! and failures followed by a successful retry.
 //! The text shows the latest recovery report for each call that is still pending recovery or
@@ -40,7 +40,7 @@
 //! ```text
 //! <workflow id>  ·  <folder name>[  ·  stand-in]
 //! state     <run state>   <n> steps: <count state, …, sorted by state; or none>
-//! booked    $<charged, 2 places>                   (when the run finished or was cancelled)
+//! booked    $<charged, 2 places>                   (from a terminal invocation)
 //! failed    <id>: <error or "no reason recorded">  (each failed step)
 //! attempt   <id> · attempt <n> [· send <n>] · <route> [· call <key>]
 //! recovery  <id> · <status> · <original booked charge, when known>
@@ -85,6 +85,9 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
     let plan = read_plan(&folder, &label)?;
     let events = read_log(&folder, &label, false)?;
     let mut view = RunView::new(&plan, &events);
+    if view.state == "unfinished" && grida_fx_runtime::observation::is_pausing(&folder, &events) {
+        view.state = "pausing";
+    }
     let requests = if args.verify || (args.json && !args.register) {
         super::waiting::requests(&folder)?
     } else {
@@ -309,8 +312,12 @@ impl RunView {
                     };
                     charged = event.get("charged_usd").cloned();
                 }
-                Some("run_cancelled") => {
-                    state = "cancelled";
+                Some(name @ ("run_cancelled" | "run_paused")) => {
+                    state = if name == "run_paused" {
+                        "paused"
+                    } else {
+                        "cancelled"
+                    };
                     charged = event.get("charged_usd").cloned();
                 }
                 Some(
@@ -371,7 +378,7 @@ impl RunView {
         let ended = matches!(state, "succeeded" | "failed" | "cancelled");
         let steps = entries
             .into_iter()
-            .map(|(id, entry)| step_view(id, entry, ended))
+            .map(|(id, entry)| step_view(id, entry, ended, state == "paused"))
             .collect();
         let first_start = events
             .iter()
@@ -395,7 +402,7 @@ impl RunView {
 }
 
 /// One entry's state (module doc).
-fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
+fn step_view(id: String, entry: Entry, ended: bool, paused: bool) -> StepView {
     let mut view = StepView {
         id,
         path: entry.path,
@@ -438,6 +445,7 @@ fn step_view(id: String, entry: Entry, ended: bool) -> StepView {
             view.state = "failed";
             view.error = Some("the run ended before this step finished".into());
         }
+        Some(_) if paused => {}
         Some(_) => match entry.waits.into_values().next() {
             Some(route) => {
                 view.state = "waiting";

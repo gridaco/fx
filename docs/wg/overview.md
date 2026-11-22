@@ -48,9 +48,10 @@ The [run-control contract](../../spec/control.md) is implemented
 cancellation, and optionally verify local completion. Acceptance is distinct from
 completion and remote provider outcomes; timeouts on waiting do not grant force
 authority. Runner-owned control works without the project service. Signal and
-Python/JavaScript SDK cancellation share these semantics. Cancellation is independent
-of viewer hosting; pause and explicit terminate remain deferred.
-Explicit termination and durable scheduler pause remain separate follow-ups.
+Python/JavaScript SDK cancellation share these semantics. Operator pause closes
+step admission and lets active steps finish before recording a durable boundary.
+Resume continues the same attempt using verified execution context. Explicit
+force termination remains deferred.
 
 The [SDK run-access contract](../../spec/sdk.md) aligns useful Python/JavaScript
 jobs: named creation/resume, loading a pinned saved record, and observing its

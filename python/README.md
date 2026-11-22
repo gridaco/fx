@@ -220,9 +220,12 @@ the [file access contract](../spec/files.md).
 
 ## Run control
 
-`inspect_control(run)` and `cancel(run, invocation=None, wait=False, timeout=None)`
-inspect or cancel an exact run folder or `WORKFLOW_ID/NAME`. Their async counterparts
-are `inspect_control_async` and `cancel_async`. `RunControlResult` preserves the wire
+`inspect_control(run)`, `pause(run, invocation=None, wait=False, timeout=None)`,
+and `cancel(run, invocation=None, wait=False, timeout=None)` select an exact run
+folder or `WORKFLOW_ID/NAME`. Pause drains active steps before recording the pause.
+Use `resume(run)` to continue from the saved attempt and receive a `RunResult`.
+Pass `require_estimates=True` to require forecasts for uncached paid work on resume.
+Each operation also has an `_async` form. `RunControlResult` preserves the wire
 contract's `lower_snake_case` fields. Structured failures raise `RunControlError`
 with `code` and `result`; unsupported binaries or malformed responses raise `FxError`.
 Choose `run_dir` to control a pending SDK invocation through these separate operations.

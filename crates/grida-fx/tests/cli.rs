@@ -2725,13 +2725,16 @@ fn integrated_run_started_records_how_to_repeat_the_run() {
          with: { files: {}, manifest: { n: 1 } }\n",
     )
     .unwrap();
-    let repeat = |folder: &str, args: &[&str], sdk: bool| {
+    let repeat = |folder: &str, args: &[&str], sdk: bool, temp_inputs: Option<&str>| {
         let mut argv = vec!["run"];
         argv.extend_from_slice(args);
         argv.extend_from_slice(&["--run", folder, "--no-view"]);
         let mut command = command(root, &argv);
         if sdk {
             command.env("GRIDA_FX_CANCEL_SOURCE", "sdk");
+        }
+        if let Some(temp_inputs) = temp_inputs {
+            command.env("GRIDA_FX_SDK_TEMP_INPUTS", temp_inputs);
         }
         // Whether the step's host starts does not matter: the record starts before it.
         let output = command.output().unwrap();
@@ -2749,19 +2752,277 @@ fn integrated_run_started_records_how_to_repeat_the_run() {
             .cloned()
     };
     assert_eq!(
-        repeat("runs/id", &["case"], false),
+        repeat("runs/id", &["case"], false, None),
         Some(json!({"workflow": "case", "live": false}))
     );
     assert_eq!(
         repeat(
             "runs/live",
             &["./case.yaml", "--live", "--max-usd", "1"],
-            false
+            false,
+            None
         ),
         Some(json!({"file": "case.yaml", "max_usd": 1, "live": true}))
     );
-    // An SDK's inputs file is temporary: nothing to repeat from.
-    assert_eq!(repeat("runs/sdk", &["case"], true), None);
+    // Older SDK callers and callers supplying a temporary input mapping omit repeat context.
+    assert_eq!(repeat("runs/sdk", &["case"], true, None), None);
+    assert_eq!(repeat("runs/sdk-temp", &["case"], true, Some("1")), None);
+    assert_eq!(
+        repeat("runs/sdk-resumable", &["case"], true, Some("0")),
+        Some(json!({"workflow": "case", "live": false}))
+    );
+}
+
+#[test]
+fn resume_reuses_saved_inputs_and_validates_the_exact_record() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\ninputs:\n  value: { type: string }\n\
+         steps:\n  gate:\n    uses: fx/await@1\n    with: { schema: { type: string } }\n\
+         outputs:\n  value: '${{ inputs.value }}'\n  answer: '${{ steps.gate.outputs.answer }}'\n",
+    )
+    .unwrap();
+    let input_path = root.join("input.yaml");
+    std::fs::write(&input_path, "value: original\n").unwrap();
+    let run = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--inputs",
+            "input.yaml",
+            "--name",
+            "review",
+            "--no-view",
+        ],
+    );
+    assert_eq!(status(&run), 1, "{}{}", stdout(&run), stderr(&run));
+    let selector = "case/review";
+    let summary = grida_fx(root, &["inspect", selector, "--json"]);
+    assert_eq!(status(&summary), 0, "{}", stderr(&summary));
+    let summary: Value = serde_json::from_slice(&summary.stdout).unwrap();
+    let folder = root.join(summary["run"]["folder"].as_str().unwrap());
+    let started = events(&folder);
+    assert_eq!(started[0]["event"], "run_started");
+    let requests = grida_fx(root, &["inspect", selector, "--requests", "--json"]);
+    assert_eq!(status(&requests), 0, "{}", stderr(&requests));
+    let requests: Value = serde_json::from_slice(&requests.stdout).unwrap();
+    let request = requests["requests"][0]["id"].as_str().unwrap();
+    let submitted = grida_fx(root, &["respond", selector, request, "--json", "\"ok\""]);
+    assert_eq!(status(&submitted), 0, "{}", stderr(&submitted));
+
+    std::fs::write(&input_path, "value: changed\n").unwrap();
+    let changed = grida_fx(root, &["resume", selector, "--no-view"]);
+    assert_eq!(
+        status(&changed),
+        1,
+        "{}{}",
+        stdout(&changed),
+        stderr(&changed)
+    );
+    assert!(stdout(&changed).contains("another workflow or other inputs"));
+    assert_eq!(events(&folder), started);
+
+    std::fs::write(&input_path, "value: original\n").unwrap();
+    let resumed = grida_fx(root, &["resume", selector, "--no-view"]);
+    assert_eq!(
+        status(&resumed),
+        0,
+        "{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+    let resumed = events(&folder);
+    let invocations: Vec<_> = resumed
+        .iter()
+        .filter(|event| event["event"] == "run_started")
+        .collect();
+    assert_eq!(invocations.len(), 2);
+    assert_ne!(
+        invocations[0]["invocation_id"],
+        invocations[1]["invocation_id"]
+    );
+    assert_eq!(invocations[0]["plan"], invocations[1]["plan"]);
+    assert_eq!(invocations[0]["repeat"], invocations[1]["repeat"]);
+    assert_eq!(resumed.last().unwrap()["event"], "run_finished");
+}
+
+#[test]
+fn resume_refuses_missing_records_and_explains_missing_context() {
+    let project = empty_project();
+    let root = project.path();
+    for absent in ["case", "runs/missing"] {
+        let output = grida_fx(root, &["resume", absent]);
+        assert_eq!(status(&output), 2);
+        assert!(!root.join(absent).exists());
+    }
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\ninputs:\n  value: { type: string }\n\
+         steps:\n  gate:\n    uses: fx/await@1\n    with: { schema: { type: string } }\n\
+         outputs:\n  value: '${{ inputs.value }}'\n",
+    )
+    .unwrap();
+    let run = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--run",
+            "runs/existing",
+            "--no-view",
+            "--",
+            "--value",
+            "provided-by-flag",
+        ],
+    );
+    assert_eq!(status(&run), 1, "{}{}", stdout(&run), stderr(&run));
+    let folder = root.join("runs/existing");
+    let started = events(&folder);
+    let output = grida_fx(root, &["resume", "runs/existing", "--no-view"]);
+    assert_eq!(status(&output), 2);
+    assert!(
+        stderr(&output).contains("Supply the original target, inputs and options"),
+        "{}",
+        stderr(&output)
+    );
+    assert_eq!(events(&folder), started);
+}
+
+#[test]
+fn resume_requires_fresh_live_authorization() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("case.yaml"),
+        "fx: workflow/v1\nid: case\ntitle: Case\nsteps:\n  gate:\n    uses: fx/await@1\n    with: { schema: { type: string } }\n",
+    )
+    .unwrap();
+    let run = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--run",
+            "runs/live",
+            "--max-usd",
+            "0",
+            "--live",
+            "--no-view",
+        ],
+    );
+    assert_eq!(status(&run), 1, "{}{}", stdout(&run), stderr(&run));
+    let folder = root.join("runs/live");
+    let started = events(&folder);
+    let refused = grida_fx(root, &["resume", "runs/live", "--no-view"]);
+    assert_eq!(
+        status(&refused),
+        2,
+        "{}{}",
+        stdout(&refused),
+        stderr(&refused)
+    );
+    assert!(stderr(&refused).contains("Pass --live"));
+    assert_eq!(events(&folder), started);
+    let resumed = grida_fx(
+        root,
+        &[
+            "resume",
+            "runs/live",
+            "--max-usd",
+            "0",
+            "--live",
+            "--no-view",
+        ],
+    );
+    assert_eq!(
+        status(&resumed),
+        1,
+        "{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+    let after = events(&folder);
+    assert_eq!(
+        after
+            .iter()
+            .filter(|event| event["event"] == "run_started")
+            .count(),
+        2
+    );
+    assert_eq!(after.last().unwrap()["event"], "run_finished");
+}
+
+#[test]
+fn resume_can_require_estimates_for_work_revealed_by_an_answer() {
+    let project = empty_project();
+    let root = project.path();
+    std::fs::write(
+        root.join("routes.yaml"),
+        "fx: routes/v1\nroutes:\n  - {capability: image.generate, route: img-a@acme}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("case.yaml"),
+        r#"fx: workflow/v1
+id: case
+title: Case
+steps:
+  gate:
+    uses: fx/await@1
+    with: { schema: { type: boolean } }
+  draw:
+    uses: fx/image.generate@1
+    route: img-a@acme
+    if: ${{ steps.gate.outputs.answer }}
+    with: { prompt: a paper lantern }
+"#,
+    )
+    .unwrap();
+    let run = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--run",
+            "runs/saved",
+            "--routes",
+            "routes.yaml",
+            "--no-view",
+        ],
+    );
+    assert_eq!(status(&run), 1, "{}{}", stdout(&run), stderr(&run));
+    let listed: Value = serde_json::from_slice(
+        &grida_fx(root, &["inspect", "runs/saved", "--requests", "--json"]).stdout,
+    )
+    .unwrap();
+    let request = listed["requests"][0]["id"].as_str().unwrap();
+    let answered = grida_fx(root, &["respond", "runs/saved", request, "--json", "true"]);
+    assert_eq!(status(&answered), 0, "{}", stderr(&answered));
+    let resumed = grida_fx(
+        root,
+        &["resume", "runs/saved", "--require-estimates", "--no-view"],
+    );
+    assert_eq!(
+        status(&resumed),
+        1,
+        "{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+    assert!(
+        stdout(&resumed).contains("cost estimate"),
+        "{}{}",
+        stdout(&resumed),
+        stderr(&resumed)
+    );
+    assert!(
+        !events(&root.join("runs/saved"))
+            .iter()
+            .any(|event| event["event"] == "budget_reserved")
+    );
 }
 
 /// A job record as the store writes it (fx-job-record-v1).

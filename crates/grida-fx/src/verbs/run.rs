@@ -94,6 +94,15 @@ const KEY: &str = "{key}";
 
 /// Runs `grida-fx run`.
 pub fn run(args: &RunArgs) -> Result<u8, Error> {
+    execute(args, super::planning::working_directory()?, None)
+}
+
+/// Runs the original planning and execution path for a resolved resume record.
+pub(super) fn resume(args: &RunArgs, root: PathBuf, invocation: &str) -> Result<u8, Error> {
+    execute(args, root, Some(invocation))
+}
+
+fn execute(args: &RunArgs, cwd: PathBuf, expected_invocation: Option<&str>) -> Result<u8, Error> {
     if args.recover && args.run.is_none() && args.resume.is_none() {
         return Err(Error::usage(
             "--recover needs an existing --run or --resume",
@@ -102,7 +111,6 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     for name in args.name.iter().chain(args.resume.iter()) {
         super::run_catalog::validate_name(name)?;
     }
-    let cwd = super::planning::working_directory()?;
     let stand_in = args
         .stand_in
         .as_deref()
@@ -150,6 +158,11 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
     };
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
+    if expected_invocation.is_some() && planner.project.root != cwd {
+        return Err(Error::usage(
+            "the saved target now resolves to another project",
+        ));
+    }
     let recorded_folder = if let Some(name) = &args.resume {
         Some(super::run_catalog::resume_named(
             &planner.project.runs_dir(),
@@ -194,9 +207,12 @@ pub fn run(args: &RunArgs) -> Result<u8, Error> {
         &engine,
         &mut planner,
         &mut host,
-        yes_up_to,
-        &deliveries,
-        prepared.facts,
+        RunPreparation {
+            yes_up_to,
+            deliveries: &deliveries,
+            resolved_models: prepared.facts,
+        },
+        expected_invocation,
     );
     crate::engine::shutdown(&runtime, &engine);
     ran
@@ -233,16 +249,26 @@ pub(super) fn start_engine(
     engine
 }
 
+struct RunPreparation<'a> {
+    yes_up_to: Option<grida_fx_core::money::Usd>,
+    deliveries: &'a [Delivery],
+    resolved_models: serde_json::Value,
+}
+
 /// Steps 3–8 of the module doc.
 fn plan_and_run(
     args: &RunArgs,
     engine: &Arc<Engine>,
     planner: &mut Planner,
     host: &mut dyn NodeHost,
-    yes_up_to: Option<grida_fx_core::money::Usd>,
-    deliveries: &[Delivery],
-    resolved_models: serde_json::Value,
+    prepared: RunPreparation<'_>,
+    expected_invocation: Option<&str>,
 ) -> Result<u8, Error> {
+    let RunPreparation {
+        yes_up_to,
+        deliveries,
+        resolved_models,
+    } = prepared;
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
     let mut plan = crate::engine::plan(engine, planner, host)?;
@@ -317,11 +343,11 @@ fn plan_and_run(
         name: args.name.clone(),
         yes_up_to,
         takes_file: super::takes_file(planner),
-        existing: args.resume.is_some() || args.recover,
+        existing: args.resume.is_some() || args.recover || expected_invocation.is_some(),
         index: Some(RunIndex {
             project_root: planner.project.root.clone(),
         }),
-        repeat: super::repeat::recorded(args, planner, cwd),
+        repeat: super::repeat::recorded(args, planner, cwd, expected_invocation.is_some()),
         resolved_models: resolved_models["routes"]
             .as_array()
             .filter(|entries| !entries.is_empty())
@@ -330,16 +356,31 @@ fn plan_and_run(
     let mut viewer = None;
     let mut invocation_id = None;
     let project = planner.project.clone();
-    let ran = runner::run_with_control_ready(
+    let sdk_project = if expected_invocation.is_some()
+        && std::env::var("GRIDA_FX_CANCEL_SOURCE").as_deref() == Ok("sdk")
+    {
+        let root = project
+            .root
+            .to_str()
+            .ok_or_else(|| Error::usage("the planning project cannot be represented as UTF-8"))?;
+        Some(serde_json::to_string(root).expect("a string is JSON"))
+    } else {
+        None
+    };
+    let ran = runner::run_with_expected_invocation(
         Arc::clone(engine),
         planner,
         host,
         plan,
         options,
+        expected_invocation,
         |ready| {
             invocation_id = Some(ready.invocation_id.clone());
             crate::interrupt::runner_started();
             print_line(&format!("run       {label}"));
+            if let Some(root) = &sdk_project {
+                stderr::line(format_args!("resume_project\t{root}"));
+            }
             if args.wait_for_answers {
                 stderr::line(format_args!(
                     "requests  {} inspect {} --requests --json",
@@ -646,6 +687,8 @@ fn summary(
 ) -> Vec<String> {
     let result = if outcome.ok {
         "ok"
+    } else if outcome.paused {
+        "paused"
     } else if outcome.incomplete {
         "incomplete"
     } else {
@@ -1227,6 +1270,7 @@ mod tests {
             ],
             outputs: IndexMap::new(),
             cancelled: false,
+            paused: false,
         }
     }
 

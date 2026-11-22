@@ -19,10 +19,13 @@ A missing lock is `unavailable`; a held lock is `busy`. The lock remains held
 through capture and copying. The source is never modified or repaired.
 
 The observation reader captures the plan and complete event prefix. The latest
-invocation must start with `run_started` and end with `run_finished` or
-`run_cancelled`, and no unreadable or incomplete event tail may follow it. Refuse
-unfinished, crashed, malformed and actively resumed records. Failed terminal
-runs are valid inspection sources. A parked invocation ending in `run_finished.awaiting` can also be exported. Its recorded request state is frozen at that invocation, and opening the package cannot submit an answer. A terminal recording never appears live.
+invocation must start with `run_started` and end with `run_finished`,
+`run_cancelled` or `run_paused`. The event tail must be readable and complete.
+Refuse unfinished, crashed, malformed and actively resumed records. Paused runs
+and runs parked on an external request can be exported. The package preserves
+recorded waiting states and any outputs available at that boundary, subject to
+the usual disclosure rules. Request IDs and the answer endpoint stay local.
+A terminal recording never appears live.
 
 `source.plan_sha256` hashes the exact saved UTF-8 `plan.json` bytes.
 `source.events_sha256` hashes the RFC 8785 canonical JSON encoding of the captured

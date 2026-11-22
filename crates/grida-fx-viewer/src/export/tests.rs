@@ -366,15 +366,33 @@ fn admission_requires_existing_inactive_lock_and_terminal_latest_invocation() {
 }
 
 #[test]
-fn parked_invocation_exports_historical_waiting_evidence_without_a_response_surface() {
+fn parked_and_paused_invocations_export_historical_waiting_evidence() {
+    for (state, terminal) in [
+        (
+            "awaiting",
+            json!({"event":"run_finished","ok":false,"incomplete":true,"charged_usd":0,"outputs":{}}),
+        ),
+        (
+            "paused",
+            json!({"event":"run_paused","charged_usd":0,"outputs":{"early":{"value":"completed output"}}}),
+        ),
+    ] {
+        waiting_evidence(state, terminal);
+    }
+}
+
+fn waiting_evidence(state: &str, mut terminal: Value) {
     let fixture = source("image/png");
     let parent = tempfile::tempdir().unwrap();
     let request = grida_fx_core::value::file_digest(b"waiting request");
+    if state == "awaiting" {
+        terminal["awaiting"] = json!([request]);
+    }
     let events = [
         json!({"event":"run_started","charged_usd":0}),
         json!({"event":"node_started","id":"draw#1","path":"draw","uses":"fx/await@1","with":{},"reads":[]}),
         json!({"event":"waiting_request","id":"draw#1","request_id":request,"request_status":"pending"}),
-        json!({"event":"run_finished","ok":false,"incomplete":true,"awaiting":[request],"charged_usd":0,"outputs":{}}),
+        terminal,
     ];
     let mut log = OpenOptions::new()
         .append(true)
@@ -390,7 +408,7 @@ fn parked_invocation_exports_historical_waiting_evidence_without_a_response_surf
     drop(log);
     export(&fixture, &parent, ExportOptions::default()).unwrap();
     let data = manifest(&parent);
-    assert_eq!(data["view"]["state"], "awaiting");
+    assert_eq!(data["view"]["state"], state);
     assert!(
         data["view"]["nodes"]
             .as_array()
@@ -399,6 +417,29 @@ fn parked_invocation_exports_historical_waiting_evidence_without_a_response_surf
             .any(|n| n["id"] == "draw#1" && n["state"] == "awaiting")
     );
     assert!(!serde_json::to_string(&data).unwrap().contains(&request));
+    if state == "paused" {
+        assert_eq!(data["view"]["outputs"]["early"], json!({"withheld":true}));
+        let disclosed = tempfile::tempdir().unwrap();
+        export(
+            &fixture,
+            &disclosed,
+            ExportOptions {
+                include_values: true,
+                ..ExportOptions::default()
+            },
+        )
+        .unwrap();
+        let disclosed = manifest(&disclosed);
+        assert_eq!(
+            disclosed["view"]["outputs"]["early"],
+            json!({"value":"completed output"})
+        );
+        assert!(
+            !serde_json::to_string(&disclosed)
+                .unwrap()
+                .contains(&request)
+        );
+    }
     let schema: Value = serde_json::from_str(include_str!(
         "../../../../spec/schemas/fx-run-export-v1.schema.json"
     ))

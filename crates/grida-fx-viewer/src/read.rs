@@ -695,7 +695,13 @@ pub(crate) fn read_recorded_inventory(root: &Path) -> io::Result<Snapshot> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
         Err(error) => return Err(error),
     };
-    project_inventory(root, &plan, &events, warnings)
+    let mut snapshot = project_inventory(root, &plan, &events, warnings)?;
+    if snapshot.document.state == "unfinished"
+        && grida_fx_runtime::observation::is_pausing(root, &events)
+    {
+        snapshot.document.state = "pausing".into();
+    }
+    Ok(snapshot)
 }
 
 fn with_reviewed_artifacts(root: &Path, mut snapshot: Snapshot) -> Snapshot {
@@ -875,8 +881,10 @@ fn project_inventory(
                     charged = Some(total + settled);
                 }
             }
-            Some("run_finished") => {
-                state = if event.get("incomplete") == Some(&Value::Bool(true))
+            Some(event_name @ ("run_finished" | "run_paused")) => {
+                state = if event_name == "run_paused" {
+                    "paused"
+                } else if event.get("incomplete") == Some(&Value::Bool(true))
                     && event
                         .get("awaiting")
                         .and_then(Value::as_array)
@@ -1063,7 +1071,14 @@ fn project_inventory(
             _ => {}
         }
     }
-    if matches!(state.as_str(), "succeeded" | "failed" | "cancelled") {
+    if state == "paused" {
+        for current in &mut nodes {
+            if matches!(current.state.as_str(), "running" | "waiting") {
+                current.state = "pending".into();
+                current.end_waits();
+            }
+        }
+    } else if matches!(state.as_str(), "succeeded" | "failed" | "cancelled") {
         for current in &mut nodes {
             if matches!(current.state.as_str(), "running" | "waiting") {
                 current.state = "failed".into();

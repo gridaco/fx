@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from grida.fx._api import FxError, _call, _failure, _no_running_loop
+from grida.fx._api import FxError, _call, _failure, _no_running_loop, _run_target
 
 _MAX_RESULT_BYTES = 16 * 1024
 _OUTCOMES = {
@@ -45,8 +44,8 @@ _ERROR_STATUS = {
 class RunControlResult:
     """The engine's fx-run-control-v1 outcome; field names match the public wire contract.
 
-    ``accepted`` is cancellation intent. Only ``cleanup == "complete"`` certifies local
-    cleanup; ``external_completion`` always remains ``not_verified``.
+    ``accepted`` records the accepted control request. Only ``cleanup == "complete"``
+    certifies local cleanup.
     """
 
     kind: str
@@ -61,6 +60,7 @@ class RunControlResult:
     message: str | None = None
     availability: str | None = None
     can_cancel: bool | None = None
+    can_pause: bool | None = None
 
 
 class RunControlError(FxError):
@@ -75,16 +75,7 @@ class RunControlError(FxError):
         self.code = result.code
 
 
-def _target(run: str | Path) -> str:
-    if not isinstance(run, str | os.PathLike):
-        raise TypeError("run is an explicit run folder or exact WORKFLOW_ID/NAME")
-    text = os.fspath(run)
-    if not isinstance(text, str) or not text or text.startswith("-") or "\0" in text:
-        raise ValueError("run is a nonempty target that cannot start with '-' or contain NUL")
-    return text
-
-
-def _cancel_options(invocation: str | None, wait: bool, timeout: str | None) -> list[str]:
+def _control_options(invocation: str | None, wait: bool, timeout: str | None) -> list[str]:
     if type(wait) is not bool:
         raise TypeError("wait is True or False")
     options = ["--source=sdk"]
@@ -118,15 +109,15 @@ def _result(document: Any, operation: str, wait: bool, status: int) -> RunContro
         "cleanup",
         "external_completion",
     }
-    optional = {"code", "message", "availability", "can_cancel"}
+    optional = {"code", "message", "availability", "can_cancel", "can_pause"}
     if not required <= document.keys():
         raise ValueError("missing fields")
     for name, value in document.items():
         if name not in required | optional:
             continue  # Compatible extensions never change the validated outcome.
-        if name == "can_cancel":
+        if name in {"can_cancel", "can_pause"}:
             if type(value) is not bool:
-                raise ValueError("can_cancel is not boolean")
+                raise ValueError(f"{name} is not boolean")
         elif name == "invocation_id" and value is None:
             continue
         elif (
@@ -144,6 +135,8 @@ def _result(document: Any, operation: str, wait: bool, status: int) -> RunContro
             "planned",
             "unfinished",
             "awaiting",
+            "pausing",
+            "paused",
             "succeeded",
             "failed",
             "cancelled",
@@ -164,13 +157,14 @@ def _result(document: Any, operation: str, wait: bool, status: int) -> RunContro
             raise ValueError("missing or unknown availability")
         if type(document.get("can_cancel")) is not bool:
             raise ValueError("missing can_cancel")
-    elif "availability" in document or "can_cancel" in document:
-        raise ValueError("inspection fields on cancellation")
+    elif {"availability", "can_cancel", "can_pause"} & document.keys():
+        raise ValueError("inspection fields on a control request")
     outcome = document["outcome"]
     if outcome == "completed" and (
         document["invocation_id"] is None
         or document["cleanup"] != "complete"
-        or document["recorded_state"] not in {"awaiting", "succeeded", "failed", "cancelled"}
+        or document["recorded_state"]
+        not in {"awaiting", "paused", "succeeded", "failed", "cancelled"}
     ):
         raise ValueError("completion lacks invocation, cleanup or terminal evidence")
     if outcome == "error":
@@ -201,15 +195,14 @@ async def _control(
     options: list[str],
     wait: bool = False,
 ) -> RunControlResult:
-    verb = "inspect" if operation == "inspect" else "cancel"
-    args = [verb, _target(run), *options, "--json"]
+    args = [operation, _run_target(run), *options, "--json"]
     done = await _call(args, Path.cwd() if cwd is None else Path(cwd).absolute())
     try:
         if len(done.stdout.encode("utf-8")) > _MAX_RESULT_BYTES:
             raise ValueError("oversized result")
         result = _result(json.loads(done.stdout), operation, wait, done.status)
     except (ValueError, TypeError):
-        raise _failure(verb, done) from None
+        raise _failure(operation, done) from None
     if result.outcome == "error":
         raise RunControlError(result, done.status)
     return result
@@ -246,7 +239,7 @@ async def cancel_async(
     of this client task only ends its wait; an accepted run cancellation remains effective.
     """
     return await _control(
-        "cancel", run, cwd=cwd, options=_cancel_options(invocation, wait, timeout), wait=wait
+        "cancel", run, cwd=cwd, options=_control_options(invocation, wait, timeout), wait=wait
     )
 
 
@@ -263,3 +256,34 @@ def cancel(
     return asyncio.run(
         cancel_async(run, invocation=invocation, wait=wait, timeout=timeout, cwd=cwd)
     )
+
+
+async def pause_async(
+    run: str | Path,
+    *,
+    invocation: str | None = None,
+    wait: bool = False,
+    timeout: str | None = None,
+    cwd: str | Path | None = None,
+) -> RunControlResult:
+    """Stop admission of new steps and drain active work for one exact run.
+
+    With ``wait=True``, the result verifies local completion and reports the recorded
+    outcome. The caller can time out or cancel its wait while an accepted pause continues.
+    """
+    return await _control(
+        "pause", run, cwd=cwd, options=_control_options(invocation, wait, timeout), wait=wait
+    )
+
+
+def pause(
+    run: str | Path,
+    *,
+    invocation: str | None = None,
+    wait: bool = False,
+    timeout: str | None = None,
+    cwd: str | Path | None = None,
+) -> RunControlResult:
+    """:func:`pause_async`, for code outside an event loop."""
+    _no_running_loop("pause")
+    return asyncio.run(pause_async(run, invocation=invocation, wait=wait, timeout=timeout, cwd=cwd))

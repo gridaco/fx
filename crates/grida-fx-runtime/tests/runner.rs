@@ -1456,6 +1456,52 @@ fn a_paid_call_left_by_a_timeout_settles_before_the_run_ends() {
 }
 
 #[test]
+fn parking_for_an_answer_settles_a_detached_call_at_its_reservation() {
+    let _serial = serial();
+    let project = Project::new(&[(
+        "case",
+        r#"fx: workflow/v1
+id: case
+title: Park while a detached call is in flight
+steps:
+  draw:
+    uses: ./nodes/cases.py#paid_slowly
+    timeout: 0.5
+    with: { prompt: lantern }
+  review:
+    uses: fx/await@1
+    with: { schema: { type: string } }
+"#,
+    )]);
+    let sends = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let slow = Slow {
+        delay: Duration::from_millis(1500),
+        sends: Arc::clone(&sends),
+    };
+    let Some(outcome) = run_in(
+        &project,
+        Invocation {
+            live: true,
+            max_usd: Some("1"),
+            adapter: Some(Adapter::Request(Arc::new(slow))),
+            ..Invocation::default()
+        },
+        None,
+    ) else {
+        return;
+    };
+    let outcome = outcome.unwrap();
+    assert!(outcome.incomplete, "{outcome:?}");
+    assert_eq!(sends.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(outcome.charged, Usd(40_000));
+    let events = project.events("runs/one");
+    let terminal = events.last().unwrap();
+    assert_eq!(terminal["event"], "run_finished");
+    assert_eq!(terminal["awaiting"].as_array().unwrap().len(), 1);
+    assert_eq!(terminal["charged_usd"], json!(0.04));
+}
+
+#[test]
 fn a_body_past_its_deadline_can_make_no_paid_call() {
     let _serial = serial();
     let project = Project::new(&[(

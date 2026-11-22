@@ -235,6 +235,8 @@ export interface Projection {
     run_started?: RunEvent;
     run_finished?: RunFinished;
     run_cancelled?: RunEvent & { reason?: string; charged_usd?: number };
+    run_paused?: RunEvent & { charged_usd: number; outputs?: { [name: string]: Encoded } };
+    pause_requested?: RunEvent;
   };
 }
 
@@ -260,7 +262,7 @@ export interface Inspection {
     workflow: string;
     /** The run folder, as it was named. */
     folder: string;
-    state: "planned" | "unfinished" | "awaiting" | "succeeded" | "failed" | "cancelled";
+    state: "planned" | "unfinished" | "awaiting" | "pausing" | "paused" | "succeeded" | "failed" | "cancelled";
     /** What the run was charged; null before it ended. */
     charged_usd: number | null;
     steps: InspectedStep[];

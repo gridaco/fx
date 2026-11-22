@@ -19,6 +19,7 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--register \| [--open] [--standalone]]` | expand, check and price a plan. `--open` opens the default browser. `--register` saves the plan and returns its viewer route. Planning never spends. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
 | `grida fx run <target> [inputs] [--routes file]… [--live] [--recover] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | Runs the workflow. `--live` admits paid calls with a ceiling unless every call is on your own Codex or Grok Build. `--recover` restricts an existing live run to collection and local work ([Resuming](04-cost-and-cache.md#resuming)). Use `--name` to create a named run, `--resume` to continue it, and `--run` to select a folder. Use `--stand-in` to answer paid calls with your function offline ([below](#stand-ins-testing-without-a-provider)). |
+| `grida fx resume RUN` | Continues an exact run folder or named run using its saved execution context. Supply `--live` again to continue live execution, with a current ceiling when required. |
 | `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | check a request or generate one image without a workflow ([below](#generate-one-image)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
@@ -53,7 +54,7 @@ grida fx inspect review-variants/review --requests --json
 # Set REVISION_ID and CHOOSE_ID to the IDs for revision#1 and choose#1.
 grida fx respond review-variants/review "$REVISION_ID" --json '"rev-42"'
 grida fx respond review-variants/review "$CHOOSE_ID" --json '{"variant":"b"}'
-grida fx run workflow.yaml --resume review
+grida fx resume review-variants/review
 ```
 
 By default the first invocation exits with status 1 and an incomplete result once
@@ -99,16 +100,19 @@ from its outputs. See [From Python](#from-python) and [From JavaScript](#from-ja
 ```sh
 grida fx run character-rig
 grida fx run character-rig --name character_1_rig_ready
-grida fx run character-rig --resume character_1_rig_ready
+grida fx resume character-rig/character_1_rig_ready
 grida fx inspect character-rig --open
 grida fx inspect character-rig/character_1_rig_ready --open
 ```
 
-Without a name, each command creates a fresh run record; matching cached results
+Each plain `run` creates a fresh run record. Matching cached results
 can still make it finish immediately. `--name` creates once and refuses an existing
-name. `--resume` requires that name and the same current plan and execution mode:
-supply the same inputs, routes, takes and builder arguments again. It appends an
-invocation, retains recorded work and spending, and never replaces history.
+name. `resume RUN` selects an exact folder or `WORKFLOW_ID/NAME`, checks the
+current plan and execution mode, and appends an invocation to the same history.
+It retains recorded work and spending. If the record lacks the execution context,
+use `run TARGET --resume NAME` or `run TARGET --run PATH` with the original
+inputs, routes, takes and builder arguments. For paid work, give a new `--live`
+and the applicable budget options.
 `--run PATH` remains the explicit create-or-resume folder interface, including
 for SDK users. The three options are mutually exclusive; there is no overwrite.
 

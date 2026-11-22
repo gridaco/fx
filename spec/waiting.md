@@ -100,6 +100,11 @@ request IDs in `run_finished.awaiting`. Cancellation ends the invocation, leavin
 state and the deadline intact for the same recorded run. A response cannot resume an ended
 invocation.
 
+An open request can remain outstanding when the operator pauses the run. Its
+original deadline continues to apply, and the engine can accept a response
+while the runner is away. A resumed invocation observes the saved result before
+dispatching dependent work. [Durable pause](control.md#11-durable-pause-and-resume)
+
 Run-folder copies can retain request records alongside the plan and event log. The public
 export does not copy the request files or make requests answerable. Any separately recorded
 workflow values remain subject to the existing [export disclosure rules](exports.md).

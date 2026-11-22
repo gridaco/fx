@@ -16,7 +16,8 @@
 
 import { lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
+import { exactRunTarget } from "./control.js";
 import type {
   CallRecovery,
   Encoded,
@@ -29,11 +30,13 @@ import type {
   Problem,
   ProjectedInstance,
   Projection,
+  RunEvent,
   RunFinished,
 } from "./documents.js";
 import { type CallOptions, call, document, type Exit, failure, INTERRUPTED } from "./engine.js";
 import { FxError } from "./errors.js";
 import {
+  amountText,
   makeRequest,
   type PlanOptions,
   type PlanRequest,
@@ -318,7 +321,15 @@ export class RunResult {
   }
 
   private get finished(): RunFinished | undefined {
-    return this.projection.run?.run_finished;
+    return this.paused ? undefined : this.currentEvent(this.projection.run?.run_finished);
+  }
+
+  private get pauseEvent(): Projection["run"]["run_paused"] {
+    return this.currentEvent(this.projection.run?.run_paused);
+  }
+
+  private currentEvent<E extends RunEvent>(event: E | undefined): E | undefined {
+    return (event?.invocation_id ?? null) === this.invocationId ? event : undefined;
   }
 
   /** The initialized invocation represented by this result's projection. */
@@ -336,6 +347,11 @@ export class RunResult {
   get incomplete(): boolean {
     const finished = this.finished;
     return finished === undefined ? true : finished.incomplete === true;
+  }
+
+  /** Whether the invocation recorded a durable pause after draining active work. */
+  get paused(): boolean {
+    return this.pauseEvent !== undefined;
   }
 
   /** Budget booked in US dollars over every invocation; unreported charges consume their reservations. */
@@ -381,7 +397,7 @@ export class RunResult {
         }
       }
       const outputs: Record<string, RunValue> = {};
-      for (const [name, value] of Object.entries(this.finished?.outputs ?? {})) {
+      for (const [name, value] of Object.entries((this.pauseEvent ?? this.finished)?.outputs ?? {})) {
         outputs[name] = decode(value, placed);
       }
       this.#outputs = outputs;
@@ -478,7 +494,10 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
         "run", ...planningArgs(request, inputsFile), ...own, "--no-view",
         ...(modelsFile === null ? [] : [`--resolved-models=${modelsFile}`]),
       ];
-      const given = callOptions(request, signal);
+      const given = {
+        ...callOptions(request, signal),
+        env: { ...request.env, GRIDA_FX_SDK_TEMP_INPUTS: inputsFile === null ? "0" : "1" },
+      };
       return answerer === null ? call(args, given) : callAnswered(args, given, answerer);
     }),
   );
@@ -486,6 +505,45 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
   if (fault !== null && fault !== undefined) {
     throw fault.error;
   }
+  const folder = startedRunFolder("run", done);
+  if (folder === undefined) {
+    if (resuming) throw failure("run", done);
+    const replanned = await planRequest(request, signal, models);
+    if (!replanned.ok) {
+      throw new PlanRefused(replanned);
+    }
+    throw failure("run", done);
+  }
+  return readRunResult(folder, done, callOptions(request, signal));
+}
+
+/** Execution options for continuing an exact saved attempt. */
+export type ResumeOptions = Pick<
+  RunOptions,
+  "cwd" | "env" | "signal" | "live" | "maxUsd" | "yesUpTo" | "waitForAnswers" | "requireEstimates"
+>;
+
+/** Continue an exact saved attempt using the execution context recorded by the engine.
+ * If the record needs explicit context, use `run(target, { resume, ... })` or its `runDir` form. */
+export async function resume(run: string, options: ResumeOptions = {}): Promise<RunResult> {
+  const { maxUsd, requireEstimates, ...execution } = options;
+  if (requireEstimates !== undefined && typeof requireEstimates !== "boolean") {
+    throw new TypeError("requireEstimates is true or false");
+  }
+  const args = ["resume", exactRunTarget(run), ...runArgs(execution), "--no-view"];
+  if (maxUsd !== undefined) args.push(`--max-usd=${amountText("maxUsd", maxUsd)}`);
+  if (requireEstimates) args.push("--require-estimates");
+  const output = await call(args, options);
+  const done = { ...output, stderr: output.stderr.replace(/^resume_project\t[^\r\n]*(?:\r?\n|$)/gm, "") };
+  const folder = startedRunFolder("resume", done);
+  if (folder === undefined) throw failure("resume", done);
+  if (!isAbsolute(folder)) {
+    throw new FxError("grida-fx resume did not report the absolute run folder", { exitCode: done.status });
+  }
+  return readRunResult(folder, done, options);
+}
+
+function startedRunFolder(verb: "run" | "resume", done: Exit): string | undefined {
   if (done.status === INTERRUPTED) {
     throw new FxError("the run was interrupted", {
       exitCode: done.status,
@@ -495,7 +553,7 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
     });
   }
   if (done.status !== 0 && done.status !== 1) {
-    throw failure("run", done);
+    throw failure(verb, done);
   }
   const lines = done.stdout.split("\n");
   const named = lines
@@ -512,17 +570,14 @@ export async function run(target: string | Plan, options: RunOptions = {}): Prom
         args: done.args,
       });
     }
-    if (resuming) throw failure("run", done);
-    const replanned = await planRequest(request, signal, models);
-    if (!replanned.ok) {
-      throw new PlanRefused(replanned);
-    }
-    throw failure("run", done);
   }
-  const readOptions = callOptions(request, signal);
-  const projection = await project(folder, readOptions);
-  const inspection = await inspect(folder, readOptions);
-  return new RunResult(resolve(request.cwd, folder), done, projection, inspection);
+  return folder;
+}
+
+async function readRunResult(folder: string, done: Exit, options: CallOptions): Promise<RunResult> {
+  const projection = await project(folder, options);
+  const inspection = await inspect(folder, options);
+  return new RunResult(resolve(options.cwd ?? process.cwd(), folder), done, projection, inspection);
 }
 
 /** {@link call} with the stand-in served on a socket pair, the engine's end its standard input.

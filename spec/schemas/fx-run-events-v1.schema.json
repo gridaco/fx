@@ -21,6 +21,8 @@
         "run_finished",
         "run_cancelled",
         "cancel_requested",
+        "run_paused",
+        "pause_requested",
         "phase_planned",
         "waiting_request",
         "node_started",
@@ -732,7 +734,22 @@
       "if": {
         "properties": {
           "event": {
-            "const": "cancel_requested"
+            "const": "run_paused"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "charged_usd",
+          "outputs"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "enum": ["cancel_requested", "pause_requested"]
           }
         }
       },

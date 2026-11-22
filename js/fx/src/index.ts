@@ -58,13 +58,15 @@ export {
   plan,
   price,
   project,
+  resume,
+  type ResumeOptions,
   RunFile,
   RunResult,
   type RunValue,
   run,
 } from "./api.js";
 export { BINARY_VARIABLE, type BinaryOptions, binary, type Environment } from "./binary.js";
-export { cancel, type CancelOptions, inspectControl, RunControlError, type RunControlResult } from "./control.js";
+export { cancel, type CancelOptions, inspectControl, pause, type PauseOptions, RunControlError, type RunControlResult } from "./control.js";
 export { AnswerError, type AnswerState, type WaitingRequest, inspectRequests, listRequests, respond } from "./waiting.js";
 export {
   loadRun, type ObservedRunEvent, type RunEventBatch, type RunEventsOptions,

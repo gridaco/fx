@@ -183,9 +183,13 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   Neither job loads author code or opens files itself. Structured
   refusals raise `FileAccessError` with `code` and `document`. See the
   [file access contract](../../spec/files.md).
-- `inspectControl(run)` and `cancel(run, { invocation, wait, timeout })`: exact-target local
-  control, independent of viewer/service lifetime. Results keep their `lower_snake_case` wire
-  fields; structured failures raise `RunControlError` with `code` and `result`.
+- `inspectControl(run)`, `pause(run, { invocation, wait, timeout })`, and
+  `cancel(run, { invocation, wait, timeout })` control an exact run independently
+  of the viewer. Pause drains active steps before recording the pause. Use
+  `resume(run, options)` to continue from the saved attempt and receive a
+  `RunResult`. Pass `requireEstimates: true` to require forecasts for uncached paid
+  work on resume. Control results keep their `lower_snake_case` wire fields.
+  Structured control failures raise `RunControlError` with `code` and `result`.
 - `listRuns({ workflow })`: the project's runs, newest first, each with its `folder`, a `runDir`
   resolved against `cwd`, and `lower_snake_case` wire fields (`state`, `placement`,
   `charged_usd`, …). `removeRuns(runs, { preview })`: removes exactly the runs given (filter
