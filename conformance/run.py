@@ -50,7 +50,7 @@ DEFAULT_COMMAND = "grida-fx"
 # names at a verb in its terminal text is that invoker's.
 INVOKER_COMMANDS = {"grida-fx": "grida-fx", "grida": "grida fx", "python": "python -m grida.fx"}
 VERBS = (
-    "init|start|status|stop|logs|plan|expand|identity|price|schema|nodes|doctor|lock|run|reroll"
+    "init|start|status|stop|logs|plan|expand|identity|price|schema|nodes|doctor|lock|run|rerun|reroll"
     "|pick|takes|jobs|project|observe|export|inspect|cancel|runs|cache|view"
 )
 DEFAULT_TIMEOUT_S = 60.0
@@ -707,6 +707,8 @@ def _normal(value: object, in_data: bool = False) -> object:
 
     Timings and invocation ids are dropped from run events (objects with an "event"
     member). Creation time is also dropped from inspect's recorded run summary.
+    Run IDs vary with each new run, and the first attempt matches a legacy record.
+    Keep later attempt numbers when comparing recorded history.
     Nothing inside the data a record carries (`with`, `outputs`, `facts`, ...) is
     changed: an authored member may have any name.
     """
@@ -714,10 +716,13 @@ def _normal(value: object, in_data: bool = False) -> object:
     if isinstance(value, dict):
         event = not in_data and "event" in value
         run_summary = not in_data and {"workflow", "folder", "steps", "state"} <= value.keys()
+        run_identity = run_summary or (event and value["event"] == "run_started")
         return {
             key: _normal(item, in_data or key in DATA_KEYS)
             for key, item in value.items()
-            if not (event and key in VOLATILE_KEYS) and not (run_summary and key == "created_at")
+            if not (event and key in VOLATILE_KEYS)
+            and not (run_summary and key == "created_at")
+            and not (run_identity and (key == "run_id" or (key == "attempt_number" and item == 1)))
         }
     if isinstance(value, list):
         return [_normal(item, in_data) for item in value]

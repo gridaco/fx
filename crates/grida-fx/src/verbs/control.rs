@@ -38,46 +38,66 @@ pub(super) fn exact_folder(
     cwd: &Path,
     wait: Option<(Instant, Duration)>,
 ) -> Result<PathBuf, (&'static str, String)> {
+    exact_folder_at(given, cwd, wait, None)
+}
+
+pub(super) fn exact_folder_at(
+    given: &str,
+    cwd: &Path,
+    wait: Option<(Instant, Duration)>,
+    attempt: Option<u64>,
+) -> Result<PathBuf, (&'static str, String)> {
+    let history_error = |error: Error| {
+        let code = if error.message.contains("multiple folders claim") {
+            "ambiguous_target"
+        } else {
+            "invalid_target"
+        };
+        (code, error.message)
+    };
     let path = cwd.join(given);
     let parts: Vec<_> = Path::new(given)
         .components()
         .filter(|part| !matches!(part, Component::CurDir))
         .collect();
     let named = match parts.as_slice() {
-        [Component::Normal(id), Component::Normal(name)] => id
+        [Component::Normal(id), Component::Normal(name)] if !given.starts_with("./") => id
             .to_str()
             .zip(name.to_str())
             .filter(|(_, name)| super::run_catalog::validate_name(name).is_ok()),
         _ => None,
     };
-    let found = if let Some((id, name)) = named {
-        let project = Project::find(cwd).map_err(|_| {
-            (
-                "invalid_target",
-                "the planning project cannot be read".into(),
-            )
-        })?;
-        super::run_catalog::resolve_control(&project.runs_dir(), id, name, wait).map_err(
-            |error| {
-                let code = if error.message.contains("deadline expired") {
-                    "wait_timeout"
-                } else if error.message.contains("ambiguous")
-                    || error.message.contains("multiple sources")
-                {
-                    "ambiguous_target"
-                } else {
-                    "invalid_target"
-                };
+    let found =
+        if let Some(folder) = super::history::anchor_by_id(given, cwd).map_err(history_error)? {
+            Some(folder)
+        } else if let Some((id, name)) = named {
+            let project = Project::find(cwd).map_err(|_| {
                 (
+                    "invalid_target",
+                    "the planning project cannot be read".into(),
+                )
+            })?;
+            super::run_catalog::resolve_control(&project.runs_dir(), id, name, wait).map_err(
+                |error| {
+                    let code = if error.message.contains("deadline expired") {
+                        "wait_timeout"
+                    } else if error.message.contains("ambiguous")
+                        || error.message.contains("multiple sources")
+                    {
+                        "ambiguous_target"
+                    } else {
+                        "invalid_target"
+                    };
+                    (
                     code,
                     "the run selector cannot be resolved uniquely; use an absolute run folder path"
                         .into(),
                 )
-            },
-        )?
-    } else {
-        None
-    };
+                },
+            )?
+        } else {
+            None
+        };
     if path.is_dir() {
         if let Some(found) = found
             && path.canonicalize().ok() != found.canonicalize().ok()
@@ -88,13 +108,19 @@ pub(super) fn exact_folder(
                     .into(),
             ));
         }
-        return Ok(path);
+        return match attempt {
+            Some(number) => super::history::select(path, cwd, Some(number)).map_err(history_error),
+            None => Ok(path),
+        };
     }
     if let Some(found) = found {
-        return Ok(found);
+        return super::history::select(found, cwd, attempt).map_err(history_error);
     }
     if matches!(parts.as_slice(), [Component::Normal(_)]) {
-        return Err(("invalid_target", "select an explicit run folder or exact WORKFLOW_ID/NAME; bare workflow IDs do not select a run".into()));
+        return Err(("invalid_target", "select a run ID, run name, or explicit run folder; bare workflow IDs do not select a run".into()));
+    }
+    if let Some(number) = attempt {
+        return super::history::select(path, cwd, Some(number)).map_err(history_error);
     }
     Ok(path)
 }

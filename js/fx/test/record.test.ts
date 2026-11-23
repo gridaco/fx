@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  FxError, loadRun, plan, run, RunExportError, RunObservationError, RunRecord, toYaml, workflow,
+  FxError, loadRun, plan, rerun, run, runHistory, RunExportError, RunObservationError, RunRecord, toYaml, workflow,
 } from "../src/index.js";
 import type { RunEventBatch } from "../src/index.js";
 import { repoRoot, SLOW, temporaryFolder, testEngine } from "./support.js";
@@ -29,7 +29,7 @@ const config = JSON.parse(fs.readFileSync(path, "utf8"));
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FAKE_RECORD_LOG, JSON.stringify(args) + "\\n");
 let response;
-if (args[0] === "inspect") response = config.inspection;
+if (args[0] === "inspect") response = args.includes("--history") ? config.history : config.inspection;
 else if (config.reply !== undefined) response = config.reply;
 else if (args.includes("--snapshot")) response = config.snapshot;
 else {
@@ -42,7 +42,8 @@ process.exit(args[0] === "inspect" ? config.inspect_status ?? 0 : config.status 
 `;
 
 function fake() {
-  const folder = temporaryFolder("record");
+  const saved = temporaryFolder("record");
+  const folder = { ...saved, path: realpathSync(saved.path) };
   const engine = join(folder.path, "fake-engine");
   const config = join(folder.path, "config.json");
   const log = join(folder.path, "log.jsonl");
@@ -65,6 +66,57 @@ function fake() {
 }
 
 describe.skipIf(!NODE || process.platform === "win32")("saved run observation", () => {
+  test("run history resolves attempt folders and loadRun accepts exact attempt selection", async () => {
+    const engine = fake();
+    const runId = "a".repeat(64);
+    const attempts = [
+      { attempt_number: 1, folder: "runs/pinned" },
+      { attempt_number: 2, folder: "runs/latest" },
+    ];
+    try {
+      engine.reply({
+        history: { kind: "fx-run-history-v1", run_id: runId, attempts },
+        inspection: { run: { ...engine.inspection.run, run_id: runId, attempt_number: 1 } },
+      });
+      const history = await runHistory("case/one", engine.options);
+      expect(history.run_id).toBe(runId);
+      expect(history.attempts).toEqual(attempts.map((attempt) => ({
+        ...attempt, runDir: join(engine.path, attempt.folder),
+      })));
+      const original = await loadRun(runId, { ...engine.options, attempt: 1 });
+      expect(original.runId).toBe(runId);
+      expect(original.attemptNumber).toBe(1);
+      expect(original.runDir).toBe(history.attempts[0]?.runDir ?? "");
+      expect(engine.log()).toEqual([
+        ["inspect", "case/one", "--history", "--json"],
+        ["inspect", runId, "--json", "--attempt=1"],
+      ]);
+    } finally { engine.cleanup(); }
+  }, SLOW);
+
+  test("resolves attempt folders from the engine's cwd through a symlink", async () => {
+    const engine = fake();
+    try {
+      const project = join(engine.path, "project");
+      const work = join(project, "work");
+      const link = join(engine.path, "working-directory");
+      mkdirSync(work, { recursive: true });
+      symlinkSync(work, link, "dir");
+      const folder = "../runs/pinned";
+      const runId = "a".repeat(64);
+      engine.reply({
+        history: {
+          kind: "fx-run-history-v1", run_id: runId,
+          attempts: [{ attempt_number: 1, folder }],
+        },
+        inspection: { run: { ...engine.inspection.run, folder } },
+      });
+      const options = { ...engine.options, cwd: link };
+      expect((await runHistory(runId, options)).attempts[0]?.runDir).toBe(join(project, "runs/pinned"));
+      expect((await loadRun(runId, options)).runDir).toBe(join(project, "runs/pinned"));
+    } finally { engine.cleanup(); }
+  }, SLOW);
+
   test("recorded v2 forecasts remain unknown when attaching to an existing run", async () => {
     const engine = fake();
     try {
@@ -343,6 +395,30 @@ describe.skipIf(engine === null)("named SDK journeys against the engine", () => 
       const bad = await record.events({ after: "wrong" }).catch((caught: unknown) => caught);
       expect(bad).toBeInstanceOf(RunObservationError);
       expect((bad as RunObservationError).code).toBe("invalid_cursor");
+    } finally { folder.cleanup(); }
+  }, SLOW);
+
+  test.skipIf(process.platform === "win32")("uses the initial run's exact folder as a rerun source from a linked cwd", async () => {
+    const folder = temporaryFolder("linked-run");
+    try {
+      const project = join(realpathSync(folder.path), "project");
+      const work = join(project, "work");
+      const link = join(folder.path, "working-directory");
+      mkdirSync(work, { recursive: true });
+      symlinkSync(work, link, "dir");
+      writeFileSync(join(project, "fx.yaml"), "fx: project/v1\n");
+      writeFileSync(join(project, "workflow.yaml"), toYaml(workflow({
+        id: "linked-run", title: "Linked run",
+        steps: { choose: { uses: "fx/select@1", with: { first_of: [1] } } },
+      })));
+      const options = { cwd: link, env: offline, maxUsd: 0 };
+      const first = await run("../workflow.yaml", options);
+      expect(existsSync(join(first.runDir, "events.jsonl"))).toBe(true);
+      const second = await rerun(first.runDir, options);
+      expect(second.runId).toBe(first.runId);
+      expect(second.attemptNumber).toBe(2);
+      const history = await runHistory(second.runDir, options);
+      expect(history.attempts.map((attempt) => attempt.runDir)).toEqual([first.runDir, second.runDir]);
     } finally { folder.cleanup(); }
   }, SLOW);
 

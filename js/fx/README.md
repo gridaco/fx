@@ -157,8 +157,8 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   recorded model facts, including when passed a `Plan`; an engine refusal rejects with
   `FxError` and its explanation.
   A failed step does not reject.
-- `project(runDir)` and `inspect(runOrWorkflowId, { verify })`: a run's record and summary.
-- `loadRun(target, { verify })`: a `RunRecord` with a pinned absolute `runDir` and
+- `project(runDir)` and `inspect(runOrWorkflowId, { attempt, verify })`: a run's record and summary.
+- `loadRun(target, { attempt, verify })`: a `RunRecord` with a pinned absolute `runDir` and
   engine `inspection`. Its `snapshot()`, `events({ after, limit })` and async
   `follow({ after, pollIntervalMs, signal })` methods use the same public reader as
   the CLI. Following yields nonempty bounded batches until broken or aborted,
@@ -167,6 +167,13 @@ An FX reservation controls admission and bookkeeping; the provider may charge mo
   `node_skipped.skip_reason`: engine cause codes and related instance IDs, without
   author-written reason text. See [recorded skip reasons](../../spec/skip-reasons.md);
   older records may have no cause.
+- `rerun(runId, { attempt, requestId })` starts another attempt from verified saved
+  context and returns a `RunResult` with `runId` and `attemptNumber`. Pass `attempt`
+  to choose the source attempt. Reuse the same `requestId` when retrying a start
+  request. `runHistory(runId)` lists the numbered attempts and their exact folders.
+  Use `loadRun(runId, { attempt })` to open one for observation or control.
+  A duplicate start can return `exitCode: 0` for the accepted request. Read
+  `ok` and `incomplete` for the recorded attempt outcome.
 - `listFiles(runDirOrSavedPlan, { project, instanceId })` and
   `record.listFiles({ project, instanceId })`: portable artifact/source targets,
   with their recorded role and optional `instanceId`/`scopeId` associations.

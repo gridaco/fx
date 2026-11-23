@@ -440,17 +440,44 @@ fn resolve_one(
         _ => None,
     };
     let by_name = named.map(|(id, name)| {
-        set.found
-            .iter()
-            .enumerate()
-            .filter(|(_, found)| {
-                found.placement == Placement::Named
-                    && found.workflow() == Some(id)
-                    && found.name() == Some(name)
-            })
-            .map(|(index, _)| index)
+        let mut groups = std::collections::BTreeMap::new();
+        for (index, found) in set.found.iter().enumerate() {
+            if found.workflow() != Some(id) || found.name() != Some(name) {
+                continue;
+            }
+            let first = found.recorded().and_then(|record| {
+                record
+                    .events
+                    .iter()
+                    .find(|event| event["event"] == "run_started")
+            });
+            let attempt = grida_fx_runtime::attempts::from_start(
+                first.unwrap_or(&Value::Null),
+                &found.folder,
+            );
+            if found.placement != Placement::Named && attempt.attempt_number == 1 {
+                continue;
+            }
+            let entry = groups
+                .entry(attempt.run_id)
+                .or_insert((attempt.attempt_number, index));
+            if attempt.attempt_number > entry.0 {
+                *entry = (attempt.attempt_number, index);
+            }
+        }
+        groups
+            .into_values()
+            .map(|(_, index)| index)
             .collect::<Vec<_>>()
     });
+    if grida_fx_core::value::is_digest(given)
+        && !path.exists()
+        && let Some(folder) = super::history::by_id(given, cwd)
+            .map_err(|error| Invalid::new("invalid_target", given, error.message))?
+        && let Some(index) = set.found.iter().position(|found| found.folder == folder)
+    {
+        return checked(set, project, index, given);
+    }
     let metadata = fs::symlink_metadata(&path);
     if let Some(matches) = &by_name {
         if matches.len() > 1 {
@@ -461,19 +488,31 @@ fn resolve_one(
             ));
         }
         if let [index] = matches.as_slice() {
+            let selected = &set.found[*index];
+            let index = if selected.recorded().is_some() {
+                let folder = super::history::select(selected.folder.clone(), cwd, None)
+                    .map_err(|error| Invalid::new("invalid_target", given, error.message))?;
+                set.found
+                    .iter()
+                    .position(|found| found.folder == folder)
+                    .ok_or_else(|| {
+                        Invalid::new("invalid_target", given, "the latest attempt is unavailable")
+                    })?
+            } else {
+                *index
+            };
             if metadata.is_ok()
-                && path.canonicalize().ok().as_ref() != Some(&set.found[*index].folder)
+                && path.canonicalize().ok().as_ref() != Some(&set.found[index].folder)
             {
                 return Err(Invalid::new(
                     "ambiguous_target",
                     given,
                     format!(
-                        "{given} names both a folder and a named run; give the run folder as \
-                         ./{given}"
+                        "{given} names both a folder and a named run; give the run folder as ./{given}"
                     ),
                 ));
             }
-            return checked(set, project, *index, given);
+            return checked(set, project, index, given);
         }
     }
     let metadata = match metadata {
@@ -1167,7 +1206,8 @@ fn report(
     }
     for outcome in outcomes {
         let name = match &outcome.selected {
-            Selected::Found(index) => label(&set.found[*index], cwd),
+            Selected::Found(index) if applied => label(&set.found[*index], cwd),
+            Selected::Found(index) => shown_path(&set.found[*index].folder, cwd),
             Selected::Forget { given, .. } => given.clone(),
         };
         let state = match &outcome.selected {

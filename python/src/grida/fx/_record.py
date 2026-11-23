@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from grida.fx._api import FxError, _call, _failure, _no_running_loop
+from grida.fx._api import FxError, _attempt_args, _call, _failure, _no_running_loop
 from grida.fx._file_access import (
     FileDescriptor,
     FileResolution,
@@ -50,7 +50,7 @@ class RunExportError(FxError):
 
 def _target(target: str | Path) -> str:
     if not isinstance(target, str | os.PathLike):
-        raise TypeError("target is a run folder, workflow ID or WORKFLOW_ID/NAME selector")
+        raise TypeError("target is a run folder, run ID, workflow ID or WORKFLOW_ID/NAME selector")
     text = os.fspath(target)
     if not isinstance(text, str) or not text or "\0" in text or text.startswith("-"):
         raise ValueError("target is nonempty and cannot start with '-' or contain NUL")
@@ -157,6 +157,20 @@ class RunRecord:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "run_dir", Path(self.run_dir).resolve())
+
+    @property
+    def run_id(self) -> str | None:
+        """The stable identity of the selected run, when available."""
+        run = self.inspection.get("run")
+        value = run.get("run_id") if isinstance(run, dict) else None
+        return value if _text(value) else None
+
+    @property
+    def attempt_number(self) -> int | None:
+        """The selected attempt number, when available."""
+        run = self.inspection.get("run")
+        value = run.get("attempt_number") if isinstance(run, dict) else None
+        return value if type(value) is int and value > 0 else None
 
     def snapshot(self) -> dict[str, Any]:
         """Capture a consistent saved-plan/event prefix and its opaque cursor."""
@@ -319,10 +333,15 @@ def _export_result(value: Any) -> bool:
 
 
 async def load_run_async(
-    target: str | Path, *, verify: bool = False, cwd: str | Path | None = None
+    target: str | Path,
+    *,
+    attempt: int | None = None,
+    verify: bool = False,
+    cwd: str | Path | None = None,
 ) -> RunRecord:
-    """Inspect a folder or workflow/name selector once and pin its selected folder.
+    """Inspect a run once and pin its selected folder.
 
+    For a run ID or name, pass ``attempt`` to select a specific attempt.
     ``--verify`` problems remain inspection evidence rather than an execution failure.
     Snapshot and event reads are separate from this inspection read.
     """
@@ -330,7 +349,10 @@ async def load_run_async(
     if type(verify) is not bool:
         raise TypeError("verify is True or False")
     base = (Path(cwd) if cwd is not None else Path.cwd()).resolve()
-    done = await _call(["inspect", text, "--json", *(["--verify"] if verify else [])], base)
+    args = ["inspect", text, "--json", *_attempt_args(attempt)]
+    if verify:
+        args.append("--verify")
+    done = await _call(args, base)
     if done.status != 0 and not (verify and done.status == 1):
         raise _failure("inspect", done)
     try:
@@ -358,8 +380,61 @@ async def load_run_async(
 
 
 def load_run(
-    target: str | Path, *, verify: bool = False, cwd: str | Path | None = None
+    target: str | Path,
+    *,
+    attempt: int | None = None,
+    verify: bool = False,
+    cwd: str | Path | None = None,
 ) -> RunRecord:
     """:func:`load_run_async`, for code outside an event loop."""
     _no_running_loop("load_run")
-    return asyncio.run(load_run_async(target, verify=verify, cwd=cwd))
+    return asyncio.run(load_run_async(target, attempt=attempt, verify=verify, cwd=cwd))
+
+
+@dataclass(frozen=True)
+class RunAttempt:
+    """One attempt in a run history, with its engine selector and resolved folder."""
+
+    attempt_number: int
+    folder: str
+    run_dir: Path
+
+
+@dataclass(frozen=True)
+class RunHistory:
+    """The stable run ID and its recorded attempts."""
+
+    run_id: str
+    attempts: tuple[RunAttempt, ...]
+
+
+async def run_history_async(run: str | Path, *, cwd: str | Path | None = None) -> RunHistory:
+    """Read the selected run's numbered attempts through the engine."""
+    base = (Path(cwd) if cwd is not None else Path.cwd()).resolve()
+    done = await _call(["inspect", _target(run), "--history", "--json"], base)
+    if done.status != 0:
+        raise _failure("inspect", done)
+    try:
+        document = json.loads(done.stdout, parse_constant=_reject_constant)
+        if not isinstance(document, dict) or document.get("kind") != "fx-run-history-v1":
+            raise ValueError
+        run_id = document["run_id"]
+        rows = document["attempts"]
+        if not _text(run_id) or "\0" in run_id or not isinstance(rows, list):
+            raise ValueError
+        attempts = []
+        for row in rows:
+            number = row["attempt_number"]
+            folder = row["folder"]
+            if type(number) is not int or number < 1 or not _text(folder) or "\0" in folder:
+                raise ValueError
+            attempts.append(RunAttempt(number, folder, (base / folder).resolve()))
+        return RunHistory(run_id, tuple(attempts))
+    except (KeyError, TypeError, ValueError):
+        raise FxError("grida-fx inspect printed a malformed run history", done.status) from None
+
+
+def run_history(run: str | Path, *, cwd: str | Path | None = None) -> RunHistory:
+    """:func:`run_history_async`, for code outside an event loop."""
+    _no_running_loop("run_history")
+    return asyncio.run(run_history_async(run, cwd=cwd))

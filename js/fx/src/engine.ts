@@ -12,11 +12,23 @@
  */
 
 import { spawn } from "node:child_process";
-import { statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import type { Socket } from "node:net";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Environment, findEngine, machineLookup, mergeEnvironment } from "./binary.js";
 import { FxError } from "./errors.js";
+
+/** The directory relative to which the engine prints paths. */
+export function commandDirectory(cwd: string | undefined): string {
+  const given = resolve(cwd ?? process.cwd());
+  try {
+    return realpathSync(given);
+  } catch {
+    // The engine reports an unavailable working directory.
+    return given;
+  }
+}
 
 /** Options every call takes. */
 export interface CallOptions {
@@ -87,7 +99,7 @@ export async function call(
   const env = mergeEnvironment({ ...hostVariables(), ...options.env });
   // A value inherited from a launcher (a node body run under `grida fx`) would change the prefix.
   env.GRIDA_FX_INVOKER = "grida-fx";
-  const ownsRun = args[0] === "run" || args[0] === "resume";
+  const ownsRun = args[0] === "run" || args[0] === "resume" || args[0] === "rerun";
   if (ownsRun) {
     // Marks signals from SDK-owned execution.
     env.GRIDA_FX_CANCEL_SOURCE = "sdk";

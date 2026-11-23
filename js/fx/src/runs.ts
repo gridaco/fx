@@ -2,9 +2,8 @@
  * them, and removing named ones. The engine finds the project from cwd, selects, locks and
  * removes; this module only reads what it prints. */
 
-import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { type CallOptions, call, type Exit, failure, USAGE_OR_ERROR } from "./engine.js";
+import { type CallOptions, call, commandDirectory, type Exit, failure, USAGE_OR_ERROR } from "./engine.js";
 import { FxError } from "./errors.js";
 
 /** Where a run sits: `allocated` (`<runs>/<id>/<YYYY-MM-DD>-<n>`), `named`, `explicit`
@@ -273,23 +272,12 @@ export async function listRuns(options: ListRunsOptions = {}): Promise<RunEntry[
     }
     args.push(`--workflow=${options.workflow}`);
   }
-  const cwd = base(options.cwd);
+  const cwd = commandDirectory(options.cwd);
   const done = await call([...args, "--json"], callOptions(options, cwd));
   try {
     return parseList(done, cwd);
   } catch {
     throw failure("runs list", done);
-  }
-}
-
-/** The working directory as the engine sees it: its real path, since the engine prints folders
- * relative to its canonical working directory (resolved lexically when it cannot be read). */
-function base(cwd: string | undefined): string {
-  const given = resolve(cwd ?? process.cwd());
-  try {
-    return realpathSync(given);
-  } catch {
-    return given;
   }
 }
 
@@ -307,7 +295,7 @@ export async function removeRuns(runs: readonly string[], options: RemoveRunsOpt
     throw new TypeError("preview is true or false");
   }
   const preview = options.preview === true;
-  const cwd = base(options.cwd);
+  const cwd = commandDirectory(options.cwd);
   const done = await call(
     ["runs", "remove", ...(preview ? [] : ["--yes"]), "--json", "--", ...runs],
     callOptions(options, cwd),

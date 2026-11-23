@@ -2849,6 +2849,545 @@ fn resume_reuses_saved_inputs_and_validates_the_exact_record() {
     assert_eq!(resumed.last().unwrap()["event"], "run_finished");
 }
 
+fn review_rerun_project(timeout_seconds: u64) -> tempfile::TempDir {
+    let project = empty_project();
+    std::fs::write(
+        project.path().join("case.yaml"),
+        format!(
+            r#"fx: workflow/v1
+id: case
+title: Review
+inputs:
+  brief: {{ type: string }}
+steps:
+  gate:
+    uses: fx/await@1
+    with:
+      schema: {{ type: string }}
+      timeout_seconds: {timeout_seconds}
+outputs:
+  brief: ${{{{ inputs.brief }}}}
+  result: ${{{{ steps.gate.outputs.answer }}}}
+"#,
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        project.path().join("inputs.yaml"),
+        "brief: Original brief\n",
+    )
+    .unwrap();
+    project
+}
+
+fn assert_cli_status(output: &Output, expected: i32) {
+    assert_eq!(
+        status(output),
+        expected,
+        "stdout:\n{}\nstderr:\n{}",
+        stdout(output),
+        stderr(output)
+    );
+}
+
+fn inspect_json(root: &Path, selector: &str, options: &[&str]) -> Value {
+    let mut args = vec!["inspect", selector, "--json"];
+    args.extend_from_slice(options);
+    let output = grida_fx(root, &args);
+    assert_cli_status(&output, 0);
+    parse(&stdout(&output))
+}
+
+fn reported_run_folder(root: &Path, output: &Output) -> PathBuf {
+    let text = stdout(output);
+    let folder = text
+        .lines()
+        .find_map(|line| line.strip_prefix("run       "))
+        .unwrap_or_else(|| panic!("no run folder reported:\n{text}\n{}", stderr(output)));
+    root.join(folder).canonicalize().unwrap()
+}
+
+#[test]
+fn rerun_groups_numbered_attempts_without_reordering_independent_runs() {
+    let project = review_rerun_project(60);
+    let root = project.path();
+    let first = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--inputs",
+            "inputs.yaml",
+            "--name",
+            "review",
+            "--no-view",
+        ],
+    );
+    assert_cli_status(&first, 1);
+    let selector = "case/review";
+    let initial = inspect_json(root, selector, &["--history"]);
+    let run_id = initial["run_id"].as_str().unwrap();
+    let original_folder = initial["attempts"][0]["folder"].as_str().unwrap();
+    assert_eq!(initial["attempts"].as_array().unwrap().len(), 1);
+    assert_eq!(initial["attempts"][0]["attempt_number"], 1);
+    let original_request = inspect_json(root, selector, &["--requests"])["requests"][0].clone();
+    let original_id = original_request["id"].as_str().unwrap();
+    assert_cli_status(
+        &grida_fx(
+            root,
+            &["respond", selector, original_id, "--json", "\"first\""],
+        ),
+        0,
+    );
+    assert_cli_status(&grida_fx(root, &["resume", selector, "--no-view"]), 0);
+    let original_events = events(&root.join(original_folder));
+    let original_starts: Vec<_> = original_events
+        .iter()
+        .filter(|event| event["event"] == "run_started")
+        .collect();
+    assert_eq!(original_starts.len(), 2);
+    for start in &original_starts {
+        assert_eq!(start["run_id"], run_id);
+        assert_eq!(start["attempt_number"], 1);
+    }
+    assert_ne!(
+        original_starts[0]["invocation_id"],
+        original_starts[1]["invocation_id"]
+    );
+
+    let independent = grida_fx(
+        root,
+        &["run", "case.yaml", "--inputs", "inputs.yaml", "--no-view"],
+    );
+    assert_cli_status(&independent, 1);
+    let newest = inspect_json(root, "case", &["--history"]);
+    assert_ne!(newest["run_id"], run_id);
+    assert_eq!(newest["attempts"].as_array().unwrap().len(), 1);
+    assert_eq!(newest["attempts"][0]["attempt_number"], 1);
+
+    let args = [
+        "rerun",
+        selector,
+        "--attempt",
+        "1",
+        "--request-id",
+        "review-again",
+        "--no-view",
+    ];
+    let (first, second) = std::thread::scope(|scope| {
+        let first = scope.spawn(|| grida_fx(root, &args));
+        let second = grida_fx(root, &args);
+        (first.join().unwrap(), second)
+    });
+    let (rerun, duplicate) = if status(&first) == 1 {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    assert_cli_status(&rerun, 1);
+    assert_cli_status(&duplicate, 0);
+    assert_eq!(
+        reported_run_folder(root, &duplicate),
+        reported_run_folder(root, &rerun)
+    );
+    let history = inspect_json(root, selector, &["--history"]);
+    let schema = parse(include_str!(
+        "../../../spec/schemas/fx-run-history-v1.schema.json"
+    ));
+    jsonschema::validator_for(&schema)
+        .unwrap()
+        .validate(&history)
+        .unwrap();
+    assert_eq!(history["run_id"], run_id);
+    let attempts = history["attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 2);
+    let second = attempts
+        .iter()
+        .find(|attempt| attempt["attempt_number"] == 2)
+        .unwrap();
+    let second_folder = second["folder"].as_str().unwrap();
+    assert_ne!(original_folder, second_folder);
+    assert_eq!(
+        reported_run_folder(root, &rerun),
+        root.join(second_folder).canonicalize().unwrap()
+    );
+    let second_events = events(&root.join(second_folder));
+    assert_eq!(second_events[0]["run_id"], run_id);
+    assert_eq!(second_events[0]["attempt_number"], 2);
+    assert_eq!(second_events[0]["plan"], original_starts[0]["plan"]);
+    assert_eq!(inspect_json(root, run_id, &["--history"]), history);
+    assert_eq!(inspect_json(root, "case", &["--history"]), newest);
+
+    let retry = grida_fx(root, &args);
+    assert!(
+        status(&retry) <= 1,
+        "{}\n{}",
+        stdout(&retry),
+        stderr(&retry)
+    );
+    assert_eq!(
+        reported_run_folder(root, &retry),
+        reported_run_folder(root, &rerun)
+    );
+    assert_eq!(inspect_json(root, selector, &["--history"]), history);
+    assert_eq!(events(&root.join(original_folder)), original_events);
+    assert_eq!(events(&root.join(second_folder)), second_events);
+
+    let original = inspect_json(root, selector, &["--attempt", "1", "--requests"]);
+    assert_eq!(
+        original,
+        inspect_json(root, original_folder, &["--requests"])
+    );
+    assert_eq!(original["requests"][0]["state"]["answer"], "first");
+    let latest = inspect_json(root, selector, &["--requests"]);
+    assert_eq!(latest, inspect_json(root, second_folder, &["--requests"]));
+    let fresh = &latest["requests"][0];
+    assert_ne!(fresh["id"], original_id);
+    assert_eq!(fresh["state"]["status"], "pending");
+    assert!(fresh["deadline"].as_str().unwrap() > original_request["deadline"].as_str().unwrap());
+    let late = grida_fx(
+        root,
+        &["respond", selector, original_id, "--json", "\"late\""],
+    );
+    assert_cli_status(&late, 1);
+    assert_eq!(parse(&stdout(&late))["code"], "not_found");
+    assert_eq!(inspect_json(root, selector, &["--requests"]), latest);
+
+    assert_cli_status(
+        &grida_fx(
+            root,
+            &[
+                "rerun",
+                selector,
+                "--attempt",
+                "1",
+                "--request-id",
+                "another-render",
+                "--no-view",
+            ],
+        ),
+        1,
+    );
+    let later = inspect_json(root, selector, &["--history"]);
+    assert_eq!(later["run_id"], run_id);
+    let attempts = later["attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 3);
+    assert!(
+        attempts
+            .iter()
+            .any(|attempt| attempt["attempt_number"] == 3)
+    );
+
+    assert_cli_status(
+        &grida_fx(root, &["runs", "remove", original_folder, "--yes"]),
+        0,
+    );
+    assert!(!root.join(original_folder).exists());
+    let remaining = inspect_json(root, selector, &["--history"]);
+    assert_eq!(remaining["run_id"], run_id);
+    assert_eq!(remaining["attempts"], json!(&attempts[1..]));
+    assert_eq!(inspect_json(root, "case", &["--history"]), newest);
+    let reuse_name = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--inputs",
+            "inputs.yaml",
+            "--name",
+            "review",
+            "--no-view",
+        ],
+    );
+    assert_cli_status(&reuse_name, 2);
+    assert!(stderr(&reuse_name).contains("already exists"));
+}
+
+#[test]
+fn rerun_refuses_an_active_or_changed_source_before_allocating_an_attempt() {
+    let project = review_rerun_project(60);
+    let root = project.path();
+    let folder = "runs/review";
+    assert_cli_status(
+        &grida_fx(
+            root,
+            &[
+                "run",
+                "case.yaml",
+                "--inputs",
+                "inputs.yaml",
+                "--run",
+                folder,
+                "--no-view",
+            ],
+        ),
+        1,
+    );
+    let history = inspect_json(root, folder, &["--history"]);
+    let original = events(&root.join(folder));
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join(folder).join("run.lock"))
+        .unwrap();
+    lock.try_lock().unwrap();
+    let active = grida_fx(root, &["rerun", folder, "--no-view"]);
+    assert_ne!(status(&active), 0, "{}", stdout(&active));
+    assert_eq!(inspect_json(root, folder, &["--history"]), history);
+    assert_eq!(events(&root.join(folder)), original);
+    drop(lock);
+
+    std::fs::write(root.join("inputs.yaml"), "brief: Changed brief\n").unwrap();
+    let changed = grida_fx(root, &["rerun", folder, "--no-view"]);
+    assert_ne!(status(&changed), 0, "{}", stdout(&changed));
+    assert_eq!(inspect_json(root, folder, &["--history"]), history);
+    assert_eq!(events(&root.join(folder)), original);
+}
+
+#[test]
+fn rerun_preserves_an_expired_legacy_attempt_and_requires_current_live_authorization() {
+    let project = review_rerun_project(1);
+    let root = project.path();
+    let folder = "runs/review";
+    assert_cli_status(
+        &grida_fx(
+            root,
+            &[
+                "run",
+                "case.yaml",
+                "--inputs",
+                "inputs.yaml",
+                "--run",
+                folder,
+                "--max-usd",
+                "0",
+                "--live",
+                "--no-view",
+            ],
+        ),
+        1,
+    );
+    let plan_events = events(&root.join(folder));
+    let mut legacy = plan_events.clone();
+    let start = legacy[0].as_object_mut().unwrap();
+    start.remove("run_id").unwrap();
+    start.remove("attempt_number").unwrap();
+    let log = legacy
+        .iter()
+        .map(|event| format!("{event}\n"))
+        .collect::<String>();
+    std::fs::write(root.join(folder).join("events.jsonl"), log).unwrap();
+
+    let timeout = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    let expired = loop {
+        let document = inspect_json(root, folder, &["--requests"]);
+        if document["requests"][0]["state"]["status"] == "expired" {
+            break document;
+        }
+        assert!(std::time::Instant::now() < timeout);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    };
+    let history = inspect_json(root, folder, &["--history"]);
+    assert_eq!(history["attempts"].as_array().unwrap().len(), 1);
+    assert_eq!(history["attempts"][0]["attempt_number"], 1);
+
+    let refused = grida_fx(root, &["rerun", folder, "--no-view"]);
+    assert_cli_status(&refused, 2);
+    assert!(stderr(&refused).contains("--live"), "{}", stderr(&refused));
+    assert_eq!(inspect_json(root, folder, &["--history"]), history);
+
+    let authorized = grida_fx(
+        root,
+        &["rerun", folder, "--live", "--max-usd", "0", "--no-view"],
+    );
+    assert_cli_status(&authorized, 1);
+    assert_eq!(inspect_json(root, folder, &["--requests"]), expired);
+    let run_id = history["run_id"].as_str().unwrap();
+    let next = inspect_json(root, run_id, &["--history"]);
+    assert_eq!(next["attempts"].as_array().unwrap().len(), 2);
+    assert_eq!(next["attempts"][0], history["attempts"][0]);
+    let fresh = inspect_json(root, run_id, &["--requests"]);
+    let original = &expired["requests"][0];
+    let rerun = &fresh["requests"][0];
+    assert_ne!(rerun["id"], original["id"]);
+    assert!(rerun["deadline"].as_str().unwrap() > original["deadline"].as_str().unwrap());
+    assert_eq!(events(&root.join(folder)), legacy);
+}
+
+#[test]
+fn rerun_retry_recovers_a_reserved_attempt_after_an_interrupted_start() {
+    let project = review_rerun_project(60);
+    let root = project.path();
+    let source = "runs/review";
+    assert_cli_status(
+        &grida_fx(
+            root,
+            &[
+                "run",
+                "case.yaml",
+                "--inputs",
+                "inputs.yaml",
+                "--run",
+                source,
+                "--no-view",
+            ],
+        ),
+        1,
+    );
+    let history = inspect_json(root, source, &["--history"]);
+    let run_id = history["run_id"].as_str().unwrap();
+    let folder = format!("runs/case/attempt-{run_id}-2");
+    let journal = root.join(".fx/runs/history");
+    std::fs::create_dir_all(&journal).unwrap();
+    std::fs::create_dir_all(root.join(&folder)).unwrap();
+    let key = "retry-after-interruption";
+    std::fs::write(
+        journal.join(format!("{run_id}.json")),
+        json!([{
+            "attempt_number": 2,
+            "source_attempt": 1,
+            "folder": folder,
+            "request_digest": grida_fx_core::value::sha256_hex(key.as_bytes()),
+        }])
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(inspect_json(root, source, &["--history"]), history);
+
+    let args = ["rerun", source, "--request-id", key, "--no-view"];
+    let accepted = grida_fx(root, &args);
+    assert_cli_status(&accepted, 1);
+    let recovered = root.join(folder).canonicalize().unwrap();
+    assert_eq!(reported_run_folder(root, &accepted), recovered);
+    let run_events = events(&recovered);
+    assert_eq!(run_events[0]["attempt_number"], 2);
+    assert_eq!(run_events[0]["run_id"], run_id);
+    let retry = grida_fx(root, &args);
+    assert_cli_status(&retry, 0);
+    assert_eq!(reported_run_folder(root, &retry), recovered);
+    assert_eq!(events(&recovered), run_events);
+    assert_eq!(
+        inspect_json(root, source, &["--history"])["attempts"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn rerun_damaged_latest_refuses_redirection_and_replay() {
+    let project = review_rerun_project(60);
+    let root = project.path();
+    let selector = "case/review";
+    let initial = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--inputs",
+            "inputs.yaml",
+            "--name",
+            "review",
+            "--no-view",
+        ],
+    );
+    assert_cli_status(&initial, 1);
+    let first = reported_run_folder(root, &initial);
+    let run_id = inspect_json(root, selector, &[])["run"]["run_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let request_args = [
+        "rerun",
+        selector,
+        "--attempt",
+        "1",
+        "--request-id",
+        "damaged",
+        "--no-view",
+    ];
+    let rerun = grida_fx(root, &request_args);
+    assert_cli_status(&rerun, 1);
+    let second = reported_run_folder(root, &rerun);
+    let starts = events(&first);
+    let conflict = grida_fx(
+        root,
+        &[
+            "rerun",
+            selector,
+            "--attempt",
+            "2",
+            "--request-id",
+            "damaged",
+            "--no-view",
+        ],
+    );
+    assert_cli_status(&conflict, 2);
+    assert!(stderr(&conflict).contains("belongs to a rerun from attempt 1"));
+
+    // The destination directory remains after losing its start record.
+    std::fs::write(second.join("events.jsonl"), "").unwrap();
+    for target in [selector, &run_id] {
+        let output = grida_fx(root, &["inspect", target, "--json"]);
+        assert_cli_status(&output, 2);
+        assert!(stderr(&output).contains("attempt 2"), "{}", stderr(&output));
+        let output = grida_fx(root, &["resume", target, "--no-view"]);
+        assert_cli_status(&output, 2);
+        assert!(stderr(&output).contains("attempt 2"), "{}", stderr(&output));
+        let removal = grida_fx(root, &["runs", "remove", target, "--yes", "--json"]);
+        assert_cli_status(&removal, 2);
+        assert!(
+            stdout(&removal).contains("attempt 2"),
+            "{}",
+            stdout(&removal)
+        );
+        let exact = inspect_json(root, target, &["--attempt", "1"]);
+        assert_eq!(exact["run"]["attempt_number"], 1);
+    }
+    let retry = grida_fx(root, &request_args);
+    assert_cli_status(&retry, 2);
+    assert!(stderr(&retry).contains("attempt 2"), "{}", stderr(&retry));
+    assert_eq!(events(&first), starts);
+    assert!(events(&second).is_empty());
+}
+
+#[test]
+fn a_run_id_refuses_copied_attempts_with_the_same_identity() {
+    let project = review_rerun_project(60);
+    let root = project.path();
+    let launch = |folder| {
+        grida_fx(
+            root,
+            &[
+                "run",
+                "case.yaml",
+                "--inputs",
+                "inputs.yaml",
+                "--run",
+                folder,
+                "--no-view",
+            ],
+        )
+    };
+    let original = launch("runs/original");
+    assert_cli_status(&original, 1);
+    let run_id = inspect_json(root, "runs/original", &[])["run"]["run_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    copy_folder(&root.join("runs/original"), &root.join("runs/copy"));
+    // An explicit resume records the copied folder in the project index.
+    assert_cli_status(&launch("runs/copy"), 1);
+    let ambiguous = grida_fx(root, &["resume", &run_id, "--no-view"]);
+    assert_cli_status(&ambiguous, 2);
+    assert!(stderr(&ambiguous).contains("multiple folders claim the same attempt"));
+    for folder in ["runs/original", "runs/copy"] {
+        assert_eq!(inspect_json(root, folder, &[])["run"]["run_id"], run_id);
+    }
+}
+
 #[test]
 fn resume_verifies_default_files_from_the_original_working_directory() {
     let project = empty_project();

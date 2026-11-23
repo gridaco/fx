@@ -92,6 +92,8 @@ pub enum Verb {
     Run(RunArgs),
     /// continue an exact recorded run using its saved execution context
     Resume(ResumeArgs),
+    /// start a fresh attempt of an existing run
+    Rerun(RerunArgs),
     /// invoke one managed capability without authoring a workflow
     Call(CallArgs),
     /// draw the next take of one step of a run
@@ -378,9 +380,30 @@ pub struct RunArgs {
 /// Continue the same attempt in a new runner invocation.
 #[derive(Debug, Args)]
 pub struct ResumeArgs {
-    /// an exact run folder or WORKFLOW_ID/NAME
+    /// a run ID, WORKFLOW_ID/NAME, or an exact run folder
     #[arg(value_name = "RUN")]
     pub run: String,
+    #[command(flatten)]
+    pub options: SavedRunOptions,
+}
+
+#[derive(Debug, Args)]
+pub struct RerunArgs {
+    /// a run ID, WORKFLOW_ID/NAME, or an exact run folder
+    #[arg(value_name = "RUN")]
+    pub run: Option<String>,
+    /// use a particular numbered attempt as the source
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    pub attempt: Option<u64>,
+    /// retry a start request with the same key
+    #[arg(long, value_name = "KEY", value_parser = verbs::history::request_id)]
+    pub request_id: Option<String>,
+    #[command(flatten)]
+    pub options: SavedRunOptions,
+}
+
+#[derive(Debug, Args)]
+pub struct SavedRunOptions {
     /// require an applicable cost forecast for uncached paid work
     #[arg(long)]
     pub require_estimates: bool,
@@ -681,8 +704,14 @@ pub struct ProjectArgs {
 
 #[derive(Debug, Args, Clone)]
 pub struct InspectArgs {
-    /// a run folder, or a workflow id (its newest run)
+    /// a run ID, a run name, a run folder, or a workflow ID (its newest run)
     pub run: String,
+    /// inspect a particular numbered attempt
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    pub attempt: Option<u64>,
+    /// list the recorded attempts of this run
+    #[arg(long, conflicts_with_all = ["attempt", "verify", "control", "requests", "register", "open", "standalone"])]
+    pub history: bool,
     /// re-check every placed file against its record
     #[arg(long)]
     pub verify: bool,
@@ -711,7 +740,7 @@ pub struct InspectArgs {
 
 #[derive(Debug, Args, Clone)]
 pub struct RespondArgs {
-    /// exact run folder or WORKFLOW_ID/NAME
+    /// a run ID, WORKFLOW_ID/NAME, or an exact run folder
     pub run: String,
     /// the request ID reported by inspect --requests
     pub request: String,
@@ -725,7 +754,7 @@ pub struct RespondArgs {
 
 #[derive(Debug, Args, Clone)]
 pub struct CancelArgs {
-    /// an explicit run folder, or exact WORKFLOW_ID/NAME; no implicit latest run
+    /// a run ID, WORKFLOW_ID/NAME, or an exact run folder
     pub run: String,
     /// require the current invocation to match this ID
     #[arg(long, value_name = "ID")]
@@ -808,7 +837,10 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
     crate::interrupt::install();
     if matches!(
         cli.verb,
-        Verb::Run(_) | Verb::Resume(_) | Verb::Call(CallArgs { dry_run: false, .. })
+        Verb::Run(_)
+            | Verb::Resume(_)
+            | Verb::Rerun(_)
+            | Verb::Call(CallArgs { dry_run: false, .. })
     ) {
         crate::interrupt::expect_runner();
     }
@@ -909,6 +941,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
             verbs::run::run(&args)
         }
         Verb::Resume(args) => verbs::resume::run(&args),
+        Verb::Rerun(args) => verbs::resume::rerun(&args),
         Verb::Call(args) => verbs::call::run(&args),
         Verb::Reroll(args) => verbs::takes::reroll(&args),
         Verb::Pick(args) => verbs::takes::pick(&args),

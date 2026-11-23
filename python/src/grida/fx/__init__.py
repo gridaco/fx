@@ -53,6 +53,8 @@ from grida.fx._api import (
     RunResult,
     plan,
     plan_async,
+    rerun,
+    rerun_async,
     resume,
     resume_async,
     run,
@@ -88,11 +90,15 @@ from grida.fx._file_access import (
     resolve_file_async,
 )
 from grida.fx._record import (
+    RunAttempt,
     RunExportError,
+    RunHistory,
     RunObservationError,
     RunRecord,
     load_run,
     load_run_async,
+    run_history,
+    run_history_async,
 )
 from grida.fx._runs import (
     RunEntry,
@@ -154,6 +160,8 @@ __all__ = [
     "PlanRefused",
     "PortSpec",
     "Refused",
+    "RunAttempt",
+    "RunHistory",
     "RunResult",
     "RunRecord",
     "RunObservationError",
@@ -201,10 +209,14 @@ __all__ = [
     "resolve_file_async",
     "respond",
     "respond_async",
+    "rerun",
+    "rerun_async",
     "resume",
     "resume_async",
     "run",
     "run_async",
+    "run_history",
+    "run_history_async",
     "spec_of",
     "tool",
 ]

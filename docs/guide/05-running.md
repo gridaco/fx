@@ -19,12 +19,13 @@ standalone `grida-fx` command and the source setup are in
 | `grida fx cancel RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]` | request cancellation; optionally verify local completion ([Run control](08-run-control.md)) |
 | `grida fx plan <target> [inputs] [--routes file]… [--max-usd N] [--check] [--expect-cached] [--json] [--register \| [--open] [--standalone]]` | expand, check and price a plan. `--open` opens the default browser. `--register` saves the plan and returns its viewer route. Planning never spends. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
 | `grida fx run <target> [inputs] [--routes file]… [--live] [--recover] [--max-usd N] [--yes-up-to N] [--deliver out=path]… [--name NAME \| --resume NAME \| --run folder] [--stand-in file.py#function \| file.ts#function] [--open \| --no-view] [--standalone]` | Runs the workflow. `--live` admits paid calls with a ceiling unless every call is on your own Codex or Grok Build. `--recover` restricts an existing live run to collection and local work ([Resuming](04-cost-and-cache.md#resuming)). Use `--name` to create a named run, `--resume` to continue it, and `--run` to select a folder. Use `--stand-in` to answer paid calls with your function offline ([below](#stand-ins-testing-without-a-provider)). |
-| `grida fx resume RUN` | Continues an exact run folder or named run using its saved execution context. Supply `--live` again to continue live execution, with a current ceiling when required. |
+| `grida fx resume RUN` | Continues the selected attempt using its saved execution context. Supply `--live` again to continue live execution, with a current ceiling when required. |
+| `grida fx rerun RUN [--attempt N]` | Starts another attempt of the same run using its verified saved execution context. See [Rerun and inspect earlier attempts](#rerun-and-inspect-earlier-attempts). |
 | `grida fx call image.generate --prompt TEXT [--route SELECTOR] [--dry-run] [--out FILE] [--json]` | check a request or generate one image without a workflow ([below](#generate-one-image)) |
 | `grida fx reroll <run> <step-path>` / `grida fx pick <run> <step-path> <take>` | takes ([Cost](04-cost-and-cache.md#takes)) |
 | `grida fx takes list <target>` / `grida fx takes mv <target> <old> <new>` | inspect or repair a takes file |
 | `grida fx jobs [--forget <key>]` | the cache's long provider jobs, `settled` ones included ([Resuming](04-cost-and-cache.md#resuming)); `--forget` clears one once you have checked the provider |
-| `grida fx inspect <folder or workflow id or workflow id/name> [--verify] [--json] [--register \| [--open] [--standalone]]` | summarize a run. A workflow ID selects its newest-created run. `--verify` re-checks every placed file. `--open` opens the default browser. `--register` returns the saved run's viewer route. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
+| `grida fx inspect RUN [--attempt N] [--verify] [--json] [--register \| [--open] [--standalone]]` | Summarize an attempt. A workflow ID selects its newest independently created run. A run name or ID selects the latest attempt, and `--attempt N` selects an exact attempt. `--verify` re-checks every placed file. `--open` opens the default browser. `--register` returns the selected attempt's viewer route. [Register a plan or saved run](07-viewing.md#register-a-plan-or-saved-run) |
 | `grida fx nodes [type]` | built-in and project node types, with settings and routes |
 | `grida fx schema <target>` | the JSON Schema its `inputs:` compile to |
 | `grida fx doctor [target]` | the Python, Node, keys, routes and tools a workflow needs, the target's own routes first ([below](#keys-and-live-runs)) |
@@ -105,10 +106,11 @@ grida fx inspect character-rig --open
 grida fx inspect character-rig/character_1_rig_ready --open
 ```
 
-Each plain `run` creates a fresh run record. Matching cached results
+Each plain `run` creates an independent run at attempt 1. Matching cached results
 can still make it finish immediately. `--name` creates once and refuses an existing
-name. `resume RUN` selects an exact folder or `WORKFLOW_ID/NAME`, checks the
-current plan and execution mode, and appends an invocation to the same history.
+name. `resume RUN` accepts an exact folder, a run ID or `WORKFLOW_ID/NAME`, checks
+the current plan and execution mode, and continues the selected attempt. A run ID
+or name follows that run's latest attempt.
 It retains recorded work and spending. If the record lacks the execution context,
 use `run TARGET --resume NAME` or `run TARGET --run PATH` with the original
 inputs, routes, takes and builder arguments. For paid work, give a new `--live`
@@ -139,6 +141,34 @@ interrupted. `--standalone` does not disable cache reuse. `--no-view` skips run
 viewer integration and conflicts with `--open`; SDK runs use it. JSON plan/inspect
 output cannot be combined with browser-serving flags. See
 [Viewing](07-viewing.md) for the lifecycle and independent observation commands.
+
+### Rerun and inspect earlier attempts
+
+In the [provider-free badge project](../../examples/hello/), render the same
+badge sheet again and keep access to both results.
+
+```sh
+grida fx run hello --inputs inputs/badges.yaml --name badge-sheet
+grida fx rerun hello/badge-sheet
+grida fx inspect hello/badge-sheet --history --json
+grida fx inspect hello/badge-sheet --attempt 1
+```
+
+The run ID stays the same. The first command creates attempt 1 and `rerun`
+adds attempt 2. Inspecting the run by ID or name shows attempt 2, including if
+it fails. Use `--attempt 1` or the first attempt's folder from history to read
+the earlier result. To open that exact attempt in the local viewer, add
+`--open` to the last command.
+
+Use the folder printed by `run` when the run has no name. JSON inspection of
+that folder gives you its run ID and attempt number. FX reconstructs the
+source attempt's saved context and checks the plan before dispatch. If an
+`at: plan` step's cached result is missing, FX refuses the rerun before invoking
+the step. Use `run`
+to start an independent run with revised inputs. Use `resume` to continue
+from completed work and existing
+reviews in the same attempt. A rerun opens fresh reviews and can reuse normal
+cached computation. Live reruns require current spending approval.
 
 **Exit status.** `0` when the command did what it was asked: for `run`, the run is ok and every
 `--deliver` found its output. `1` when it read everything and refused or stopped: a plan with

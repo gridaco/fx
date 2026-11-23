@@ -66,6 +66,7 @@
 //! 8. Exit 0 when the run is ok and every requested output was delivered, else 1. The stand-in's
 //!    answerer is ended with the engine ([`crate::engine::shutdown`]).
 
+use super::rerun::{Launch, Rerun, report_accepted};
 use crate::cli::RunArgs;
 use crate::print::{labelled, print_line, shown_path};
 use grida_fx_core::host::{Language, NodeHost};
@@ -102,6 +103,17 @@ pub(super) struct ResumeContext<'a> {
     pub root: &'a Path,
     pub invocation: &'a str,
     pub defaulted_inputs_digest: Option<&'a str>,
+    pub rerun: Option<Rerun<'a>>,
+}
+
+pub(super) fn sdk_root(root: &Path) -> Result<Option<String>, Error> {
+    if std::env::var("GRIDA_FX_CANCEL_SOURCE").as_deref() != Ok("sdk") {
+        return Ok(None);
+    }
+    let root = root
+        .to_str()
+        .ok_or_else(|| Error::usage("the planning project cannot be represented as UTF-8"))?;
+    Ok(Some(serde_json::to_string(root).expect("a string is JSON")))
 }
 
 /// Runs the original planning and execution path for a resolved resume record.
@@ -170,7 +182,7 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
     };
     let mut host = crate::print::planning_host(&request.target, &request.cwd);
     let mut planner = make_planner(&request, &mut host)?;
-    if let Some(context) = resume {
+    if let Some(context) = &resume {
         if planner.project.root != context.root {
             return Err(Error::usage(
                 "the saved target now resolves to another project",
@@ -191,18 +203,22 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
         }
     }
     let recorded_folder = if let Some(name) = &args.resume {
-        Some(super::run_catalog::resume_named(
-            &planner.project.runs_dir(),
-            &planner.workflow.workflow.id,
-            &planner.workflow.source,
-            name,
-        )?)
+        Some(
+            super::run_catalog::resume_named(
+                &planner.project.runs_dir(),
+                &planner.workflow.workflow.id,
+                &planner.workflow.source,
+                name,
+            )
+            .and_then(|folder| super::history::select(folder, &cwd, None))?,
+        )
     } else {
         args.run.as_ref().map(|folder| cwd.join(folder))
     };
     let snapshot = if let Some(file) = &args.resolved_models {
         Some(crate::models::read(&cwd.join(file))?)
     } else if let Some(file) = recorded_folder
+        .as_ref()
         .map(|folder| folder.join("resolved-models.json"))
         .filter(|file| file.exists())
     {
@@ -238,6 +254,8 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
             yes_up_to,
             deliveries: &deliveries,
             resolved_models: prepared.facts,
+            recorded_folder,
+            rerun: resume.and_then(|context| context.rerun),
         },
         expected_invocation,
     );
@@ -280,6 +298,8 @@ struct RunPreparation<'a> {
     yes_up_to: Option<grida_fx_core::money::Usd>,
     deliveries: &'a [Delivery],
     resolved_models: serde_json::Value,
+    recorded_folder: Option<PathBuf>,
+    rerun: Option<Rerun<'a>>,
 }
 
 /// Steps 3–8 of the module doc.
@@ -295,10 +315,16 @@ fn plan_and_run(
         yes_up_to,
         deliveries,
         resolved_models,
+        recorded_folder,
+        rerun,
     } = prepared;
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
-    let mut plan = crate::engine::plan(engine, planner, host)?;
+    let mut plan = if rerun.is_some() {
+        crate::engine::verify_rerun_plan(engine, planner, host)?
+    } else {
+        crate::engine::plan(engine, planner, host)?
+    };
     if args.require_estimates && !engine.stand_in_run() && !args.recover {
         plan.require_estimates();
     }
@@ -326,7 +352,33 @@ fn plan_and_run(
         print_line(&format!("refused: {message}"));
         return Ok(1);
     }
-    let (folder, label, made) = if let Some(name) = &args.name {
+    let allocation = if let Some(source) = rerun {
+        match source.allocate(
+            planner,
+            &plan,
+            expected_invocation.expect("rerun has a source invocation"),
+        )? {
+            Launch::Duplicate(folder) => {
+                report_accepted(&folder, &planner.project.root)?;
+                return Ok(0);
+            }
+            Launch::Fresh(allocation) => Some(allocation),
+        }
+    } else {
+        None
+    };
+    let mut named_claim = None;
+    let (folder, label, made) = if let Some(allocation) = &allocation {
+        let folder = allocation.folder.clone();
+        let label = folder.to_string_lossy().into_owned();
+        (folder, label, false)
+    } else if let Some(name) = &args.name {
+        // Removing attempt 1 and claiming its name share one decision boundary.
+        // Keep the lock until the claim has an execution record.
+        named_claim = Some(
+            grida_fx_runtime::run_index::allocate_attempt(&planner.project.root)
+                .map_err(|error| Error::io("project run index", &error))?,
+        );
         let folder = super::run_catalog::create_named(
             &planner.project.runs_dir(),
             &planner.workflow.workflow.id,
@@ -335,13 +387,8 @@ fn plan_and_run(
         )?;
         let label = shown_path(&folder, cwd);
         (folder, label, true)
-    } else if let Some(name) = &args.resume {
-        let folder = super::run_catalog::resume_named(
-            &planner.project.runs_dir(),
-            &planner.workflow.workflow.id,
-            &planner.workflow.source,
-            name,
-        )?;
+    } else if args.resume.is_some() {
+        let folder = recorded_folder.expect("named resume selected before planning");
         let label = shown_path(&folder, cwd);
         (folder, label, false)
     } else {
@@ -367,10 +414,17 @@ fn plan_and_run(
         recover: args.recover,
         folder: folder.clone(),
         label: label.clone(),
-        name: args.name.clone(),
+        name: allocation
+            .as_ref()
+            .and_then(|entry| entry.name.clone())
+            .or_else(|| args.name.clone()),
         yes_up_to,
         takes_file: super::takes_file(planner),
-        existing: args.resume.is_some() || args.recover || expected_invocation.is_some(),
+        existing: allocation.is_none()
+            && (args.resume.is_some() || args.recover || expected_invocation.is_some()),
+        attempt: allocation
+            .as_ref()
+            .map(|allocation| allocation.start.clone()),
         index: Some(RunIndex {
             project_root: planner.project.root.clone(),
         }),
@@ -383,14 +437,9 @@ fn plan_and_run(
     let mut viewer = None;
     let mut invocation_id = None;
     let project = planner.project.clone();
-    let sdk_project = if expected_invocation.is_some()
-        && std::env::var("GRIDA_FX_CANCEL_SOURCE").as_deref() == Ok("sdk")
-    {
-        let root = project
-            .root
-            .to_str()
-            .ok_or_else(|| Error::usage("the planning project cannot be represented as UTF-8"))?;
-        Some(serde_json::to_string(root).expect("a string is JSON"))
+    let rerunning = allocation.is_some();
+    let sdk_project = if expected_invocation.is_some() {
+        sdk_root(&project.root)?
     } else {
         None
     };
@@ -400,11 +449,17 @@ fn plan_and_run(
         host,
         plan,
         options,
-        expected_invocation,
+        expected_invocation.filter(|_| !rerunning),
         |ready| {
+            drop(allocation);
+            drop(named_claim.take());
             invocation_id = Some(ready.invocation_id.clone());
             crate::interrupt::runner_started();
             print_line(&format!("run       {label}"));
+            if rerunning {
+                print_line(&format!("run ID    {}", ready.attempt.run_id));
+                print_line(&format!("attempt   {}", ready.attempt.attempt_number));
+            }
             if let Some(root) = &sdk_project {
                 stderr::line(format_args!("resume_project\t{root}"));
             }
@@ -446,6 +501,7 @@ fn plan_and_run(
         // Refused before anything was written: the new folder goes again (only while empty).
         let _ = std::fs::remove_dir(&folder);
     }
+    drop(named_claim);
     let outcome = match ran {
         Ok(outcome) => outcome,
         Err(RunError::Refused(message)) => {

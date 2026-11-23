@@ -257,6 +257,10 @@ export interface InspectedStep {
 /** `grida-fx inspect <run> --json`: a run's summary. */
 export interface Inspection {
   run: {
+    /** Stable identity of the run, when available. */
+    run_id?: string;
+    /** The selected attempt number, when available. */
+    attempt_number?: number;
     /** Recorded external requests when the workflow has opened any. */
     requests?: import("./waiting.js").WaitingRequest[];
     workflow: string;

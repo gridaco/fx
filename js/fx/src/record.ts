@@ -1,9 +1,9 @@
 /** Saved evidence and independent observation; neither owns execution or a viewer. */
 
 import { resolve } from "node:path";
-import type { InspectOptions } from "./api.js";
+import { attemptArgs, type InspectOptions } from "./api.js";
 import type { Graph, Inspection, RunEvent } from "./documents.js";
-import { call, type CallOptions, type Exit, failure } from "./engine.js";
+import { call, type CallOptions, commandDirectory, type Exit, failure } from "./engine.js";
 import { FxError } from "./errors.js";
 import { listFiles, resolveFile, type FileDescriptor, type FileReference, type FileResolution } from "./file-access.js";
 
@@ -234,6 +234,16 @@ export class RunRecord {
     };
   }
 
+  /** The stable identity of the selected run, when available. */
+  get runId(): string | null {
+    return this.inspection.run?.run_id ?? null;
+  }
+
+  /** The selected attempt number, when available. */
+  get attemptNumber(): number | null {
+    return this.inspection.run?.attempt_number ?? null;
+  }
+
   /** Capture the saved plan, complete readable event prefix and matching attachment cursor. */
   async snapshot(options: RunReadOptions = {}): Promise<RunSnapshot> {
     const done = await call(["observe", this.runDir, "--snapshot"], {
@@ -314,8 +324,8 @@ export async function loadRun(target: string, options: InspectOptions = {}): Pro
   if (options.verify !== undefined && typeof options.verify !== "boolean") {
     throw new TypeError("verify is true or false");
   }
-  const cwd = resolve(options.cwd ?? process.cwd());
-  const done = await call(["inspect", target, "--json", ...(options.verify === true ? ["--verify"] : [])], {
+  const cwd = commandDirectory(options.cwd);
+  const done = await call(["inspect", target, "--json", ...attemptArgs(options.attempt), ...(options.verify === true ? ["--verify"] : [])], {
     cwd,
     ...(options.env !== undefined ? { env: options.env } : {}),
     ...(options.signal !== undefined ? { signal: options.signal } : {}),
@@ -339,4 +349,43 @@ export async function loadRun(target: string, options: InspectOptions = {}): Pro
   return new RunRecord(resolve(cwd, folder), inspection as unknown as Inspection, {
     cwd, ...(options.env !== undefined ? { env: options.env } : {}),
   });
+}
+
+/** One attempt in a run history. The engine's `folder` is resolved against the call's cwd. */
+export interface RunAttempt {
+  readonly attempt_number: number;
+  readonly folder: string;
+  readonly runDir: string;
+}
+
+/** The stable run ID and its recorded attempts. */
+export interface RunHistory {
+  readonly run_id: string;
+  readonly attempts: readonly RunAttempt[];
+}
+
+/** Read a run's numbered attempts from the engine. */
+export async function runHistory(run: string, options: CallOptions = {}): Promise<RunHistory> {
+  if (!text(run) || run.startsWith("-") || run.includes("\0")) {
+    throw new TypeError("run is a nonempty saved-run selector without a leading '-' or NUL");
+  }
+  const cwd = commandDirectory(options.cwd);
+  const done = await call(["inspect", run, "--history", "--json"], { ...options, cwd });
+  if (done.status !== 0) throw failure("inspect", done);
+  let history: unknown;
+  try { history = JSON.parse(done.stdout); } catch { throw failure("inspect", done); }
+  if (!object(history) || history.kind !== "fx-run-history-v1"
+    || !text(history.run_id) || history.run_id.includes("\0") || !Array.isArray(history.attempts)) {
+    throw failure("inspect", done);
+  }
+  const attempts = history.attempts.map((row: unknown): RunAttempt => {
+    if (!object(row)) throw failure("inspect", done);
+    const { attempt_number, folder } = row;
+    if (typeof attempt_number !== "number" || !Number.isSafeInteger(attempt_number) || attempt_number < 1
+      || !text(folder) || folder.includes("\0")) {
+      throw failure("inspect", done);
+    }
+    return { attempt_number, folder, runDir: resolve(cwd, folder) };
+  });
+  return { run_id: history.run_id, attempts };
 }

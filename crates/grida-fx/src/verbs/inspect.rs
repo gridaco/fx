@@ -74,14 +74,32 @@ use std::path::{Component, Path, PathBuf};
 
 /// Runs `grida-fx inspect`.
 pub fn run(args: &InspectArgs) -> Result<u8, Error> {
+    let cwd = super::planning::working_directory()?;
+    let explicit;
+    let args = if let Some(attempt) = args.attempt {
+        let (folder, _) = find_folder_at(&args.run, &cwd, Some(attempt))?;
+        explicit = InspectArgs {
+            run: folder
+                .to_str()
+                .ok_or_else(|| Error::usage("the run folder is not UTF-8"))?
+                .into(),
+            attempt: None,
+            ..args.clone()
+        };
+        &explicit
+    } else {
+        args
+    };
     if args.requests {
         return super::waiting::inspect(args);
     }
     if args.control {
         return super::control::inspect(args);
     }
-    let cwd = super::planning::working_directory()?;
     let (folder, label) = find_folder(&args.run, &cwd)?;
+    if args.history {
+        return super::history::print(&folder, &cwd, args.json);
+    }
     let plan = read_plan(&folder, &label)?;
     let events = read_log(&folder, &label, false)?;
     let mut view = RunView::new(&plan, &events);
@@ -129,6 +147,12 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             receipt
         } else {
             let mut document = json_document(&view, &label, verification.as_ref());
+            if let Some(first) = events.iter().find(|event| event["event"] == "run_started") {
+                let canonical = folder.canonicalize().unwrap_or_else(|_| folder.clone());
+                let attempt = grida_fx_runtime::attempts::from_start(first, &canonical);
+                document["run"]["run_id"] = json!(attempt.run_id);
+                document["run"]["attempt_number"] = json!(attempt.attempt_number);
+            }
             if !requests.is_empty() {
                 document["run"]["requests"] = json!(requests);
             }
@@ -177,9 +201,27 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
 
 /// The run folder `given` names, and how messages name it (module doc).
 fn find_folder(given: &str, cwd: &Path) -> Result<(PathBuf, String), Error> {
+    find_folder_at(given, cwd, None)
+}
+
+fn find_folder_at(
+    given: &str,
+    cwd: &Path,
+    attempt: Option<u64>,
+) -> Result<(PathBuf, String), Error> {
     let folder = cwd.join(given);
+    let describe = |path: PathBuf| {
+        let label = shown_path(&path, cwd);
+        Ok((path, label))
+    };
     if folder.is_dir() {
+        if let Some(attempt) = attempt {
+            return describe(super::history::select(folder, cwd, Some(attempt))?);
+        }
         return Ok((folder, given.to_string()));
+    }
+    if let Some(found) = super::history::anchor_by_id(given, cwd)? {
+        return describe(super::history::select(found, cwd, attempt)?);
     }
     let parts: Vec<_> = Path::new(given)
         .components()
@@ -187,7 +229,7 @@ fn find_folder(given: &str, cwd: &Path) -> Result<(PathBuf, String), Error> {
         .collect();
     let selector = match parts.as_slice() {
         [Component::Normal(id)] => id.to_str().map(|id| (id, None)),
-        [Component::Normal(id), Component::Normal(name)] => id
+        [Component::Normal(id), Component::Normal(name)] if !given.starts_with("./") => id
             .to_str()
             .zip(name.to_str())
             .filter(|(_, name)| super::run_catalog::validate_name(name).is_ok())
@@ -197,14 +239,16 @@ fn find_folder(given: &str, cwd: &Path) -> Result<(PathBuf, String), Error> {
     if let Some((id, name)) = selector {
         let project = Project::find(cwd)?;
         if let Some(found) = super::run_catalog::resolve(&project.runs_dir(), id, name)? {
-            let label = shown_path(&found, cwd);
-            return Ok((found, label));
+            return describe(super::history::select(found, cwd, attempt)?);
         }
         if name.is_none() {
             return Err(Error::usage(format!(
                 "no run folder {given}, and no runs of a workflow {given} here"
             )));
         }
+    }
+    if let Some(attempt) = attempt {
+        return describe(super::history::select(folder, cwd, Some(attempt))?);
     }
     // An explicit path still reaches the normal recorded-run validation and error messages.
     Ok((folder, given.to_string()))

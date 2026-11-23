@@ -156,6 +156,18 @@ pub fn forget(project_root: &Path, folder: &Path) -> io::Result<bool> {
 /// The lock `runs remove` holds while it selects and removes runs, so two removals never decide
 /// against each other's selection: taken exclusively, waiting (saying so once on stderr).
 pub fn removals(project_root: &Path) -> io::Result<File> {
+    lock_index(
+        project_root,
+        "waiting for another grida-fx runs remove to finish",
+    )
+}
+
+/// Serialize new attempts with other allocations and run removal.
+pub fn allocate_attempt(project_root: &Path) -> io::Result<File> {
+    lock_index(project_root, "waiting for the project's run index")
+}
+
+fn lock_index(project_root: &Path, waiting: &str) -> io::Result<File> {
     let index = project_root.join(INDEX);
     private_folder(&index)?;
     let file = OpenOptions::new()
@@ -167,7 +179,7 @@ pub fn removals(project_root: &Path) -> io::Result<File> {
     match file.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => {
-            crate::stderr::line("waiting for another grida-fx runs remove to finish");
+            crate::stderr::line(waiting);
             file.lock()?;
         }
         Err(TryLockError::Error(error)) => return Err(error),
@@ -176,7 +188,7 @@ pub fn removals(project_root: &Path) -> io::Result<File> {
 }
 
 /// How a canonical folder is recorded: relative (POSIX) inside the project, else absolute.
-fn recorded_form(project_root: &Path, folder: &Path) -> io::Result<String> {
+pub(crate) fn recorded_form(project_root: &Path, folder: &Path) -> io::Result<String> {
     let text = match folder.strip_prefix(project_root) {
         Ok(relative) if relative.as_os_str().is_empty() => ".".to_string(),
         Ok(relative) => {
@@ -199,7 +211,7 @@ fn not_utf8() -> io::Error {
 }
 
 /// An absolute path, `.`, or a relative POSIX path of plain names.
-fn well_formed(recorded: &str) -> bool {
+pub(crate) fn well_formed(recorded: &str) -> bool {
     let path = Path::new(recorded);
     recorded == "."
         || path.is_absolute()
@@ -209,7 +221,7 @@ fn well_formed(recorded: &str) -> bool {
                 .all(|part| matches!(part, Component::Normal(_))))
 }
 
-fn resolve(project_root: &Path, recorded: &str) -> PathBuf {
+pub(crate) fn resolve(project_root: &Path, recorded: &str) -> PathBuf {
     if recorded == "." {
         project_root.to_path_buf()
     } else if Path::new(recorded).is_absolute() {
@@ -265,7 +277,7 @@ fn private_folder(index: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn make_private(folder: &Path) -> io::Result<()> {
+pub(crate) fn make_private(folder: &Path) -> io::Result<()> {
     match fs::create_dir(folder) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::AlreadyExists => return Ok(()),
@@ -279,7 +291,7 @@ fn make_private(folder: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn private_new_file(path: &Path) -> io::Result<fs::File> {
+pub(crate) fn private_new_file(path: &Path) -> io::Result<fs::File> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]

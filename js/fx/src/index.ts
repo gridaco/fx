@@ -58,6 +58,8 @@ export {
   plan,
   price,
   project,
+  rerun,
+  type RerunOptions,
   resume,
   type ResumeOptions,
   RunFile,
@@ -69,7 +71,7 @@ export { BINARY_VARIABLE, type BinaryOptions, binary, type Environment } from ".
 export { cancel, type CancelOptions, inspectControl, pause, type PauseOptions, RunControlError, type RunControlResult } from "./control.js";
 export { AnswerError, type AnswerState, type WaitingRequest, inspectRequests, listRequests, respond } from "./waiting.js";
 export {
-  loadRun, type ObservedRunEvent, type RunEventBatch, type RunEventsOptions,
+  loadRun, runHistory, type RunHistory, type RunAttempt, type ObservedRunEvent, type RunEventBatch, type RunEventsOptions,
   type RunFollowOptions, RunObservationError, type RunObservationFailure,
   type RunReadOptions, RunRecord, type RunSnapshot,
   RunExportError, type RunExportFailure, type RunExportOptions, type RunExportResult,

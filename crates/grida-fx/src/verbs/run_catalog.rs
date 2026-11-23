@@ -6,7 +6,7 @@ use grida_fx_core::value::sha256_hex;
 use grida_fx_runtime::events::run_metadata;
 use grida_fx_runtime::folder::safe_name;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -53,6 +53,11 @@ pub(super) fn create_named(
     ensure_directory(&runs.join(safe_name(id)))?;
     ensure_directory(&parent)?;
     let folder = named_folder(runs, id, source, name);
+    if !folder.exists() && rerun_named(runs, id, source, name)?.is_some() {
+        return Err(Error::usage(format!(
+            "run {id}/{name} already exists; use --resume {name} or choose a new name"
+        )));
+    }
     std::fs::create_dir(&folder).map_err(|error| {
         if error.kind() == std::io::ErrorKind::AlreadyExists && !folder.join("plan.json").exists() {
             Error::usage(format!(
@@ -81,6 +86,11 @@ pub(super) fn resume_named(
     validate_name(name)?;
     let folder = named_folder(runs, id, source, name);
     let parent = named_parent(runs, id, source);
+    if !folder.exists()
+        && let Some(found) = rerun_named(runs, id, source, name)?
+    {
+        return Ok(found);
+    }
     for path in [runs, &runs.join(safe_name(id)), &parent, &folder] {
         if !std::fs::symlink_metadata(path)
             .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
@@ -98,6 +108,53 @@ pub(super) fn resume_named(
                 "no named run {id}/{name}; create it with --name {name}"
             ))
         })
+}
+
+/// A surviving rerun still holds the name when attempt 1 is removed.
+fn rerun_named(runs: &Path, id: &str, source: &str, name: &str) -> Result<Option<PathBuf>, Error> {
+    let directory = runs.join(safe_name(id));
+    for path in [runs, &directory] {
+        match std::fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => return Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(Error::io("named run", &error)),
+        }
+    }
+    let entries = match std::fs::read_dir(&directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(Error::io("named run", &error)),
+    };
+    let mut found: Option<RecordedRun> = None;
+    for entry in entries {
+        let entry = entry.map_err(|error| Error::io("named run", &error))?;
+        if !entry.file_name().to_string_lossy().starts_with("attempt-")
+            || !entry.file_type().is_ok_and(|kind| kind.is_dir())
+        {
+            continue;
+        }
+        if let Some(run) = read_recorded(&entry.path())
+            && run.id == id
+            && run.source == source
+            && run.name.as_deref() == Some(name)
+            && run.attempt.attempt_number > 1
+        {
+            if found
+                .as_ref()
+                .is_some_and(|previous| previous.attempt.run_id != run.attempt.run_id)
+            {
+                return Err(Error::usage(format!("named run {id}/{name} is ambiguous")));
+            }
+            if found
+                .as_ref()
+                .is_none_or(|previous| previous.attempt.attempt_number < run.attempt.attempt_number)
+            {
+                found = Some(run);
+            }
+        }
+    }
+    Ok(found.map(|run| run.folder))
 }
 
 /// Only regular directories can form the allocation namespace. Configured roots may be
@@ -125,6 +182,7 @@ fn ensure_directory(path: &Path) -> Result<(), Error> {
 }
 
 struct RecordedRun {
+    attempt: grida_fx_runtime::attempts::Attempt,
     folder: PathBuf,
     id: String,
     source: String,
@@ -169,18 +227,40 @@ fn resolve_bounded(
             "workflow {id} has runs from multiple sources; inspect an explicit run folder"
         )));
     }
-    let mut matches: Vec<_> = candidates
+    let mut latest = BTreeMap::<String, RecordedRun>::new();
+    let mut attempts = BTreeSet::new();
+    for run in candidates
         .into_iter()
         .filter(|run| name.is_none_or(|name| run.name.as_deref() == Some(name)))
-        .collect();
-    if name.is_some() && matches.len() > 1 {
+    {
+        let run_id = run.attempt.run_id.clone();
+        if !attempts.insert((run_id.clone(), run.attempt.attempt_number)) {
+            return Err(Error::usage(
+                "multiple folders claim the same attempt; use an exact folder",
+            ));
+        }
+        match latest.entry(run_id) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(run);
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry)
+                if entry.get().attempt.attempt_number < run.attempt.attempt_number =>
+            {
+                entry.insert(run);
+            }
+            _ => {}
+        }
+    }
+    if name.is_some() && latest.len() > 1 {
         return Err(Error::usage(format!(
             "named run {id}/{} is ambiguous; inspect an explicit run folder",
             name.unwrap_or_default()
         )));
     }
-    matches.sort_by(|a, b| (&a.created_at, &a.folder).cmp(&(&b.created_at, &b.folder)));
-    Ok(matches.pop().map(|run| run.folder))
+    Ok(latest
+        .into_values()
+        .max_by(|a, b| (&a.created_at, &a.attempt.run_id).cmp(&(&b.created_at, &b.attempt.run_id)))
+        .map(|run| run.folder))
 }
 
 /// Bounded discovery stays within the configured run tree and never follows symlinks.
@@ -301,6 +381,10 @@ fn read_recorded(folder: &Path) -> Option<RecordedRun> {
         metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
     );
     Some(RecordedRun {
+        attempt: grida_fx_runtime::attempts::from_start(
+            events.first().unwrap_or(&Value::Null),
+            folder,
+        ),
         folder: folder.to_path_buf(),
         id,
         source,

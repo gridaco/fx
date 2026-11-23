@@ -138,9 +138,9 @@ A record does hold what was asked: a call record keeps its request exactly, prom
 
 ## 8. Run folders
 
-A run keeps its record in a run folder, and links its results there from the store. The folder is for people and for the commands that read a run (`inspect`, `project`, `reroll`, `pick`). The store stays the cache: deleting a run folder loses nothing the store holds, and a copied run folder can be read on another machine. `grida-fx runs list` and `grida-fx runs remove` list and remove a project's run folders (§9).
+A run keeps one execution record per attempt, each in its own run folder with results linked from the store. The folder is an exact selector for commands that read a run (`inspect`, `project`, `reroll`, `pick`). The store stays the cache. Deleting an attempt folder leaves the cached copies, and a copied attempt folder can be inspected on another machine. `grida-fx runs list` and `grida-fx runs remove` list and remove a project's run folders (§9).
 
-**Where.** `grida-fx run --run <folder>` creates or resumes `<folder>`, relative to the current directory. Without `--run`, `--name` or `--resume`, every invocation creates a new run, even when all results come from the cache:
+**Where.** `grida-fx run --run <folder>` creates or resumes an attempt in `<folder>`, relative to the current directory. Without `--run`, `--name` or `--resume`, each `run` creates a new run at attempt 1, even when all results come from the cache:
 
 ```
 <runs>/<workflow id>/<YYYY-MM-DD>-<n>/
@@ -162,9 +162,9 @@ does not enter any execution or cache identity. A refusal before writing a recor
 releases a newly claimed empty folder. Naming needs no running service.
 
 `run TARGET --resume NAME` requires an existing named run of that same workflow ID
-and source. It plans the current target with the currently supplied inputs, routes,
-takes and builder arguments; it does not reconstruct an old source or restore old
-arguments. The existing same-plan and same-mode checks below apply. A missing name
+and source and selects its latest attempt. It plans the current target with the
+supplied inputs, routes, takes and builder arguments. The same-plan and same-mode
+checks below apply. A missing name
 is an error, never a request to create one, and a resume takes the lock of the folder it
 found without making it: a folder removed in the meantime is refused, never started afresh.
 A name whose folder was claimed but holds no run (an empty claim, §9) is refused with the
@@ -173,19 +173,18 @@ mutually exclusive. Workflow input flags that overlap CLI options follow `--`, f
 example `run greeting --name baseline -- --name Ada`; inputs files remain another
 way to supply them. Planning's `--name Ada` still names a workflow input.
 
-`inspect WORKFLOW_ID` selects the newest-created recorded run, including failures,
-not the last successful or most recently resumed run. `inspect WORKFLOW_ID/NAME`
-selects a named run. Both refuse an ambiguous ID belonging to several recorded
-sources; an actual run folder disambiguates. Lookup is bounded to the project's
-configured runs tree, excluding symlink traversal. It uses the first `run_started`
-creation time, falling back to unchanged `plan.json` modification time for legacy
-records. Creation-time ties use a deterministic folder order. Real folder paths
-remain accepted directly.
+`inspect WORKFLOW_ID` selects the newest independently created run, including failures.
+`inspect WORKFLOW_ID/NAME` selects a named run. Selectors for a run read its latest
+attempt unless an attempt number is specified. Both workflow selectors refuse an
+ambiguous ID belonging to several recorded sources. Use an opaque run ID or an
+actual run folder to disambiguate. Workflow ordering uses attempt 1's first
+`run_started` creation time, falling back to `plan.json` modification time for
+legacy records. Rerun and resume preserve that ordering. Creation-time ties use
+a deterministic folder order.
 
 **Presentation metadata.** New `run_started` events record `created_at`, a UTC
-RFC3339 timestamp with milliseconds, and optionally `name`. Both describe the run,
-not the invocation. Resuming repeats the first event's values without changing
-creation time or name; old runs use their original plan-file time. Consumers accept
+RFC3339 timestamp with milliseconds, and optionally `name`. Resuming repeats the
+attempt's first event's values. Old records use their original plan-file time. Consumers accept
 older events without these optional fields. Every new `run_started` also records
 `started_at`, the invocation's own start in the same format: the time its `offset_ms`
 counts from, so a reader can date any event of that invocation. None of these fields belongs in `plan.json`,
@@ -193,9 +192,9 @@ the plan digest, step or call identities, prices, or cache keys. A changed defin
 or input creates a different plan within the same logical workflow (recorded ID
 and source); FX introduces no workflow revision or version registry.
 
-**Repeating a run.** A `run_started` that `grida-fx run` or `grida-fx resume` writes may record
-`repeat`: the
-arguments that run the same workflow again with the same inputs, from which `reroll` and `pick`
+**Repeating a run.** A `run_started` that `grida-fx run`, `grida-fx resume` or
+`grida-fx rerun` writes may record `repeat`. These are the arguments for running
+the same workflow again with the same inputs, from which `reroll` and `pick`
 print their `next` command. It holds the target, as `workflow` (a workflow id, as given) or
 `file` (the workflow file, or a builder's module with its `function`), the `--inputs` and
 `--routes` files in the order given (`inputs`, `routes`, left out when none), `max_usd` (the
@@ -236,7 +235,7 @@ part of `plan.json`, the plan digest, step or call identities, prices or cache k
 
 **Resuming.** Running in a folder that already holds a run continues it. Finished steps come back from the record and the store, and answered calls replay without being billed. A folder whose `plan.json` records a different plan digest ([identity.md](identity.md) §10), or whose `events.jsonl` holds an event with another `plan`, is refused before anything runs, with the advice to choose a new folder; so is a folder of the other mode, a stand-in run resumed without a stand-in or the reverse (*Stand-in runs* below). The engine reads both only once it holds `run.lock`, so no other invocation writes the folder between the check and the run.
 
-`resume RUN` selects an exact existing run folder or `WORKFLOW_ID/NAME` using the
+`resume RUN` selects an existing attempt by exact folder, run ID or `WORKFLOW_ID/NAME` using the
 [run-control selectors](control.md). It uses the latest `run_started.repeat` to
 recover the target, original working directory and project-relative input and
 route files. It uses the project whose run index records the folder. When defaults
@@ -432,58 +431,68 @@ These names are for reading, and they are not identities. Two step paths or keys
 
 ### Run references, attempts and invocations
 
-A **run attempt** is the recorded execution in one run folder. Its plan, step
-occurrences, requests, receipts, outputs and event history belong to that record.
-An **invocation** is one execution of the runner against that attempt, identified
-by its `invocation_id`. A resume starts a new invocation of the same attempt.
-Compute identities and cache keys follow [identity.md](identity.md). Independent
-attempts of the same plan can reuse eligible cached work.
+A **run** has a stable, opaque project-local ID, an optional name, a creation time
+and a history of attempts. Each independent `run` creates a run at attempt 1,
+including when it uses the same workflow and inputs as another run. An existing
+record can serve as attempt 1 in its original folder.
 
-The following operations are implemented:
+A **run attempt** is the execution record in one folder. Its plan, step
+occurrences, requests, receipts, outputs and event history belong to that
+attempt. The pair `run_id` and `attempt_number` addresses an exact attempt.
+An **invocation** is one execution of the runner against an attempt, identified
+by its `invocation_id`. A resume starts a new invocation of the same attempt.
+Run and attempt identity do not enter plan, step or call digests. Each
+attempt can reuse eligible cached computation under [identity.md](identity.md).
+New `run_started` records carry `run_id` as 64 lowercase hexadecimal characters
+and `attempt_number` as a positive integer. A resume preserves both fields.
+For a legacy attempt 1 the engine derives a stable ID from the original
+recorded identity. Both fields live in the [run event schema](schemas/fx-run-events-v1.schema.json).
+`inspect RUN --json` reports them in `run` for the attempt it resolved.
 
 | Operation | Execution target |
 |---|---|
-| `inspect RUN` | One saved attempt. The bare workflow ID shorthand is a read selector for the newest-created matching record, under the ambiguity rules above. |
-| `run TARGET --resume NAME` or `--run FOLDER` on an existing record | The same attempt, with current plan and mode verified before dispatch. A previously unused `--run FOLDER` can create a run. |
-| `inspect RUN --requests` and `respond RUN REQUEST` | An exact attempt selected by folder or workflow/name. A response also selects a request within that attempt. |
-| `inspect RUN --control` and `cancel RUN` | An exact attempt selected by folder or workflow/name. FX resolves the current invocation once. For cancellation, `--invocation` can require a specific current invocation. A live request also binds to the verified owner. |
-| Existing local viewer run URL | The exact attempt bound by catalog registration. Browser responses target that record and request. |
+| `inspect RUN` | The latest attempt by number when selected by run ID or name. A bare workflow ID selects the newest independently created run. An exact folder selects one attempt. |
+| `inspect RUN --attempt N` | Attempt N of the selected run. |
+| `inspect RUN --history --json` | The [run history](schemas/fx-run-history-v1.schema.json). Entries report the attempt number and a folder selector that can be used to target that record exactly. |
+| `rerun RUN [--attempt N]` | Starts a new attempt from the selected source. The run ID stays the same. |
+| `resume RUN`, `pause RUN`, `cancel RUN`, `respond RUN REQUEST` | Resolve an attempt once and act on it. A folder pins the attempt. A run ID or name selects its latest attempt. A response additionally selects one request, and an invocation guard can pin the observed invocation where supported. |
+| `run TARGET --resume NAME` or `--run FOLDER` with an existing record | Resume the latest attempt of the named run or the exact folder. A previously unused explicit folder can start an independent run. |
+| Local viewer run URL | The exact attempt bound by catalog registration. Browser responses target that record and request. |
 
-CLI and SDK operations use these same boundaries. See [SDK run access](sdk.md),
-[waiting steps](waiting.md), [run control](control.md), and
-[local catalog and URLs](service.md#4-local-catalog-and-urls).
+Mutations that take a run selector refuse a bare workflow ID. Once a mutation
+resolves its target, it stays bound to that attempt even if another client
+starts a newer attempt or invocation. When automation requires a previously
+observed attempt, it retains the exact folder or pins its attempt number on
+commands that support `--attempt`. Viewer history navigation and run-level
+permalinks are tracked in [#168](https://github.com/gridaco/fx/issues/168).
+See [SDK run access](sdk.md), [waiting steps](waiting.md),
+[run control](control.md) and [local catalog and URLs](service.md#4-local-catalog-and-urls).
 
-**Contract for full rerun (implementation pending).** A **run reference** identifies
-the history of one run within its project. A newly created independent run starts
-its own history at attempt 1. Existing records, including 0.12.0 run folders,
-can serve as attempt 1 in place. History membership comes from an explicit rerun
-relationship. Matching workflow, name, inputs, plan digest or cached outputs
-do not establish that relationship.
+**Full rerun.** Reconstruct the selected source attempt's definition, effective
+inputs, bound routes, takes and execution mode from saved context. Verify its
+recorded plan and mode before dispatch. Ready `at: plan` instances are
+reconstructed from trusted cached results. Missing results refuse the rerun
+before executing the instance. FX refuses an active source, missing
+context or failed verification and reports the reason. Plan equality checks
+the recorded identities, including declared versions for versioned code.
+New paid work requires current spending authorization and limits.
 
-Full rerun takes an explicitly selected source attempt and creates a fresh
-attempt in the same history. A new attempt has its own run folder and opens its
-own requests when it reaches waiting steps. The original plan, events, outputs,
-requests and receipts stay addressable through the retained source attempt.
-Inspecting a history can list its attempts. Resume, response and cancellation
-use the exact targets above. Once FX resolves a mutation's target, it stays
-bound to that target even if a new attempt or invocation starts.
-
-Register the history at a separate stable local viewer URL. An existing attempt
-URL stays bound to the original record and can become unavailable if the record
-is removed or replaced. A folder selector addresses the record at that path.
-An existing `WORKFLOW_ID/NAME` selector still resolves its named attempt under the
-rules above. Later attempts have their own selectors so they cannot make that
-name ambiguous. The history reference is separate from plan, step and call
-digests and grants no authority to modify a record.
-
-Full rerun requires enough evidence to reconstruct the source attempt's execution
-definition, effective inputs, bound routes, takes and execution mode. Verify the
-reconstruction against the source attempt's recorded plan and mode. If evidence
-is missing or verification fails, refuse with the specific reason before
-dispatching work. Plan equality checks FX's recorded identities, including
-declared versions for versioned code. New paid work requires the usual spending
-authorization. The rerun contract will define the available source evidence,
-published selectors, history storage and eligible source states.
+A successful rerun allocates the next attempt number in that run's history and
+starts execution in a new folder. Earlier attempt records remain independently
+addressable. Each waiting step reached by the new attempt opens its own request
+and deadline. Retrying a start with the same `--request-id` recovers the
+previously accepted attempt in that run's history. The key is 1–128 ASCII letters,
+digits, underscores or hyphens. An exact source supplied on retry must match
+the source originally selected. Starting a distinct rerun allocates a new number.
+The private allocation journal at `.fx/runs/history` serializes allocation under
+the project run-index lock and retains allocated numbers and request key digests
+across process restarts and attempt removal. FX confirms the start in the
+journal after persisting its initial event and before dispatch. An interrupted
+confirmation can be recovered from the matching initial event. A repeated start
+reports the saved attempt folder and identity without launching it again. A
+removed, replaced or damaged accepted record refuses another start with that
+key. An unreadable newer attempt makes latest selection fail rather than
+selecting an older attempt. The journal is local coordination state.
 
 ## 9. Listing and removing runs, and pruning the store
 
@@ -505,7 +514,7 @@ A `plan.json` of another kind, a folder at a run's place that holds files but no
 **States.** The list ([schemas/fx-run-list-v1.schema.json](schemas/fx-run-list-v1.schema.json)) gives each run its creation time (the first `run_started`'s, else, for a record older than that field or a run that never started, `plan.json`'s modification time; none for a leftover) and the state `inspect` reads from its log (`planned`, `unfinished`, `paused`, `succeeded`, `cancelled`), with unsuccessful finishes distinguished as `awaiting` for a `run_finished` with blocking `awaiting` request IDs, `incomplete` for other finishes with `ok: false` and `incomplete: true`, and `failed` for other failures. `pausing` requires a recorded `pause_requested` and a verified current invocation owner. Detached responses leave the recorded invocation outcome intact. The leftovers are `empty`, `removing` and `missing`. Check `run.lock` or verify the owner to learn whether a process is running.
 
 **Selecting runs to remove.** `runs remove` takes runs or filters, never both.
-- A run is a run folder, an empty claim or a tombstone that the list shows; `WORKFLOW_ID/NAME` of a named run, found by its place, so that an empty named claim is found too (a name of several sources is ambiguous); or a missing folder that the run index or the catalog still names, which is then only forgotten. Every run named is checked before anything is removed. One that is not a run, a folder that is or holds the project root, its `runs` folder, its store or `.fx`, and a folder that holds other runs fail the command, and nothing is removed.
+- A run is a run folder, an empty claim or a tombstone that the list shows. A run ID or `WORKFLOW_ID/NAME` selects its newest available attempt. An empty named claim can also be selected by name (a name of several sources is ambiguous); or a missing folder that the run index or the catalog still names, which is then only forgotten. Every run named is checked before anything is removed. One that is not a run, a folder that is or holds the project root, its `runs` folder, its store or `.fx`, and a folder that holds other runs fail the command, and nothing is removed.
 - Filters (`--workflow ID`, `--state STATE`, `--before DATE`, a local date) select allocated runs only, and say how many named, explicit and external runs they passed over. A name thus exempts a run from filters and from nothing else: nothing is removed unless it is selected and the removal is confirmed. An empty claim less than a minute old is passed over, since a run may be starting in it.
 - Without `--yes` nothing is removed: the command says what would be. A removal selects again when it is confirmed, so a filter can match differently then; naming the run folders the preview showed removes exactly those.
 - A confirmed removal holds `.fx/runs/lock` exclusively from the moment it reads the project's runs until it is done, waiting for another removal to finish, so no two removals decide against each other's selection.

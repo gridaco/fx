@@ -812,6 +812,32 @@ def test_resume_uses_the_exact_attempt_and_recorded_project(fake: Fake, project:
     assert result.outputs["plate"].path == store / "files" / "11" / D1
 
 
+def test_rerun_uses_the_accepted_attempt_and_recorded_project(fake: Fake, project: Path) -> None:
+    folder = project / "second"
+    folder.mkdir()
+    events = [{**EVENTS[0], "run_id": "a" * 64, "attempt_number": 2}, *EVENTS[1:]]
+    (folder / "events.jsonl").write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+    fake.reply(
+        rerun={
+            "stdout": f"run       {folder}\n",
+            "stderr": f"resume_project\t{json.dumps(str(project.resolve()))}\n",
+            "status": 1,
+        }
+    )
+    result = fx.rerun("gallery/one", cwd=project.parent, attempt=1, request_id="reel-2")
+    assert fake.invocations == [
+        ["rerun", "gallery/one", "--attempt=1", "--request-id=reel-2", "--no-view"]
+    ]
+    assert result.run_dir == folder
+    assert result.run_id == "a" * 64
+    assert result.attempt_number == 2
+    assert (
+        result.outputs["plate"].path == project.resolve() / "store" / "cache" / "files" / "11" / D1
+    )
+
+
 def test_a_run_result_reads_the_record(fake: Fake, project: Path) -> None:
     fake.runs()
     result = fx.run("gallery", cwd=project, run_dir="runs/mine")

@@ -431,6 +431,16 @@
       "format": "date-time",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
     },
+    "run_id": {
+      "description": "Stable project-local run identity on run_started, shared by every attempt. Older records may omit it.",
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "attempt_number": {
+      "description": "Positive attempt number on run_started, starting at 1 within run_id. A resume preserves this number. Older records may omit it.",
+      "type": "integer",
+      "minimum": 1
+    },
     "started_at": {
       "description": "UTC start of this invocation on run_started, the time its offset_ms counts from; new on every invocation, absent in older records. Presentation metadata only.",
       "type": "string",

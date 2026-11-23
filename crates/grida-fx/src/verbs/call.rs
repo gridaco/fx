@@ -151,6 +151,7 @@ fn run_prepared(
         .map_err(|error| Error::io(&shown_path(&runs.join(id), &cwd), &error))?;
     let label = shown_path(&folder, &cwd);
     let options = RunOptions {
+        attempt: None,
         folder: folder.clone(),
         label: label.clone(),
         resolved_models: resolved_models["routes"]

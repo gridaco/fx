@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 struct Project {
     root: tempfile::TempDir,
@@ -55,16 +55,20 @@ def greet(ctx: Ctx) -> dict:
     }
 
     fn command(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_grida-fx"))
+        self.process(args).output().unwrap()
+    }
+
+    fn process(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_grida-fx"));
+        command
             .current_dir(self.root.path())
             .env_clear()
             .env("GRIDA_FX_PYTHON", &self.python)
             .env("GRIDA_FX_DISABLE_DOTENV", "1")
             .env("GRIDA_FX_NETWORK", "off")
             .env("PYTHONDONTWRITEBYTECODE", "1")
-            .args(args)
-            .output()
-            .unwrap()
+            .args(args);
+        command
     }
 
     fn run(&self, args: &[&str]) -> Output {
@@ -88,6 +92,50 @@ def greet(ctx: Ctx) -> dict:
             .map(|line| serde_json::from_str(line).unwrap())
             .collect()
     }
+}
+
+#[test]
+fn a_name_claim_waits_for_removal_and_checks_the_surviving_attempt() {
+    use std::io::{BufRead, Read};
+
+    let Some(project) = Project::new() else {
+        return;
+    };
+    success(&project.run(&["--name", "baseline"]));
+    let initial = project.inspect("greeting/baseline");
+    let original = initial["run"]["folder"].as_str().unwrap();
+    success(&project.command(&["rerun", "greeting/baseline", "--no-view"]));
+    let lock = grida_fx_runtime::run_index::removals(project.root.path()).unwrap();
+    let mut claim = project
+        .process(&["run", "workflow.yaml", "--name", "baseline", "--no-view"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = std::io::BufReader::new(claim.stderr.take().unwrap());
+    let waiting = stderr
+        .by_ref()
+        .lines()
+        .map_while(Result::ok)
+        .any(|line| line.contains("waiting for the project's run index"));
+    assert!(waiting, "name claim should be serialized with removal");
+
+    // Simulate removal of attempt 1 while the competing name claim is waiting.
+    std::fs::rename(
+        project.root.path().join(original),
+        project.root.path().join("removed"),
+    )
+    .unwrap();
+    drop(lock);
+    let outcome = claim.wait_with_output().unwrap();
+    let mut suffix = String::new();
+    stderr.read_to_string(&mut suffix).unwrap();
+    assert_eq!(outcome.status.code(), Some(2), "{suffix}");
+    assert!(suffix.contains("already exists"), "{suffix}");
+    assert_eq!(
+        project.inspect("greeting/baseline")["run"]["attempt_number"],
+        2
+    );
 }
 
 fn success(output: &Output) {

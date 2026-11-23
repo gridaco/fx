@@ -90,7 +90,7 @@ const ENUMS: Readonly<Record<string, readonly string[]>> = {
 
 export function exactRunTarget(run: string): string {
   if (typeof run !== "string" || run === "" || run.startsWith("-") || run.includes("\0")) {
-    throw new TypeError("run is a nonempty explicit run folder or exact WORKFLOW_ID/NAME, without a leading '-' or NUL");
+    throw new TypeError("run is a run ID, an explicit run folder, or WORKFLOW_ID/NAME without a leading '-' or NUL");
   }
   return run;
 }

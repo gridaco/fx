@@ -36,9 +36,11 @@ grida fx cancel gallery/baseline
 grida fx cancel gallery/baseline --wait --timeout 30s --json
 ```
 
-The target is an explicit run folder, such as `runs/example`, or an exact
-`WORKFLOW_ID/NAME`. A bare workflow ID cannot select an implicit latest run.
-Use an absolute folder path if a relative path could also identify a named run.
+The target is an explicit attempt folder, a run ID or `WORKFLOW_ID/NAME`. An ID
+or name selects that run's latest attempt. Pass the exact folder to keep control
+bound to an earlier attempt. A bare workflow ID cannot select an implicit
+latest run. Use an absolute folder path if a relative path could also identify
+a named run.
 
 `inspect --control` reports the current invocation, recorded state, verified local
 control availability, `can_cancel` and `can_pause`. It never runs author code or calls providers.

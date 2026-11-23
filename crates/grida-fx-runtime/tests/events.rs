@@ -30,6 +30,7 @@ fn every_event() -> Vec<Event> {
     let encoded_file = json!({"file": {"digest": DIGEST, "kind": "text/plain", "name": "loud['ada']/text", "size": 8}});
     vec![
         Event::RunStarted {
+            attempt: None,
             workflow: "case".into(),
             name: None,
             created_at: "2026-10-08T00:00:00.000Z".into(),
@@ -43,6 +44,7 @@ fn every_event() -> Vec<Event> {
             repeat: None,
         },
         Event::RunStarted {
+            attempt: None,
             workflow: "case".into(),
             name: Some("baseline".into()),
             created_at: "2026-10-08T00:00:00.000Z".into(),
