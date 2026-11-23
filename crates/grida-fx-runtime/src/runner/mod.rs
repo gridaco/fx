@@ -221,6 +221,8 @@ pub fn run_with_ready(
 pub struct ReadyRun {
     pub folder: PathBuf,
     pub attempt: crate::attempts::Attempt,
+    /// Whether this invocation continued a record with earlier events.
+    pub resumed: bool,
     pub invocation_id: String,
     pub control_available: bool,
 }
@@ -698,12 +700,13 @@ fn invoke(
         watchers();
         return Err(RunError::Fatal(Error::io("run history", &error)));
     }
+    let resumed = !prior.is_empty();
     let started = Event::RunStarted {
         attempt: Some(attempt.clone()),
         name: recorded_name,
         created_at,
         workflow: scheduler.workflow.clone(),
-        resumed: !prior.is_empty(),
+        resumed,
         ceiling_usd: scheduler.ledger.ceiling(),
         charged_usd: scheduler.ledger.charged(),
         estimate_low: estimate.low,
@@ -749,6 +752,7 @@ fn invoke(
                 &ReadyRun {
                     attempt,
                     folder: options.folder.clone(),
+                    resumed,
                     invocation_id: scheduler.services.invocation_id.clone(),
                     control_available: endpoint.is_some(),
                 },

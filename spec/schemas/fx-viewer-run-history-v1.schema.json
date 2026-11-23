@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-viewer-run-history-v1",
+  "title": "Local FX viewer run history",
+  "type": "object",
+  "required": ["kind", "run_id", "latest_url", "latest_available", "selected_attempt", "attempts"],
+  "properties": {
+    "kind": { "const": "fx-viewer-run-history-v1" },
+    "run_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "latest_url": { "type": "string", "pattern": "^/p/[a-f0-9]{64}/run/[a-f0-9]{64}/$" },
+    "latest_available": { "type": "boolean" },
+    "selected_attempt": { "$ref": "#/$defs/attempt_number" },
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["attempt_number", "url", "state"],
+        "properties": {
+          "attempt_number": { "$ref": "#/$defs/attempt_number" },
+          "url": { "type": "string", "pattern": "^/p/[a-f0-9]{64}/runs/[a-f0-9]{64}/$" },
+          "state": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "attempt_number": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+  }
+}

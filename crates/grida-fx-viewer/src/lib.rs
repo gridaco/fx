@@ -240,6 +240,31 @@ async fn local_request(
     response
 }
 
+// A non-simple action header prevents HTML form submission. The enclosing router
+// validates the loopback Host and does not grant cross-origin preflights.
+fn local_submission(headers: &HeaderMap, authority: &str, action: &str) -> bool {
+    let mut origins = headers.get_all(header::ORIGIN).iter();
+    let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
+        return false;
+    };
+    origins.next().is_none()
+        && origin.strip_prefix("http://") == Some(authority)
+        && headers
+            .get("x-fx-action")
+            .is_some_and(|value| value == action)
+        && headers
+            .get("sec-fetch-site")
+            .is_none_or(|value| value == "same-origin")
+}
+
+fn json_submission(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("application/json"))
+}
+
 async fn view_document(State(state): State<Arc<AppState>>) -> Response {
     match &state.source {
         Source::Run(_) => run_document(State(state)).await,

@@ -94,6 +94,8 @@ pub enum Verb {
     Resume(ResumeArgs),
     /// start a fresh attempt of an existing run
     Rerun(RerunArgs),
+    #[command(name = verbs::viewer_run::CHILD_VERB, hide = true)]
+    ViewerRun,
     /// invoke one managed capability without authoring a workflow
     Call(CallArgs),
     /// draw the next take of one step of a run
@@ -840,6 +842,7 @@ pub fn main(argv: Vec<OsString>) -> ExitCode {
         Verb::Run(_)
             | Verb::Resume(_)
             | Verb::Rerun(_)
+            | Verb::ViewerRun
             | Verb::Call(CallArgs { dry_run: false, .. })
     ) {
         crate::interrupt::expect_runner();
@@ -942,6 +945,7 @@ fn dispatch(verb: Verb, rest: Vec<String>) -> Result<u8, Error> {
         }
         Verb::Resume(args) => verbs::resume::run(&args),
         Verb::Rerun(args) => verbs::resume::rerun(&args),
+        Verb::ViewerRun => verbs::viewer_run::child(),
         Verb::Call(args) => verbs::call::run(&args),
         Verb::Reroll(args) => verbs::takes::reroll(&args),
         Verb::Pick(args) => verbs::takes::pick(&args),

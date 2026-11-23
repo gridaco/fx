@@ -54,6 +54,16 @@ describe("recorded project metadata", () => {
       expect(() => parseServiceIndex(catalog([invalid]))).toThrow("invalid entry");
     }
   });
+
+  test("attempt metadata is optional and requires a stable ID and positive attempt number on a run entry", () => {
+    const run_id = "b".repeat(64);
+    const valid = entry(1, { run_id, attempt_number: 2 });
+    expect(parseServiceIndex(catalog([valid])).entries).toEqual([valid]);
+    for (const options of [{ run_id }, { attempt_number: 1 }, { run_id, attempt_number: 0 }, { run_id, attempt_number: 2.5 },
+      { run_id: "short", attempt_number: 1 }, { kind: "plan" as const, run_id, attempt_number: 1 }]) {
+      expect(() => parseServiceIndex(catalog([entry(1, options)]))).toThrow("invalid entry");
+    }
+  });
 });
 
 describe("workflow index projection", () => {
@@ -103,6 +113,21 @@ describe("workflow index projection", () => {
     const group = new ServiceIndexProjection(catalog([resumed, later])).groups[0];
     expect(group.primary).toBe(later);
     expect(group.runs).toEqual([later, resumed]);
+  });
+
+  test("chooses the highest attempt per run without promoting a rerun over newer independent runs", () => {
+    const run_id = "f".repeat(64);
+    const earlier = entry(1, { name: "baseline", run_id, attempt_number: 1, state: "awaiting" });
+    const rerun = entry(3, { name: "baseline", run_id, attempt_number: 2, state: "failed", created_at: earlier.created_at });
+    const newestRun = entry(2, { run_id: "e".repeat(64), attempt_number: 1 });
+    const group = new ServiceIndexProjection(catalog([rerun, newestRun, earlier])).groups[0];
+    expect(group.primary).toBe(newestRun);
+    expect(group.runs).toEqual([newestRun, rerun]);
+    expect(group.unfinished_runs).toEqual([earlier]);
+    const only = new ServiceIndexProjection(catalog([earlier, rerun])).groups[0];
+    expect(only.primary).toBe(rerun);
+    expect(only.primary.url).toBe(rerun.url);
+    expect(only.runs).toEqual([rerun]);
   });
 
   test("plan-only workflows open their newest saved plan", () => {

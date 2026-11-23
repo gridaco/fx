@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-viewer-run-control-v1",
+  "title": "FX viewer run action availability",
+  "type": "object",
+  "required": ["kind", "invocation_id", "attempt_number", "actions"],
+  "properties": {
+    "kind": { "const": "fx-viewer-run-control-v1" },
+    "invocation_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "attempt_number": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "actions": {
+      "type": "object",
+      "required": ["pause", "resume", "rerun", "cancel"],
+      "properties": {
+        "pause": { "type": "boolean" },
+        "resume": { "type": "boolean" },
+        "rerun": { "type": "boolean" },
+        "cancel": { "type": "boolean" }
+      }
+    }
+  }
+}

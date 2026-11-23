@@ -5,15 +5,24 @@ use grida_fx_core::Error;
 use grida_fx_core::docs::project::Project;
 use grida_fx_core::project::{Target, is_workflow_file};
 use grida_fx_runtime::{
+    control,
     folder::{RunFolder, holds_stand_in, same_file},
     run_index::recording_project,
 };
+use grida_fx_viewer::service::{LaunchOperation, LaunchRequest};
 use std::path::{Path, PathBuf};
 
 pub fn run(args: &ResumeArgs) -> Result<u8, Error> {
     let cwd = super::planning::working_directory()?;
     let folder = select(&args.run, &cwd)?;
-    execute(&args.run, folder, cwd, &args.options, Operation::Resume)
+    execute(
+        &args.run,
+        folder,
+        cwd,
+        &args.options,
+        Operation::Resume,
+        None,
+    )
 }
 
 pub fn rerun(args: &RerunArgs) -> Result<u8, Error> {
@@ -34,6 +43,52 @@ pub fn rerun(args: &RerunArgs) -> Result<u8, Error> {
             key: args.request_id.as_deref(),
             pinned,
         },
+        None,
+    )
+}
+
+struct ViewerStart<'a> {
+    request: &'a LaunchRequest,
+    receipt: &'a super::viewer_run::Receipt,
+}
+
+#[cfg(unix)]
+pub(super) fn viewer_start(
+    request: &LaunchRequest,
+    receipt: &super::viewer_run::Receipt,
+) -> Result<u8, Error> {
+    if super::planning::working_directory()? != request.project_root {
+        return Err(receipt.refuse(
+            "context_unavailable",
+            "The run's planning project is unavailable.",
+        ));
+    }
+    let key = super::history::request_id(&request.request_id).map_err(Error::usage)?;
+    let operation = match request.operation {
+        LaunchOperation::Resume => Operation::Resume,
+        LaunchOperation::Rerun => Operation::Rerun {
+            key: Some(&key),
+            pinned: true,
+        },
+    };
+    execute(
+        "selected attempt",
+        request.folder.clone(),
+        request.project_root.clone(),
+        &SavedRunOptions {
+            require_estimates: false,
+            live: false,
+            max_usd: None,
+            yes_up_to: None,
+            // This runner owns the wait even after the browser disconnects. Answers
+            // and deadlines can continue execution without starting another runner.
+            wait_for_answers: true,
+            no_view: true,
+            standalone: false,
+            open: false,
+        },
+        operation,
+        Some(ViewerStart { request, receipt }),
     )
 }
 
@@ -52,6 +107,7 @@ fn execute(
     cwd: PathBuf,
     args: &SavedRunOptions,
     operation: Operation<'_>,
+    viewer: Option<ViewerStart<'_>>,
 ) -> Result<u8, Error> {
     let folder = folder
         .canonicalize()
@@ -63,6 +119,25 @@ fn execute(
     let source = plan["workflow"]["file"].as_str();
     let here = Project::find(&cwd).ok().map(|project| project.root);
     let root = recording_project(&folder, here.as_deref().unwrap_or(&folder));
+    if let Some(viewer) = &viewer {
+        if root.as_ref() != Some(&viewer.request.project_root) {
+            return Err(viewer.receipt.refuse(
+                "context_unavailable",
+                "FX couldn’t find the project or the information it needs to continue this run.",
+            ));
+        }
+        if folder != viewer.request.folder
+            || !super::history::recorded(&folder)?.is_some_and(|attempt| {
+                attempt.run_id == viewer.request.run_id
+                    && attempt.attempt_number == viewer.request.source_attempt
+            })
+        {
+            return Err(viewer.receipt.refuse(
+                "invocation_mismatch",
+                "This attempt changed. Refresh the page and try again.",
+            ));
+        }
+    }
     let rerun = if let Operation::Rerun { key, pinned } = operation {
         let root = root
             .as_ref()
@@ -79,6 +154,9 @@ fn execute(
             pinned.then_some(attempt.attempt_number),
         )? {
             super::rerun::report_accepted(&path, root)?;
+            if let Some(viewer) = &viewer {
+                viewer.receipt.accept_existing(&path)?;
+            }
             return Ok(0);
         }
         if let Some(digest) = request_digest.as_deref()
@@ -96,11 +174,15 @@ fn execute(
                 cwd,
                 args,
                 Operation::Rerun { key, pinned: true },
+                viewer,
             );
         }
-        // Refuse an active source before loading its builder or planning work.
-        // The allocator checks the lock and invocation again after planning.
-        RunFolder::lock_existing(&folder, "rerun source").map_err(|error| Error::usage(error.0))?;
+        if viewer.is_none() {
+            // Refuse an active source before loading its builder or planning work.
+            // The allocator checks the lock and invocation again after planning.
+            RunFolder::lock_existing(&folder, "rerun source")
+                .map_err(|error| Error::usage(error.0))?;
+        }
         Some(super::rerun::Rerun {
             source: &folder,
             attempt,
@@ -111,6 +193,12 @@ fn execute(
         None
     };
     let missing = |why: &str| {
+        if let Some(viewer) = &viewer {
+            return viewer.receipt.refuse(
+                "context_unavailable",
+                "FX needs the original workflow and inputs to continue. Check this attempt in the terminal for details.",
+            );
+        }
         if rerun.is_some() {
             return Error::usage(format!("{label}: {why}"));
         }
@@ -139,9 +227,46 @@ fn execute(
         .as_str()
         .filter(|id| !id.is_empty())
         .ok_or_else(|| missing("the record has no invocation ID"))?;
+    if let Some(viewer) = &viewer {
+        if viewer.request.expected_invocation != invocation {
+            return Err(viewer.receipt.refuse(
+                "invocation_mismatch",
+                "This attempt has started again. Check its status before trying again.",
+            ));
+        }
+        if matches!(viewer.request.operation, LaunchOperation::Resume) {
+            let status = control::inspect(&folder);
+            if status.invocation_id.as_deref() != Some(invocation) {
+                return Err(viewer.receipt.refuse(
+                    "invocation_mismatch",
+                    "This attempt has started again. Check its status before trying again.",
+                ));
+            }
+            if status.recorded_state != "paused" {
+                return Err(viewer.receipt.refuse(
+                    "not_paused",
+                    "This attempt is no longer paused. Check the run’s status.",
+                ));
+            }
+        }
+        // Sample the writer before applying any saved execution context. The runner checks
+        // the invocation again when it acquires this lock to commit the new start.
+        RunFolder::lock_existing(&folder, "selected attempt").map_err(|_| {
+            viewer.receipt.refuse(
+                "source_active",
+                "This attempt is still running or stopping. Try again once it stops.",
+            )
+        })?;
+    }
     let saved = super::repeat::Repeat::parse(&started["repeat"])
         .ok_or_else(|| missing("the record lacks the execution context for automatic resume"))?;
     if saved.live && !args.live {
+        if let Some(viewer) = &viewer {
+            return Err(viewer.receipt.refuse(
+                "approval_required",
+                "This attempt had live access enabled. Use --live in your terminal with an approved spending limit if needed.",
+            ));
+        }
         return Err(Error::usage(format!(
             "{label}: this run used live provider access. Pass --live and supply a spending ceiling when required"
         )));
@@ -216,6 +341,7 @@ fn execute(
             invocation,
             defaulted_inputs_digest: saved.defaulted_inputs_digest.as_deref(),
             rerun,
+            viewer_receipt: viewer.map(|viewer| viewer.receipt),
         },
     )
 }

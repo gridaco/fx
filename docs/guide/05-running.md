@@ -158,7 +158,9 @@ The run ID stays the same. The first command creates attempt 1 and `rerun`
 adds attempt 2. Inspecting the run by ID or name shows attempt 2, including if
 it fails. Use `--attempt 1` or the first attempt's folder from history to read
 the earlier result. To open that exact attempt in the local viewer, add
-`--open` to the last command.
+`--open` to the last command. The shared link printed by `run` and `rerun`
+opens the latest attempt. Use the viewer's attempt history to get back to an
+earlier result.
 
 Use the folder printed by `run` when the run has no name. JSON inspection of
 that folder gives you its run ID and attempt number. FX reconstructs the

@@ -40,6 +40,12 @@ const run = {
 };
 const activePath = `/p/${"a".repeat(64)}/runs/${"c".repeat(64)}/`;
 const planPath = `/p/${"a".repeat(64)}/plans/${"b".repeat(64)}/`;
+const runId = "f".repeat(64);
+const stablePath = `/p/${"a".repeat(64)}/run/${runId}/`;
+const earlier = { attempt_number: 1, url: `/p/${"a".repeat(64)}/runs/${"d".repeat(64)}/`, state: "succeeded" };
+const later = { attempt_number: 2, url: `/p/${"a".repeat(64)}/runs/${"e".repeat(64)}/`, state: "failed" };
+let attempts = [earlier];
+let latestAvailable = true;
 const start = { kind: "fx-run-events-v1", event: "run_started", plan: "a".repeat(64), invocation_id: "first", offset_ms: 0 };
 let activity = { active: true, state: "unfinished", events: [start] };
 const requests = [];
@@ -48,6 +54,21 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) 
   const { pathname, searchParams } = new URL(request.url);
   requests.push({ method: request.method, pathname });
   if (request.method !== "GET") return new Response("Read only", { status: 405 });
+  if (pathname === stablePath) return latestAvailable
+    ? new Response(null, { status: 307, headers: { Location: attempts[0].url, "Cache-Control": "no-store" } })
+    : new Response("Latest attempt unavailable", { status: 404 });
+  const attempt = attempts.find(item => pathname.startsWith(item.url));
+  if (attempt) {
+    if (pathname === `${attempt.url}api/history`) return Response.json({
+      kind: "fx-viewer-run-history-v1", run_id: runId, latest_url: stablePath, latest_available: latestAvailable,
+      selected_attempt: attempt.attempt_number, attempts,
+    });
+    const view = { ...run, state: attempt.state, elapsed_ms: 32100 };
+    if (attempt.url !== activePath) {
+      if (pathname === `${attempt.url}api/view`) return Response.json(view);
+      if (pathname === `${attempt.url}api/snapshot`) return Response.json({ kind: "fx-run-snapshot-v1", cursor: "fixture", plan, events: [], view });
+    }
+  }
   if (pathname.startsWith(activePath)) {
     const { active, state, events } = activity;
     const view = { ...run, state, run_name: "activity" };
@@ -275,6 +296,193 @@ try {
   assert.equal(await activePage.evaluate(() => sessionStorage.getItem("icon_on_exit")), origin + activePath + "favicon.svg");
   await activePage.close();
   console.log("ok   active tab pulses beside a completed run and plan; reduced motion, owner loss, pause, completion, resume and navigation");
+
+  const pinned = await context.newPage();
+  await pinned.setViewportSize({ width: 360, height: 650 });
+  await pinned.goto(origin + stablePath);
+  assert.equal(pinned.url(), origin + earlier.url);
+  await ready(pinned);
+  const historyToggle = pinned.getByRole("button", { name: "Attempt 1, run history" });
+  await historyToggle.focus();
+  await historyToggle.press("Enter");
+  const panel = pinned.getByRole("complementary", { name: "Attempt history" });
+  await panel.waitFor();
+  assert.equal(await panel.getByRole("heading").evaluate(node => node === document.activeElement), true);
+  assert.equal(await panel.getByRole("link", { name: /Attempt 1/ }).getAttribute("aria-current"), "page");
+  assert.equal(await historyToggle.evaluate((button) => button.getBoundingClientRect().right <= button.closest("nav").getBoundingClientRect().right), true);
+  attempts = [later, earlier];
+  await panel.getByRole("link", { name: /Attempt 2 Latest failed/ }).waitFor();
+  assert.equal(pinned.url(), origin + earlier.url);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+  await panel.getByRole("button", { name: "Copy run link" }).click();
+  await panel.getByRole("button", { name: "Copied" }).waitFor();
+  assert.equal(await pinned.evaluate(() => navigator.clipboard.readText()), origin + stablePath);
+
+  const latestPage = await context.newPage();
+  await latestPage.goto(origin + stablePath);
+  assert.equal(latestPage.url(), origin + later.url);
+  const latestToggle = latestPage.getByRole("button", { name: "Attempt 2, run history" });
+  await latestToggle.click();
+  const latestPanel = latestPage.getByRole("complementary", { name: "Attempt history" });
+  assert.equal(await latestPanel.getByRole("link", { name: /Attempt 1/ }).getAttribute("href"), earlier.url);
+  if (process.env.FX_VIEWER_HISTORY_SCREENSHOT) await latestPage.screenshot({ path: process.env.FX_VIEWER_HISTORY_SCREENSHOT });
+  await latestPanel.getByRole("link", { name: /Attempt 1/ }).click();
+  assert.equal(latestPage.url(), origin + earlier.url);
+  await latestPage.close();
+
+  attempts = [earlier];
+  latestAvailable = false;
+  await panel.getByText("Latest attempt unavailable", { exact: true }).waitFor();
+  assert.equal(await panel.getByRole("button", { name: "Copy run link" }).count(), 0);
+  await pinned.keyboard.press("Escape");
+  assert.equal(await historyToggle.getAttribute("aria-expanded"), "false");
+  assert.equal(await historyToggle.evaluate(button => button === document.activeElement), true);
+  await pinned.close();
+  console.log("ok   stable links open the newest attempt while exact pages stay pinned and offer keyboard-accessible history");
+
+  const controlled = await context.newPage();
+  await controlled.setViewportSize({ width: 360, height: 650 });
+  const sourceAttempt = { ...earlier, url: activePath, state: "unfinished" };
+  attempts = [sourceAttempt];
+  latestAvailable = true;
+  const activeActions = { pause: true, resume: false, rerun: false, cancel: true };
+  const pausedActions = { pause: false, resume: true, rerun: true, cancel: false };
+  let control = { kind: "fx-viewer-run-control-v1", attempt_number: 1, invocation_id: "1".repeat(16), actions: activeActions };
+  activity = { active: true, state: "unfinished", events: [{ ...start, invocation_id: control.invocation_id }] };
+  const actionRequests = [];
+  const acceptedAction = (fields = {}) => ({ kind: "fx-viewer-run-action-v1", outcome: "accepted", message: "Action accepted.", ...fields });
+  let rerunCount = 0;
+  await controlled.route(/\/api\/control(?:\/[a-z]+)?$/, async route => {
+    const request = route.request();
+    if (request.method() === "GET") return route.fulfill({ json: control });
+    const pathname = new URL(request.url()).pathname;
+    const verb = pathname.split("/").at(-1);
+    actionRequests.push({ pathname, body: request.postDataJSON(), header: await request.headerValue("X-FX-Action") });
+    if (verb === "pause") {
+      activity = { ...activity, state: "pausing", events: [...activity.events,
+        { ...start, invocation_id: control.invocation_id, event: "pause_requested", source: "viewer" }] };
+      control = { ...control, actions: { ...activeActions, pause: false } };
+      return route.fulfill({ json: acceptedAction({ message: "Pause requested." }) });
+    }
+    if (verb === "resume") {
+      control = { ...control, invocation_id: "2".repeat(16), actions: activeActions };
+      activity = { active: true, state: "unfinished", events: [...activity.events, { ...start, invocation_id: control.invocation_id }] };
+      return route.fulfill({ json: acceptedAction({ message: "Attempt resumed.", url: activePath }) });
+    }
+    if (verb === "cancel") {
+      control = { ...control, actions: { ...pausedActions, resume: false } };
+      sourceAttempt.state = "cancelled";
+      activity = { ...activity, state: "cancelled", active: false, events: [...activity.events,
+        { ...start, invocation_id: control.invocation_id, event: "run_cancelled" }] };
+      return route.fulfill({ json: acceptedAction({ message: "Cancellation requested." }) });
+    }
+    rerunCount += 1;
+    if (rerunCount === 1) return route.fulfill({ json: acceptedAction({
+      outcome: "refused", message: "Rerun requires current spending approval.", cli_command: "grida fx rerun review --live --max-usd USD",
+    }) });
+    if (rerunCount === 2) return route.fulfill({ json: acceptedAction({
+      outcome: "unknown", message: "FX could not confirm the request.",
+    }) });
+    attempts = [later, sourceAttempt];
+    return route.fulfill({ json: acceptedAction({ message: "New attempt started.", url: later.url }) });
+  });
+  await controlled.goto(origin + activePath);
+  await ready(controlled);
+  const actionsToggle = controlled.getByRole("button", { name: "Run actions", exact: true });
+  await actionsToggle.press("Enter");
+  const actionsPanel = controlled.locator("#fx-run-actions");
+  await actionsPanel.getByRole("heading", { name: "Run actions" }).waitFor();
+  assert.equal(await actionsPanel.getByRole("heading").evaluate(node => node === document.activeElement), true);
+  assert.equal(await actionsToggle.evaluate(button => button.getBoundingClientRect().right <= button.closest("nav").getBoundingClientRect().right), true);
+  await actionsPanel.getByRole("button", { name: "Pause", exact: true }).click();
+  await actionsPanel.getByRole("status").filter({ hasText: "Pause requested." }).waitFor();
+  const controlledBar = controlled.getByRole("navigation", { name: "Workflow location" });
+  await controlledBar.getByText("pausing", { exact: true }).waitFor();
+  activity = { active: false, state: "paused", events: [...activity.events,
+    { ...start, invocation_id: control.invocation_id, event: "run_paused", charged_usd: 0, outputs: {} }] };
+  control = { ...control, actions: pausedActions };
+  await controlledBar.getByText("paused", { exact: true }).waitFor();
+  await actionsPanel.getByRole("button", { name: "Resume", exact: true }).waitFor();
+  if (process.env.FX_VIEWER_ACTIONS_SCREENSHOT) await controlled.screenshot({ path: process.env.FX_VIEWER_ACTIONS_SCREENSHOT });
+  await actionsPanel.getByRole("button", { name: "Resume", exact: true }).click();
+  await actionsPanel.getByRole("status").filter({ hasText: "Attempt resumed." }).waitFor();
+  assert.equal(controlled.url(), origin + activePath);
+  const cancelRun = actionsPanel.getByRole("button", { name: "Cancel run", exact: true });
+  const cancelDialog = controlled.getByRole("dialog", { name: "Cancel this run?", exact: true });
+  const confirmCancel = cancelDialog.getByRole("button", { name: "Cancel run", exact: true });
+  await cancelRun.click();
+  await cancelDialog.waitFor();
+  assert.equal(await cancelDialog.evaluate(dialog => dialog.matches(":modal")), true);
+  assert.equal(actionRequests.length, 2);
+  await controlled.keyboard.press("Escape");
+  await cancelDialog.waitFor({ state: "hidden" });
+  assert.equal(await cancelRun.evaluate(node => node === document.activeElement), true);
+  assert.equal(actionRequests.length, 2);
+  await cancelRun.click();
+  await cancelDialog.waitFor();
+  control = { ...control, invocation_id: "3".repeat(16) };
+  await cancelDialog.getByRole("alert").waitFor();
+  assert.equal(await confirmCancel.isEnabled(), false);
+  await cancelDialog.getByRole("button", { name: "Back" }).click();
+  await cancelDialog.waitFor({ state: "hidden" });
+  await actionsPanel.getByRole("status").waitFor();
+  assert.equal(await cancelRun.isEnabled(), false);
+  assert.equal(actionRequests.length, 2);
+  activity = { ...activity, events: [...activity.events, { ...start, invocation_id: control.invocation_id }] };
+  await cancelRun.click();
+  await cancelDialog.waitFor();
+  await confirmCancel.click();
+  await cancelDialog.waitFor({ state: "hidden" });
+  await controlledBar.getByText("cancelled", { exact: true }).waitFor();
+
+  const observer = await context.newPage();
+  await observer.goto(origin + activePath);
+  await ready(observer);
+  await observer.getByRole("button", { name: "Attempt 1, run history" }).click();
+  const observedHistory = observer.getByRole("complementary", { name: "Attempt history" });
+  assert.equal(await observedHistory.getByRole("link", { name: /Attempt 1/ }).getAttribute("aria-current"), "page");
+
+  const rerunWorkflow = actionsPanel.getByRole("button", { name: "Rerun workflow", exact: true });
+  const rerunDialog = controlled.getByRole("dialog", { name: "Rerun this workflow?", exact: true });
+  const confirmRerun = rerunDialog.getByRole("button", { name: "Rerun workflow", exact: true });
+  await rerunWorkflow.click();
+  await rerunDialog.getByText(/\battempt 1\b/i).waitFor();
+  assert.equal(await rerunDialog.evaluate(dialog => dialog.matches(":modal")), true);
+  if (process.env.FX_VIEWER_CONFIRMATION_SCREENSHOT) await controlled.screenshot({ path: process.env.FX_VIEWER_CONFIRMATION_SCREENSHOT });
+  assert.equal(actionRequests.length, 3);
+  await confirmRerun.click();
+  await rerunDialog.getByRole("alert").filter({ hasText: "Rerun requires current spending approval." }).waitFor();
+  await rerunDialog.getByText("grida fx rerun review --live --max-usd USD", { exact: true }).waitFor();
+  assert.equal(controlled.url(), origin + activePath);
+  await rerunDialog.getByRole("button", { name: "Back" }).click();
+  await rerunDialog.waitFor({ state: "hidden" });
+  assert.equal(await rerunWorkflow.evaluate(node => node === document.activeElement), true);
+  await rerunWorkflow.press("Enter");
+  await rerunDialog.waitFor();
+  await confirmRerun.click();
+  await rerunDialog.getByRole("alert").filter({ hasText: "FX could not confirm the request." }).waitFor();
+  const retry = rerunDialog.getByRole("button", { name: "Retry request" });
+  await retry.waitFor();
+  assert.equal(controlled.url(), origin + activePath);
+  await Promise.all([controlled.waitForURL(origin + later.url), retry.click()]);
+  await ready(controlled);
+  await controlledBar.getByText("failed", { exact: true }).waitFor();
+  await controlled.getByRole("button", { name: "Attempt 2, run history" }).waitFor();
+  await observedHistory.getByRole("link", { name: /Attempt 2 Latest failed/ }).waitFor();
+  assert.equal(observer.url(), origin + activePath);
+  assert.deepEqual(actionRequests.map(({ pathname, header }) => [pathname, header]),
+    ["pause", "resume", "cancel", "rerun", "rerun", "rerun"].map(verb => [`${activePath}api/control/${verb}`, verb]));
+  assert.deepEqual(actionRequests.map(({ body }) => body.invocation_id), ["1", "1", "3", "3", "3", "3"].map(value => value.repeat(16)));
+  assert(actionRequests[1].body.request_id);
+  assert(actionRequests[4].body.request_id);
+  assert.equal(actionRequests[4].body.request_id, actionRequests[5].body.request_id);
+  await controlled.goBack();
+  await controlled.waitForURL(origin + activePath);
+  await ready(controlled);
+  await controlledBar.getByText("cancelled", { exact: true }).waitFor();
+  await observer.close();
+  await controlled.close();
+  console.log("ok   modal run confirmations protect exact invocation targets and restore focus; rerun opens the result in the initiating tab");
 
   const authored = 'Prepare the "before" & "after" frames.';
   await page.route("**/plans/*/api/view", (route) => route.fulfill({ json: {

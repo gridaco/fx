@@ -90,10 +90,12 @@ from urllib.request import urlopen
 root = Path(__file__).parent.parent
 (root / "opener-invoked").touch()
 url = sys.argv[1]
-with urlopen(url + "api/view", timeout=5) as response:
+with urlopen(url, timeout=5) as response:
+    exact_url = response.geturl()
+with urlopen(exact_url + "api/view", timeout=5) as response:
     view = json.load(response)
 temporary = root / "opened.tmp"
-receipt = {{"url": url, "kind": view["kind"]}}
+receipt = {{"url": url, "exact_url": exact_url, "kind": view["kind"]}}
 receipt.update({{name: view[name] for name in ("steps", "takes_file") if name in view}})
 temporary.write_text(json.dumps(receipt))
 temporary.replace(root / "opened.json")
@@ -147,12 +149,14 @@ temporary.replace(root / "opened.json")
         std::fs::write(self.root().join(format!("release-{token}")), "").unwrap();
     }
     fn run(&self, token: &str, standalone: bool, open: bool) -> Running {
+        let inputs = format!("inputs-{token}.yaml");
+        std::fs::write(self.root().join(&inputs), format!("token: {token}\n")).unwrap();
         let mut command = self.command();
         command.args([
             "run",
             "workflow.yaml",
-            "--token",
-            token,
+            "--inputs",
+            &inputs,
             "--run",
             &format!("runs/{token}"),
             "--max-usd",
@@ -267,7 +271,11 @@ fn await_file(path: &Path) {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
-fn get(url: &str) -> Vec<u8> {
+fn http_get(url: &str) -> Vec<u8> {
+    http_request(url, "GET", "", "")
+}
+
+fn http_request(url: &str, method: &str, headers: &str, body: &str) -> Vec<u8> {
     let (address, path) = url
         .strip_prefix("http://")
         .unwrap()
@@ -275,15 +283,21 @@ fn get(url: &str) -> Vec<u8> {
         .unwrap();
     let mut stream = TcpStream::connect(address).unwrap();
     stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
+        .set_read_timeout(Some(Duration::from_secs(35)))
         .unwrap();
     write!(
         stream,
-        "GET /{path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
+        "{method} /{path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n{headers}Content-Length: {}\r\n\r\n{body}",
+        body.len(),
     )
     .unwrap();
     let mut response = Vec::new();
     stream.read_to_end(&mut response).unwrap();
+    response
+}
+
+fn get(url: &str) -> Vec<u8> {
+    let response = http_get(url);
     assert!(
         response.starts_with(b"HTTP/1.1 200"),
         "{}",
@@ -300,6 +314,351 @@ fn get_json(url: &str) -> Value {
     serde_json::from_slice(&get(url)).unwrap()
 }
 
+fn exact_run_url(stable_url: &str) -> String {
+    let response = http_get(stable_url);
+    let response = String::from_utf8(response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 307"), "{response}");
+    let location = response
+        .lines()
+        .find_map(|line| line.strip_prefix("location: /"))
+        .unwrap();
+    let (base, _) = stable_url.split_once("/p/").unwrap();
+    format!("{base}/{location}")
+}
+
+fn control_post(url: &str, operation: &str, origin: &str, body: Value) -> (u16, Value) {
+    viewer_post(
+        &format!("{url}api/control/{operation}"),
+        operation,
+        origin,
+        body,
+    )
+}
+
+fn viewer_post(url: &str, action: &str, origin: &str, body: Value) -> (u16, Value) {
+    let response = http_request(
+        url,
+        "POST",
+        &format!("Origin: {origin}\r\nContent-Type: application/json\r\nX-FX-Action: {action}\r\n"),
+        &body.to_string(),
+    );
+    let response = String::from_utf8(response).unwrap();
+    let (header, body) = response.split_once("\r\n\r\n").unwrap();
+    let status = header
+        .split_ascii_whitespace()
+        .nth(1)
+        .unwrap()
+        .parse::<u16>()
+        .unwrap();
+    (
+        status,
+        serde_json::from_str(body).unwrap_or_else(|_| json!(body)),
+    )
+}
+
+fn await_run_state(url: &str, state: &str) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let view = get_json(&format!("{url}api/view"));
+        if view["state"] == state {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "expected {state}; got {}",
+            view["state"]
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn await_exit(run: &mut Running) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while run.child.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "workflow runner did not stop");
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
+fn read_events(project: &Project, folder: &str) -> Vec<Value> {
+    std::fs::read_to_string(project.root().join(folder).join("events.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn start_control_fixture(project: &Project, folder: &str, live: bool) -> Running {
+    let mut command = project.command();
+    command.args(["run", "workflow.yaml", "--run", folder, "--max-usd", "0"]);
+    if live {
+        command.arg("--live");
+    }
+    Running::spawn(command)
+}
+
+#[test]
+fn viewer_pauses_resumes_and_reruns_exact_attempts_through_the_project_service() {
+    let Some(project) = Project::new() else {
+        return;
+    };
+    let nodes = include_str!("../../../fixtures/control/nodes.py");
+    let workflow = include_str!("../../../fixtures/control/workflow.yaml")
+        .replace("./nodes.py#after", "./finish.py#finish");
+    std::fs::write(project.root().join("nodes.py"), nodes).unwrap();
+    std::fs::write(project.root().join("workflow.yaml"), workflow).unwrap();
+    std::fs::write(
+        project.root().join("finish.py"),
+        r#"
+from os import getenv
+from time import monotonic, sleep
+from pathlib import Path
+from grida.fx import Ctx, node
+
+@node("viewer_finish", inputs={"text": "text"}, outputs={"text": "text"}, version=1)
+def finish(ctx: Ctx) -> dict:
+    if getenv("ACME_VIEWER_TEST_KEY"):
+        raise ctx.fail("viewer start inherited the test provider variable")
+    home = Path(__file__).parent
+    (home / "finish-entered").touch()
+    deadline = monotonic() + 30
+    while not (home / "finish-release").is_file():
+        if ctx.cancelled or monotonic() >= deadline:
+            raise ctx.fail("finish gate did not release")
+        sleep(0.01)
+    return {"text": ctx.inputs["text"]}
+"#,
+    )
+    .unwrap();
+    let port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let service = json_success(
+        project
+            .command()
+            .env("ACME_VIEWER_TEST_KEY", "fixture")
+            .args([
+                "start",
+                "--background",
+                "--port",
+                &port.to_string(),
+                "--json",
+            ])
+            .output()
+            .unwrap(),
+    );
+    let origin = service["url"].as_str().unwrap().trim_end_matches('/');
+    let folder = "runs/control";
+    let mut run = start_control_fixture(&project, folder, false);
+    let stable = run.url();
+    let exact = exact_run_url(&stable);
+    await_file(&project.root().join(".control-entered"));
+    let control = get_json(&format!("{exact}api/control"));
+    let first = control["invocation_id"].as_str().unwrap();
+    assert_eq!(
+        control["actions"],
+        json!({"pause":true,"cancel":true,"resume":false,"rerun":false})
+    );
+
+    let (status, _) = control_post(
+        &exact,
+        "pause",
+        "https://example.invalid",
+        json!({"invocation_id":first}),
+    );
+    assert_eq!(status, 403);
+    let (_, paused) = control_post(&exact, "pause", origin, json!({"invocation_id":first}));
+    assert_eq!(paused["outcome"], "accepted", "{paused}");
+    await_run_state(&exact, "pausing");
+    std::fs::write(project.root().join(".control-release"), "").unwrap();
+    await_exit(&mut run);
+    await_run_state(&exact, "paused");
+    let pause_events = read_events(&project, folder);
+    assert!(
+        pause_events
+            .iter()
+            .any(|event| event["event"] == "pause_requested" && event["source"] == "viewer")
+    );
+    assert!(!project.root().join("finish-entered").exists());
+
+    // The service was launched before this variable became a provider credential.
+    let configuration = project.root().join("fx.yaml");
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(configuration)
+        .unwrap()
+        .write_all(
+            br#"
+providers:
+  acme:
+    credential: {variable: ACME_VIEWER_TEST_KEY, header: authorization, scheme: Bearer}
+    base_url: {default: https://api.acme.test/v1}
+    family: openai-compatible
+"#,
+        )
+        .unwrap();
+
+    let resume_body =
+        json!({"invocation_id":first,"request_id":"bbd27793-3eb5-428d-aaf6-6f217a8f3d73"});
+    let (_, resumed) = control_post(&exact, "resume", origin, resume_body);
+    assert_eq!(resumed["outcome"], "accepted", "{resumed}");
+    assert_eq!(
+        format!("{origin}{}", resumed["url"].as_str().unwrap()),
+        exact
+    );
+    await_file(&project.root().join("finish-entered"));
+    let live = get_json(&format!("{exact}api/control"));
+    let second = live["invocation_id"].as_str().unwrap();
+    assert_ne!(second, first);
+    let (_, stale) = control_post(&exact, "cancel", origin, json!({"invocation_id":first}));
+    assert_eq!(stale["code"], "invocation_mismatch", "{stale}");
+    project.stop();
+    std::fs::write(project.root().join("finish-release"), "").unwrap();
+    let restart = json_success(
+        project
+            .command()
+            .args(["start", "--background", "--json"])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(restart["url"], service["url"]);
+    await_run_state(&exact, "succeeded");
+
+    let rerun_body =
+        json!({"invocation_id":second,"request_id":"01d42701-37d2-4bcc-afee-71e55f94451d"});
+    let (_, rerun) = control_post(&exact, "rerun", origin, rerun_body.clone());
+    assert_eq!(rerun["outcome"], "accepted", "{rerun}");
+    let latest = format!("{origin}{}", rerun["url"].as_str().unwrap());
+    assert_ne!(latest, exact);
+    let (_, replay) = control_post(&exact, "rerun", origin, rerun_body);
+    assert_eq!(replay["url"], rerun["url"], "{replay}");
+    assert_eq!(replay["outcome"], "accepted", "{replay}");
+    assert_eq!(exact_run_url(&stable), latest);
+    await_run_state(&latest, "succeeded");
+    let history = get_json(&format!("{exact}api/history"));
+    assert_eq!(history["selected_attempt"], 1);
+    assert_eq!(history["attempts"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn viewer_cancels_an_active_invocation_and_refuses_implicit_live_rerun() {
+    let Some(project) = Project::new() else {
+        return;
+    };
+    let service = project.start();
+    let origin = service["url"].as_str().unwrap().trim_end_matches('/');
+    // The fixture has only a local step. --live exercises the saved authorization policy.
+    let folder = "runs/live";
+    let mut run = start_control_fixture(&project, folder, true);
+    let url = run.url();
+    let exact = exact_run_url(&url);
+    await_file(&project.root().join("entered-one"));
+    let inspect = get_json(&format!("{exact}api/control"));
+    let invocation = inspect["invocation_id"].as_str().unwrap();
+    let (_, cancelled) = control_post(
+        &exact,
+        "cancel",
+        origin,
+        json!({"invocation_id":invocation}),
+    );
+    assert_eq!(cancelled["outcome"], "accepted", "{cancelled}");
+    await_exit(&mut run);
+    await_run_state(&exact, "cancelled");
+    let events = read_events(&project, folder);
+    assert!(
+        events
+            .iter()
+            .any(|event| event["event"] == "cancel_requested" && event["source"] == "viewer")
+    );
+    assert!(!events.iter().any(|event| event["event"] == "call"));
+    let (_, denied) = control_post(
+        &exact,
+        "rerun",
+        origin,
+        json!({"invocation_id":invocation,"request_id":"53104d6a-a2cf-4153-b95f-d2879d31b0a6"}),
+    );
+    assert_eq!(denied["outcome"], "refused", "{denied}");
+    assert_eq!(denied["code"], "approval_required", "{denied}");
+    assert!(denied["cli_command"].as_str().unwrap().contains("rerun"));
+    assert!(
+        !denied
+            .to_string()
+            .contains(project.root().to_str().unwrap())
+    );
+    assert_eq!(exact_run_url(&url), exact);
+}
+
+#[test]
+fn viewer_rerun_continues_after_a_response_to_the_new_attempt() {
+    let Some(project) = Project::new() else {
+        return;
+    };
+    std::fs::write(
+        project.root().join("workflow.yaml"),
+        r#"fx: workflow/v1
+id: review
+title: Review
+steps:
+  review:
+    uses: fx/await@1
+    with:
+      schema: {type: string}
+      timeout_seconds: 60
+outputs:
+  answer: ${{ steps.review.outputs.answer }}
+"#,
+    )
+    .unwrap();
+    let service = project.start();
+    let origin = service["url"].as_str().unwrap().trim_end_matches('/');
+    let mut run = start_control_fixture(&project, "runs/review", false);
+    let stable = run.url();
+    let original = exact_run_url(&stable);
+    await_exit(&mut run);
+    let before = get_json(&format!("{original}api/requests"));
+    let original_request = &before["requests"][0];
+    let control = get_json(&format!("{original}api/control"));
+    let (_, rerun) = control_post(
+        &original,
+        "rerun",
+        origin,
+        json!({
+            "invocation_id":control["invocation_id"],
+            "request_id":"cb588c1e-50e9-4a53-bac0-1fef6dba8901",
+        }),
+    );
+    assert_eq!(rerun["outcome"], "accepted", "{rerun}");
+    let exact = format!("{origin}{}", rerun["url"].as_str().unwrap());
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let request = loop {
+        let result = get_json(&format!("{exact}api/requests"));
+        if let Some(request) = result["requests"].get(0) {
+            break request.clone();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the new attempt did not reach its review"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    assert_ne!(original_request["id"], request["id"]);
+    assert!(request["deadline"].as_str() > original_request["deadline"].as_str());
+    let (status, _) = viewer_post(
+        &format!(
+            "{exact}api/requests/{}/respond",
+            request["id"].as_str().unwrap()
+        ),
+        "respond",
+        origin,
+        json!({"answer":"new result"}),
+    );
+    assert_eq!(status, 200);
+    await_run_state(&exact, "succeeded");
+    assert_eq!(get_json(&format!("{original}api/requests")), before);
+}
+
 #[test]
 fn a_run_stays_inspectable_after_completion_and_service_restart() {
     let Some(project) = Project::new() else {
@@ -308,8 +667,9 @@ fn a_run_stays_inspectable_after_completion_and_service_restart() {
     let service = project.start();
     let base = service["url"].as_str().unwrap();
     let mut run = project.run("one", false, true);
-    let url = run.url();
-    assert!(url.starts_with(&format!("{base}p/")) && url.contains("/runs/"));
+    let stable_url = run.url();
+    assert!(stable_url.starts_with(&format!("{base}p/")) && stable_url.contains("/run/"));
+    let url = exact_run_url(&stable_url);
     await_file(&project.root().join("entered-one"));
     assert_eq!(
         get_json(&format!("{url}api/snapshot"))["view"]["state"],
@@ -319,7 +679,8 @@ fn a_run_stays_inspectable_after_completion_and_service_restart() {
     let opened: Value =
         serde_json::from_slice(&std::fs::read(project.root().join("opened.json")).unwrap())
             .unwrap();
-    assert_eq!(opened["url"], url);
+    assert_eq!(opened["url"], stable_url);
+    assert_eq!(opened["exact_url"], url);
     project.release("one");
     run.finish();
     let completed = get_json(&format!("{url}api/view"));
@@ -341,6 +702,7 @@ fn a_run_stays_inspectable_after_completion_and_service_restart() {
             .unwrap(),
     );
     assert_eq!(restarted["url"], service["url"]);
+    assert_eq!(exact_run_url(&stable_url), url);
     assert_eq!(get_json(&format!("{url}api/view"))["state"], "succeeded");
     assert_eq!(get(&artifact_url), b"completed one");
     let inspection = project
@@ -350,6 +712,33 @@ fn a_run_stays_inspectable_after_completion_and_service_restart() {
         .unwrap();
     assert!(inspection.status.success());
     assert!(String::from_utf8_lossy(&inspection.stdout).contains(&url));
+
+    let rerun = project
+        .command()
+        .args(["rerun", "runs/one", "--no-view"])
+        .output()
+        .unwrap();
+    assert!(
+        rerun.status.success(),
+        "{}",
+        String::from_utf8_lossy(&rerun.stderr)
+    );
+    let latest = exact_run_url(&stable_url);
+    assert_ne!(latest, url);
+    let before = get_json(&format!("{url}api/history"));
+    let after = get_json(&format!("{latest}api/history"));
+    assert_eq!(before["selected_attempt"], 1);
+    assert_eq!(after["selected_attempt"], 2);
+    assert_eq!(before["attempts"], after["attempts"]);
+    assert_eq!(
+        after["attempts"][0]["url"],
+        format!("/{}", latest.strip_prefix(base).unwrap())
+    );
+    assert_eq!(get(&artifact_url), b"completed one");
+    let mut resume = project.run("one", false, false);
+    assert_eq!(resume.url(), url);
+    resume.finish();
+    assert_eq!(exact_run_url(&stable_url), latest);
 }
 
 #[test]
@@ -359,7 +748,7 @@ fn stopping_the_service_during_execution_does_not_cancel_the_run() {
     };
     let service = project.start();
     let mut run = project.run("two", false, false);
-    let url = run.url();
+    let url = exact_run_url(&run.url());
     await_file(&project.root().join("entered-two"));
     project.stop();
     assert!(run.child.try_wait().unwrap().is_none());
@@ -473,7 +862,7 @@ fn a_slow_artifact_reader_cannot_keep_the_service_alive_after_stop() {
     let service = project.start();
     let base = service["url"].as_str().unwrap();
     let mut run = project.run("large", false, false);
-    let url = run.url();
+    let url = exact_run_url(&run.url());
     await_file(&project.root().join("entered-large"));
     project.release("large");
     run.finish();

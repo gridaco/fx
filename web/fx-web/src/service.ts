@@ -11,6 +11,8 @@ export interface ServiceEntry {
   workflow?: { id: string; source: string };
   created_at?: string;
   name?: string;
+  run_id?: string;
+  attempt_number?: number;
 }
 
 export interface ServiceIndex {
@@ -32,6 +34,12 @@ function workflow(value: unknown): value is NonNullable<ServiceEntry["workflow"]
     && !/^(?:\/|[A-Za-z]:|file:|[A-Za-z][A-Za-z0-9+.-]*:\/\/)/i.test(value.source);
 }
 
+function validAttempt(entry: Record<string, unknown>): boolean {
+  if (entry.run_id === undefined && entry.attempt_number === undefined) return true;
+  return entry.kind === "run" && typeof entry.run_id === "string" && /^[a-f0-9]{64}$/.test(entry.run_id)
+    && typeof entry.attempt_number === "number" && Number.isSafeInteger(entry.attempt_number) && entry.attempt_number > 0;
+}
+
 export function parseServiceIndex(value: unknown): ServiceIndex {
   if (!record(value) || value.kind !== "fx-service-index-v1") throw new Error("This viewer does not support the returned project format.");
   if (typeof value.project_id !== "string" || !/^[a-f0-9]{64}$/.test(value.project_id)
@@ -44,6 +52,7 @@ export function parseServiceIndex(value: unknown): ServiceIndex {
       || (entry.workflow !== undefined && !workflow(entry.workflow))
       || (entry.created_at !== undefined && !utcTimestamp(entry.created_at))
       || (entry.name !== undefined && (entry.kind !== "run" || typeof entry.name !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(entry.name)))
+      || !validAttempt(entry)
       || entry.url !== viewerEntryUrl(value.project_id, entry.kind as "run" | "plan", entry.id)) {
       throw new Error("The project response contains an invalid entry.");
     }
@@ -63,6 +72,7 @@ export interface ServiceWorkflowGroup {
   /** Undated legacy records do not establish which run was created latest. */
   latest_known: boolean;
   show_source: boolean;
+  /** The highest recorded attempt of each independent run. */
   runs: ServiceEntry[];
   plans: ServiceEntry[];
   /** Recorded in-progress evidence, not an assertion that a process is alive. */
@@ -85,7 +95,7 @@ function newestEntry(left: ServiceEntry, right: ServiceEntry): number {
   } else if (left.created_at !== undefined || right.created_at !== undefined) {
     return left.created_at !== undefined ? -1 : 1;
   }
-  return compareText(left.kind, right.kind) || compareText(left.id, right.id);
+  return compareText(left.kind, right.kind) || compareText(left.run_id ?? left.id, right.run_id ?? right.id) || compareText(left.id, right.id);
 }
 
 /** Groups recorded workflow identities without deriving identity from titles or plan digests. */
@@ -97,20 +107,25 @@ export class ServiceIndexProjection {
     for (const entry of catalog.entries) {
       const key = JSON.stringify(entry.workflow
         ? ["workflow", catalog.project_id, entry.workflow.id, entry.workflow.source]
-        : ["entry", catalog.project_id, entry.kind, entry.id]);
+        : entry.run_id ? ["run", catalog.project_id, entry.run_id] : ["entry", catalog.project_id, entry.kind, entry.id]);
       const entries = groups.get(key) ?? [];
       entries.push(entry);
       groups.set(key, entries);
     }
     this.groups = [...groups].map(([key, entries]) => {
-      const runs = entries.filter((entry) => entry.kind === "run").sort(newestEntry);
+      const attempts = entries.filter((entry) => entry.kind === "run").sort(newestEntry);
+      const latest = new Map<string, number>();
+      for (const { run_id, attempt_number } of attempts) {
+        if (run_id !== undefined && attempt_number !== undefined) latest.set(run_id, Math.max(latest.get(run_id) ?? 0, attempt_number));
+      }
+      const runs = attempts.filter(entry => entry.run_id === undefined || entry.attempt_number === latest.get(entry.run_id));
       const plans = entries.filter((entry) => entry.kind === "plan").sort(newestEntry);
       const primary = runs[0] ?? plans[0];
       return {
         key, title: primary.title, workflow: primary.workflow, primary,
         latest_known: (runs.length ? runs : plans).every((entry) => entry.created_at !== undefined),
         show_source: false, runs, plans,
-        unfinished_runs: runs.filter((entry) => entry !== primary && ["running", "unfinished", "awaiting", "pausing", "paused"].includes(entry.state)),
+        unfinished_runs: attempts.filter((entry) => entry !== primary && ["running", "unfinished", "awaiting", "pausing", "paused"].includes(entry.state)),
       };
     });
     const titles = new Map<string, number>(), workflowIds = new Map<string, number>();

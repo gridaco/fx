@@ -773,15 +773,15 @@ fn serve(mut stream: std::os::unix::net::UnixStream, owner: &Owner, control: &Ru
     } else if !matches!(
         request.operation.as_str(),
         "inspect" | "inspect_pause" | "cancel" | "pause"
-    ) || !matches!(request.source.as_str(), "cli" | "sdk")
+    ) || !matches!(request.source.as_str(), "cli" | "sdk" | "viewer")
     {
         reply.code = Some("unsupported_version".into());
     } else {
         if matches!(request.operation.as_str(), "cancel" | "pause") {
-            let source = if request.source == "sdk" {
-                CancelSource::Sdk
-            } else {
-                CancelSource::Cli
+            let source = match request.source.as_str() {
+                "sdk" => CancelSource::Sdk,
+                "viewer" => CancelSource::Viewer,
+                _ => CancelSource::Cli,
             };
             let outcome = if request.operation == "pause" {
                 control.request_pause(source)
@@ -1030,12 +1030,21 @@ fn explanation(code: &str) -> &'static str {
 
 /// Observes saved evidence and verifies the sampled owner with one bounded local handshake.
 pub fn inspect(folder: &Path) -> ControlResult {
+    inspect_from(folder, "cli")
+}
+
+/// Samples whether the selected runner accepts viewer control requests.
+pub fn inspect_for_viewer(folder: &Path) -> ControlResult {
+    inspect_from(folder, "viewer")
+}
+
+fn inspect_from(folder: &Path, source: &str) -> ControlResult {
     operate(
         folder,
         None,
         false,
         Duration::from_secs(30),
-        "cli",
+        source,
         "inspect",
         Instant::now(),
     )

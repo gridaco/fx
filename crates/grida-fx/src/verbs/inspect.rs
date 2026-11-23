@@ -190,7 +190,7 @@ pub fn run(args: &InspectArgs) -> Result<u8, Error> {
             )?;
         } else {
             super::view::report_service(
-                super::service::register_run(&project, &folder),
+                super::service::register_run(&project, &folder, false),
                 args.open,
                 &declarations,
             );

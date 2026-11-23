@@ -538,11 +538,12 @@
       }
     },
     "source": {
-      "description": "Origin of cancellation intent for this invocation.",
+      "description": "Origin of pause or cancellation intent for this invocation.",
       "enum": [
         "cli",
         "signal",
-        "sdk"
+        "sdk",
+        "viewer"
       ]
     },
     "preview": {

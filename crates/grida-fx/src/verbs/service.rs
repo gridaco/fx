@@ -378,7 +378,13 @@ fn foreground(
         .build()
         .map_err(|error| Error::io("service runtime", &error))?;
     let result = runtime.block_on(async {
-        let (server, stopped) = grida_fx_viewer::service::bind(catalog.clone(), port, instance.clone(), token.clone()).await
+        let (server, stopped) = grida_fx_viewer::service::bind_with_run_launcher(
+            catalog.clone(),
+            port,
+            instance.clone(),
+            token.clone(),
+            super::viewer_run::launcher(declarations),
+        ).await
             .map_err(|error| bind_error(port, &error))?;
         let descriptor = json!({"port": port, "project_id": catalog.project_id(), "instance_id": instance, "pid": std::process::id(), "token": token});
         save(&catalog.state_dir().join(DESCRIPTOR), &descriptor).map_err(|error| Error::io("service descriptor", &error))?;
@@ -702,18 +708,34 @@ pub fn logs(args: &LogsArgs) -> Result<u8, Error> {
     Ok(0)
 }
 
-/// Register before run-phase execution. Service absence never prevents recording the run.
-pub(crate) fn register_run(project: &Project, folder: &Path) -> Result<Option<String>, Error> {
+/// Register the exact attempt before linking to it or to the run's latest attempt.
+/// Service absence never prevents recording or registering the run.
+pub(crate) fn register_run(
+    project: &Project,
+    folder: &Path,
+    follow_latest: bool,
+) -> Result<Option<String>, Error> {
     let catalog = catalog(project)?;
     let entry = catalog
         .register_run(folder)
         .map_err(|error| Error::io("service run registration", &error))?;
-    Ok(registered_url(&catalog, &entry.url))
+    let status = probe(&catalog);
+    let latest = if follow_latest && status["run_history"] == true {
+        catalog
+            .registered_run_latest_route(folder)
+            .map_err(|error| Error::io("service run history", &error))?
+    } else {
+        None
+    };
+    Ok(registered_url(
+        &status,
+        latest.as_deref().unwrap_or(&entry.url),
+    ))
 }
 
 pub(crate) fn register_plan(project: &Project, graph: &Value) -> Result<Option<String>, Error> {
     let (catalog, entry) = save_plan(project, graph)?;
-    Ok(registered_url(&catalog, &entry.url))
+    Ok(registered_url(&probe(&catalog), &entry.url))
 }
 
 /// Registers an existing run and returns its stable catalog address.
@@ -766,8 +788,7 @@ fn save_plan(project: &Project, graph: &Value) -> Result<(Catalog, Entry), Error
     Ok((catalog, entry))
 }
 
-fn registered_url(catalog: &Catalog, path: &str) -> Option<String> {
-    let value = probe(catalog);
+fn registered_url(value: &Value, path: &str) -> Option<String> {
     let base = value["url"]
         .as_str()
         .filter(|_| value["state"] == "running")?;
@@ -782,7 +803,7 @@ pub(super) fn existing_run_url(folder: &Path) -> Option<String> {
         return None;
     }
     let route = catalog.registered_run_route(folder).ok()??;
-    registered_url(&catalog, &route)
+    registered_url(&probe(&catalog), &route)
 }
 
 #[cfg(all(test, unix))]

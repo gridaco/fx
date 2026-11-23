@@ -1,10 +1,11 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, FileText, List, RefreshCw, Square, Workflow, X } from "lucide-react";
-import { ExternalFileController, FileInventoryController, OutputArchiveController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, WaitingReviewController, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel, withReviewCards } from "@grida/fx-web";
+import { ArrowLeft, ArrowUpRight, Check, ChevronRight, Copy, Download, Ellipsis, FileText, History, List, RefreshCw, Square, Workflow, X } from "lucide-react";
+import { ExternalFileController, FileInventoryController, OutputArchiveController, RunActionsController, RunHistoryController, ServiceIndexProjection, ViewerController, ViewerPage, ViewerPresentation, ViewerPresentationError, WaitingReviewController, elapsedLabel, outputFiles, ownsKeys, priceLabel, readFileInventory, skipExplanation, skipSourceScopes, ViewerEntryController, type Artifact, type CanvasPreview, type CanvasStep, type GraphDocument, type GraphInstance, type PendingRepeat, type RunHistory, type ServiceEntry, type ServiceIndex, type ViewerRun, type WorkflowNote, type ValueView, valueArtifacts, valueInspectionData, valueKindLabel, valueStateLabel, withReviewCards } from "@grida/fx-web";
 import { ExternalFileLink, NoteContent, StateIcon, StateLabel, Status, Value, Values, WorkflowCanvas, money, type WorkflowCanvasHandle } from "@grida/fx-react";
 import { RunFavicon } from "./run-favicon";
+import { RunActionsPanel } from "./run-actions";
 import { WaitingReviews } from "./waiting-reviews";
 import "./style.css";
 
@@ -87,7 +88,7 @@ function SourceFile({ instanceId, scopeId }: { instanceId?: string; scopeId?: st
 }
 
 /** Copies `text`, and says so for a moment. */
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({ text, label, visible = false }: { text: string; label: string; visible?: boolean }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -95,8 +96,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     return () => window.clearTimeout(reset);
   }, [copied]);
   const copy = () => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false));
-  return <button type="button" onClick={copy} className="fx-copy" aria-label={copied ? "Copied" : label} title={copied ? "Copied" : label}>
+  return <button type="button" onClick={copy} className={visible ? "fx-action" : "fx-copy"} aria-label={copied ? "Copied" : label} title={copied ? "Copied" : label}>
     {copied ? <Check {...iconProps} /> : <Copy {...iconProps} />}
+    {visible && (copied ? "Copied" : label)}
   </button>;
 }
 
@@ -265,6 +267,38 @@ function usePageMetadata(titleParts: (string | undefined)[], description?: strin
   }, [title, description]);
 }
 
+function AttemptHistory({ history, error, onClose }: { history: RunHistory; error: string | null; onClose: () => void }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
+  return <aside className="fx-details fx-attempt-history" id="fx-attempt-history" aria-labelledby="fx-attempt-history-title" data-fx-owns-keys
+    onKeyDown={event => {
+      if (event.key === "Escape" && !event.defaultPrevented && !event.currentTarget.ownerDocument.fullscreenElement) {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    }}>
+    <div className="fx-detail-heading">
+      <div className="fx-detail-heading-row"><h2 ref={heading} tabIndex={-1} id="fx-attempt-history-title">Attempt history</h2></div>
+    </div>
+    <button type="button" className="fx-details-close" aria-label="Close run history" onClick={onClose}><X {...iconProps} /></button>
+    {error && <p role="alert" className="fx-detail-problem">{error} Showing the last loaded history.</p>}
+    <ul className="fx-attempt-history-list">{history.attempts.map((attempt, index) => <li key={attempt.attempt_number}>
+      <a className="fx-attempt-row" href={attempt.url} aria-current={attempt.attempt_number === history.selected_attempt ? "page" : undefined}>
+        <span>Attempt {attempt.attempt_number}</span>
+        {index === 0 && history.latest_available && <span className="fx-attempt-latest">Latest</span>}
+        <Status state={attempt.state} />
+      </a>
+    </li>)}</ul>
+    <div className="fx-attempt-share">
+      {history.latest_available ? <>
+        <CopyButton text={new URL(history.latest_url, window.location.origin).href} label="Copy run link" visible />
+        <span>Opens the latest attempt</span>
+      </> : <span>Latest attempt unavailable</span>}
+    </div>
+  </aside>;
+}
+
 function WorkflowView() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const external = useSyncExternalStore(externalFiles.subscribe, externalFiles.getSnapshot);
@@ -272,6 +306,29 @@ function WorkflowView() {
   const reviews = useMemo(() => new WaitingReviewController(apiBase), []);
   const pendingAnswers = useSyncExternalStore(reviews.subscribe, reviews.getPendingCount);
   const reviewStep = useSyncExternalStore(reviews.subscribe, reviews.getOpenStep);
+  const historyController = useMemo(() => new RunHistoryController(entryController.route), []);
+  const { history, error: historyError } = useSyncExternalStore(historyController.subscribe, historyController.getSnapshot);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyToggle = useRef<HTMLButtonElement>(null);
+  const actionController = useMemo(() => new RunActionsController(entryController.route, {
+    onAccepted: (action, receipt) => {
+      if (action === "rerun" && receipt.url) window.location.assign(receipt.url);
+      else void controller.refresh();
+    },
+  }), []);
+  const actionState = useSyncExternalStore(actionController.subscribe, actionController.getSnapshot);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsToggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => { historyController.setOpen(historyOpen); }, [historyOpen, historyController]);
+  useEffect(() => { actionController.setOpen(actionsOpen); }, [actionsOpen, actionController]);
+  const closeHistory = useCallback(() => {
+    setHistoryOpen(false);
+    historyToggle.current?.focus({ preventScroll: true });
+  }, []);
+  const closeActions = useCallback(() => {
+    setActionsOpen(false);
+    actionsToggle.current?.focus({ preventScroll: true });
+  }, []);
   useEffect(() => {
     const favicon = new RunFavicon(document.querySelector<HTMLLinkElement>('link[rel="icon"]')!);
     let pageActive = true;
@@ -285,31 +342,39 @@ function WorkflowView() {
     const hide = () => {
       pageActive = false;
       controller.dispose();
+      historyController.dispose();
+      actionController.dispose();
       syncIcon();
     };
     const show = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
       pageActive = true;
       void controller.refresh();
+      historyController.start();
+      actionController.start();
       syncIcon();
     };
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", show);
     void controller.refresh();
+    historyController.start();
+    actionController.start();
     return () => {
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", show);
       unsubscribe();
       unsubscribeReviews();
       controller.dispose();
+      historyController.dispose();
+      actionController.dispose();
       favicon.dispose();
     };
-  }, [reviews]);
-  const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling, runActive } = state;
+  }, [reviews, historyController, actionController]);
+  const { view, graph, layout, selected, loading, error, scope, breadcrumbs, scopeNode, cancelling, runActive, invocationId } = state;
   // The workflow's own details, opened from its name; a selection or another workflow closes them.
   const [about, setAbout] = useState(false);
-  useEffect(() => { setAbout(false); reviews.close(); }, [scope, reviews]);
-  const select = (id: string | null) => { reviews.close(); setAbout(false); controller.select(id); };
+  useEffect(() => { setAbout(false); setHistoryOpen(false); setActionsOpen(false); reviews.close(); }, [scope, reviews]);
+  const select = (id: string | null) => { reviews.close(); setAbout(false); setHistoryOpen(false); setActionsOpen(false); controller.select(id); };
   const plan = view && view.kind !== "fx-viewer-run-v1" ? view : null;
   const run = view?.kind === "fx-viewer-run-v1"
     ? view.state === "pausing" && !runActive ? { ...view, state: "unfinished" } : view
@@ -378,6 +443,8 @@ function WorkflowView() {
       flushSync(() => {
         setAbout(false);
         if (focus !== null) {
+          setHistoryOpen(false);
+          setActionsOpen(false);
           setSteps(false);
           reviews.close();
         }
@@ -402,17 +469,19 @@ function WorkflowView() {
   }, [reveal]);
   // Esc closes the right-hand panel before the step list. Interactive content can handle it first.
   useEffect(() => {
-    if (!reviewOpen && !open && !steps) return;
+    if (!reviewOpen && !historyOpen && !actionsOpen && !open && !steps) return;
     const close = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented || ownsKeys(event.target)) return;
       event.preventDefault();
       if (reviewOpen) closeReview();
+      else if (historyOpen) closeHistory();
+      else if (actionsOpen) closeActions();
       else if (open) { setAbout(false); controller.select(null); }
       else setSteps(false);
     };
     document.addEventListener("keydown", close, { capture: true });
     return () => document.removeEventListener("keydown", close, { capture: true });
-  }, [reviewOpen, open, steps, closeReview]);
+  }, [reviewOpen, historyOpen, actionsOpen, open, steps, closeReview, closeHistory, closeActions]);
   return <div className="fx-viewer">
     {error && <p role="alert" className="fx-error">{error}{view && " Showing the last loaded data."}</p>}
     {external.error && <p role="alert" className="fx-error">{external.error}{external.failedReference?.target.kind === "artifact" && external.failedReference.target.artifact.url && <>{" "}<a href={external.failedReference.target.artifact.url} target="_blank" rel="noopener noreferrer" className="underline">Open in browser</a></>}{" "}<button type="button" className="underline" onClick={externalFiles.clearError}>Dismiss</button></p>}
@@ -420,7 +489,7 @@ function WorkflowView() {
     {!view ? <main className="fx-unavailable"><h2>{loading ? "Opening the workflow…" : "Workflow unavailable"}</h2><p>{loading ? "Reading the selected graph or run." : "Check that the local viewer server is running."}</p>{!loading && <button onClick={() => void controller.refresh()} className="fx-action">Try again</button>}</main>
       : <main ref={pane} aria-label="Workflow canvas" className="fx-canvas-pane">
         <WorkflowCanvas ref={canvas} graph={liveGraph} layout={layout} selected={selected} scope={scope} onSelect={select}
-          onOpenScope={controller.openScope} onBack={controller.back} onReview={hasReviews ? reviews.open : undefined} />
+          onOpenScope={controller.openScope} onBack={controller.back} onReview={hasReviews ? step => { setHistoryOpen(false); setActionsOpen(false); reviews.open(step); } : undefined} />
         <nav aria-label="Workflow location" className="fx-bar">
           {entryController.route?.project_id && <a href="/" className="fx-bar-project" title="Project" aria-label="Project"><ArrowLeft {...iconProps} /></a>}
           <ol className="fx-crumbs">{breadcrumbs.map((crumb, index) => <li key={crumb.id ?? "root"}>{index < breadcrumbs.length - 1
@@ -430,6 +499,18 @@ function WorkflowView() {
             : view.estimate && <span className="fx-bar-cost">{priceLabel(view.estimate, money, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
+          {run && history && <button type="button" ref={historyToggle} className="fx-bar-history" title="Run history"
+            aria-label={`Attempt ${history.selected_attempt}, run history`} aria-expanded={historyOpen} aria-controls={historyOpen ? "fx-attempt-history" : undefined}
+            onClick={() => {
+              if (historyOpen) closeHistory();
+              else { select(null); setHistoryOpen(true); }
+            }}><History {...iconProps} />Attempt {history.selected_attempt}</button>}
+          {run && actionState.control && <button type="button" ref={actionsToggle} className="fx-bar-controls" title="Run actions" aria-label="Run actions"
+            aria-expanded={actionsOpen} aria-controls={actionsOpen ? "fx-run-actions" : undefined}
+            onClick={() => {
+              if (actionsOpen) closeActions();
+              else { select(null); actionController.setOpen(true); setActionsOpen(true); }
+            }}><Ellipsis {...iconProps} /></button>}
         </nav>
         <button ref={toggle} onClick={() => setSteps(!steps)} className="fx-steps-toggle" aria-expanded={steps} aria-controls="fx-steps" aria-label="Steps" title="Steps"><List {...iconProps} size={16} /></button>
         {steps && <nav ref={popover} id="fx-steps" aria-label="Workflow steps" className="fx-steps">
@@ -439,6 +520,8 @@ function WorkflowView() {
           </button>)}</div>
         </nav>}
         {run && reviewOpen ? <WaitingReviews run={run} controller={reviews} onClose={closeReview} />
+        : history && historyOpen ? <AttemptHistory history={history} error={historyError} onClose={closeHistory} />
+        : actionsOpen ? <RunActionsPanel state={actionState} controller={actionController} invocationId={invocationId} onClose={closeActions} />
         : open && <aside aria-label="Details" className="fx-details">
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>
           {selectedNote ? <NoteDetails note={selectedNote} /> : selectedNode?.value ? <ValueDetails value={selectedNode.value} view={view} /> : selectedNode?.kind ? <ScopeDetails node={selectedNode} />
@@ -465,7 +548,7 @@ function EntryTime({ entry }: { entry: ServiceEntry }) {
 function HistoryEntry({ entry, latest = false }: { entry: ServiceEntry; latest?: boolean }) {
   return <li><a href={entry.url} className="fx-project-history-entry">
     {entry.kind === "plan" ? <FileText {...iconProps} /> : <Square {...iconProps} />}
-    <code>{entry.name ?? entry.id.slice(0, 12)}</code>{latest && <span className="fx-project-latest">Latest</span>}
+    <code>{entry.name ?? entry.id.slice(0, 12)}</code>{entry.attempt_number !== undefined && <span>Attempt {entry.attempt_number}</span>}{latest && <span className="fx-project-latest">Latest</span>}
     <span className="fx-project-history-time"><EntryTime entry={entry} /></span><Status state={entry.state} /><ArrowUpRight {...iconProps} />
   </a></li>;
 }
@@ -480,7 +563,7 @@ function ProjectIndex({ catalog, loading }: { catalog: ServiceIndex; loading: bo
       <a href={group.primary.url} className="fx-project-entry">
         <Workflow {...iconProps} /><div className="fx-project-entry-name"><h3>{group.title}</h3>
           {group.show_source && <code className="fx-project-source" title={group.workflow?.source}>{group.workflow?.source}</code>}
-          <span>{group.primary.kind === "plan" ? "Saved plan" : group.latest_known ? "Latest run" : "Run"}<code>{group.primary.name ?? group.primary.id.slice(0, 12)}</code><EntryTime entry={group.primary} /></span>
+          <span>{group.primary.kind === "plan" ? "Saved plan" : group.latest_known ? "Latest run" : "Run"}<code>{group.primary.name ?? group.primary.id.slice(0, 12)}</code>{(group.primary.attempt_number ?? 0) > 1 && <span>Attempt {group.primary.attempt_number}</span>}<EntryTime entry={group.primary} /></span>
         </div><Status state={group.primary.state} /><ArrowUpRight {...iconProps} />
       </a>
       {group.unfinished_runs.length > 0 && <section className="fx-project-unfinished" aria-label={`Other unfinished runs of ${group.title}`}><p>Other unfinished runs</p><ul>{group.unfinished_runs.map((entry) => <HistoryEntry key={entry.id} entry={entry} />)}</ul></section>}

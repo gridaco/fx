@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-viewer-run-action-v1",
+  "title": "FX viewer run action receipt",
+  "type": "object",
+  "required": ["kind", "outcome", "message"],
+  "properties": {
+    "kind": { "const": "fx-viewer-run-action-v1" },
+    "outcome": { "enum": ["accepted", "refused", "unknown"] },
+    "message": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "url": { "type": "string", "pattern": "^/p/[a-f0-9]{64}/runs/[a-f0-9]{64}/$" },
+    "cli_command": { "type": "string", "minLength": 1, "maxLength": 4096 }
+  }
+}

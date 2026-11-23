@@ -46,9 +46,13 @@ shipped routes, and `grida fx schema TARGET` for a workflow's inputs.
 - **Let FX own retries and records.** Use the run commands and SDKs to read or resume runs. Leave
   generated `runs/` and `.fx/` files to FX. The engine owns provider retries, accounting for each
   attempt.
-- **Share the viewer URL.** Share the URL emitted by `run` for live work when available. For a plan
-  or saved run, register it and resolve the route against the verified service URL for that project.
-  Use `--open` when the user asks to launch the browser.
+- **Share the viewer URL.** Share the URL emitted by `run` or `rerun` for live work when available.
+  The shared run link opens the latest attempt. The viewer's attempt history gives exact links.
+  For a plan or an exact saved attempt, register it and resolve its route against the verified
+  service URL for that project. Use `--open` when the user asks to launch the browser.
+- **Control runs from the viewer.** The local run page offers Pause, Resume, Rerun and Cancel
+  through **Run actions**. Use the CLI when a start needs live approval or additional context.
+  [Run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md#control-a-run-in-the-viewer).
 
 ## Install and check
 
