@@ -18,7 +18,8 @@
 //! panic there); the CLI plans on its own command thread.
 
 use crate::engine::{Cancel, Engine, Services};
-use crate::executor::{InstanceJob, execute, failed};
+use crate::executor::{InstanceJob, JobBody, execute, failed, from_cache, select};
+use crate::store::Store;
 use grida_fx_core::Error;
 use grida_fx_core::expand::{Instance, NodeResult};
 use grida_fx_core::host::PlanTimeRunner;
@@ -40,8 +41,7 @@ impl PlanTime {
 
 impl PlanTimeRunner for PlanTime {
     fn run(&mut self, instance: &Instance, planner: &Planner) -> Result<NodeResult, Error> {
-        let env = |name: &str| std::env::var_os(name).and_then(|v| v.into_string().ok());
-        let job = match InstanceJob::from_instance(instance, planner, &env) {
+        let job = match job(instance, planner) {
             Ok(job) => job,
             Err(message) => return Ok(failed(&message)),
         };
@@ -53,4 +53,37 @@ impl PlanTimeRunner for PlanTime {
             None => Ok(attempt.result),
         }
     }
+}
+
+/// Reconstructs plan-time outputs for rerun verification without dispatching node bodies.
+pub struct CachedPlanTime<'a> {
+    store: &'a Store,
+}
+
+impl<'a> CachedPlanTime<'a> {
+    pub fn new(store: &'a Store) -> Self {
+        Self { store }
+    }
+}
+
+impl PlanTimeRunner for CachedPlanTime<'_> {
+    fn run(&mut self, instance: &Instance, planner: &Planner) -> Result<NodeResult, Error> {
+        let job = job(instance, planner).map_err(Error::usage)?;
+        if matches!(job.body, JobBody::Select) {
+            return Ok(select(&job));
+        }
+        from_cache(self.store, &job)
+            .map(|hit| hit.result)
+            .ok_or_else(|| {
+                Error::usage(format!(
+                    "cannot verify the recorded plan for rerun: {} has no trusted cached at-plan result",
+                    instance.id
+                ))
+            })
+    }
+}
+
+fn job(instance: &Instance, planner: &Planner) -> Result<InstanceJob, String> {
+    let env = |name: &str| std::env::var_os(name).and_then(|value| value.into_string().ok());
+    InstanceJob::from_instance(instance, planner, &env)
 }

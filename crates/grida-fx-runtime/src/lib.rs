@@ -25,6 +25,7 @@
 
 pub mod adapter_host;
 pub mod agent;
+pub mod attempts;
 pub mod calls;
 pub mod control;
 pub mod engine;

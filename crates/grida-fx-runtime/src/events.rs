@@ -142,6 +142,7 @@ pub enum Event {
     },
     RunStarted {
         workflow: String,
+        attempt: Option<crate::attempts::Attempt>,
         /// Optional human name, immutable across this run's invocations.
         name: Option<String>,
         /// Original creation time, UTC RFC3339 milliseconds.
@@ -407,6 +408,7 @@ impl Event {
             }
             Event::RunStarted {
                 workflow,
+                attempt,
                 name,
                 created_at,
                 resumed,
@@ -419,6 +421,10 @@ impl Event {
                 repeat,
             } => {
                 fields.text("workflow", workflow);
+                if let Some(attempt) = attempt {
+                    fields.text("run_id", &attempt.run_id);
+                    fields.put("attempt_number", Value::from(attempt.attempt_number));
+                }
                 if let Some(name) = name {
                     fields.text("name", name);
                 }

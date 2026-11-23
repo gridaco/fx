@@ -5,7 +5,7 @@
 // (see support.ts).
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import {
@@ -69,7 +69,7 @@ function crc32(data: Uint8Array): number {
 
 describe.skipIf(engine === null)("the SDK, driving the engine", () => {
   const folder = temporaryFolder("api");
-  const cwd = folder.path;
+  const cwd = realpathSync(folder.path);
   const env = { GRIDA_FX_BIN: engine ?? "" };
   const options = { cwd, env, routes: ["routes.yaml"] };
 
@@ -292,7 +292,7 @@ describe.skipIf(engine === null)("the SDK, driving the engine", () => {
           "f3945de0c1182a1b279816f51ef2e79938d04957c7bfde94cd4bf2eb4c2170b4",
         );
         expect(file.kind).toBe("image/png");
-        expect(file.path?.startsWith(join(replay.path, "runs", "one", "files"))).toBe(true);
+        expect(file.path?.startsWith(join(realpathSync(replay.path), "runs", "one", "files"))).toBe(true);
         expect((await file.read()).length).toBe(file.size);
         expect(result.steps["draw#1"]).toMatchObject({ state: "succeeded", cache: "miss" });
         const projection = await project("runs/one", { cwd: replay.path, env });

@@ -300,14 +300,29 @@ class RunResult:
         #: The planning project's store; found from the current directory when not set.
         self._store: Path | None = None
 
+    def _started(self) -> Mapping[str, Any]:
+        for event in reversed(self.events):
+            if event.get("event") == "run_started":
+                return event
+        return {}
+
     @property
     def invocation_id(self) -> str | None:
         """The latest initialized invocation in this result's recorded events."""
-        for event in reversed(self.events):
-            if event.get("event") == "run_started":
-                value = event.get("invocation_id")
-                return value if isinstance(value, str) else None
-        return None
+        value = self._started().get("invocation_id")
+        return value if isinstance(value, str) else None
+
+    @property
+    def run_id(self) -> str | None:
+        """The stable identity of this run, when recorded."""
+        value = self._started().get("run_id")
+        return value if isinstance(value, str) else None
+
+    @property
+    def attempt_number(self) -> int | None:
+        """This result's attempt number within the run, when recorded."""
+        value = self._started().get("attempt_number")
+        return value if type(value) is int and value > 0 else None
 
     def _ending(self) -> Mapping[str, Any] | None:
         """The most recent recorded invocation outcome."""
@@ -330,7 +345,7 @@ class RunResult:
 
     @property
     def incomplete(self) -> bool:
-        """Whether the run stopped before everything ran (re-running continues it)."""
+        """Whether the attempt stopped before everything ran."""
         finished = self._finished()
         return True if finished is None else bool(finished.get("incomplete"))
 
@@ -671,11 +686,19 @@ def _target_text(target: Any) -> str:
 
 def _run_target(run: str | Path) -> str:
     if not isinstance(run, str | os.PathLike):
-        raise TypeError("run is an explicit run folder or exact WORKFLOW_ID/NAME")
+        raise TypeError("run is a run ID, an explicit run folder, or WORKFLOW_ID/NAME")
     text = os.fspath(run)
     if not isinstance(text, str) or not text or text.startswith("-") or "\0" in text:
         raise ValueError("run is a nonempty target that cannot start with '-' or contain NUL")
     return text
+
+
+def _attempt_args(attempt: int | None) -> list[str]:
+    if attempt is None:
+        return []
+    if type(attempt) is not int or not 1 <= attempt <= 2**53 - 1:
+        raise ValueError("attempt is a positive safe integer")
+    return [f"--attempt={attempt}"]
 
 
 def _request(
@@ -824,7 +847,7 @@ async def _call(
     """Runs the binary, retaining ownership of a cancelled run until its engine has exited.
     Repeated task cancellation is the same request, never emergency force authority. Non-run
     commands keep their process-owned interruption and force deadline."""
-    if not args or args[0] not in {"run", "resume"}:
+    if not args or args[0] not in {"run", "resume", "rerun"}:
         return await _call_owned(args, cwd, stdin)
     stop_requested = asyncio.Event()
     owner = asyncio.ensure_future(
@@ -867,7 +890,7 @@ async def _call_owned(
         options["start_new_session"] = True
     loop = asyncio.get_running_loop()
     environment = engine_environment()
-    if args and args[0] in {"run", "resume"}:
+    if args and args[0] in {"run", "resume", "rerun"}:
         environment["GRIDA_FX_CANCEL_SOURCE"] = "sdk"
     if temporary_inputs is not None:
         # The engine can retain explicit input file arguments in the run record.
@@ -1417,11 +1440,36 @@ async def resume_async(
     inputs, and ``resume`` or ``run_dir``. Set ``live=True`` to authorize paid calls and
     ``require_estimates=True`` to require forecasts for uncached paid work.
     """
+    return await _execute_saved_run(
+        "resume",
+        _run_target(run),
+        [],
+        live=live,
+        max_usd=max_usd,
+        yes_up_to=yes_up_to,
+        wait_for_answers=wait_for_answers,
+        require_estimates=require_estimates,
+        cwd=cwd,
+    )
+
+
+async def _execute_saved_run(
+    verb: str,
+    target: str,
+    selection: list[str],
+    *,
+    live: bool,
+    max_usd: float | None,
+    yes_up_to: float | None,
+    wait_for_answers: bool,
+    require_estimates: bool,
+    cwd: str | Path | None,
+) -> RunResult:
     if type(live) is not bool or type(wait_for_answers) is not bool:
         raise TypeError("live and wait_for_answers are True or False")
     if type(require_estimates) is not bool:
         raise TypeError("require_estimates is True or False")
-    args = ["resume", _run_target(run), "--no-view"]
+    args = [verb, target, *selection, "--no-view"]
     if live:
         args.append("--live")
     if max_usd is not None:
@@ -1443,18 +1491,18 @@ async def resume_async(
             stderr.append(line)
     done = replace(done, stderr="\n".join(stderr))
     run_line = _summary_line(done, _RUN_LINE)
-    _check_execution("resume", done, run_line)
+    _check_execution(verb, done, run_line)
     if run_line is None:
-        raise _failure("resume", done)
+        raise _failure(verb, done)
     try:
         root = Path(json.loads(project_lines[0])) if len(project_lines) == 1 else None
     except (TypeError, ValueError):
         root = None
     if root is None or "\0" in os.fspath(root) or not root.is_absolute():
-        raise FxError("grida-fx resume did not report the absolute project folder", done.status)
+        raise FxError(f"grida-fx {verb} did not report the absolute project folder", done.status)
     folder = Path(run_line.removeprefix(_RUN_LINE))
     if not folder.is_absolute():
-        raise FxError("grida-fx resume did not report the absolute run folder", done.status)
+        raise FxError(f"grida-fx {verb} did not report the absolute run folder", done.status)
     result = RunResult(folder, _read_events(folder))
     result._store = _project_store(root)
     return result
@@ -1475,6 +1523,71 @@ def resume(
     return asyncio.run(
         resume_async(
             run,
+            live=live,
+            max_usd=max_usd,
+            yes_up_to=yes_up_to,
+            wait_for_answers=wait_for_answers,
+            require_estimates=require_estimates,
+            cwd=cwd,
+        )
+    )
+
+
+async def rerun_async(
+    run: str | Path,
+    *,
+    attempt: int | None = None,
+    request_id: str | None = None,
+    live: bool = False,
+    max_usd: float | None = None,
+    yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
+    require_estimates: bool = False,
+    cwd: str | Path | None = None,
+) -> RunResult:
+    """Start a fresh attempt in the selected run using its verified execution context.
+
+    Omit ``attempt`` to use the selector's default source. Provide the same ``request_id``
+    when retrying the same start request. A new request can create another attempt.
+    The engine applies the usual cache and spending rules.
+    """
+    selection = _attempt_args(attempt)
+    if request_id is not None:
+        if not isinstance(request_id, str) or not request_id or "\0" in request_id:
+            raise ValueError("request_id is a nonempty string without NUL")
+        selection.append(f"--request-id={request_id}")
+    return await _execute_saved_run(
+        "rerun",
+        _run_target(run),
+        selection,
+        live=live,
+        max_usd=max_usd,
+        yes_up_to=yes_up_to,
+        wait_for_answers=wait_for_answers,
+        require_estimates=require_estimates,
+        cwd=cwd,
+    )
+
+
+def rerun(
+    run: str | Path,
+    *,
+    attempt: int | None = None,
+    request_id: str | None = None,
+    live: bool = False,
+    max_usd: float | None = None,
+    yes_up_to: float | None = None,
+    wait_for_answers: bool = False,
+    require_estimates: bool = False,
+    cwd: str | Path | None = None,
+) -> RunResult:
+    """:func:`rerun_async`, for code outside an event loop."""
+    _no_running_loop("rerun")
+    return asyncio.run(
+        rerun_async(
+            run,
+            attempt=attempt,
+            request_id=request_id,
             live=live,
             max_usd=max_usd,
             yes_up_to=yes_up_to,

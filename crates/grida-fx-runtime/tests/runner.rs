@@ -378,6 +378,7 @@ fn run_in(
     )
     .unwrap();
     let options = RunOptions {
+        attempt: None,
         folder: project.root.join(invocation.folder),
         label: invocation.folder.to_string(),
         name: None,

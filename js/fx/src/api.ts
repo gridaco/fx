@@ -33,7 +33,7 @@ import type {
   RunEvent,
   RunFinished,
 } from "./documents.js";
-import { type CallOptions, call, document, type Exit, failure, INTERRUPTED } from "./engine.js";
+import { type CallOptions, call, commandDirectory, document, type Exit, failure, INTERRUPTED } from "./engine.js";
 import { FxError } from "./errors.js";
 import {
   amountText,
@@ -302,7 +302,8 @@ export type RunValue = RunFile | Map<string, RunValue> | RunValue[] | JsonValue;
 export class RunResult {
   /** The run folder, absolute. */
   readonly runDir: string;
-  /** The engine's exit status: 0 when the run is ok (and every `deliver` found its output). */
+  /** The command's exit status. A duplicate rerun can return 0 for its accepted request.
+   * Read `ok` and `incomplete` for the selected attempt's recorded outcome. */
   readonly exitCode: number;
   /** What `grida-fx run` printed: the plan and the run's summary. */
   readonly stdout: string;
@@ -338,12 +339,22 @@ export class RunResult {
     return typeof value === "string" ? value : null;
   }
 
+  /** The stable identity of this run, when available. */
+  get runId(): string | null {
+    return this.inspection.run?.run_id ?? null;
+  }
+
+  /** This result's attempt number within the run, when available. */
+  get attemptNumber(): number | null {
+    return this.inspection.run?.attempt_number ?? null;
+  }
+
   /** Whether every step that had to run succeeded and the run ended normally. */
   get ok(): boolean {
     return this.finished?.ok === true;
   }
 
-  /** Whether the run stopped before everything ran (running it again continues it). */
+  /** Whether the attempt stopped before everything ran. */
   get incomplete(): boolean {
     const finished = this.finished;
     return finished === undefined ? true : finished.incomplete === true;
@@ -523,27 +534,57 @@ export type ResumeOptions = Pick<
   "cwd" | "env" | "signal" | "live" | "maxUsd" | "yesUpTo" | "waitForAnswers" | "requireEstimates"
 >;
 
+/** Options for starting a fresh attempt of a saved run. */
+export interface RerunOptions extends ResumeOptions {
+  /** Use this attempt as the source. Defaults to the selected record or the latest attempt. */
+  readonly attempt?: number;
+  /** Keep this ID when retrying the same start request. */
+  readonly requestId?: string;
+}
+
 /** Continue an exact saved attempt using the execution context recorded by the engine.
  * If the record needs explicit context, use `run(target, { resume, ... })` or its `runDir` form. */
 export async function resume(run: string, options: ResumeOptions = {}): Promise<RunResult> {
+  return executeSavedRun("resume", run, [], options);
+}
+
+/** Start a fresh attempt of a saved run, using the engine's verified execution context. */
+export async function rerun(run: string, options: RerunOptions = {}): Promise<RunResult> {
+  const { attempt, requestId, ...execution } = options;
+  const selection = attemptArgs(attempt);
+  if (requestId !== undefined) {
+    if (typeof requestId !== "string" || requestId === "" || requestId.includes("\0")) {
+      throw new TypeError("requestId is a nonempty string without NUL");
+    }
+    selection.push(`--request-id=${requestId}`);
+  }
+  return executeSavedRun("rerun", run, selection, execution);
+}
+
+async function executeSavedRun(
+  verb: "resume" | "rerun",
+  run: string,
+  selection: string[],
+  options: ResumeOptions,
+): Promise<RunResult> {
   const { maxUsd, requireEstimates, ...execution } = options;
   if (requireEstimates !== undefined && typeof requireEstimates !== "boolean") {
     throw new TypeError("requireEstimates is true or false");
   }
-  const args = ["resume", exactRunTarget(run), ...runArgs(execution), "--no-view"];
+  const args = [verb, exactRunTarget(run), ...selection, ...runArgs(execution), "--no-view"];
   if (maxUsd !== undefined) args.push(`--max-usd=${amountText("maxUsd", maxUsd)}`);
   if (requireEstimates) args.push("--require-estimates");
   const output = await call(args, options);
   const done = { ...output, stderr: output.stderr.replace(/^resume_project\t[^\r\n]*(?:\r?\n|$)/gm, "") };
-  const folder = startedRunFolder("resume", done);
-  if (folder === undefined) throw failure("resume", done);
+  const folder = startedRunFolder(verb, done);
+  if (folder === undefined) throw failure(verb, done);
   if (!isAbsolute(folder)) {
-    throw new FxError("grida-fx resume did not report the absolute run folder", { exitCode: done.status });
+    throw new FxError(`grida-fx ${verb} did not report the absolute run folder`, { exitCode: done.status });
   }
   return readRunResult(folder, done, options);
 }
 
-function startedRunFolder(verb: "run" | "resume", done: Exit): string | undefined {
+function startedRunFolder(verb: "run" | "resume" | "rerun", done: Exit): string | undefined {
   if (done.status === INTERRUPTED) {
     throw new FxError("the run was interrupted", {
       exitCode: done.status,
@@ -575,9 +616,10 @@ function startedRunFolder(verb: "run" | "resume", done: Exit): string | undefine
 }
 
 async function readRunResult(folder: string, done: Exit, options: CallOptions): Promise<RunResult> {
-  const projection = await project(folder, options);
-  const inspection = await inspect(folder, options);
-  return new RunResult(resolve(options.cwd ?? process.cwd(), folder), done, projection, inspection);
+  const runDir = isAbsolute(folder) ? folder : resolve(commandDirectory(options.cwd), folder);
+  const projection = await project(runDir, options);
+  const inspection = await inspect(runDir, options);
+  return new RunResult(runDir, done, projection, inspection);
 }
 
 /** {@link call} with the stand-in served on a socket pair, the engine's end its standard input.
@@ -606,14 +648,24 @@ export async function project(runDir: string, options: CallOptions = {}): Promis
 
 /** Options of {@link inspect}. */
 export interface InspectOptions extends CallOptions {
+  /** Pin an exact attempt of the selected run. */
+  readonly attempt?: number;
   /** Re-check every placed file against its record (`--verify`). */
   readonly verify?: boolean;
 }
 
-/** `grida-fx inspect <run> --json`: a run's summary. `run` is a run folder, or a workflow id for
- * its newest run. With `verify`, `verification` says whether every placed file still matches. */
+export function attemptArgs(attempt: number | undefined): string[] {
+  if (attempt === undefined) return [];
+  if (!Number.isSafeInteger(attempt) || attempt < 1) {
+    throw new TypeError("attempt is a positive safe integer");
+  }
+  return [`--attempt=${attempt}`];
+}
+
+/** `grida-fx inspect <run> --json`: a run's summary. Pass `attempt` to read a specific attempt.
+ * With `verify`, `verification` says whether every placed file still matches. */
 export async function inspect(run: string, options: InspectOptions = {}): Promise<Inspection> {
-  const args = [run, "--json", ...(options.verify === true ? ["--verify"] : [])];
+  const args = [run, "--json", ...attemptArgs(options.attempt), ...(options.verify === true ? ["--verify"] : [])];
   return document<Inspection>("inspect", args, options, [0, 1]);
 }
 

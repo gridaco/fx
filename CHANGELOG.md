@@ -15,6 +15,11 @@ with the tagged commit date for the lightweight `v0.4.0` tag.
 ### Added
 
 - Pause an active workflow with `grida fx pause RUN`, which lets running steps finish before saving a durable boundary. Continue the same attempt with `grida fx resume RUN` using the recorded working directory. The CLI, SDKs, and viewer expose when the run is pausing or paused. Run removal filters accept both states. [#166](https://github.com/gridaco/fx/issues/166)
+- Start a fresh attempt of a recorded run with `grida fx rerun RUN`. The run keeps its ID, and `grida fx inspect RUN --history --json` lists its attempts. Earlier outputs and reviews remain addressable under their exact attempts. [#162](https://github.com/gridaco/fx/issues/162)
+
+### Changed
+
+- A run name selects its latest attempt. To keep a script on an earlier result, use the exact attempt folder or inspect the run with `--attempt N`. [#162](https://github.com/gridaco/fx/issues/162)
 
 ### Fixed
 

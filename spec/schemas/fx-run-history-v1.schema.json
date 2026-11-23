@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:grida-fx:schema:fx-run-history-v1",
+  "title": "FX run history (fx-run-history-v1)",
+  "description": "The available numbered attempts of one run from `grida-fx inspect RUN --history --json`.",
+  "type": "object",
+  "required": ["kind", "run_id", "attempts"],
+  "properties": {
+    "kind": { "const": "fx-run-history-v1" },
+    "run_id": {
+      "description": "The stable ID shared by the run's attempts.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "attempts": {
+      "description": "Available attempt records in attempt number order.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["attempt_number", "folder"],
+        "properties": {
+          "attempt_number": { "type": "integer", "minimum": 1 },
+          "folder": {
+            "description": "Local folder selector for this exact attempt, as an absolute path.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

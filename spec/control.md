@@ -37,13 +37,14 @@ grida-fx pause RUN [--invocation ID] [--wait] [--timeout DURATION] [--json]
 grida-fx resume RUN [--require-estimates]
 ```
 
-`RUN` is an explicit run folder or an exact `WORKFLOW_ID/NAME`. Named lookup
-uses recorded workflow ID/source within the selected planning project's runs
-tree, with the existing bounded traversal and ambiguous-source refusal. An
-explicit folder supports unnamed runs and folders outside that tree. A bare
-workflow ID is refused even when only one run currently exists. Path spelling
-follows existing inspect resolution; ambiguity between a path and a named
-selector must be refused, with advice to use an absolute folder path.
+`RUN` is an explicit attempt folder, a run ID or `WORKFLOW_ID/NAME`. An ID or
+name resolves the latest attempt. Keep its exact folder to act on the same
+attempt later. Named lookup uses recorded workflow ID and source in the planning
+project and refuses ambiguous sources. An explicit folder supports unnamed
+runs and folders outside the configured runs tree. A bare workflow ID is
+refused even when only one run currently exists. Path spelling follows inspect
+resolution. For ambiguity between a path and a named selector, use an absolute
+folder path. [Run targeting](store.md#run-references-attempts-and-invocations)
 
 `--invocation ID` is an expected-current guard. Without it, resolve the selected
 record's current invocation once, then bind the request to that invocation and

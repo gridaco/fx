@@ -379,7 +379,7 @@ pub async fn execute(services: Arc<Services>, job: Arc<InstanceJob>, cancel: Can
 }
 
 /// Step 1: a trusted result record answers, or `None`.
-fn from_cache(store: &Store, job: &InstanceJob) -> Option<Attempt> {
+pub(super) fn from_cache(store: &Store, job: &InstanceJob) -> Option<Attempt> {
     let identity = job.identity.as_deref()?;
     let record = store.load_result(identity, &job.read)?;
     let mut outputs = IndexMap::with_capacity(record.outputs.len());

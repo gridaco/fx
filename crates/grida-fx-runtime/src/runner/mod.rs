@@ -127,6 +127,8 @@ pub struct RunOptions {
     pub label: String,
     /// Optional run name; used only on first creation, outside execution identities.
     pub name: Option<String>,
+    /// Identity assigned for a fresh rerun. Ordinary starts allocate their own identity.
+    pub attempt: Option<RerunStart>,
     /// `--yes-up-to`.
     pub yes_up_to: Option<Usd>,
     /// Keep the invoking runner attached while workflow steps wait for an external answer.
@@ -148,6 +150,13 @@ pub struct RunOptions {
     pub repeat: Option<serde_json::Value>,
     /// Sanitized discovered route facts, independently retained for offline recovery.
     pub resolved_models: Option<serde_json::Value>,
+}
+
+/// Start metadata shared by a run's attempts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RerunStart {
+    pub identity: crate::attempts::Attempt,
+    pub run_created_at: String,
 }
 
 /// How an invocation ended.
@@ -211,6 +220,7 @@ pub fn run_with_ready(
 #[derive(Debug, Clone)]
 pub struct ReadyRun {
     pub folder: PathBuf,
+    pub attempt: crate::attempts::Attempt,
     pub invocation_id: String,
     pub control_available: bool,
 }
@@ -589,6 +599,12 @@ fn invoke(
         }
     }
     let invocation_id = crate::events::new_invocation_id();
+    let attempt = prior
+        .iter()
+        .find(|event| event["event"] == "run_started")
+        .map(|first| crate::attempts::from_start(first, &folder.path))
+        .or_else(|| options.attempt.as_ref().map(|start| start.identity.clone()))
+        .unwrap_or_else(|| crate::attempts::first(&invocation_id));
     let log = match EventLog::open(&folder.events_path(), &invocation_id, &digest) {
         Ok(log) => Arc::new(log),
         Err(error) => {
@@ -665,10 +681,25 @@ fn invoke(
     } else {
         (
             options.name.clone(),
-            crate::events::created_at(std::time::SystemTime::now()),
+            options.attempt.as_ref().map_or_else(
+                || crate::events::created_at(std::time::SystemTime::now()),
+                |start| start.run_created_at.clone(),
+            ),
         )
     };
+    if options.attempt.is_none()
+        && let Some(index) = &options.index
+        && let Err(error) = crate::attempts::confirm_before_resume(
+            &index.project_root,
+            &attempt,
+            &scheduler.folder.path,
+        )
+    {
+        watchers();
+        return Err(RunError::Fatal(Error::io("run history", &error)));
+    }
     let started = Event::RunStarted {
+        attempt: Some(attempt.clone()),
         name: recorded_name,
         created_at,
         workflow: scheduler.workflow.clone(),
@@ -682,7 +713,21 @@ fn invoke(
         repeat: options.repeat.clone(),
     };
     let mut endpoint = None;
-    let outcome = match scheduler.emit(&started) {
+    let outcome = match scheduler.emit(&started).and_then(|()| {
+        if let Some(start) = &options.attempt {
+            let index = options
+                .index
+                .as_ref()
+                .ok_or_else(|| Error::internal("a rerun requires the project run index"))?;
+            crate::attempts::confirm_start(
+                &index.project_root,
+                &start.identity,
+                &scheduler.folder.path,
+            )
+            .map_err(|error| Error::io("run history", &error))?;
+        }
+        Ok(())
+    }) {
         Ok(()) => {
             endpoint = match crate::control::ControlServer::start(
                 &options.folder,
@@ -702,6 +747,7 @@ fn invoke(
             control_ready.send_replace(Some(Arc::clone(&scheduler.services.control)));
             ready(
                 &ReadyRun {
+                    attempt,
                     folder: options.folder.clone(),
                     invocation_id: scheduler.services.invocation_id.clone(),
                     control_available: endpoint.is_some(),
@@ -767,12 +813,20 @@ fn prepare(
             "the cache is being pruned (grida-fx cache prune); run again when it ends".into(),
         )
     })?;
-    let folder = if options.existing || expected_invocation.is_some() {
-        RunFolder::lock_existing(&options.folder, &options.label)
-    } else {
-        RunFolder::lock(&options.folder, &options.label)
+    let folder =
+        if options.existing || expected_invocation.is_some() || options.attempt.is_some() {
+            RunFolder::lock_existing(&options.folder, &options.label)
+        } else {
+            RunFolder::lock(&options.folder, &options.label)
+        }
+        .map_err(|refused| RunError::Refused(refused.0))?;
+    if let Some(start) = &options.attempt {
+        let index = options.index.as_ref().ok_or_else(|| {
+            RunError::Fatal(Error::internal("a rerun requires the project run index"))
+        })?;
+        crate::attempts::verify_reservation(&index.project_root, &start.identity, &folder.path)
+            .map_err(|error| RunError::Refused(error.to_string()))?;
     }
-    .map_err(|refused| RunError::Refused(refused.0))?;
     if (options.existing || expected_invocation.is_some()) && !folder.plan_path().is_file() {
         return Err(RunError::Refused(format!(
             "{} no longer holds a run",
@@ -806,6 +860,12 @@ fn prepare(
                 options.label
             )));
         }
+    }
+    if options.attempt.is_some() && !prior.is_empty() {
+        return Err(RunError::Refused(format!(
+            "{} already contains an execution record",
+            options.label
+        )));
     }
     if torn {
         crate::stderr::line(format_args!(
@@ -1956,6 +2016,7 @@ while (message := read()) is not None:
                 &mut host,
                 plan,
                 &RunOptions {
+                    attempt: None,
                     folder: folder.clone(),
                     label: "runs/one".into(),
                     name: None,
@@ -2071,6 +2132,7 @@ while (message := read()) is not None:
             &mut host,
             plan.clone(),
             RunOptions {
+                attempt: None,
                 folder: folder.clone(),
                 label: "runs/one".into(),
                 name: None,
@@ -2108,6 +2170,7 @@ while (message := read()) is not None:
             &mut host,
             refused,
             RunOptions {
+                attempt: None,
                 folder: root.join("runs/refused"),
                 label: "runs/refused".into(),
                 name: None,

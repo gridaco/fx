@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { call } from "../src/engine.js";
-import { AnswerError, cancel, FxError, inspectControl, inspectRequests, listRequests, pause as pauseRun, respond, resume, RunControlError } from "../src/index.js";
+import { AnswerError, cancel, FxError, inspectControl, inspectRequests, listRequests, pause as pauseRun, rerun, respond, resume, RunControlError } from "../src/index.js";
 import type { CancelOptions, RunControlResult, WaitingRequest } from "../src/index.js";
 import { SLOW, temporaryFolder } from "./support.js";
 
@@ -133,6 +133,32 @@ describe.skipIf(!NODE || process.platform === "win32")("exact-target run control
       expect(latest.ok).toBe(false);
       expect(latest.incomplete).toBe(true);
       expect(latest.outputs).toEqual({});
+    } finally {
+      engine.cleanup();
+    }
+  });
+
+  test("rerun uses the accepted attempt folder and retains execution ownership", async () => {
+    const engine = fake();
+    const folder = join(engine.path, "runs/second");
+    const runId = "a".repeat(64);
+    try {
+      engine.reply({ verbs: {
+        rerun: { stdout: `run       ${folder}\n`, status: 1 },
+        project: { stdout: JSON.stringify({ instances: {}, run: {
+          run_started: { invocation_id: "inv-2" },
+        } }) },
+        inspect: { stdout: JSON.stringify({ run: { run_id: runId, attempt_number: 2 } }) },
+      } });
+      const result = await rerun("gallery/one", { ...engine.options, attempt: 1, requestId: "reel-2" });
+      expect(result.runDir).toBe(folder);
+      expect(result.runId).toBe(runId);
+      expect(result.attemptNumber).toBe(2);
+      expect(engine.log()).toEqual([
+        { args: ["rerun", "gallery/one", "--attempt=1", "--request-id=reel-2", "--no-view"], source: "sdk" },
+        { args: ["project", folder], source: null },
+        { args: ["inspect", folder, "--json"], source: null },
+      ]);
     } finally {
       engine.cleanup();
     }

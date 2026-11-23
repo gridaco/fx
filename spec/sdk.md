@@ -1,8 +1,7 @@
 # SDK run access
 
-Python and JavaScript expose useful user jobs through language-native APIs. CLI
-verb coverage is not a goal. This additive SDK contract changes no execution,
-identity, cache, spending, run-record or observation wire semantics.
+Python and JavaScript expose useful user jobs through language-native APIs. The
+engine owns execution, run identity, cache, spending and observation.
 
 ## Prepare a plan
 
@@ -31,8 +30,9 @@ owns full name grammar, atomic claims, existence, plan/mode compatibility,
 writer exclusion and accounting, under [store.md](store.md).
 SDK preplanning can execute local code before the engine's remaining run checks.
 
-Omitting all three selectors creates a fresh record. `name` is create-only; `resume` requires an
-existing named run. An explicit folder retains its existing create/resume behavior.
+Omitting all three selectors creates an independent run at attempt 1. `name` is
+create-only. `resume` requires an existing named run and selects its latest
+attempt. An explicit folder selects the exact record it contains.
 Each resume starts a new invocation of the same
 [run attempt](store.md#run-references-attempts-and-invocations).
 Resuming through `run` uses the target, inputs, routes and builder options supplied
@@ -53,7 +53,7 @@ to collect. It preserves the prior recorded ceiling and sends no new managed wor
 Ordinary live execution also retries collection for jobs already known to have finished.
 
 Python `resume(run)` / `resume_async(run)` and JavaScript `resume(run, options)`
-continue an exact saved attempt identified by a run folder or `WORKFLOW_ID/NAME`.
+select an attempt by exact folder, run ID or `WORKFLOW_ID/NAME` and continue it.
 They return the same `RunResult` as `run` and use the engine's recorded-context
 resume path. They accept the normal live authorization, ceiling, estimate and
 later-phase approval options, and can wait for external answers. The engine reports
@@ -61,14 +61,33 @@ missing context, a plan mismatch or an authorization refusal as `FxError`.
 Supply the original execution options to `run` when the saved record needs
 explicit reconstruction.
 
-SDKs mark signals from owned `run` and `resume` processes with
+## Rerun and inspect history
+
+Python `rerun(run)` / `rerun_async(run)` and JavaScript `rerun(run, options)`
+create a numbered attempt under the same run ID from a verified saved source.
+They accept the execution options of `resume`, including current live and
+spending approval, and return a `RunResult` for the new attempt. Pass `attempt`
+to select a source by number, or pass its folder directly. A caller retrying a
+start can use the same `request_id` / `requestId` to recover the attempt already
+accepted for that request. See [full rerun](store.md#run-references-attempts-and-invocations).
+
+Python `run_history` / `run_history_async` and JavaScript `runHistory` read a
+`RunHistory` through engine inspection. Its `run_id` identifies the run and
+`attempts` contains each attempt's `attempt_number` and folder. Use the native
+`run_dir` / `runDir` of an entry for exact operation targeting. `RunResult` and
+`RunRecord` expose the recorded `run_id` / `runId` and `attempt_number` /
+`attemptNumber` when available.
+
+## Execution ownership and results
+
+SDKs mark signals from owned `run`, `resume` and `rerun` processes with
 `GRIDA_FX_CANCEL_SOURCE=sdk`. When opening a run, they report whether they wrote
 temporary inputs with `GRIDA_FX_SDK_TEMP_INPUTS` (value `1` for temporary inputs
 or `0` for persistent inputs). `run_started.repeat` can record eligible persistent
 input paths. A temporary inputs file or the absence of this marker on an older SDK's
 `run` leaves `repeat` absent. See [repeating a run](store.md#8-run-folders).
 
-Run and resume calls retain execution ownership until completion, including
+Run, resume and rerun calls retain execution ownership until completion, including
 cleanup under [control.md](control.md). A terminal pause returns a `RunResult`
 with `paused` and `incomplete` set to true and the available workflow outputs.
 These calls do not start a viewer, return an early URL, or offer a readiness handle.
@@ -92,7 +111,9 @@ available and distinguish `pausing` and `paused`. See [run control](control.md).
 
 ## Answer external requests
 
-Use `list_requests` / `listRequests` with an exact run directory or `workflow/name`.
+Use `list_requests` / `listRequests` with an exact attempt directory, a run ID or
+`workflow/name`. An ID or name follows the latest attempt. Retain the exact
+attempt directory when responding later.
 Listing reads the run's request records without discovering a viewer. They include
 the frozen schema and any authored message, reviewed values, choices, original
 deadline and current state. Use `respond(run, request_id, answer)` for a durable
@@ -134,10 +155,11 @@ exit status 130; load the saved record to inspect and later resume it.
 ## Load a record
 
 Python `load_run`/`load_run_async` and JavaScript `loadRun` invoke engine inspection
-and return a `RunRecord`. Targets follow `inspect`: explicit folders, workflow/name,
-or a workflow ID for its newest-created record, with ambiguity refused. The
-emitted folder is resolved once against the inspection call's working directory.
-Subsequent observation uses that absolute folder, never a fresh latest-run lookup.
+and return a `RunRecord`. Targets follow `inspect` and accept an exact folder, run
+ID, workflow/name, or a workflow ID for its newest independently created run.
+Use the `attempt` option to select an earlier attempt by number. The SDK resolves
+the emitted folder against the inspection call's working directory. Subsequent
+observation uses that absolute folder.
 
 The record exposes `inspection`, the full engine summary and optional verification
 result, and `run_dir` / `runDir`. Where recorded, `inspection.run.call_attempt_failures`

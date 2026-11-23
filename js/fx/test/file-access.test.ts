@@ -51,7 +51,7 @@ describe.skipIf(spawnSync("node", ["--version"]).status !== 0 || process.platfor
       loading.abort();
       record.inspection.run.folder = "runs/changed";
       await record.listFiles();
-      expect(engine.log().at(-1)).toEqual(["files", "list", join(engine.path, "runs/pinned"), "--json"]);
+      expect(engine.log().at(-1)).toEqual(["files", "list", join(realpathSync(engine.path), "runs/pinned"), "--json"]);
     } finally { engine.cleanup(); }
   }, SLOW);
 
@@ -67,7 +67,7 @@ describe.skipIf(spawnSync("node", ["--version"]).status !== 0 || process.platfor
       const args = engine.log().at(-1)!;
       expect(args.slice(0, 4)).toEqual(["files", "resolve", record.runDir, "--reference"]);
       expect(JSON.parse(args[4]!)).toEqual(reference(source));
-      expect(args.slice(5)).toEqual(["--json", `--project=${engine.path}`, `--source-root=${join(engine.path, "source owner")}`]);
+      expect(args.slice(5)).toEqual(["--json", `--project=${engine.path}`, `--source-root=${join(realpathSync(engine.path), "source owner")}`]);
       engine.reply({ kind: "fx-file-resolution-v1", target: artifact, local_path: null, source_match: null, reason: "Recorded bytes are unavailable." });
       expect((await resolveFile("saved-plan.json", reference(artifact), engine.options)).localPath).toBeNull();
     } finally { engine.cleanup(); }

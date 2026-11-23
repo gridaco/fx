@@ -172,8 +172,11 @@ and
 ## Running
 
 `TARGET` is a workflow ID, YAML path, or a builder like `file.py:build` or `file.ts:build` with
-`--arg name=value`. Prefer the exact run folder or `WORKFLOW_ID/NAME` when inspecting a saved run. A
-workflow ID alone selects its latest run.
+`--arg name=value`. In `inspect`, `rerun`, and run control commands, a run ID or
+`WORKFLOW_ID/NAME` selects the latest attempt. `inspect WORKFLOW_ID` selects the
+newest independent run of that workflow. An exact attempt folder pins its record.
+For `observe` and `project`, pass that folder. Read it from `run.folder` in
+`inspect RUN --attempt N --json` or from `inspect RUN --history --json`.
 
 | Job | Command |
 |---|---|
@@ -181,10 +184,11 @@ workflow ID alone selects its latest run.
 | Preview one image call without a workflow | `grida fx call image.generate --prompt TEXT --dry-run`. Set `--route` when the project has no image default. An approved live call can copy the saved PNG with `--out FILE` to an unused destination. |
 | Run local work or admit paid calls | `grida fx run TARGET`. After approval, add `--live --max-usd N` for dollar-billed work. `--yes-up-to N` adds an approval gate for later phases. |
 | Run with simulated provider answers | `grida fx run TARGET --stand-in FILE#FUNCTION`. A stand-in runs offline, uses a separate cache, and conflicts with `--live` and `--yes-up-to`. |
-| Inspect a result and verify files | `grida fx inspect RUN --verify --json`. Use `grida fx observe RUN --snapshot` or `grida fx observe RUN --after CURSOR` to read recorded state and events. |
+| Inspect a result and verify files | `grida fx inspect RUN --verify --json`. Use `grida fx observe FOLDER --snapshot` or `grida fx observe FOLDER --after CURSOR` to read the selected attempt's state and events. |
 | Supply external input during a run | An `fx/await@1` step declares `with.schema` and can add a human-readable `message`. List requests using `grida fx inspect RUN --requests --json` and submit `grida fx respond RUN REQUEST_ID --json JSON`. Use the exact folder or `WORKFLOW_ID/NAME`. Read the value from `outputs.answer`. An optional candidate map also yields `outputs.selected`. A parked run continues on `run --resume NAME`. With `--wait-for-answers` the attached runner continues automatically. [Waiting steps](https://github.com/gridaco/fx/blob/main/spec/waiting.md). |
-| Check or cancel one exact invocation | `grida fx inspect RUN --control --json`, then `grida fx cancel RUN --invocation ID --wait --json`. Use an exact run folder or `WORKFLOW_ID/NAME`. Local completion and provider completion are separate. See [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md). |
+| Check or cancel one exact invocation | `grida fx inspect RUN --control --json`, then `grida fx cancel RUN --invocation ID --wait --json`. Use an exact attempt folder to pin the selected attempt. Local completion and provider completion are separate. See [run control](https://github.com/gridaco/fx/blob/main/docs/guide/08-run-control.md). |
 | Pause at a step boundary and continue later | `grida fx pause RUN --wait --json` lets active steps finish and records a durable pause. `grida fx resume RUN` continues that exact attempt from saved context. For live work, supply the usual spending authorization. |
+| Run it again under the same ID | `grida fx rerun RUN` verifies saved execution context and adds a numbered attempt. A run ID or name follows its latest attempt. `grida fx inspect RUN --history --json` lists attempts, and `grida fx inspect RUN --attempt N --json` pins one for reading. [Rerun and inspect earlier attempts](https://github.com/gridaco/fx/blob/main/docs/guide/05-running.md#rerun-and-inspect-earlier-attempts). |
 | Deliver or share outputs | `grida fx run TARGET --deliver output=path` copies declared outputs. Use `{key}` in the destination for keyed collections. `grida fx export RUN --out DIR --json` creates a portable export of a finished run. See [export disclosure options](https://github.com/gridaco/fx/blob/main/docs/guide/11-exports.md). |
 | Choose another result | `grida fx reroll RUN STEP` and `grida fx pick RUN STEP TAKE` change the selection for later runs. Re-plan before repeating the run because a new take or changed downstream work may cost money. |
 | Clean up | `grida fx runs list --json`, `grida fx runs remove RUN`, and `grida fx cache prune`. Removal and pruning preview until `--yes`. See [cleanup and refusals](https://github.com/gridaco/fx/blob/main/docs/guide/10-cleanup.md). |
@@ -193,6 +197,10 @@ workflow ID alone selects its latest run.
 When saved context is missing, repeat the original target, inputs and plan-affecting options with
 `--resume NAME` or the same `--run DIR`. Resume requires the same plan and preserves the original
 spending ledger. A new run record can still reuse cached work.
+
+Keep an exact attempt folder when acting on a previously observed result. A
+fresh rerun opens new review requests and deadlines and uses normal cache
+and spending rules. The original workflow command creates an independent run.
 
 If FX retained a provider task handle, use `--live --recover` with the existing run selector to
 collect the original result, replay cache and run local work while blocking new paid dispatch. See

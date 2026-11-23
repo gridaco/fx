@@ -1342,6 +1342,7 @@ mod tests {
             Arc::new(EventLog::open(&folder.join("events.jsonl"), invocation, &plan).unwrap());
         events
             .emit(&Event::RunStarted {
+                attempt: None,
                 workflow: "case".into(),
                 name: None,
                 created_at: "2026-10-08T00:00:00.000Z".into(),

@@ -25,6 +25,8 @@ test("the SDK's surface", () => {
     "cancel",
     "pause",
     "resume",
+    "rerun",
+    "runHistory",
     "listRuns",
     "removeRuns",
     "engineVersion",

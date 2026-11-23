@@ -92,6 +92,36 @@ def test_verify_failure_is_retained_inspection_evidence(fake: Fake, tmp_path: Pa
         fx.load_run("case", cwd=tmp_path)
 
 
+def test_run_history_and_pinned_attempt_use_engine_selection(fake: Fake, tmp_path: Path) -> None:
+    run_id = "a" * 64
+    rows = [
+        {"attempt_number": 1, "folder": "runs/selected"},
+        {"attempt_number": 2, "folder": "runs/latest"},
+    ]
+    fake.reply(
+        inspect={
+            "stdout": json.dumps({"kind": "fx-run-history-v1", "run_id": run_id, "attempts": rows})
+        }
+    )
+    history = fx.run_history("case/one", cwd=tmp_path)
+    assert history.run_id == run_id
+    assert history.attempts == tuple(
+        fx.RunAttempt(row["attempt_number"], row["folder"], tmp_path.resolve() / row["folder"])
+        for row in rows
+    )
+    fake.reply(
+        inspect={"stdout": json.dumps({"run": {**INSPECTION["run"], **rows[0], "run_id": run_id}})}
+    )
+    record = fx.load_run(run_id, attempt=1, cwd=tmp_path)
+    assert record.run_dir == history.attempts[0].run_dir
+    assert record.run_id == run_id
+    assert record.attempt_number == 1
+    assert fake.invocations == [
+        ["inspect", "case/one", "--history", "--json"],
+        ["inspect", run_id, "--json", "--attempt=1"],
+    ]
+
+
 def test_skip_causes_remain_available_as_structured_observation_evidence(
     fake: Fake, tmp_path: Path
 ) -> None:

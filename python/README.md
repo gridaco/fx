@@ -161,10 +161,17 @@ media or change execution results. The engine validates the workflow and selecte
 
 ## Saved runs and observation
 
-`load_run(target, verify=False, cwd=None)` returns a `RunRecord` containing the
-engine's `inspection` and absolute `run_dir`. It accepts a folder, workflow/name,
-or workflow ID for its newest-created run. The selected folder stays pinned even
-if a newer run appears. It has no invocation exit code.
+`load_run(target, attempt=None, verify=False, cwd=None)` returns a `RunRecord`
+containing the engine's `inspection` and absolute `run_dir`. It accepts a run ID,
+workflow/name, exact folder, or workflow ID for its newest-created run. Pass an
+attempt number to select that attempt explicitly. The selected folder stays pinned,
+so it can be passed to control operations for exact targeting.
+
+Use `rerun(run_id)` to start another attempt from verified saved context. It
+returns a `RunResult` with `run_id` and `attempt_number`. Pass `attempt` to
+choose the source attempt, and reuse a caller-supplied `request_id` when retrying
+the same start request. `run_history(run_id)` lists the numbered attempts and
+their exact folders. Both operations have `_async` forms.
 
 `record.export(destination)` and `export_async` retain the resolved loading `cwd` for
 the publishing project's current `fx.yaml` display defaults. Relative destinations still

@@ -466,6 +466,7 @@ fn plan_and_run(fixture: &Fixture, hosts: &mut NodeHosts, engine: Engine) -> Run
     .unwrap();
     assert!(plan.ok(), "{:?}", plan.problems);
     let options = RunOptions {
+        attempt: None,
         folder: fixture.root.join("runs/one"),
         label: "runs/one".into(),
         takes_file: "workflows/case.takes.yaml".into(),

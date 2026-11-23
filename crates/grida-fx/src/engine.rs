@@ -77,7 +77,7 @@ use grida_fx_runtime::engine::Engine;
 use grida_fx_runtime::host::locate::{self, node_host_entry};
 use grida_fx_runtime::host::pool::HostPool;
 use grida_fx_runtime::host::process::HostSpec;
-use grida_fx_runtime::plantime::PlanTime;
+use grida_fx_runtime::plantime::{CachedPlanTime, PlanTime};
 use grida_fx_runtime::stand_in::StandIn;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -426,6 +426,20 @@ pub fn plan(
     let mut plan_time = PlanTime::new(Arc::clone(engine));
     let runner: &mut dyn PlanTimeRunner = &mut plan_time;
     make_plan(planner, host, Some(runner), &*engine.store)
+}
+
+/// Reconstructs a rerun's plan before accepting its dispatch. Ready at-plan
+/// instances read trusted cached results during source verification.
+pub fn verify_rerun_plan(
+    engine: &Arc<Engine>,
+    planner: &mut Planner,
+    host: &mut dyn NodeHost,
+) -> Result<Plan, Error> {
+    planner
+        .routes
+        .apply_plan_billing(&engine.adapters.plan_providers());
+    let mut plan_time = CachedPlanTime::new(&engine.store);
+    make_plan(planner, host, Some(&mut plan_time), &*engine.store)
 }
 
 /// Ends the idle node hosts of `engine` (from `at: plan` steps), and its stand-in's answerer.
