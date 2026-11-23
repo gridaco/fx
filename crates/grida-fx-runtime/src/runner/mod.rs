@@ -813,12 +813,20 @@ fn prepare(
             "the cache is being pruned (grida-fx cache prune); run again when it ends".into(),
         )
     })?;
-    let folder = if options.existing || expected_invocation.is_some() {
-        RunFolder::lock_existing(&options.folder, &options.label)
-    } else {
-        RunFolder::lock(&options.folder, &options.label)
+    let folder =
+        if options.existing || expected_invocation.is_some() || options.attempt.is_some() {
+            RunFolder::lock_existing(&options.folder, &options.label)
+        } else {
+            RunFolder::lock(&options.folder, &options.label)
+        }
+        .map_err(|refused| RunError::Refused(refused.0))?;
+    if let Some(start) = &options.attempt {
+        let index = options.index.as_ref().ok_or_else(|| {
+            RunError::Fatal(Error::internal("a rerun requires the project run index"))
+        })?;
+        crate::attempts::verify_reservation(&index.project_root, &start.identity, &folder.path)
+            .map_err(|error| RunError::Refused(error.to_string()))?;
     }
-    .map_err(|refused| RunError::Refused(refused.0))?;
     if (options.existing || expected_invocation.is_some()) && !folder.plan_path().is_file() {
         return Err(RunError::Refused(format!(
             "{} no longer holds a run",

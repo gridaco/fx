@@ -190,15 +190,17 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
         }
         let bound = super::repeat::defaulted_file_inputs_digest(&planner);
         if bound.as_deref() != context.defaulted_inputs_digest {
-            return Err(if context.defaulted_inputs_digest.is_none() {
-                Error::usage(format!(
+            return Err(match context.defaulted_inputs_digest {
+                None if context.rerun.is_some() => {
+                    Error::usage("cannot verify defaulted file inputs for rerun from this record")
+                }
+                None => Error::usage(format!(
                     "the record cannot verify defaulted file inputs. Use the original working directory, inputs and options with {} run TARGET --run FOLDER",
                     crate::invoker::command()
-                ))
-            } else {
-                Error::usage(
+                )),
+                Some(_) => Error::usage(
                     "the defaulted inputs changed since the run was recorded. Restore the original inputs or start a new run",
-                )
+                ),
             });
         }
     }

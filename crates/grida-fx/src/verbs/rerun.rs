@@ -108,21 +108,7 @@ impl Rerun<'_> {
                 .runs_dir()
                 .join(&planner.workflow.workflow.id);
             let folder = base.join(format!("attempt-{run_id}-{number}"));
-            std::fs::create_dir_all(&base)
-                .and_then(|_| match std::fs::create_dir(&folder) {
-                    Err(error)
-                        if error.kind() == std::io::ErrorKind::AlreadyExists
-                            && std::fs::symlink_metadata(&folder)
-                                .is_ok_and(|meta| meta.is_dir())
-                            && std::fs::read_dir(&folder)
-                                .is_ok_and(|mut files| files.next().is_none()) =>
-                    {
-                        Ok(())
-                    }
-                    result => result,
-                })
-                .map_err(|error| Error::io("rerun attempt folder", &error))?;
-            let allocation = Allocation::new(
+            let allocation = Allocation::reserve(
                 root,
                 &folder,
                 number,

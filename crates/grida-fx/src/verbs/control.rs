@@ -47,8 +47,13 @@ pub(super) fn exact_folder_at(
     wait: Option<(Instant, Duration)>,
     attempt: Option<u64>,
 ) -> Result<PathBuf, (&'static str, String)> {
-    let history_error = |error: Error| {
-        let code = if error.message.contains("multiple folders claim") {
+    let selector_error = |error: Error| {
+        let code = if error.message.contains("deadline expired") {
+            "wait_timeout"
+        } else if error.message.contains("ambiguous")
+            || error.message.contains("multiple sources")
+            || error.message.contains("multiple folders claim")
+        {
             "ambiguous_target"
         } else {
             "invalid_target"
@@ -68,7 +73,7 @@ pub(super) fn exact_folder_at(
         _ => None,
     };
     let found =
-        if let Some(folder) = super::history::anchor_by_id(given, cwd).map_err(history_error)? {
+        if let Some(folder) = super::history::anchor_by_id(given, cwd).map_err(selector_error)? {
             Some(folder)
         } else if let Some((id, name)) = named {
             let project = Project::find(cwd).map_err(|_| {
@@ -79,15 +84,7 @@ pub(super) fn exact_folder_at(
             })?;
             super::run_catalog::resolve_control(&project.runs_dir(), id, name, wait).map_err(
                 |error| {
-                    let code = if error.message.contains("deadline expired") {
-                        "wait_timeout"
-                    } else if error.message.contains("ambiguous")
-                        || error.message.contains("multiple sources")
-                    {
-                        "ambiguous_target"
-                    } else {
-                        "invalid_target"
-                    };
+                    let (code, _) = selector_error(error);
                     (
                     code,
                     "the run selector cannot be resolved uniquely; use an absolute run folder path"
@@ -109,18 +106,18 @@ pub(super) fn exact_folder_at(
             ));
         }
         return match attempt {
-            Some(number) => super::history::select(path, cwd, Some(number)).map_err(history_error),
+            Some(number) => super::history::select(path, cwd, Some(number)).map_err(selector_error),
             None => Ok(path),
         };
     }
     if let Some(found) = found {
-        return super::history::select(found, cwd, attempt).map_err(history_error);
+        return super::history::select(found, cwd, attempt).map_err(selector_error);
     }
     if matches!(parts.as_slice(), [Component::Normal(_)]) {
         return Err(("invalid_target", "select a run ID, run name, or explicit run folder; bare workflow IDs do not select a run".into()));
     }
     if let Some(number) = attempt {
-        return super::history::select(path, cwd, Some(number)).map_err(history_error);
+        return super::history::select(path, cwd, Some(number)).map_err(selector_error);
     }
     Ok(path)
 }

@@ -3019,12 +3019,7 @@ fn rerun_groups_numbered_attempts_without_reordering_independent_runs() {
     assert_eq!(inspect_json(root, "case", &["--history"]), newest);
 
     let retry = grida_fx(root, &args);
-    assert!(
-        status(&retry) <= 1,
-        "{}\n{}",
-        stdout(&retry),
-        stderr(&retry)
-    );
+    assert_cli_status(&retry, 0);
     assert_eq!(
         reported_run_folder(root, &retry),
         reported_run_folder(root, &rerun)
@@ -3237,24 +3232,32 @@ fn rerun_retry_recovers_a_reserved_attempt_after_an_interrupted_start() {
     let history = inspect_json(root, source, &["--history"]);
     let run_id = history["run_id"].as_str().unwrap();
     let folder = format!("runs/case/attempt-{run_id}-2");
-    let journal = root.join(".fx/runs/history");
-    std::fs::create_dir_all(&journal).unwrap();
-    std::fs::create_dir_all(root.join(&folder)).unwrap();
     let key = "retry-after-interruption";
-    std::fs::write(
-        journal.join(format!("{run_id}.json")),
-        json!([{
-            "attempt_number": 2,
-            "source_attempt": 1,
-            "folder": folder,
-            "request_digest": grida_fx_core::value::sha256_hex(key.as_bytes()),
-        }])
-        .to_string(),
+    let original = root.join(&folder);
+    std::fs::create_dir_all(&original).unwrap();
+    std::fs::write(original.join(".0123456789abcdef.part"), b"partial marker").unwrap();
+    let allocation = grida_fx_runtime::attempts::Allocation::reserve(
+        root,
+        &original,
+        2,
+        1,
+        Some(grida_fx_core::value::sha256_hex(key.as_bytes())),
     )
     .unwrap();
+    grida_fx_runtime::attempts::save(root, run_id, &[allocation]).unwrap();
     assert_eq!(inspect_json(root, source, &["--history"]), history);
 
     let args = ["rerun", source, "--request-id", key, "--no-view"];
+    let moved = root.join("moved-attempt");
+    std::fs::rename(&original, &moved).unwrap();
+    std::fs::create_dir(&original).unwrap();
+    let refused = grida_fx(root, &args);
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("allocated attempt folder was replaced"));
+    assert_eq!(std::fs::read_dir(&original).unwrap().count(), 0);
+    std::fs::remove_dir(&original).unwrap();
+    std::fs::rename(&moved, &original).unwrap();
+
     let accepted = grida_fx(root, &args);
     assert_cli_status(&accepted, 1);
     let recovered = root.join(folder).canonicalize().unwrap();
@@ -3370,20 +3373,38 @@ fn a_run_id_refuses_copied_attempts_with_the_same_identity() {
             ],
         )
     };
-    let original = launch("runs/original");
+    let selector = "case/original";
+    let original = grida_fx(
+        root,
+        &[
+            "run",
+            "case.yaml",
+            "--inputs",
+            "inputs.yaml",
+            "--name",
+            "original",
+            "--no-view",
+        ],
+    );
     assert_cli_status(&original, 1);
-    let run_id = inspect_json(root, "runs/original", &[])["run"]["run_id"]
+    let original_folder = reported_run_folder(root, &original);
+    let run_id = inspect_json(root, selector, &[])["run"]["run_id"]
         .as_str()
         .unwrap()
         .to_owned();
 
-    copy_folder(&root.join("runs/original"), &root.join("runs/copy"));
+    copy_folder(&original_folder, &root.join("runs/copy"));
     // An explicit resume records the copied folder in the project index.
     assert_cli_status(&launch("runs/copy"), 1);
     let ambiguous = grida_fx(root, &["resume", &run_id, "--no-view"]);
     assert_cli_status(&ambiguous, 2);
     assert!(stderr(&ambiguous).contains("multiple folders claim the same attempt"));
-    for folder in ["runs/original", "runs/copy"] {
+    for target in [&run_id, selector] {
+        let control = grida_fx(root, &["inspect", target, "--control", "--json"]);
+        assert_cli_status(&control, 2);
+        assert_eq!(parse(&stdout(&control))["code"], "ambiguous_target");
+    }
+    for folder in [original_folder.to_str().unwrap(), "./runs/copy"] {
         assert_eq!(inspect_json(root, folder, &[])["run"]["run_id"], run_id);
     }
 }
@@ -3439,6 +3460,11 @@ outputs:
         stderr(&refused)
     );
     assert!(stderr(&refused).contains("cannot verify defaulted file inputs"));
+    assert!(stderr(&refused).contains("run TARGET --run FOLDER"));
+    let refused = grida_fx(root, &["rerun", "runs/saved", "--no-view"]);
+    assert_cli_status(&refused, 2);
+    assert!(stderr(&refused).contains("cannot verify defaulted file inputs for rerun"));
+    assert!(!stderr(&refused).contains("--run FOLDER"));
     assert_eq!(events(&folder), legacy);
     std::fs::write(&log, saved_log).unwrap();
 

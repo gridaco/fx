@@ -6,7 +6,7 @@ use grida_fx_core::value::{digest, is_digest};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Stable address for one recorded execution.
@@ -77,6 +77,7 @@ pub struct Allocation {
     pub attempt_number: u64,
     pub source_attempt: u64,
     pub folder: String,
+    reservation: String,
     #[serde(default)]
     pub started: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +102,7 @@ pub fn allocations(project: &Path, run_id: &str) -> io::Result<Vec<Allocation>> 
             || !run_index::well_formed(&entry.folder)
             || entry.folder.is_empty()
             || entry.folder == "."
+            || !is_digest(&entry.reservation)
             || entry
                 .request_digest
                 .as_ref()
@@ -132,17 +134,55 @@ pub fn save(project: &Path, run_id: &str, records: &[Allocation]) -> io::Result<
 }
 
 impl Allocation {
-    pub fn new(
+    /// Claim a folder before publishing its allocation in the project journal.
+    ///
+    /// An abandoned claim can be reused if it holds only the marker and
+    /// temporary files. Once journaled, the marker must match on every retry.
+    pub fn reserve(
         project: &Path,
         folder: &Path,
         attempt_number: u64,
         source_attempt: u64,
         request_digest: Option<String>,
     ) -> io::Result<Self> {
+        let parent = folder
+            .parent()
+            .ok_or_else(|| io::Error::other("invalid attempt folder"))?;
+        fs::create_dir_all(parent)?;
+        match fs::create_dir(folder) {
+            Ok(()) => {}
+            Err(error)
+                if error.kind() == io::ErrorKind::AlreadyExists
+                    && fs::symlink_metadata(folder)?.is_dir() => {}
+            Err(error) => return Err(error),
+        }
+        let folder = folder.canonicalize()?;
+        for entry in fs::read_dir(&folder)? {
+            let name = entry?.file_name();
+            if name != "run.lock" && !crate::folder::is_temporary_name(&name.to_string_lossy()) {
+                return Err(io::Error::other(
+                    "the attempt folder already contains files",
+                ));
+            }
+        }
+        let reservation = match reservation_marker(&folder)? {
+            Some(reservation) => reservation,
+            None => {
+                let reservation = digest(&json!([
+                    "fx-rerun-reservation-v1",
+                    crate::events::new_invocation_id()
+                ]));
+                write_reservation_marker(&folder, &reservation)?;
+                reservation
+            }
+        };
+        sync_directory(&folder)?;
+        sync_directory(folder.parent().expect("the attempt folder has a parent"))?;
         Ok(Self {
             attempt_number,
             source_attempt,
-            folder: run_index::recorded_form(project, &folder.canonicalize()?)?,
+            folder: run_index::recorded_form(project, &folder)?,
+            reservation,
             started: false,
             request_digest,
         })
@@ -157,7 +197,14 @@ impl Allocation {
     pub fn existing_folder(&self, project: &Path) -> io::Result<Option<PathBuf>> {
         let path = self.path(project);
         match fs::symlink_metadata(&path) {
-            Ok(meta) if meta.is_dir() && path.canonicalize()? == path => Ok(Some(path)),
+            Ok(meta) if meta.is_dir() && path.canonicalize()? == path => {
+                if reservation_marker(&path)?.as_deref() != Some(self.reservation.as_str()) {
+                    return Err(io::Error::other(
+                        "the allocated attempt folder was replaced",
+                    ));
+                }
+                Ok(Some(path))
+            }
             Ok(_) => Err(io::Error::other(
                 "the allocated attempt folder was replaced",
             )),
@@ -165,6 +212,63 @@ impl Allocation {
             Err(error) => Err(error),
         }
     }
+}
+
+const MARKER_PREFIX: &str = "fx-rerun-reservation-v1 ";
+
+fn write_reservation_marker(folder: &Path, reservation: &str) -> io::Result<()> {
+    let temporary = folder.join(crate::folder::temporary_name());
+    let mut file = run_index::private_new_file(&temporary)?;
+    let written = (|| {
+        writeln!(file, "{MARKER_PREFIX}{reservation}")?;
+        file.sync_all()?;
+        fs::hard_link(&temporary, folder.join("run.lock"))
+    })();
+    drop(file);
+    let _ = fs::remove_file(temporary);
+    written
+}
+
+fn reservation_marker(folder: &Path) -> io::Result<Option<String>> {
+    let path = folder.join("run.lock");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let malformed = || io::Error::other("the attempt folder has an invalid reservation marker");
+    let length = (MARKER_PREFIX.len() + 65) as u64;
+    if !metadata.is_file() || metadata.len() != length {
+        return Err(malformed());
+    }
+    let mut marker = String::new();
+    File::open(path)?
+        .take(length + 1)
+        .read_to_string(&mut marker)?;
+    marker
+        .strip_prefix(MARKER_PREFIX)
+        .and_then(|value| value.strip_suffix('\n'))
+        .filter(|value| is_digest(value))
+        .map(|value| Some(value.to_owned()))
+        .ok_or_else(malformed)
+}
+
+pub(crate) fn verify_reservation(
+    project: &Path,
+    attempt: &Attempt,
+    folder: &Path,
+) -> io::Result<()> {
+    let entries = allocations(project, &attempt.run_id)?;
+    let entry = entries
+        .iter()
+        .find(|entry| entry.attempt_number == attempt.attempt_number)
+        .ok_or_else(|| io::Error::other("the attempt has no allocation"))?;
+    if entry.existing_folder(project)?.as_deref() != Some(folder) {
+        return Err(io::Error::other(
+            "the allocated attempt folder was replaced or removed",
+        ));
+    }
+    Ok(())
 }
 
 fn journal(project: &Path, run_id: &str) -> io::Result<PathBuf> {
