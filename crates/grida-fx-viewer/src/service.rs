@@ -7,8 +7,10 @@ use axum::routing::post;
 use chrono::{DateTime, SecondsFormat, Utc};
 use grida_fx_core::value::digest;
 use grida_fx_runtime::waiting::{self as requests, RequestState};
+use grida_fx_runtime::{attempts, run_index};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 use std::sync::Mutex;
@@ -18,6 +20,9 @@ use tower::ServiceExt;
 const MAX_SCAN_ENTRIES: usize = 2048;
 const MAX_SCAN_DEPTH: usize = 4;
 const MAX_RECORD_BYTES: u64 = 16 * 1024 * 1024;
+
+mod run_control;
+pub use run_control::{LaunchAccepted, LaunchOperation, LaunchRefused, LaunchRequest, RunLauncher};
 
 /// A public catalog entry contains presentation metadata and an opaque local URL, never paths.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,6 +37,10 @@ pub struct Entry {
     pub workflow: Option<Workflow>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_number: Option<u64>,
 }
 
 /// Recorded workflow identity, independent of a particular plan or run.
@@ -68,6 +77,8 @@ enum Record {
         title: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         metadata: Option<RunMetadata>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt: Option<attempts::Attempt>,
     },
     Plan {
         id: String,
@@ -176,21 +187,43 @@ impl Catalog {
 
     /// Return the scoped route only if this exact run already has a catalog entry.
     pub fn registered_run_route(&self, run: &Path) -> io::Result<Option<String>> {
+        Ok(self
+            .registered_attempt(run)?
+            .map(|(id, _)| self.exact_url(&id)))
+    }
+
+    /// Returns the stable run route only if the supplied attempt is already registered.
+    /// Opening the route resolves the newest recorded attempt and redirects to its exact URL.
+    pub fn registered_run_latest_route(&self, run: &Path) -> io::Result<Option<String>> {
+        Ok(self
+            .registered_attempt(run)?
+            .map(|(_, attempt)| self.latest_url(&attempt.run_id)))
+    }
+
+    fn registered_attempt(&self, run: &Path) -> io::Result<Option<(String, attempts::Attempt)>> {
         let root = run.canonicalize()?;
-        let identity = run_identity(&root)?;
-        let id = local_run_id(&root, &identity);
+        let details = run_details(&root)?;
+        let id = local_run_id(&root, &details.identity);
         match self.record(&id) {
             Ok(Record::Run {
                 root: recorded,
                 identity: original,
                 ..
-            }) if recorded == root && original == identity => {
-                Ok(Some(format!("/p/{}/runs/{id}/", self.project_id)))
+            }) if recorded == root && original == details.identity => {
+                Ok(Some((id, details.attempt)))
             }
             Ok(_) => Err(invalid("The registered run no longer matches.")),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error),
         }
+    }
+
+    fn exact_url(&self, id: &str) -> String {
+        format!("/p/{}/runs/{id}/", self.project_id)
+    }
+
+    fn latest_url(&self, run_id: &str) -> String {
+        format!("/p/{}/run/{run_id}/", self.project_id)
     }
 
     /// Registers a run only if it still matches the recorded evidence read by inspection.
@@ -223,6 +256,7 @@ impl Catalog {
             identity,
             title: details.title,
             metadata: Some(details.metadata),
+            attempt: Some(details.attempt),
         };
         Ok(self.entry(&self.persist(&record)?))
     }
@@ -334,7 +368,7 @@ impl Catalog {
     }
 
     fn entry(&self, record: &Record) -> Entry {
-        let (kind, title, state, metadata) = match record {
+        let (kind, title, state, metadata, attempt) = match record {
             Record::Run {
                 root,
                 identity,
@@ -348,11 +382,11 @@ impl Catalog {
                 let state = details
                     .as_ref()
                     .ok_or_else(|| invalid("The registered run folder is unavailable."))
-                    .and_then(|_| read::read_recorded_inventory(root))
-                    .map(|snapshot| catalog_run_state(root, snapshot.document.state))
+                    .and_then(|_| recorded_state(root))
                     .unwrap_or_else(|_| "unavailable".into());
+                let attempt = details.as_ref().map(|run| run.attempt.clone());
                 let metadata = metadata.clone().or_else(|| details.map(|run| run.metadata));
-                ("run", title.clone(), state, metadata)
+                ("run", title.clone(), state, metadata, attempt)
             }
             Record::Plan {
                 title,
@@ -370,6 +404,7 @@ impl Catalog {
                     workflow: graph_workflow(graph),
                     name: None,
                 }),
+                None,
             ),
         };
         let metadata = metadata.unwrap_or_else(|| RunMetadata {
@@ -377,6 +412,9 @@ impl Catalog {
             workflow: None,
             name: None,
         });
+        let (run_id, attempt_number) = attempt
+            .map(|identity| (identity.run_id, identity.attempt_number))
+            .unzip();
         Entry {
             id: record.id().into(),
             kind: kind.into(),
@@ -387,6 +425,8 @@ impl Catalog {
                 .unwrap_or_else(|| self.record_time(record.id())),
             workflow: metadata.workflow.filter(safe_workflow),
             name: metadata.name.filter(|name| safe_name(name)),
+            run_id,
+            attempt_number,
         }
     }
 
@@ -407,6 +447,176 @@ impl Catalog {
             Record::Plan { graph, .. } if kind == "plans" => plan_source(graph),
             _ => Err(invalid("The requested catalog entry does not exist.")),
         }
+    }
+
+    fn history(&self, run_id: &str) -> io::Result<RunHistory> {
+        self.check_state()?;
+        let mut candidates: BTreeMap<PathBuf, BTreeSet<String>> = BTreeMap::new();
+        let mut history = RunHistory::default();
+        let entries = self.state_dir.join("entries");
+        let mut registered_attempts = BTreeMap::new();
+        for item in fs::read_dir(&entries)? {
+            let item = item?;
+            let name = item.file_name();
+            let Some(id) = name
+                .to_str()
+                .and_then(|name| name.strip_suffix(".json"))
+                .filter(|id| is_digest(id))
+            else {
+                continue;
+            };
+            let Ok(Some((registered, attempt))) = read_run_registration(&entries, id) else {
+                continue;
+            };
+            if let Some(attempt) = attempt
+                && attempt.run_id == run_id
+                && attempt.attempt_number > 0
+            {
+                let number = attempt.attempt_number;
+                history.unavailable.insert(number);
+                if let Some(previous) = registered_attempts.insert(number, registered.root.clone())
+                    && previous != registered.root
+                {
+                    return Err(invalid("Multiple folders claim the same run attempt."));
+                }
+            }
+            candidates
+                .entry(registered.root)
+                .or_default()
+                .insert(registered.identity);
+        }
+
+        // The project index records starts even when the invocation has no viewer, including
+        // folders outside the configured run tree. HTTP never supplies a folder to register.
+        let index = self.root.join(run_index::INDEX);
+        match fs::symlink_metadata(&index) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => return Err(invalid("The local run index is unavailable.")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        for path in run_index::entries(&self.root)? {
+            candidates.entry(path).or_default();
+        }
+
+        let mut allocations = BTreeMap::new();
+        for allocation in attempts::allocations(&self.root, run_id)? {
+            let number = allocation.attempt_number;
+            let path = allocation.path(&self.root);
+            let folder = allocation.existing_folder(&self.root);
+            let verified = matches!(folder, Ok(Some(_)));
+            if verified {
+                candidates.entry(path.clone()).or_default();
+            }
+            // Explicit removal deletes the index and catalog entries. A missing folder
+            // still tracked in either must never make the stable link fall back silently.
+            if allocation.started && (!matches!(folder, Ok(None)) || candidates.contains_key(&path))
+            {
+                history.unavailable.insert(number);
+            }
+            allocations.insert(number, (path, verified));
+        }
+
+        for (root, bound) in candidates {
+            let Ok(first) = run_start(&root) else {
+                continue;
+            };
+            let attempt = attempts::from_start(&first, &root);
+            if attempt.run_id != run_id {
+                continue;
+            }
+            let Ok(details) = run_details_from_start(&root, first, attempt) else {
+                continue;
+            };
+            if !bound.is_empty() && !bound.contains(&details.identity) {
+                continue;
+            }
+            let number = details.attempt.attempt_number;
+            if registered_attempts
+                .get(&number)
+                .is_some_and(|path| *path != root)
+            {
+                return Err(invalid("Multiple folders claim the same run attempt."));
+            }
+            if let Some((path, verified)) = allocations.get(&number) {
+                if *path != root {
+                    return Err(invalid("Multiple folders claim the same run attempt."));
+                }
+                if !verified {
+                    history.unavailable.insert(number);
+                    continue;
+                }
+            }
+            let attempt = HistoryAttempt {
+                root,
+                identity: details.identity,
+            };
+            if history.attempts.insert(number, attempt).is_some() {
+                return Err(invalid("Multiple folders claim the same run attempt."));
+            }
+            history.unavailable.remove(&number);
+        }
+        Ok(history)
+    }
+
+    fn exact_attempt_url(&self, attempt: &HistoryAttempt) -> io::Result<String> {
+        let id = local_run_id(&attempt.root, &attempt.identity);
+        if self.record(&id).is_err() {
+            self.register_matching_run(&attempt.root, Some(&attempt.identity))?;
+        }
+        checked_run(&attempt.root, &attempt.identity)?;
+        Ok(self.exact_url(&id))
+    }
+
+    fn latest_exact_url(&self, run_id: &str) -> io::Result<String> {
+        let history = self.history(run_id)?;
+        let (_, attempt) = history.latest()?;
+        recorded_state(&attempt.root)?;
+        self.exact_attempt_url(attempt)
+    }
+
+    fn history_document(&self, id: &str) -> io::Result<Value> {
+        let (root, details) = self.exact_run(id)?;
+        let selected = details.attempt;
+        let history = self.history(&selected.run_id)?;
+        if !history
+            .attempts
+            .get(&selected.attempt_number)
+            .is_some_and(|attempt| attempt.root == root && attempt.identity == details.identity)
+        {
+            return Err(invalid("The selected run attempt has changed."));
+        }
+        let latest_number = history.latest().ok().map(|(number, _)| number);
+        let mut attempts = Vec::new();
+        let mut latest_available = false;
+        for (&number, attempt) in history.attempts.iter().rev() {
+            let state = recorded_state(&attempt.root).unwrap_or_else(|_| "unavailable".into());
+            let Ok(url) = self.exact_attempt_url(attempt) else {
+                if number == selected.attempt_number {
+                    return Err(invalid("The selected run attempt has changed."));
+                }
+                continue;
+            };
+            latest_available |= latest_number == Some(number) && state != "unavailable";
+            attempts.push(json!({"attempt_number": number, "url": url, "state": state}));
+        }
+        Ok(
+            json!({"kind": "fx-viewer-run-history-v1", "run_id": selected.run_id,
+            "latest_url": self.latest_url(&selected.run_id), "latest_available": latest_available,
+            "selected_attempt": selected.attempt_number,
+            "attempts": attempts}),
+        )
+    }
+
+    fn exact_run(&self, id: &str) -> io::Result<(PathBuf, RunDetails)> {
+        let Record::Run { root, identity, .. } = self.record(id)? else {
+            return Err(invalid("The selected catalog entry is not a run."));
+        };
+        let details = run_details(&root)?;
+        if details.identity != identity {
+            return Err(invalid("The registered run folder has been replaced."));
+        }
+        Ok((root, details))
     }
 
     fn discover(&self) {
@@ -453,6 +663,11 @@ impl Catalog {
             }
         }
     }
+}
+
+fn recorded_state(root: &Path) -> io::Result<String> {
+    read::read_recorded_inventory(root)
+        .map(|snapshot| catalog_run_state(root, snapshot.document.state))
 }
 
 fn catalog_run_state(root: &Path, recorded: String) -> String {
@@ -600,12 +815,8 @@ fn entries_dir(project_root: &Path) -> io::Result<Option<PathBuf>> {
 
 /// One entry, checked as [`Catalog::record`] checks it.
 fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
-    let (file, _) = read::open_confined_file(entries, &format!("{id}.json"))?;
-    if file.metadata()?.len() > MAX_RECORD_BYTES {
-        return Err(invalid("The catalog entry is too large."));
-    }
-    let record: Record =
-        serde_json::from_reader(file).map_err(|_| invalid("The catalog entry cannot be read."))?;
+    let record: Record = serde_json::from_reader(open_catalog_entry(entries, id)?)
+        .map_err(|_| invalid("The catalog entry cannot be read."))?;
     let expected = match &record {
         Record::Run { root, identity, .. } => local_run_id(root, identity),
         Record::Plan { graph, .. } => digest(&json!(["fx-local-plan-v1", graph])),
@@ -614,6 +825,42 @@ fn read_entry(entries: &Path, id: &str) -> io::Result<Record> {
         return Err(invalid("The catalog entry identity differs."));
     }
     Ok(record)
+}
+
+// A run-history poll needs only the binding. Stream past saved-plan graphs
+// without constructing a JSON value or validating their payload.
+fn read_run_registration(
+    entries: &Path,
+    id: &str,
+) -> io::Result<Option<(RegisteredRun, Option<attempts::Attempt>)>> {
+    #[derive(Deserialize)]
+    struct Binding {
+        kind: String,
+        id: String,
+        root: Option<PathBuf>,
+        identity: Option<String>,
+        attempt: Option<attempts::Attempt>,
+    }
+    let binding: Binding = serde_json::from_reader(open_catalog_entry(entries, id)?)
+        .map_err(|_| invalid("The catalog entry cannot be read."))?;
+    if binding.kind != "run" {
+        return Ok(None);
+    }
+    let (Some(root), Some(identity)) = (binding.root, binding.identity) else {
+        return Err(invalid("The registered run has no binding."));
+    };
+    if binding.id != id || local_run_id(&root, &identity) != id {
+        return Err(invalid("The catalog entry identity differs."));
+    }
+    Ok(Some((RegisteredRun { root, identity }, binding.attempt)))
+}
+
+fn open_catalog_entry(entries: &Path, id: &str) -> io::Result<BufReader<File>> {
+    let (file, _) = read::open_confined_file(entries, &format!("{id}.json"))?;
+    if file.metadata()?.len() > MAX_RECORD_BYTES {
+        return Err(invalid("The catalog entry is too large."));
+    }
+    Ok(BufReader::new(file))
 }
 
 fn graph_title(graph: &Value) -> String {
@@ -627,27 +874,43 @@ fn graph_title(graph: &Value) -> String {
 struct RunDetails {
     identity: String,
     title: String,
+    attempt: attempts::Attempt,
     metadata: RunMetadata,
 }
 
-fn run_details(root: &Path) -> io::Result<RunDetails> {
+struct HistoryAttempt {
+    root: PathBuf,
+    identity: String,
+}
+
+#[derive(Default)]
+struct RunHistory {
+    attempts: BTreeMap<u64, HistoryAttempt>,
+    unavailable: BTreeSet<u64>,
+}
+
+impl RunHistory {
+    fn latest(&self) -> io::Result<(u64, &HistoryAttempt)> {
+        let (&number, attempt) = self
+            .attempts
+            .last_key_value()
+            .ok_or_else(|| invalid("No recorded attempt is available."))?;
+        if self.unavailable.last().is_some_and(|known| *known > number) {
+            return Err(invalid("A newer run attempt is unavailable."));
+        }
+        Ok((number, attempt))
+    }
+}
+
+fn run_start(root: &Path) -> io::Result<Value> {
     if !root.is_dir()
         || root.canonicalize()? != root
         || fs::symlink_metadata(root)?.file_type().is_symlink()
     {
         return Err(invalid("The registered run folder is unavailable."));
     }
-    let plan = read::confined_file(root, "plan.json")?;
-    let plan_file = File::open(plan)?;
-    let plan_metadata = plan_file.metadata()?;
-    if plan_metadata.len() > MAX_RECORD_BYTES {
-        return Err(invalid("The recorded plan is too large."));
-    }
-    let graph: Value = serde_json::from_reader(plan_file)
-        .map_err(|_| invalid("The recorded plan cannot be read."))?;
-    plan_source(graph.clone())?;
-    let events = read::confined_file(root, "events.jsonl")?;
     let mut first_line = Vec::new();
+    let events = read::confined_file(root, "events.jsonl")?;
     let mut reader = BufReader::new(std::io::Read::take(File::open(events)?, MAX_RECORD_BYTES));
     reader.read_until(b'\n', &mut first_line)?;
     if first_line.last() != Some(&b'\n') {
@@ -658,6 +921,28 @@ fn run_details(root: &Path) -> io::Result<RunDetails> {
     if first["kind"] != "fx-run-events-v1" || first["event"] != "run_started" {
         return Err(invalid("The run has no initial run_started event."));
     }
+    Ok(first)
+}
+
+fn run_details(root: &Path) -> io::Result<RunDetails> {
+    let first = run_start(root)?;
+    let attempt = attempts::from_start(&first, root);
+    run_details_from_start(root, first, attempt)
+}
+
+fn run_details_from_start(
+    root: &Path,
+    first: Value,
+    attempt: attempts::Attempt,
+) -> io::Result<RunDetails> {
+    let plan = File::open(read::confined_file(root, "plan.json")?)?;
+    let plan_metadata = plan.metadata()?;
+    if plan_metadata.len() > MAX_RECORD_BYTES {
+        return Err(invalid("The recorded plan is too large."));
+    }
+    let graph: Value =
+        serde_json::from_reader(plan).map_err(|_| invalid("The recorded plan cannot be read."))?;
+    plan_source(graph.clone())?;
     if first.get("plan").is_some() && first["plan"] != graph["plan"] {
         return Err(invalid("The initial event belongs to another plan."));
     }
@@ -668,6 +953,7 @@ fn run_details(root: &Path) -> io::Result<RunDetails> {
     let created_at = normalize_time(&created_at).unwrap_or(created_at);
     let name = name.filter(|name| safe_name(name));
     Ok(RunDetails {
+        attempt,
         identity: recorded_run_identity(&graph, first),
         title: graph_title(&graph),
         metadata: RunMetadata {
@@ -825,6 +1111,7 @@ struct ServiceState {
     url: String,
     instance_id: String,
     control_token: String,
+    run_launcher: Option<RunLauncher>,
     stop: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
@@ -849,6 +1136,34 @@ pub async fn bind(
     instance_id: String,
     control_token: String,
 ) -> io::Result<(Server, oneshot::Receiver<()>)> {
+    bind_service(catalog, port, instance_id, control_token, None).await
+}
+
+/// Binds the project service with an engine-supplied launcher for resume and rerun actions.
+pub async fn bind_with_run_launcher(
+    catalog: Catalog,
+    port: u16,
+    instance_id: String,
+    control_token: String,
+    run_launcher: RunLauncher,
+) -> io::Result<(Server, oneshot::Receiver<()>)> {
+    bind_service(
+        catalog,
+        port,
+        instance_id,
+        control_token,
+        Some(run_launcher),
+    )
+    .await
+}
+
+async fn bind_service(
+    catalog: Catalog,
+    port: u16,
+    instance_id: String,
+    control_token: String,
+    run_launcher: Option<RunLauncher>,
+) -> io::Result<(Server, oneshot::Receiver<()>)> {
     if instance_id.is_empty() || control_token.is_empty() {
         return Err(invalid(
             "Service identity and control token must be nonempty.",
@@ -867,6 +1182,7 @@ pub async fn bind(
         url: url.clone(),
         instance_id,
         control_token,
+        run_launcher,
         stop: Arc::new(Mutex::new(Some(sender))),
     };
     Ok((
@@ -916,7 +1232,8 @@ async fn health(State(state): State<Arc<ServiceState>>, headers: HeaderMap) -> R
     }
     observed_json(
         json!({"kind":"fx-service-status-v1", "state":"running", "protocol_version":1,
-        "project_id":state.catalog.project_id(), "instance_id":state.instance_id, "pid":std::process::id(), "url":state.url}),
+        "project_id":state.catalog.project_id(), "instance_id":state.instance_id, "pid":std::process::id(), "url":state.url,
+        "run_history":true}),
     )
 }
 
@@ -951,13 +1268,42 @@ async fn service_viewer_config(State(state): State<Arc<ServiceState>>) -> Respon
     super::project_viewer_config(state.catalog.root.clone()).await
 }
 
+async fn latest_run(catalog: Catalog, id: String) -> Response {
+    let mut response =
+        match tokio::task::spawn_blocking(move || catalog.latest_exact_url(&id)).await {
+            Ok(Ok(url)) => axum::response::Redirect::temporary(&url).into_response(),
+            _ => failure(
+                StatusCode::NOT_FOUND,
+                "The latest attempt of this run is unavailable.",
+            ),
+        };
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn exact_run_history(catalog: Catalog, id: String) -> Response {
+    match tokio::task::spawn_blocking(move || catalog.history_document(&id)).await {
+        Ok(Ok(history)) => observed_json(history),
+        Ok(Err(error)) if error.kind() == io::ErrorKind::NotFound => failure(
+            StatusCode::NOT_FOUND,
+            "The selected run history is unavailable.",
+        ),
+        _ => failure(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "The selected run history is unavailable.",
+        ),
+    }
+}
+
 async fn dispatch(State(state): State<Arc<ServiceState>>, mut request: Request) -> Response {
     let path = request.uri().path().to_owned();
     if path.starts_with("/p/") {
         let parts: Vec<_> = path.splitn(6, '/').collect();
         if parts.len() < 5
             || parts[2] != state.catalog.project_id()
-            || !matches!(parts[3], "runs" | "plans")
+            || !matches!(parts[3], "run" | "runs" | "plans")
             || !is_digest(parts[4])
         {
             return failure(StatusCode::NOT_FOUND, "Unknown project entry.");
@@ -965,6 +1311,23 @@ async fn dispatch(State(state): State<Arc<ServiceState>>, mut request: Request) 
         let catalog = state.catalog.clone();
         let id = parts[4].to_owned();
         let kind = parts[3].to_owned();
+        let suffix = parts.get(5).copied().unwrap_or_default();
+        if kind == "runs" && (suffix == "api/control" || suffix.starts_with("api/control/")) {
+            return run_control::dispatch(state, id, suffix, request).await;
+        }
+        if kind == "run" || kind == "runs" && suffix == "api/history" {
+            if !matches!(*request.method(), Method::GET | Method::HEAD) {
+                return failure(
+                    StatusCode::METHOD_NOT_ALLOWED,
+                    "This resource is read-only.",
+                );
+            }
+            return match kind.as_str() {
+                "run" if suffix.is_empty() => latest_run(catalog, id).await,
+                "runs" => exact_run_history(catalog, id).await,
+                _ => failure(StatusCode::NOT_FOUND, "Unknown project entry."),
+            };
+        }
         let source = match tokio::task::spawn_blocking(move || catalog.source(&id, &kind)).await {
             Ok(Ok(source)) => source,
             _ => {
@@ -975,7 +1338,7 @@ async fn dispatch(State(state): State<Arc<ServiceState>>, mut request: Request) 
             }
         };
         let prefix = format!("/p/{}/{}/{}", parts[2], parts[3], parts[4]);
-        let relative = format!("/{}", parts.get(5).unwrap_or(&""));
+        let relative = format!("/{suffix}");
         let query = request
             .uri()
             .query()

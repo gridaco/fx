@@ -243,6 +243,8 @@ export * from "./observation";
 export { elapsedLabel } from "./card";
 export * from "./route";
 export * from "./service";
+export * from "./run-history";
+export * from "./run-actions";
 export * from "./export";
 export * from "./export-controller";
 export * from "./values";

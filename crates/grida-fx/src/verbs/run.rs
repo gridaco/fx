@@ -104,6 +104,7 @@ pub(super) struct ResumeContext<'a> {
     pub invocation: &'a str,
     pub defaulted_inputs_digest: Option<&'a str>,
     pub rerun: Option<Rerun<'a>>,
+    pub viewer_receipt: Option<&'a super::viewer_run::Receipt>,
 }
 
 pub(super) fn sdk_root(root: &Path) -> Result<Option<String>, Error> {
@@ -247,6 +248,9 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
     }
     let runtime = crate::engine::runtime()?;
     let engine = start_engine(&runtime, &planner, args.live, stand_in, prepared.settings)?;
+    let (rerun, viewer_receipt) = resume.map_or((None, None), |context| {
+        (context.rerun, context.viewer_receipt)
+    });
     let ran = plan_and_run(
         args,
         &engine,
@@ -257,7 +261,8 @@ fn execute(args: &RunArgs, cwd: PathBuf, resume: Option<ResumeContext<'_>>) -> R
             deliveries: &deliveries,
             resolved_models: prepared.facts,
             recorded_folder,
-            rerun: resume.and_then(|context| context.rerun),
+            rerun,
+            viewer_receipt,
         },
         expected_invocation,
     );
@@ -302,6 +307,7 @@ struct RunPreparation<'a> {
     resolved_models: serde_json::Value,
     recorded_folder: Option<PathBuf>,
     rerun: Option<Rerun<'a>>,
+    viewer_receipt: Option<&'a super::viewer_run::Receipt>,
 }
 
 /// Steps 3–8 of the module doc.
@@ -319,6 +325,7 @@ fn plan_and_run(
         resolved_models,
         recorded_folder,
         rerun,
+        viewer_receipt,
     } = prepared;
     let working_directory = planner.cwd.clone();
     let cwd = working_directory.as_path();
@@ -362,6 +369,9 @@ fn plan_and_run(
         )? {
             Launch::Duplicate(folder) => {
                 report_accepted(&folder, &planner.project.root)?;
+                if let Some(receipt) = viewer_receipt {
+                    receipt.accept_existing(&folder)?;
+                }
                 return Ok(0);
             }
             Launch::Fresh(allocation) => Some(allocation),
@@ -457,6 +467,9 @@ fn plan_and_run(
             drop(named_claim.take());
             invocation_id = Some(ready.invocation_id.clone());
             crate::interrupt::runner_started();
+            if let Some(receipt) = viewer_receipt {
+                receipt.accept(&ready.folder, &ready.invocation_id);
+            }
             print_line(&format!("run       {label}"));
             if rerunning {
                 print_line(&format!("run ID    {}", ready.attempt.run_id));
@@ -490,7 +503,7 @@ fn plan_and_run(
                 }
             } else if !args.no_view {
                 super::view::report_service(
-                    super::service::register_run(&project, root),
+                    super::service::register_run(&project, root, !ready.resumed),
                     args.open,
                     &declarations,
                 );

@@ -5,7 +5,9 @@
 The local FX service gives one project a stable loopback address, an index of
 recorded runs and saved plans, and the embedded browser client. Workflow execution
 remains owned by its invoking process. Both the service and independent observers
-read the existing [observation contract](observation.md).
+read the existing [observation contract](observation.md). A local project viewer
+can request [run actions](#run-actions), with new execution owned by a separate
+engine process.
 
 ## 1. Command vocabulary
 
@@ -28,7 +30,8 @@ discussion is shorthand, not a newly installed executable alias.
 
 `view` remains a hidden compatibility command for independent foreground viewing
 of source targets, saved plans and saved runs. New onboarding uses the commands
-above. No service command executes workflow source or loads provider credentials.
+above. Service lifecycle commands start and stop inspection without executing
+workflow source or loading provider credentials.
 The `--open` flag requests a launch in the default browser. Browser failures
 leave the workflow execution result intact. JSON inspection/planning output
 conflicts with browser flags that would mix a URL into machine-readable stdout.
@@ -327,7 +330,7 @@ Each catalog entry has an opaque local ID and one of these routes:
 
 ```text
 /                                    project index
-/p/PROJECT_ID/runs/RUN_ID/             recorded run
+/p/PROJECT_ID/runs/ENTRY_ID/           exact recorded run attempt
 /p/PROJECT_ID/plans/PLAN_ID/           materialized plan
 ```
 
@@ -340,11 +343,24 @@ This URL addresses one exact [run attempt](store.md#run-references-attempts-and-
 The same plan may have several runs. Saved plans are immutable materializations;
 the service never imports workflow code to refresh them.
 
+A run also has a shareable latest-attempt selector at `/p/PROJECT_ID/run/RUN_ID/`,
+where `RUN_ID` is the recorded run ID shared by its numbered attempts. It
+temporarily redirects to the exact URL of the latest retained attempt, including
+if that attempt failed. The redirect is not cached. Opening the link again
+resolves the latest attempt again. The opened page and its scoped APIs stay on
+the resolved attempt. `run` and `rerun` announce the shared link when the local
+service advertises `run_history: true` in its private status handshake. On older
+services they announce the exact URL. `inspect --register` and `inspect --open`
+continue to target the exact attempt selected for inspection.
+
 The catalog supports default project runs and explicitly registered `--run`
 locations. Discovery is bounded to the configured run storage, not a scan of a
 project's source tree or the machine. Registration is through local CLI filesystem
 operations; web requests cannot register arbitrary paths. Missing or changed
 records are surfaced without silently pointing an old URL at different data.
+New registrations retain the verified run ID and attempt number so a damaged
+latest record can still block the stable selector. History keeps other verified
+exact links when an attempt cannot be opened.
 `grida-fx runs remove` ([store.md](store.md) §9) is the one local operation that
 deletes run entries: once it has removed a run folder it deletes the entries binding
 that folder and its recorded identity, and their URLs are then not found. A folder
@@ -378,9 +394,13 @@ Readers accept older entries lacking this optional metadata.
 The index groups by project identity plus recorded workflow ID and source. It does
 not group by title or plan digest: changed inputs/definitions at one source stay in
 one workflow, while different sources with the same ID remain distinguishable.
-Entries without sufficient workflow metadata remain separate. The main workflow
-row opens the newest-created run, including failures, or a saved plan when no run
-exists. Expandable history includes names, creation times and states, with saved
+Verified run entries can also carry the pair `run_id` and `attempt_number`.
+The dashboard shows the highest available attempt number for each run ID and
+uses the original run creation time to order independent runs. Older entries
+without the new fields remain readable. Entries without sufficient workflow
+metadata remain separate. The main workflow row opens the newest-created run,
+including failures, or a saved plan when no run exists. Expandable workflow history
+includes names, creation times and states, with saved
 plans in the same group. Older recorded running/unfinished runs remain visible
 without opening history; recorded state still does not prove process liveness.
 Resuming never promotes an old run as a new one.
@@ -402,6 +422,18 @@ entry. A wrong project or entry ID returns an error, never the current project's
 unrelated run. Browser readers use explicit scoped API bases and reject URLs
 outside that scope. The standalone root API remains supported.
 
+`GET /api/history` under an exact project run entry returns
+[`fx-viewer-run-history-v1`](schemas/fx-viewer-run-history-v1.schema.json)
+with `run_id`, `latest_url`, `latest_available`, `selected_attempt`, and
+`attempts` in descending attempt number order. The selector refuses to
+redirect if the latest attempt is known but damaged. In that case the history
+reports `latest_available: false` and readable exact links remain available.
+Each row has
+`attempt_number`, `url` (the exact attempt link), and recorded display `state`.
+The service resolves these from the project's run records. Plans, standalone
+viewers, and portable exports do not have this endpoint. No paths or private
+coordination data appear in the document.
+
 For a live run, `GET /api/requests` lists external requests and their recorded state.
 The bundled viewer can submit a JSON answer to `POST /api/requests/ID/respond` under
 the same run. A write requires the exact loopback Host and matching browser Origin,
@@ -410,6 +442,46 @@ the exact run, request, schema and deadline. Private service-control credentials
 inside the service. The authority is local-machine access, with no reviewer sign-in.
 Project roots, plan pages and portable exports have no answer endpoint.
 See [waiting steps](waiting.md) for the resolution and resume contract.
+
+### Run actions
+
+An exact local project run entry serves
+`GET /api/control`, an engine-backed
+[`fx-viewer-run-control-v1`](schemas/fx-viewer-run-control-v1.schema.json)
+document with the selected `attempt_number`, sampled `invocation_id` and
+availability for `pause`, `resume`, `rerun` and `cancel`. This sample helps
+the viewer present actions. The engine checks eligibility again at dispatch.
+These endpoints belong to the local project service's exact run pages.
+
+`POST /api/control/ACTION` takes a JSON object with the sampled `invocation_id`
+and, for Resume and Rerun, a caller-generated `request_id`. The browser must
+send the exact loopback Host and matching Origin, a JSON content type and
+`X-FX-Action: ACTION`. No browser sign-in or credential setup is needed.
+
+Pause and Cancel use the runner-owned [control protocol](control.md), binding
+the request to the sampled invocation. The recorded state distinguishes
+acceptance, drain or cancellation, and the resulting outcome. Resume continues
+the selected paused attempt. Rerun starts a fresh attempt from the selected
+record. The service launches a separate engine process and confirms acceptance
+only after the invocation's durable start. The process continues if the
+browser disconnects or the service stops. It waits for the selected attempt's
+workflow requests so submitting an answer can continue the invocation.
+Viewer starts use the offline engine mode and current project declarations to
+withhold provider environment variables. Project dotenv loading is disabled.
+Rerun uses the engine's request ID to recover a previously accepted start.
+Resume guards the sampled invocation
+so a retried request cannot start its successor.
+
+Replies use
+[`fx-viewer-run-action-v1`](schemas/fx-viewer-run-action-v1.schema.json).
+An accepted start includes the exact attempt URL. After accepting Rerun, the
+viewer tab that submitted it navigates to that URL. Other exact attempt pages
+stay on their selected attempt. A refusal gives a safe
+reason and can include a CLI continuation command. A lost acknowledgment
+may produce `unknown`. Keep the original invocation and request ID for a
+retry. A start requiring fresh live authorization or missing saved context
+continues through the CLI with the usual engine checks. Browser replies omit
+local execution paths, private coordination data and credentials.
 
 The bundled viewer uses an optional `X-FX-Run-Active: 1` response header for
 tab activity. An unfinished snapshot can carry it after a read-only owner

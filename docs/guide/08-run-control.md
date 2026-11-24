@@ -4,6 +4,22 @@
 of the project service, including SDK launches, `--no-view` and projectless runs.
 `stop` shuts down the inspection service; it does not stop workflow execution.
 
+## Control a run in the viewer
+
+On a local project run page, open **Run actions**. Choose **Pause** to let
+started steps finish, **Resume** to continue the paused attempt, **Rerun** to
+start another attempt from the selected record, or **Cancel** to stop the
+selected active invocation. The confirmation dialog for **Rerun** and
+**Cancel** shows which attempt the action affects. When the rerun starts, the
+viewer opens the new attempt in the same tab.
+Use the browser's Back button to return to the source attempt.
+
+Execution continues when you close the tab. When a viewer-started attempt
+requests a review, answering lets that same invocation continue.
+If a start needs live spending
+approval or FX cannot reconstruct its execution context, follow the CLI guidance
+in the viewer. Use attempt history to open an earlier result.
+
 ## Pause and resume at a step boundary
 
 ```sh

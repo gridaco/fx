@@ -76,8 +76,13 @@ button { touch-action: manipulation; }
 .fx-review-error:not(:empty) { padding: 5px 0; color: #991b1b; overflow-wrap: anywhere; }
 .fx-bar-project { display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 6px; color: #71717a; }
 .fx-bar-project:hover { background: #f4f4f5; color: #27272a; }
+.fx-bar-history { display: inline-flex; min-height: 28px; flex-shrink: 0; align-items: center; gap: 5px; padding-inline: 6px; border-radius: 5px; color: #52525b; white-space: nowrap; }
+.fx-bar-controls { display: grid; width: 28px; height: 28px; flex: none; place-items: center; border-radius: 5px; color: #52525b; }
+:is(.fx-bar-history, .fx-bar-controls):is(:hover, [aria-expanded=true]) { background: #f4f4f5; color: #27272a; }
 .fx-bar-dot { margin: 0 -4px; color: #a1a1aa; }
 .fx-bar-cost { flex-shrink: 0; color: #71717a; font-family: var(--font-mono); font-size: 11px; }
+@media (max-width: 400px) { .fx-bar:has(.fx-bar-history) :is(.fx-bar-dot, .fx-bar-cost) { display: none; } }
+@media (max-width: 500px) { .fx-bar:has(.fx-bar-controls) :is(.fx-bar-dot, .fx-bar-cost) { display: none; } }
 .fx-crumbs { display: flex; min-width: 0; align-items: center; overflow: hidden; white-space: nowrap; }
 .fx-crumbs li { display: flex; min-width: 0; align-items: center; }
 .fx-crumbs li + li::before { content: "/"; padding: 0 6px; color: #c4c4cc; }
@@ -106,6 +111,28 @@ button { touch-action: manipulation; }
 .fx-details-close { position: absolute; top: 10px; right: 10px; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 5px; color: #8b8b94; }
 .fx-details-close:hover { background: #f4f4f5; color: #27272a; }
 .fx-details .fx-detail-heading-row { padding-right: 26px; }
+.fx-attempt-history-list { display: grid; gap: 4px; margin: 10px 0; }
+.fx-attempt-row { display: flex; min-height: 36px; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 5px; }
+.fx-attempt-row > :last-child { margin-inline-start: auto; }
+.fx-attempt-row:hover { background: #f4f4f5; }
+.fx-attempt-row[aria-current=page] { background: #eaf0f7; color: #345675; font-weight: 600; }
+.fx-attempt-latest { color: #52525b; font-size: 11px; font-weight: 400; }
+.fx-attempt-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: #52525b; font-size: 11px; }
+.fx-run-action-list { display: grid; gap: 2px; margin-top: 10px; }
+.fx-run-action-row { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding-block: 4px; color: #52525b; line-height: 16px; }
+.fx-run-action-row + .fx-run-action-row { border-top: 1px solid #ededf0; }
+.fx-run-actions .fx-action { min-height: 30px; }
+.fx-run-actions .fx-action[data-destructive=true]:not(:disabled) { border-color: #ead2d5; color: #991b1b; }
+.fx-run-actions .fx-action[data-destructive=true]:hover:not(:disabled) { background: #fdf4f4; }
+.fx-run-inline { margin-top: 10px; }
+.fx-run-dialog { inset: 0; margin: auto; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 18px; border: 1px solid #e4e4e7; border-radius: 12px; background: white; color: #27272a; box-shadow: 0 12px 36px #00000026; }
+.fx-run-dialog::backdrop { background: #18181b58; }
+.fx-run-dialog > h2 { margin-bottom: 8px; font-size: 16px; font-weight: 600; }
+.fx-run-dialog > p { color: #52525b; font-size: 13px; line-height: 1.5; }
+.fx-run-confirm-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.fx-run-dialog .fx-run-confirm-buttons { margin-top: 16px; }
+.fx-run-receipt { margin-top: 10px; padding: 8px 10px; border: 1px solid #e4e4e7; border-radius: 5px; color: #3f3f46; }
+.fx-run-command { display: block; margin-top: 4px; color: #27272a; white-space: pre-wrap; }
 .fx-detail-notice { margin-top: 10px; padding: 8px 10px; border-radius: 4px; background: #faf8f0; color: #8b7345; font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
 .fx-bar-notice { flex-shrink: 0; padding: 1px 6px; border-radius: 4px; background: #faf8f0; color: #8b7345; font-size: 11px; }
 @media (max-width: 640px) { .fx-details { top: 60px; max-height: calc(100% - 72px); } }

@@ -28,6 +28,10 @@
     "protocol_version": {
       "const": 1
     },
+    "run_history": {
+      "description": "Whether the running service supports latest-attempt links and viewer attempt history.",
+      "type": "boolean"
+    },
     "project_id": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"

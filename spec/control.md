@@ -84,7 +84,7 @@ and with commitment to finalization. There are three distinct boundaries:
 2. **Accepted:** the runner closed admission for this invocation and appended
    and flushed one `cancel_requested` event before replying. The event has the
    existing invocation/plan envelope and a bounded `source` enum (`cli`,
-   `signal`, `sdk`). It is intent evidence, not a terminal event.
+   `signal`, `sdk`, `viewer`). It is intent evidence, not a terminal event.
 3. **Completed locally:** the invocation has a terminal record, local call
    bookkeeping has finished, owned node hosts have been cleaned up within the
    supported process-ownership boundary, and its run writer ownership is released.
@@ -234,10 +234,12 @@ No control operation may load workflow code or credentials to repair discovery.
 Authenticated local control protects against other users/accidental stale
 targeting; it is not isolation from malicious code already running as this user.
 
-The project service may later adapt this interface for a viewer action with
-explicit browser mutation protections. Observation HTTP endpoints remain
-read-only; merely opening a run URL never authorizes cancellation. Browser answering for a workflow-declared [waiting step](waiting.md) uses its run-scoped
-HTTP endpoint. Cancellation remains available through local process control.
+The [project service](service.md#run-actions) adapts the same owner interface
+for viewer pause and cancel actions using the exact attempt and observed
+invocation. A viewer sends the `viewer` source over the private handshake.
+Its availability probe requires the runner to recognize that source. Browser
+workflow answers use the request endpoint defined by [waiting steps](waiting.md).
+Observation HTTP endpoints are read-only.
 
 ## 6. External work, signals and SDKs
 
@@ -375,7 +377,7 @@ Reviewed 2026-10-08; these inform intent, not additional FX promises:
 Pause and cancellation use the exact selectors, invocation guard and local
 control transport in §2. The runner serializes pause acceptance with step
 dispatch, cancellation and finalization. Acceptance flushes `pause_requested`
-with its `cli` or `sdk` source and closes step admission. Admitted steps finish
+with its `cli`, `sdk` or `viewer` source and closes step admission. Admitted steps finish
 under their existing authorization, including their nested calls and retries.
 Repeated pause requests return the recorded acceptance for that invocation.
 

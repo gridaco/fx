@@ -361,11 +361,14 @@ otherwise. Reduced motion keeps the green icon steady.
 
 `run` stays foreground and exits normally after execution. The separate FX service
 keeps its page available afterward, including for failed and cancelled runs.
-The URL still identifies that record after a service restart or same-plan resume.
+The shared run link opens the latest attempt, even after a service restart.
+Once open, the viewer stays on that attempt. Use the attempt history in the
+workflow bar to open a specific result or copy the shared run link.
 The dashboard opens each workflow's newest-created run, including a failed run.
 Expand its history for earlier names, creation times and states, or a saved plan.
 Older unfinished runs stay visible even when a newer run exists. The arrow in the
-bar returns from a canvas to that index. Resume retains the original creation time and URL.
+bar returns from a canvas to that index. Resume retains the original creation time
+and the exact attempt URL.
 Grouping uses the recorded workflow ID and source, so changed inputs or definitions
 at that path stay together; distinct sources sharing an ID remain separate.
 Old records without sufficient source metadata remain separate rather than guessed.

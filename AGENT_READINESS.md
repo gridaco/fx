@@ -195,8 +195,9 @@ readiness. Preserve existing project settings rather than replacing them.
 `run` is foreground and non-interactive. With a running project service, it reports
 an actual usable run URL after initialization and before run-phase execution.
 An agent can relay it immediately while supervising execution; planning-time code
-precedes it. The service keeps that page available after completion and across
-service restarts while the record is retained. Report the printed URL and use
+precedes it. The shared run link resolves the latest attempt on each visit, while
+the opened page stays on its exact attempt. The service keeps retained records
+available after completion and across service restarts. Report the printed URL and use
 `--open` when the user asks FX to launch the default browser. For plans and saved
 runs, resolve the registered route against the verified address for the same
 project ID.
@@ -458,7 +459,8 @@ promise through documentation alone.
 | AR-29 | "Generate one image on this route and give me the PNG." | [One-shot call](spec/call.md) for [#149](https://github.com/gridaco/fx/issues/149) exposes image generation directly in the CLI. Python and JavaScript callers can build a one-step workflow, run it, and resolve or deliver its output. Native one-shot SDK entry points and a `--fresh` equivalent on that API are deferred. | Exercise project discovery from a child directory, explicit override, empty override refusal and projectless selection. Dry-run never generates. Prove request, output and cache behavior with a stand-in, including fresh execution and ordinary replay. Verify budget and live admission, reject output names that cannot be reported as UTF-8, and preserve the saved image on delivery failure or interruption. An opt-in signed-in Codex invocation is the live smoke test. |
 | AR-30 | "Retrieve the result I already paid for." | Implemented in source for [#116](https://github.com/gridaco/fx/issues/116). A live resume collects a known completed task. CLI, Python and JavaScript expose recovery-only resume and recorded recovery events. | A charged success followed by download or answer validation failure retains the task. A repeat collects and publishes the original result with one generation and one charge. Concurrent invocations sharing a long-job call key serialize submission and collection. A settled handle from an older engine or an ambiguous project adapter outcome requires explicit recovery. Original bookings require task-specific evidence. Terminal generation failure and unavailable retention produce distinct next steps. Pruning preserves recovery candidates. |
 | AR-31 | "Let my build supply its revision and let me choose a generated image." | [Durable workflow requests](spec/waiting.md) in CLI, Python, JavaScript and the live local viewer. | An SDK lists and answers a promptless revision. A reviewer chooses a frozen image through the viewer or CLI in the same run. Verify both values downstream, the winner on conflict and the exact selected file on resume. Timeout fallback follows normal spending rules. |
-| AR-32 | "Run that reel again. Show me the previous result." | CLI, Python and JavaScript full rerun and history in [#162](https://github.com/gridaco/fx/issues/162). Viewer navigation is tracked in [#168](https://github.com/gridaco/fx/issues/168). | Start a new attempt from a verified source. Read the latest result by run ID and the old result by attempt number or folder. Identical independent runs get distinct run IDs. A fresh review gets its own request and deadline, with late submissions confined to the original attempt. Verify retry safety and refusal when the saved source cannot be reconstructed. [Run targeting](spec/store.md#run-references-attempts-and-invocations) |
+| AR-32 | "Run that reel again. Show me the previous result." | CLI, Python and JavaScript full rerun and history in [#162](https://github.com/gridaco/fx/issues/162). The viewer opens the latest attempt from a shared run link, offers exact attempt links and can start a rerun from the selected attempt in [#168](https://github.com/gridaco/fx/issues/168). | Start a new attempt from a verified source. Read the latest result by run ID and the old result by attempt number or folder. Visit the original viewer link for the latest attempt and use its history to open an earlier result. Identical independent runs get distinct run IDs. A fresh review gets its own request and deadline, with late submissions confined to the original attempt. Verify retry safety and refusal when the saved source cannot be reconstructed. [Run targeting](spec/store.md#run-references-attempts-and-invocations) |
+| AR-33 | "Pause this workflow while I review it, then continue from here." | [Project viewer controls](spec/service.md#run-actions) and existing CLI, Python and JavaScript operations. The viewer can also cancel an active invocation, and gives CLI continuation for starts that require live authorization or execution context. | Pause while a step is running and show the durable boundary after it finishes. Resume the same attempt, keep the exact link, and continue even if the browser disconnects. Refuse stale actions on a successor invocation, cross-origin writes, and implicit live approval. Cancellation records viewer intent under the selected invocation. |
 
 The [waiting fixture](fixtures/waiting/workflow.yaml) synthesizes three PNGs,
 provides a deterministic fallback and writes the revision and delivered image
@@ -478,7 +480,17 @@ damaged or ambiguous. The [planning regression](crates/grida-fx/tests/rerun_plan
 verifies that a rejected rerun leaves changed plan-time bodies unexecuted.
 The [Python SDK tests](python/tests/test_api.py) and
 [JavaScript SDK tests](js/fx/test/record.test.ts) exercise argument forwarding and
-keep loaded records pinned to their resolved attempt folders.
+keep loaded records pinned to their resolved attempt folders. The
+[project service integration test](crates/grida-fx/tests/service_run.rs) follows
+the printed run link across a rerun and service restart and verifies that exact
+links and their artifacts stay on the selected attempt.
+
+AR-33 uses the [project service integration tests](crates/grida-fx/tests/service_run.rs)
+to exercise all four actions against real provider-free runs, including service
+restart during a resumed invocation, guarded cancellation, and repeat delivery of
+a rerun request. The [viewer browser check](tools/check_viewer_browser.mjs) exercises
+the action panel and submitted invocation guards. It verifies that a confirmed
+viewer rerun opens its exact new attempt and browser Back returns to the source.
 
 AR-25 uses the [notes fixture](fixtures/viewer/README.md#try-workflow-notes),
 [engine acceptance](tools/check_notes.py), browser acceptance and builder/core/viewer tests.

@@ -28,7 +28,7 @@ pub fn inspect(args: &InspectArgs) -> Result<u8, Error> {
     let viewer_url = if args.register {
         let project =
             grida_fx_core::docs::project::Project::find(&super::planning::working_directory()?)?;
-        super::service::register_run(&project, &folder)?
+        super::service::register_run(&project, &folder, false)?
     } else if args.viewer_url {
         super::service::existing_run_url(&folder)
     } else {

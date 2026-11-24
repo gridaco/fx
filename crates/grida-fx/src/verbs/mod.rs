@@ -30,6 +30,7 @@ pub mod schema;
 pub mod service;
 pub mod takes;
 pub mod view;
+pub mod viewer_run;
 pub mod waiting;
 
 use grida_fx_core::project::Planner;

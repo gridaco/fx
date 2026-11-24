@@ -84,13 +84,27 @@
           "name": {
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "run_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "attempt_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
           }
+        },
+        "dependentRequired": {
+          "run_id": ["attempt_number"],
+          "attempt_number": ["run_id"]
         },
         "allOf": [
           {
             "if": {
-              "required": [
-                "name"
+              "anyOf": [
+                { "required": ["name"] },
+                { "required": ["run_id"] }
               ]
             },
             "then": {

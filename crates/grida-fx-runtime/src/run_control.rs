@@ -5,12 +5,13 @@ use crate::events::{Event, EventLog};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
-/// The bounded, portable source of cancellation intent.
+/// The bounded, portable source of pause or cancellation intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CancelSource {
     Cli,
     Signal,
     Sdk,
+    Viewer,
 }
 
 impl CancelSource {
@@ -19,6 +20,7 @@ impl CancelSource {
             Self::Cli => "cli",
             Self::Signal => "signal",
             Self::Sdk => "sdk",
+            Self::Viewer => "viewer",
         }
     }
 }

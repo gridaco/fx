@@ -10,6 +10,13 @@ fn catalog() -> (TempDir, Catalog) {
 }
 
 fn app(catalog: Catalog) -> (Router, oneshot::Receiver<()>) {
+    app_with_launcher(catalog, None)
+}
+
+fn app_with_launcher(
+    catalog: Catalog,
+    run_launcher: Option<RunLauncher>,
+) -> (Router, oneshot::Receiver<()>) {
     let (sender, receiver) = oneshot::channel();
     (
         service_router(ServiceState {
@@ -18,6 +25,7 @@ fn app(catalog: Catalog) -> (Router, oneshot::Receiver<()>) {
             url: "http://127.0.0.1:43123/".into(),
             instance_id: "instance-test".into(),
             control_token: "private-test-token".into(),
+            run_launcher,
             stop: Arc::new(Mutex::new(Some(sender))),
         }),
         receiver,
@@ -565,6 +573,522 @@ async fn nested_routes_scope_artifacts_and_reject_wrong_projects() {
     assert_eq!(value(response).await, static_plan());
 }
 
+fn save_attempt(root: &Path, fixture: &Fixture, run_id: &str, number: u64, succeeded: bool) {
+    let events = fs::read_to_string(fixture.root().join("events.jsonl")).unwrap();
+    let (initial, rest) = events.split_once('\n').unwrap();
+    let mut first: Value = serde_json::from_str(initial).unwrap();
+    first["run_id"] = json!(run_id);
+    first["attempt_number"] = json!(number);
+    fs::write(
+        root.join("events.jsonl"),
+        format!("{first}\n{rest}").replace(
+            "\"ok\":false",
+            if succeeded {
+                "\"ok\":true"
+            } else {
+                "\"ok\":false"
+            },
+        ),
+    )
+    .unwrap();
+    if root != fixture.root() {
+        fs::copy(fixture.root().join("plan.json"), root.join("plan.json")).unwrap();
+    }
+}
+
+#[test]
+fn history_keeps_openable_attempts_when_latest_cannot_be_linked_or_is_damaged() {
+    let (_directory, catalog) = catalog();
+    let run_id = "d".repeat(64);
+    let first = Fixture::new("image/png");
+    let second = Fixture::new("image/png");
+    let third = Fixture::new("image/png");
+    for (number, fixture) in [(1, &first), (2, &second), (3, &third)] {
+        save_attempt(&fixture.root(), fixture, &run_id, number, true);
+    }
+    let first = catalog.register_run(&first.root()).unwrap();
+    let second = catalog.register_run(&second.root()).unwrap();
+    let third_root = third.root().canonicalize().unwrap();
+    run_index::RunIndex {
+        project_root: catalog.root.clone(),
+    }
+    .record(&third_root)
+    .unwrap();
+    let third_id = local_run_id(&third_root, &run_identity(&third_root).unwrap());
+    let entry_path = catalog
+        .state_dir
+        .join("entries")
+        .join(format!("{third_id}.json"));
+    // Publication cannot replace an existing entry that cannot be read.
+    fs::create_dir(&entry_path).unwrap();
+    let assert_earlier_history = || {
+        let history = catalog.history_document(&first.id).unwrap();
+        assert_eq!(history["latest_available"], false);
+        let rows = history["attempts"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["url"], second.url);
+        assert_eq!(rows[1]["url"], first.url);
+        assert!(catalog.latest_exact_url(&run_id).is_err());
+    };
+    assert_earlier_history();
+    fs::remove_dir(&entry_path).unwrap();
+    let third = catalog.register_run(&third_root).unwrap();
+    assert_eq!(catalog.latest_exact_url(&run_id).unwrap(), third.url);
+
+    // No allocation journal exists for these separately registered attempts.
+    fs::write(third_root.join("events.jsonl"), b"invalid start\n").unwrap();
+    let reopened = Catalog::open(&catalog.root, &catalog.runs_dir).unwrap();
+    assert!(reopened.latest_exact_url(&run_id).is_err());
+    assert_earlier_history();
+    assert_eq!(
+        deregister_runs(&catalog.root, &third_root, None).unwrap(),
+        1
+    );
+    assert_eq!(reopened.latest_exact_url(&run_id).unwrap(), second.url);
+}
+
+#[tokio::test]
+async fn run_links_resolve_latest_and_keep_exact_attempts_pinned() {
+    let (_directory, catalog) = catalog();
+    let first = Fixture::new("image/png");
+    let run_id = "d".repeat(64);
+    save_attempt(&first.root(), &first, &run_id, 1, true);
+    let entry = catalog.register_run(&first.root()).unwrap();
+    assert_eq!(entry.run_id.as_deref(), Some(run_id.as_str()));
+    assert_eq!(entry.attempt_number, Some(1));
+    let stable = catalog
+        .registered_run_latest_route(&first.root())
+        .unwrap()
+        .unwrap();
+    assert_eq!(stable, format!("/p/{}/run/{run_id}/", catalog.project_id()));
+    assert_eq!(
+        catalog.registered_run_route(&first.root()).unwrap(),
+        Some(entry.url.clone())
+    );
+    let (before, _receiver) = app(catalog.clone());
+    let response = before
+        .oneshot(request(&stable).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    assert_eq!(response.headers()[header::LOCATION], entry.url);
+
+    // The next attempt used no viewer and lives outside the configured runs tree.
+    let second = catalog.root.join("elsewhere/attempt-2");
+    let second_allocation =
+        attempts::Allocation::reserve(&catalog.root, &second, 2, 1, None).unwrap();
+    let third = catalog.root.join("elsewhere/attempt-3");
+    let third_allocation =
+        attempts::Allocation::reserve(&catalog.root, &third, 3, 2, None).unwrap();
+    let allocation_lock = run_index::allocate_attempt(&catalog.root).unwrap();
+    attempts::save(
+        &catalog.root,
+        &run_id,
+        &[second_allocation, third_allocation],
+    )
+    .unwrap();
+    let failed = Fixture::new("image/png");
+    save_attempt(&second, &failed, &run_id, 2, false);
+    run_index::RunIndex {
+        project_root: catalog.root.clone(),
+    }
+    .record(&second)
+    .unwrap();
+    attempts::confirm_start(
+        &catalog.root,
+        &attempts::Attempt {
+            run_id: run_id.clone(),
+            attempt_number: 2,
+        },
+        &second,
+    )
+    .unwrap();
+    drop(allocation_lock);
+    assert_eq!(catalog.registered_run_latest_route(&second).unwrap(), None);
+
+    let reopened = Catalog::open(&catalog.root, &catalog.runs_dir).unwrap();
+    let (restarted, _receiver) = app(reopened.clone());
+    let response = restarted
+        .clone()
+        .oneshot(request(&stable).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+    let latest = response.headers()[header::LOCATION]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(latest, entry.url);
+    assert_eq!(
+        reopened.registered_run_latest_route(&second).unwrap(),
+        Some(stable.clone())
+    );
+
+    let history_path = format!("{}api/history", entry.url);
+    let response = restarted
+        .clone()
+        .oneshot(request(&history_path).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    assert_eq!(
+        value(response).await,
+        json!({
+            "kind": "fx-viewer-run-history-v1", "run_id": run_id, "selected_attempt": 1,
+        "latest_url": stable, "latest_available": true, "attempts": [
+                {"attempt_number": 2, "url": latest, "state": "failed"},
+                {"attempt_number": 1, "url": entry.url, "state": "succeeded"}
+            ]
+        })
+    );
+
+    // A process can publish its start before confirming the allocation. The index
+    // can recover such a start only while its on-disk reservation still matches.
+    save_attempt(&third, &failed, &run_id, 3, false);
+    run_index::RunIndex {
+        project_root: catalog.root.clone(),
+    }
+    .record(&third)
+    .unwrap();
+    let marker_path = third.join("run.lock");
+    let marker = fs::read(&marker_path).unwrap();
+    fs::write(&marker_path, b"replaced reservation\n").unwrap();
+    assert!(reopened.latest_exact_url(&run_id).is_err());
+    fs::write(marker_path, marker).unwrap();
+    fs::remove_file(third.join("events.jsonl")).unwrap();
+
+    for path in [stable.as_str(), &history_path] {
+        let post = request(path)
+            .method(Method::POST)
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            restarted.clone().oneshot(post).await.unwrap().status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+    }
+    let wrong = stable.replace(catalog.project_id(), &"e".repeat(64));
+    let response = restarted
+        .clone()
+        .oneshot(request(&wrong).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    // A damaged accepted latest attempt does not send the visitor back to the first one.
+    fs::write(second.join("events.jsonl"), b"corrupt\n").unwrap();
+    let response = restarted
+        .clone()
+        .oneshot(request(&stable).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(!response.headers().contains_key(header::LOCATION));
+    let response = restarted
+        .clone()
+        .oneshot(request(&history_path).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let retained_history = value(response).await;
+    assert_eq!(retained_history["attempts"][0]["url"], entry.url);
+    assert_eq!(retained_history["latest_available"], false);
+    let response = restarted
+        .oneshot(
+            request(&format!("{}api/view", entry.url))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(value(response).await["state"], "succeeded");
+}
+
+fn viewer_action(path: &str, action: &str) -> axum::http::request::Builder {
+    request(&format!("{path}api/control/{action}"))
+        .method(Method::POST)
+        .header(header::ORIGIN, "http://127.0.0.1:43123")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-fx-action", action)
+}
+
+#[tokio::test]
+async fn viewer_starts_require_exact_project_run_and_browser_submission() {
+    let (_directory, catalog) = catalog();
+    let first = Fixture::new("image/png");
+    let next = Fixture::new("image/png");
+    let run_id = "a".repeat(64);
+    let invocation = "0123456789abcdef";
+    let next_invocation = "fedcba9876543210";
+    save_attempt(&first.root(), &first, &run_id, 1, false);
+    let log = first.root().join("events.jsonl");
+    let events = fs::read_to_string(&log)
+        .unwrap()
+        .replace("offline-fixture", invocation);
+    fs::write(
+        log,
+        events.replace("\"event\":\"run_finished\"", "\"event\":\"run_paused\""),
+    )
+    .unwrap();
+    save_attempt(&next.root(), &next, &run_id, 2, false);
+    let log = next.root().join("events.jsonl");
+    let events = fs::read_to_string(&log)
+        .unwrap()
+        .replace("offline-fixture", next_invocation);
+    fs::write(log, events).unwrap();
+    let index = run_index::RunIndex {
+        project_root: catalog.root.clone(),
+    };
+    index.record(&first.root()).unwrap();
+    index.record(&next.root()).unwrap();
+    let first_entry = catalog.register_run(&first.root()).unwrap();
+    let plan = catalog.register_plan(&static_plan()).unwrap();
+    let external = Fixture::new("image/png");
+    let external = catalog.register_run(&external.root()).unwrap();
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let requests = Arc::clone(&received);
+    let next_root = next.root();
+    let launcher: RunLauncher = Arc::new(move |request| {
+        let response = match request.request_id.as_str() {
+            "needs-spending" => Err(LaunchRefused {
+                code: "approval_required".into(),
+                message: "Continuing this run needs current spending authorization.".into(),
+                unknown: false,
+            }),
+            "unknown" => Err(LaunchRefused {
+                code: "unknown".into(),
+                message: "The detached start could not be confirmed.".into(),
+                unknown: true,
+            }),
+            _ => Ok(LaunchAccepted {
+                folder: match request.operation {
+                    LaunchOperation::Resume => request.folder.clone(),
+                    LaunchOperation::Rerun => next_root.clone(),
+                },
+                invocation_id: next_invocation.into(),
+            }),
+        };
+        requests.lock().unwrap().push(request);
+        response
+    });
+    let (app, _receiver) = app_with_launcher(catalog.clone(), Some(launcher));
+    let response = app
+        .clone()
+        .oneshot(
+            request(&format!("{}api/control", first_entry.url))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        value(response).await,
+        json!({"kind":"fx-viewer-run-control-v1", "invocation_id":invocation,
+        "attempt_number":1,"actions":{"pause":false,"resume":true,"rerun":true,"cancel":false}})
+    );
+
+    let body = json!({"invocation_id":invocation,"request_id":"retry-1"});
+    let missing_origin = request(&format!("{}api/control/rerun", first_entry.url))
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-fx-action", "rerun")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    for (request, status) in [
+        (missing_origin, StatusCode::FORBIDDEN),
+        (
+            viewer_action(&first_entry.url, "rerun")
+                .header(header::ORIGIN, "http://example.test")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            viewer_action(&first_entry.url, "rerun")
+                .body(Body::from(json!({"invocation_id":invocation}).to_string()))
+                .unwrap(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            viewer_action(&first_entry.url, "rerun")
+                .body(Body::from(
+                    json!({"invocation_id":invocation,"request_id":"retry-1","folder":"other"})
+                        .to_string(),
+                ))
+                .unwrap(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            viewer_action(&external.url, "rerun")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+            StatusCode::CONFLICT,
+        ),
+        (
+            viewer_action(&plan.url, "rerun")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+            StatusCode::METHOD_NOT_ALLOWED,
+        ),
+    ] {
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), status);
+    }
+    assert!(received.lock().unwrap().is_empty());
+
+    let response = app
+        .clone()
+        .oneshot(
+            viewer_action(&first_entry.url, "resume")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(value(response).await["url"], first_entry.url);
+    let response = app
+        .clone()
+        .oneshot(
+            viewer_action(&first_entry.url, "rerun")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let latest = catalog.registered_run_route(&next.root()).unwrap().unwrap();
+    assert_eq!(value(response).await["url"], latest);
+    for (key, status, command) in [
+        (
+            "needs-spending",
+            StatusCode::CONFLICT,
+            format!("grida fx rerun {run_id} --attempt 1"),
+        ),
+        (
+            "unknown",
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("grida fx inspect {run_id} --history"),
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                viewer_action(&first_entry.url, "rerun")
+                    .body(Body::from(
+                        json!({"invocation_id":invocation,"request_id":key}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status);
+        let response = value(response).await;
+        assert_eq!(response["cli_command"], command);
+        assert!(
+            !response
+                .to_string()
+                .contains(first.root().to_str().unwrap())
+        );
+    }
+    let observed = received.lock().unwrap();
+    assert_eq!(observed.len(), 4);
+    assert_eq!(observed[0].operation, LaunchOperation::Resume);
+    assert_eq!(observed[1].operation, LaunchOperation::Rerun);
+    assert_eq!(observed[1].expected_invocation, invocation);
+    assert_eq!(observed[1].source_attempt, 1);
+    assert_eq!(observed[1].run_id, run_id);
+    assert_eq!(observed[1].folder, first.root());
+    assert_eq!(observed[1].project_root, catalog.root);
+    assert_eq!(observed[1].request_id, "retry-1");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn viewer_pause_and_cancel_target_the_observed_invocation() {
+    use grida_fx_runtime::{
+        engine::Cancel, events::EventLog, folder::RunFolder, run_control::RunControl,
+    };
+
+    let (_directory, catalog) = catalog();
+    let fixture = Fixture::new("image/png");
+    let folder = fixture.root();
+    let invocation = "0123456789abcdef";
+    let plan = "a".repeat(64);
+    let events_path = folder.join("events.jsonl");
+    let events = fs::read_to_string(&events_path).unwrap();
+    let initial = events
+        .lines()
+        .next()
+        .unwrap()
+        .replace("offline-fixture", invocation);
+    fs::write(&events_path, format!("{initial}\n")).unwrap();
+    let lock = RunFolder::lock_existing(&folder, "test run").unwrap();
+    let events = Arc::new(EventLog::open(&events_path, invocation, &plan).unwrap());
+    let owner = control::ControlServer::start(
+        &folder,
+        &plan,
+        invocation,
+        RunControl::new(events, Cancel::new()),
+        &tokio::runtime::Handle::current(),
+    )
+    .unwrap();
+    let entry = catalog.register_run(&folder).unwrap();
+    let (app, _receiver) = app(catalog);
+    let response = app
+        .clone()
+        .oneshot(
+            request(&format!("{}api/control", entry.url))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        value(response).await["actions"],
+        json!({"pause":true,"cancel":true,"resume":false,"rerun":false})
+    );
+    let stale = || {
+        viewer_action(&entry.url, "pause")
+            .body(Body::from(
+                json!({"invocation_id":"fedcba9876543210"}).to_string(),
+            ))
+            .unwrap()
+    };
+    let response = app.clone().oneshot(stale()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(value(response).await["code"], "invocation_mismatch");
+    assert!(
+        !fs::read_to_string(&events_path)
+            .unwrap()
+            .contains("pause_requested")
+    );
+    for action in ["pause", "pause", "cancel"] {
+        let request = viewer_action(&entry.url, action)
+            .body(Body::from(json!({"invocation_id":invocation}).to_string()))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(value(response).await["outcome"], "accepted");
+    }
+    // A different invocation's recorded acceptance cannot acknowledge this stale request.
+    let response = app.oneshot(stale()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(value(response).await["code"], "invocation_mismatch");
+    let events = grida_fx_runtime::events::read_events_tolerant(&events_path).unwrap();
+    for action in ["pause_requested", "cancel_requested"] {
+        let matching: Vec<_> = events
+            .iter()
+            .filter(|event| event["event"] == action)
+            .collect();
+        assert_eq!(matching.len(), 1);
+        assert_eq!(matching[0]["source"], "viewer");
+        assert_eq!(matching[0]["invocation_id"], invocation);
+    }
+    drop(owner);
+    drop(lock);
+}
+
 #[tokio::test]
 async fn public_index_has_no_private_paths_or_control_credentials() {
     let (_directory, catalog) = catalog();
@@ -699,6 +1223,7 @@ async fn lifecycle_requires_authentication_and_same_origin() {
         .unwrap();
     let response = value(response).await;
     assert_eq!(response["instance_id"], "instance-test");
+    assert_eq!(response["run_history"], true);
     assert!(!response.to_string().contains("private-test-token"));
     let response = app
         .oneshot(

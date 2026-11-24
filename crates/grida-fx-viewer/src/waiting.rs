@@ -1,8 +1,8 @@
 //! Browser adapter for the runtime's exact-run response operation.
-use super::{AppState, Source, failure, observed_json};
+use super::{AppState, Source, failure, json_submission, local_submission, observed_json};
 use axum::body::Bytes;
 use axum::extract::{FromRequest, Path, Request, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use grida_fx_core::value::parse_json;
 use grida_fx_runtime::waiting::{self, ResponseChannel, WaitingError};
@@ -24,25 +24,6 @@ pub(super) async fn list(State(host): State<Arc<AppState>>) -> Response {
     }
 }
 
-// A non-simple header prevents submission by an HTML form. Require the browser's
-// exact Origin as well. The enclosing router binds loopback, validates Host and
-// Fetch Metadata and does not grant cross-origin preflights. No service or
-// run-control credential is serialized to JavaScript.
-fn local_submission(headers: &HeaderMap, authority: &str) -> bool {
-    let mut origins = headers.get_all(header::ORIGIN).iter();
-    let Some(origin) = origins.next().and_then(|value| value.to_str().ok()) else {
-        return false;
-    };
-    origins.next().is_none()
-        && origin.strip_prefix("http://") == Some(authority)
-        && headers
-            .get("x-fx-action")
-            .is_some_and(|value| value == "respond")
-        && headers
-            .get("sec-fetch-site")
-            .is_none_or(|value| value == "same-origin")
-}
-
 pub(super) async fn respond(
     State(host): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -51,23 +32,13 @@ pub(super) async fn respond(
     let Source::Run(root) = &host.source else {
         return failure(StatusCode::NOT_FOUND, "A plan has no run requests.");
     };
-    if !local_submission(request.headers(), &host.authority) {
+    if !local_submission(request.headers(), &host.authority, "respond") {
         return failure(
             StatusCode::FORBIDDEN,
             "Submit the answer from this local viewer.",
         );
     }
-    let json = request
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| {
-            value
-                .split(';')
-                .next()
-                .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("application/json"))
-        });
-    if !json {
+    if !json_submission(request.headers()) {
         return failure(
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             "Submit the answer as application/json.",
