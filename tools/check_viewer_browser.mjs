@@ -135,7 +135,12 @@ try {
   const consoleErrors = [];
   context.on("page", (page) => {
     page.on("pageerror", (error) => pageErrors.push(error.message));
-    page.on("console", (message) => { if (message.type() === "error" && !message.text().includes("404")) consoleErrors.push(message.text()); });
+    page.on("console", (message) => {
+      if (message.type() !== "error" || message.text().includes("404")) return;
+      const url = message.location().url;
+      if (message.text().includes("503") && (url.endsWith("/api/history") || url.endsWith("/api/control"))) return;
+      consoleErrors.push(message.text());
+    });
   });
   await context.route("**/*", (route) => [origin, foreignOrigin].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
   const host = await context.newPage();
@@ -352,9 +357,13 @@ try {
   const actionRequests = [];
   const acceptedAction = (fields = {}) => ({ kind: "fx-viewer-run-action-v1", outcome: "accepted", message: "Action accepted.", ...fields });
   let rerunCount = 0;
+  let controlReads = 0;
   await controlled.route(/\/api\/control(?:\/[a-z]+)?$/, async route => {
     const request = route.request();
-    if (request.method() === "GET") return route.fulfill({ json: control });
+    if (request.method() === "GET") {
+      if (++controlReads === 1) return route.fulfill({ status: 503 });
+      return route.fulfill({ json: control });
+    }
     const pathname = new URL(request.url()).pathname;
     const verb = pathname.split("/").at(-1);
     actionRequests.push({ pathname, body: request.postDataJSON(), header: await request.headerValue("X-FX-Action") });
@@ -436,11 +445,15 @@ try {
   await controlledBar.getByText("cancelled", { exact: true }).waitFor();
 
   const observer = await context.newPage();
+  let historyReads = 0;
+  await observer.route("**/api/history", route => ++historyReads === 1 ? route.fulfill({ status: 503 }) : route.continue());
   await observer.goto(origin + activePath);
   await ready(observer);
-  await observer.getByRole("button", { name: "Attempt 1, run history" }).click();
+  await observer.getByRole("button", { name: "Run history", exact: true }).click();
   const observedHistory = observer.getByRole("complementary", { name: "Attempt history" });
-  assert.equal(await observedHistory.getByRole("link", { name: /Attempt 1/ }).getAttribute("aria-current"), "page");
+  const observedSource = observedHistory.getByRole("link", { name: /Attempt 1/ });
+  await observedSource.waitFor();
+  assert.equal(await observedSource.getAttribute("aria-current"), "page");
 
   const rerunWorkflow = actionsPanel.getByRole("button", { name: "Rerun workflow", exact: true });
   const rerunDialog = controlled.getByRole("dialog", { name: "Rerun this workflow?", exact: true });
@@ -461,6 +474,9 @@ try {
   await rerunDialog.waitFor();
   await confirmRerun.click();
   await rerunDialog.getByRole("alert").filter({ hasText: "FX could not confirm the request." }).waitFor();
+  await controlled.keyboard.press("Escape");
+  await rerunDialog.waitFor({ state: "hidden" });
+  await rerunWorkflow.click();
   const retry = rerunDialog.getByRole("button", { name: "Retry request" });
   await retry.waitFor();
   assert.equal(controlled.url(), origin + activePath);

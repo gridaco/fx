@@ -121,8 +121,8 @@ export class RunHistoryController {
       if (request.signal.aborted) return;
       if (value !== null) {
         this.update({ history: parseRunHistory(value, this.route), error: null });
-      } else if (this.state.history) {
-        this.update({ history: this.state.history, error: "Run history is unavailable." });
+      } else {
+        this.update({ history: this.state.history, error: this.state.history ? "Run history is unavailable." : null });
       }
     } catch (error) {
       if (!request.signal.aborted) this.update({ history: this.state.history,

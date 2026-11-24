@@ -596,6 +596,57 @@ fn save_attempt(root: &Path, fixture: &Fixture, run_id: &str, number: u64, succe
     }
 }
 
+#[test]
+fn history_keeps_openable_attempts_when_latest_cannot_be_linked_or_is_damaged() {
+    let (_directory, catalog) = catalog();
+    let run_id = "d".repeat(64);
+    let first = Fixture::new("image/png");
+    let second = Fixture::new("image/png");
+    let third = Fixture::new("image/png");
+    for (number, fixture) in [(1, &first), (2, &second), (3, &third)] {
+        save_attempt(&fixture.root(), fixture, &run_id, number, true);
+    }
+    let first = catalog.register_run(&first.root()).unwrap();
+    let second = catalog.register_run(&second.root()).unwrap();
+    let third_root = third.root().canonicalize().unwrap();
+    run_index::RunIndex {
+        project_root: catalog.root.clone(),
+    }
+    .record(&third_root)
+    .unwrap();
+    let third_id = local_run_id(&third_root, &run_identity(&third_root).unwrap());
+    let entry_path = catalog
+        .state_dir
+        .join("entries")
+        .join(format!("{third_id}.json"));
+    // Publication cannot replace an existing entry that cannot be read.
+    fs::create_dir(&entry_path).unwrap();
+    let assert_earlier_history = || {
+        let history = catalog.history_document(&first.id).unwrap();
+        assert_eq!(history["latest_available"], false);
+        let rows = history["attempts"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["url"], second.url);
+        assert_eq!(rows[1]["url"], first.url);
+        assert!(catalog.latest_exact_url(&run_id).is_err());
+    };
+    assert_earlier_history();
+    fs::remove_dir(&entry_path).unwrap();
+    let third = catalog.register_run(&third_root).unwrap();
+    assert_eq!(catalog.latest_exact_url(&run_id).unwrap(), third.url);
+
+    // No allocation journal exists for these separately registered attempts.
+    fs::write(third_root.join("events.jsonl"), b"invalid start\n").unwrap();
+    let reopened = Catalog::open(&catalog.root, &catalog.runs_dir).unwrap();
+    assert!(reopened.latest_exact_url(&run_id).is_err());
+    assert_earlier_history();
+    assert_eq!(
+        deregister_runs(&catalog.root, &third_root, None).unwrap(),
+        1
+    );
+    assert_eq!(reopened.latest_exact_url(&run_id).unwrap(), second.url);
+}
+
 #[tokio::test]
 async fn run_links_resolve_latest_and_keep_exact_attempts_pinned() {
     let (_directory, catalog) = catalog();

@@ -72,6 +72,7 @@ export interface RunActionsState {
   selection: ActionSelection | null;
   submitting: boolean;
   checking: boolean;
+  rerunUnconfirmed: boolean;
   receipt: (RunActionReceipt & { action: RunAction }) | null;
 }
 
@@ -89,7 +90,7 @@ const scheduler: ViewerPollingScheduler = {
 
 /** Keeps the invocation selected by the user fixed through confirmation and transport retries. */
 export class RunActionsController {
-  private state: RunActionsState = { control: null, error: null, selection: null, submitting: false, checking: false, receipt: null };
+  private state: RunActionsState = { control: null, error: null, selection: null, submitting: false, checking: false, rerunUnconfirmed: false, receipt: null };
   private readonly listeners = new Set<() => void>();
   private readonly request: typeof fetch;
   private readonly scheduler: ViewerPollingScheduler;
@@ -99,6 +100,7 @@ export class RunActionsController {
   private open = false;
   private timer: unknown = null;
   private read: AbortController | null = null;
+  private unconfirmedRerun: { selection: ActionSelection; receipt: NonNullable<RunActionsState["receipt"]> } | null = null;
 
   constructor(private readonly route: ViewerRoute | null, private readonly options: Options = {}) {
     this.base = route?.kind === "run" && route.project_id ? `${route.api_base}/control` : undefined;
@@ -140,7 +142,12 @@ export class RunActionsController {
 
   readonly choose = (action: RunAction, observedInvocation: string | null): void => {
     const { control, checking, error, selection, submitting } = this.state;
-    if (!this.active || checking || error || selection || submitting || !observedInvocation
+    if (!this.active || checking || selection || submitting) return;
+    if (action === "rerun" && this.unconfirmedRerun) {
+      this.update(this.unconfirmedRerun);
+      return;
+    }
+    if (error || !observedInvocation
       || control?.invocation_id !== observedInvocation || !control.actions[action]) return;
     const { attempt_number, invocation_id } = control;
     const request_id = action === "resume" || action === "rerun" ? this.requestId() : undefined;
@@ -176,7 +183,9 @@ export class RunActionsController {
     this.read?.abort();
     this.read = null;
     const keepSelection = result.outcome === "unknown" || result.outcome === "refused" && requiresRunConfirmation(action);
-    this.update({ selection: keepSelection ? selection : null, submitting: false, receipt: { ...result, action }, checking: true });
+    const response = { ...result, action };
+    if (action === "rerun") this.unconfirmedRerun = result.outcome === "unknown" ? { selection, receipt: response } : null;
+    this.update({ selection: keepSelection ? selection : null, submitting: false, receipt: response, checking: true, rerunUnconfirmed: this.unconfirmedRerun !== null });
     if (this.active) {
       if (result.outcome === "accepted") this.options.onAccepted?.(action, result);
       await this.refresh();

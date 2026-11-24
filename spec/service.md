@@ -358,6 +358,9 @@ locations. Discovery is bounded to the configured run storage, not a scan of a
 project's source tree or the machine. Registration is through local CLI filesystem
 operations; web requests cannot register arbitrary paths. Missing or changed
 records are surfaced without silently pointing an old URL at different data.
+New registrations retain the verified run ID and attempt number so a damaged
+latest record can still block the stable selector. History keeps other verified
+exact links when an attempt cannot be opened.
 `grida-fx runs remove` ([store.md](store.md) §9) is the one local operation that
 deletes run entries: once it has removed a run folder it deletes the entries binding
 that folder and its recorded identity, and their URLs are then not found. A folder

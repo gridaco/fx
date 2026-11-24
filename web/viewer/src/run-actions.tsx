@@ -44,7 +44,7 @@ function RunActionDialog({ state, selection, controller, invocationId }: {
     element.showModal();
     return () => { element.close(); };
   }, []);
-  useEffect(() => { back.current?.focus({ preventScroll: true }); }, [refused]);
+  useEffect(() => { back.current?.focus({ preventScroll: true }); }, [refused, retry]);
   return <dialog ref={dialog} className="fx-run-dialog" aria-labelledby="fx-run-dialog-title"
     aria-describedby="fx-run-dialog-description" data-fx-owns-keys
     onKeyDown={event => { if (event.key === "Escape") event.stopPropagation(); }}
@@ -70,7 +70,7 @@ export function RunActionsPanel({ state, controller, invocationId, onClose }: {
   invocationId: string | null;
   onClose: () => void;
 }) {
-  const { control, error, selection, checking, submitting, receipt } = state;
+  const { control, error, selection, checking, submitting, receipt, rerunUnconfirmed } = state;
   const heading = useRef<HTMLHeadingElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   const confirming = selection !== null && requiresRunConfirmation(selection.action);
@@ -80,7 +80,7 @@ export function RunActionsPanel({ state, controller, invocationId, onClose }: {
     opener.current = null;
     (button?.isConnected && !button.disabled ? button : heading.current)?.focus({ preventScroll: true });
   }, [confirming]);
-  const available = runActions.filter(action => control?.actions[action]);
+  const available = runActions.filter(action => control?.actions[action] || action === "rerun" && rerunUnconfirmed);
   const matches = invocationId !== null && control?.invocation_id === invocationId;
   return <aside className="fx-details fx-run-actions" id="fx-run-actions" aria-labelledby="fx-run-actions-title" data-fx-owns-keys
     onKeyDown={event => {
@@ -109,9 +109,10 @@ export function RunActionsPanel({ state, controller, invocationId, onClose }: {
       </div>}
     </div> : available.length > 0 ? <ul className="fx-run-action-list">{available.map(action => {
       const { label, description, icon: Icon } = actions[action];
+      const retryRerun = action === "rerun" && rerunUnconfirmed;
       return <li className="fx-run-action-row" key={action}>
-        <p id={`fx-run-action-hint-${action}`}>{description}</p>
-        <button type="button" className="fx-action" disabled={checking || !matches || Boolean(error)} aria-describedby={`fx-run-action-hint-${action}`}
+        <p id={`fx-run-action-hint-${action}`}>{retryRerun ? "Check the previous rerun request." : description}</p>
+        <button type="button" className="fx-action" disabled={checking || !retryRerun && (!matches || Boolean(error))} aria-describedby={`fx-run-action-hint-${action}`}
           data-destructive={action === "cancel"} onClick={event => {
             if (requiresRunConfirmation(action)) opener.current = event.currentTarget;
             controller.choose(action, invocationId);

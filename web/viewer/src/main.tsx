@@ -267,7 +267,7 @@ function usePageMetadata(titleParts: (string | undefined)[], description?: strin
   }, [title, description]);
 }
 
-function AttemptHistory({ history, error, onClose }: { history: RunHistory; error: string | null; onClose: () => void }) {
+function AttemptHistory({ history, error, onClose }: { history: RunHistory | null; error: string | null; onClose: () => void }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   return <aside className="fx-details fx-attempt-history" id="fx-attempt-history" aria-labelledby="fx-attempt-history-title" data-fx-owns-keys
@@ -282,7 +282,8 @@ function AttemptHistory({ history, error, onClose }: { history: RunHistory; erro
       <div className="fx-detail-heading-row"><h2 ref={heading} tabIndex={-1} id="fx-attempt-history-title">Attempt history</h2></div>
     </div>
     <button type="button" className="fx-details-close" aria-label="Close run history" onClick={onClose}><X {...iconProps} /></button>
-    {error && <p role="alert" className="fx-detail-problem">{error} Showing the last loaded history.</p>}
+    {error && <p role="alert" className="fx-detail-problem">{error} {history ? "Showing the last loaded history." : "FX will try again while this panel is open."}</p>}
+    {history && <>
     <ul className="fx-attempt-history-list">{history.attempts.map((attempt, index) => <li key={attempt.attempt_number}>
       <a className="fx-attempt-row" href={attempt.url} aria-current={attempt.attempt_number === history.selected_attempt ? "page" : undefined}>
         <span>Attempt {attempt.attempt_number}</span>
@@ -296,6 +297,7 @@ function AttemptHistory({ history, error, onClose }: { history: RunHistory; erro
         <span>Opens the latest attempt</span>
       </> : <span>Latest attempt unavailable</span>}
     </div>
+    </>}
   </aside>;
 }
 
@@ -471,7 +473,8 @@ function WorkflowView() {
   useEffect(() => {
     if (!reviewOpen && !historyOpen && !actionsOpen && !open && !steps) return;
     const close = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || ownsKeys(event.target)) return;
+      if (event.key !== "Escape" || event.defaultPrevented || ownsKeys(event.target)
+        || document.querySelector(".fx-run-dialog:modal")) return;
       event.preventDefault();
       if (reviewOpen) closeReview();
       else if (historyOpen) closeHistory();
@@ -499,13 +502,13 @@ function WorkflowView() {
             : view.estimate && <span className="fx-bar-cost">{priceLabel(view.estimate, money, "est. $0.00")}</span>}
           {(run?.stand_in || plan?.stand_in) && <span className="fx-badge">Stand-in</span>}
           {notices.length > 0 && <button onClick={() => { select(null); setAbout(true); }} className="fx-bar-notice" title={notices.join("\n")}>{notices.length} {plan ? (notices.length === 1 ? "problem" : "problems") : (notices.length === 1 ? "notice" : "notices")}</button>}
-          {run && history && <button type="button" ref={historyToggle} className="fx-bar-history" title="Run history"
-            aria-label={`Attempt ${history.selected_attempt}, run history`} aria-expanded={historyOpen} aria-controls={historyOpen ? "fx-attempt-history" : undefined}
+          {run && (history || historyError) && <button type="button" ref={historyToggle} className="fx-bar-history" title="Run history"
+            aria-label={history ? `Attempt ${history.selected_attempt}, run history` : "Run history"} aria-expanded={historyOpen} aria-controls={historyOpen ? "fx-attempt-history" : undefined}
             onClick={() => {
               if (historyOpen) closeHistory();
               else { select(null); setHistoryOpen(true); }
-            }}><History {...iconProps} />Attempt {history.selected_attempt}</button>}
-          {run && actionState.control && <button type="button" ref={actionsToggle} className="fx-bar-controls" title="Run actions" aria-label="Run actions"
+            }}><History {...iconProps} />{history ? `Attempt ${history.selected_attempt}` : "Run history"}</button>}
+          {run && (actionState.control || actionState.error) && <button type="button" ref={actionsToggle} className="fx-bar-controls" title="Run actions" aria-label="Run actions"
             aria-expanded={actionsOpen} aria-controls={actionsOpen ? "fx-run-actions" : undefined}
             onClick={() => {
               if (actionsOpen) closeActions();
@@ -520,7 +523,7 @@ function WorkflowView() {
           </button>)}</div>
         </nav>}
         {run && reviewOpen ? <WaitingReviews run={run} controller={reviews} onClose={closeReview} />
-        : history && historyOpen ? <AttemptHistory history={history} error={historyError} onClose={closeHistory} />
+        : historyOpen && (history || historyError) ? <AttemptHistory history={history} error={historyError} onClose={closeHistory} />
         : actionsOpen ? <RunActionsPanel state={actionState} controller={actionController} invocationId={invocationId} onClose={closeActions} />
         : open && <aside aria-label="Details" className="fx-details">
           <button onClick={() => select(null)} className="fx-details-close" aria-label="Close details" title="Close"><X {...iconProps} /></button>

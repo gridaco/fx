@@ -515,7 +515,6 @@ providers:
     let (_, stale) = control_post(&exact, "cancel", origin, json!({"invocation_id":first}));
     assert_eq!(stale["code"], "invocation_mismatch", "{stale}");
     project.stop();
-    std::fs::write(project.root().join("finish-release"), "").unwrap();
     let restart = json_success(
         project
             .command()
@@ -524,6 +523,10 @@ providers:
             .unwrap(),
     );
     assert_eq!(restart["url"], service["url"]);
+    let resumed_after_restart = get_json(&format!("{exact}api/control"));
+    assert_eq!(resumed_after_restart["invocation_id"], second);
+    assert_eq!(resumed_after_restart["actions"]["cancel"], true);
+    std::fs::write(project.root().join("finish-release"), "").unwrap();
     await_run_state(&exact, "succeeded");
 
     let rerun_body =
