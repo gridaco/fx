@@ -573,7 +573,7 @@ The bar shows `cancelling` after a recorded `cancel_requested` event and
 returns to the terminal state when that invocation ends. A resume resets the intent.
 This label does not prove the runner is still alive or that cleanup finished. Use
 [`inspect --control` or `cancel --wait`](08-run-control.md) for verified local control.
-Request cancellation through the CLI or SDK.
+To cancel from the viewer, use **Run actions**. See [Control a run in the viewer](08-run-control.md#control-a-run-in-the-viewer).
 
 To connect a chat, editor, or browser automation to the current selection and
 presentation, see [Connect to the FX viewer](16-viewer-api.md).

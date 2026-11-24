@@ -12,10 +12,10 @@ A build system for generated assets.
 
 - **Priced before it spends.** The whole run is priced up front, and a live run reserves each call
   against its ceiling before making it.
-- **Never pays twice.** Results and paid calls are cached by content, and an interrupted run picks
-  up where it stopped.
-- **Review before continuing.** Choose an image in the viewer or supply a typed value from a
-  script. The workflow remembers the decision and can resume after the runner exits.
+- **Reuse completed work.** FX caches results and paid calls by content and saves progress
+  so you can pause and resume a run.
+- **Review and revisit results.** Pick an image in the viewer or supply a typed value from a
+  script. Rerun under the same run ID and open any recorded attempt from its history.
 - **Any model, or your own subscription.** Switch providers per step, or draw on your Codex or
   Grok plan.
 - **One native engine.** No Docker, no server: YAML in git, from your laptop to CI.
@@ -62,11 +62,15 @@ npx grida fx init my-assets                  # a starter project, with files for
 cd my-assets
 grida fx start --background                  # the local viewer
 grida fx plan icon --open                    # the steps and their price; spends nothing
-grida fx run icon --live --max-usd 1 --open
+grida fx run icon --name first-pass --live --max-usd 1 --open
 ```
 
-Without `--live`, nothing is spent: local steps run and cached results are reused. Start with
-[the guide](docs/guide/01-getting-started.md), or the [examples](examples/).
+Without `--live`, local steps run and FX reuses cached results. Open **Run actions** in the
+viewer to pause, resume, or cancel a run. Rerunning makes a new attempt and keeps earlier
+attempts available in history. If resuming or rerunning needs spending approval, the
+viewer points you to the CLI. See [Run control](docs/guide/08-run-control.md) and
+[Rerun and inspect earlier attempts](docs/guide/05-running.md#rerun-and-inspect-earlier-attempts).
+Start with [the guide](docs/guide/01-getting-started.md) or the [examples](examples/).
 
 Use `grida fx add pet` to copy an editable example into your workspace. Public GitHub templates
 use `grida fx add OWNER/REPO@REF` with a tag or full commit SHA. For a private template, add
