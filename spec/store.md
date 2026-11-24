@@ -457,14 +457,15 @@ recorded identity. Both fields live in the [run event schema](schemas/fx-run-eve
 | `rerun RUN [--attempt N]` | Starts a new attempt from the selected source. The run ID stays the same. |
 | `resume RUN`, `pause RUN`, `cancel RUN`, `respond RUN REQUEST` | Resolve an attempt once and act on it. A folder pins the attempt. A run ID or name selects its latest attempt. A response additionally selects one request, and an invocation guard can pin the observed invocation where supported. |
 | `run TARGET --resume NAME` or `--run FOLDER` with an existing record | Resume the latest attempt of the named run or the exact folder. A previously unused explicit folder can start an independent run. |
-| Local viewer run URL | The exact attempt bound by catalog registration. Browser responses target that record and request. |
+| Exact local viewer run URL | The exact attempt bound by catalog registration. Browser responses target that record and request. |
+| Shared local viewer run URL | Opens the latest attempt of that run. The viewer then stays on the exact attempt until explicitly navigated. |
 
 Mutations that take a run selector refuse a bare workflow ID. Once a mutation
 resolves its target, it stays bound to that attempt even if another client
 starts a newer attempt or invocation. When automation requires a previously
 observed attempt, it retains the exact folder or pins its attempt number on
-commands that support `--attempt`. Viewer history navigation and run-level
-permalinks are tracked in [#168](https://github.com/gridaco/fx/issues/168).
+commands that support `--attempt`. The viewer's history can open an exact
+attempt or copy the shared run link.
 See [SDK run access](sdk.md), [waiting steps](waiting.md),
 [run control](control.md) and [local catalog and URLs](service.md#4-local-catalog-and-urls).
 

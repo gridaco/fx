@@ -1,17 +1,19 @@
 # Working with runs from an SDK
 
 Use Python or JavaScript to execute workflows, return to saved records, and observe
-work running in another process. These APIs need FX 0.2 or later. Neither SDK needs a running FX service
+work running in another process. The pause, resume and attempt-history APIs
+described here require FX 0.13 or later. Neither SDK needs a running FX service
 for record access. [SDK run access](../../spec/sdk.md) defines their boundary.
 
 ## Give a result a name
 
-After planning and checking a local workflow, create its named record:
+Use a local `workflow.yaml` with no required inputs, or with defaults for its
+inputs. Plan it and create a named run:
 
 ```python
 from grida.fx import load_run, plan, run
 
-planned = plan("workflow.yaml", inputs={"character": "character_1"})
+planned = plan("workflow.yaml")
 result = run(planned, name="character_1_rig_ready")
 print(result.ok, result.run_dir)
 
@@ -23,7 +25,7 @@ print(record.inspection["verification"])
 ```ts
 import { loadRun, plan, run } from "@grida/fx";
 
-const planned = await plan("workflow.yaml", { inputs: { character: "character_1" } });
+const planned = await plan("workflow.yaml");
 const result = await run(planned, { name: "character_1_rig_ready" });
 console.log(result.ok, result.runDir);
 
@@ -31,19 +33,57 @@ const record = await loadRun(result.runDir, { verify: true });
 console.log(record.inspection.run.state, record.inspection.verification);
 ```
 
-Names are create-only. Repeating that creation fails instead of replacing history.
-Resume with `run(planned, resume="character_1_rig_ready")` in Python, or
-`run(planned, { resume: "character_1_rig_ready" })` in JavaScript. Repeat the
-original target and options; a changed plan is refused. `name`, `resume` and
-`run_dir` / `runDir` are mutually exclusive. Omitting them creates a fresh record;
-matching work can still come from cache. Paid calls still require explicit live
-admission and a ceiling.
+Names are create-only. Repeating that creation fails. Omitting `name`, `resume`
+and `run_dir` / `runDir` creates an independent run at attempt 1. Matching work
+can still come from cache. Paid calls require explicit live admission and a
+current ceiling where applicable.
+
+## Pause, resume or rerun
+
+Use `pause(run)` from a separate caller to let active steps finish and save a
+durable pause. Use `resume(run)` to continue that attempt from its recorded
+execution context. If a saved record lacks that context, supply the original
+target and options to `run` with its explicit folder or the `resume` option.
+See [Pause and resume at a step boundary](08-run-control.md#pause-and-resume-at-a-step-boundary).
+
+Use `rerun(run)` to create another attempt using the verified context of a
+saved run. A rerun keeps the run ID, opens fresh review requests, and can reuse
+normal cached results. Use the attempt folder or pass `attempt` to choose a
+source explicitly. Resume and rerun require current authorization for live work.
+
+Passing an `inputs` mapping to the SDK uses a temporary file, so the run lacks
+the saved context that automatic resume and rerun require. To resume such a run,
+pass the original target and inputs to `run` with the saved attempt folder. To
+make a run eligible for automatic rerun, use workflow defaults or launch it from
+the CLI with a persistent `--inputs` file inside the project.
+
+For example, after creating the local run above, rerun its exact attempt and
+look up the first result from the history:
+
+```python
+from grida.fx import load_run, rerun, run_history
+
+again = rerun(result.run_dir)
+history = run_history(again.run_dir)
+first = load_run(history.run_id, attempt=1)
+print([entry.attempt_number for entry in history.attempts], first.run_dir)
+```
+
+```ts
+import { rerun, runHistory } from "@grida/fx";
+
+const again = await rerun(result.runDir);
+const history = await runHistory(again.runDir);
+const first = await loadRun(history.run_id, { attempt: 1 });
+console.log(history.attempts.map((entry) => entry.attempt_number), first.runDir);
+```
 
 ## Return to a saved run
 
-Load an explicit folder or `workflow_id/name`. A bare workflow ID selects its
-newest-created record, including failures, and refuses ambiguous sources.
-Loading pins that folder so a later new run cannot redirect your observer.
+Pass a run ID or `workflow_id/name` to load its latest attempt. Pass the exact
+attempt folder or use `attempt` to open a particular result. A bare workflow ID
+selects its newest independently created run, including failures, and refuses
+ambiguous sources. The returned record stays pinned to the resolved attempt.
 
 Python `load_run` and async `load_run_async`, or JavaScript `loadRun`, return a
 `RunRecord` with an absolute folder and the engine's inspection document. It is a
@@ -108,7 +148,7 @@ passed to `run` instead requests execution cancellation and waits for owned
 cleanup. [Run control](08-run-control.md) covers exact-target cancellation.
 
 A single-invocation consumer can stop after applying that invocation's terminal
-event (`run_finished` or `run_cancelled`). Unfinished evidence does not prove a
+event (`run_finished`, `run_cancelled`, or `run_paused`). Unfinished evidence does not prove a
 process is alive; a crash may have no terminal event. A terminal event also does
 not certify cleanup. Use control's verified completion when that guarantee matters.
 

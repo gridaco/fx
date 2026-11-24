@@ -38,8 +38,8 @@ steps too. The bundled viewer displays plans and recorded runs.
 5. [Running: CLI, Python, JavaScript, agents](05-running.md)
 6. [Annotations and judges](06-annotations-and-judges.md): marks as artifacts, verdicts as decisions
 7. [Viewing workflows and runs](07-viewing.md): the bundled local node canvas
-8. [Stopping and continuing a run](08-run-control.md): exact targeting, cancellation and verified local cleanup
-9. [Working with runs from an SDK](09-sdk-runs.md): names, saved records and independent observation
+8. [Stopping and continuing a run](08-run-control.md): durable pause and resume, viewer controls, and verified cancellation
+9. [Working with runs from an SDK](09-sdk-runs.md): resume, rerun, attempt history and independent observation
 10. [Cleaning up runs](10-cleanup.md): listing a project's runs, removing the ones you no longer need, and pruning the cache
 11. [Share a recorded run](11-exports.md): portable inspection, disclosure and immutable content
 12. [Images from your own Codex](12-codex.md): no API key, with your ChatGPT plan, and its caveats

@@ -45,13 +45,19 @@ truth. Every other manifest repeats it in its own form:
 
 - the crates inherit it, and `Cargo.lock` records it;
 - `python/pyproject.toml` and `python/uv.lock` use the PEP 440 form (`0.1.0-alpha.1` is `0.1.0a1`);
-- `js/fx/package.json` uses it unchanged and pins each engine package to it exactly, and
+- `js/fx/package.json` uses it unchanged. The manifest and its Bun lockfile pin each engine
+  package to it exactly, and
   `js/fx/src/index.ts` exports it as `version`;
+- `web/fx-web/package.json`, `web/fx-react/package.json` and the root Bun lockfile record
+  the version of the private viewer packages;
 - `fixtures/host/grida/package.json`, the stand-in for the npm `grida` command, pins
   `@grida/fx` to it exactly, as `grida` does ([spec/distribution.md](spec/distribution.md));
 - [`llms.txt`](llms.txt) names it on its `Version:` line and pins `@grida/fx` to it in its
   recipes. Refresh the summaries and links for the release using the
   [maintainer guidelines for `llms.txt`](AGENTS.md#maintaining-llmstxt).
+
+Update the showcase projects' `grida` minor-version ranges and any guide examples that
+pin the current SDK. Keep historical version references as written.
 
 To change it, edit `Cargo.toml` and each of those files. Then run `cargo update --workspace`
 and `(cd python && uv lock)`, and check the result:

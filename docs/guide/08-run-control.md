@@ -20,6 +20,10 @@ If a start needs live spending
 approval or FX cannot reconstruct its execution context, follow the CLI guidance
 in the viewer. Use attempt history to open an earlier result.
 
+If the project service was already running before you upgraded FX, run
+`grida fx stop` and then `grida fx start --background` from the project to load
+the new viewer. Restarting the viewer service leaves workflow invocations running.
+
 ## Pause and resume at a step boundary
 
 ```sh
@@ -153,9 +157,11 @@ operation separately. There is no live SDK viewer handle.
 
 ## Continue later
 
-Repeat the original target, inputs and options with `--resume NAME` or the same
-`--run FOLDER`. FX requires the same plan and execution mode, preserves recorded
-spend and reuses valid saved work. It restores no old source or input options.
+Use `grida fx resume RUN` to continue a saved attempt. FX reads the recorded
+execution context, verifies the plan and mode, preserves recorded spending and
+reuses valid saved work. If the saved context is missing, repeat the original
+target, inputs and options with `run TARGET --resume NAME` or
+`run TARGET --run FOLDER`.
 
 The [provider-free harness](../../fixtures/control/) demonstrates timeout and resume.
 The [normative contract](../../spec/control.md) defines outcomes, error codes,
